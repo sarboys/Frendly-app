@@ -1,0 +1,2067 @@
+import 'dart:ui';
+
+import 'package:big_break_mobile/app/navigation/app_routes.dart';
+import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
+import 'package:big_break_mobile/shared/data/app_providers.dart';
+import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/models/dating_profile.dart';
+import 'package:big_break_mobile/shared/models/profile.dart';
+import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+const _datingInterestFilters = [
+  'вино',
+  'кофе',
+  'кино',
+  'концерты',
+  'wellness',
+  'юмор',
+  'книги',
+];
+const _datingAreaFilters = [
+  'Все',
+  'Центр',
+  'Патрики',
+  'Чистые пруды',
+  'Тверская',
+  'Хамовники',
+];
+const _datingTimeFilters = [
+  'Сейчас',
+  'Сегодня вечером',
+  'Эти выходные',
+  'Всегда онлайн',
+];
+
+class DatingScreen extends ConsumerStatefulWidget {
+  const DatingScreen({super.key});
+
+  @override
+  ConsumerState<DatingScreen> createState() => _DatingScreenState();
+}
+
+class _DatingScreenState extends ConsumerState<DatingScreen> {
+  String _tab = 'discover';
+  bool _submitting = false;
+  final Map<String, int> _photoIndexes = <String, int>{};
+  final Set<String> _handledProfileIds = <String>{};
+  final Set<String> _savedProfileIds = <String>{};
+  final Set<String> _filterInterests = <String>{};
+  String _filterArea = 'Все';
+  String _filterTime = 'Сегодня вечером';
+  RangeValues _filterAge = const RangeValues(22, 35);
+
+  @override
+  Widget build(BuildContext context) {
+    final subscription = ref.watch(subscriptionStateProvider).valueOrNull;
+    final premium = hasPremiumDatingAccess(subscription);
+    final discoverAsync = premium ? ref.watch(datingDiscoverProvider) : null;
+    final likesAsync =
+        premium && _tab == 'likes' ? ref.watch(datingLikesProvider) : null;
+    final likes = likesAsync?.valueOrNull ?? const <DatingProfileData>[];
+    final discover = discoverAsync?.valueOrNull ?? const <DatingProfileData>[];
+    final filteredDiscover = _filterProfiles(discover);
+    final current = _currentProfile(filteredDiscover);
+    final hasWidePhotoTapZone = premium &&
+        _tab == 'discover' &&
+        current != null &&
+        _photosFor(current).length > 1 &&
+        MediaQuery.sizeOf(context).width > 520;
+
+    return BbV5Scaffold(
+      child: Stack(
+        children: [
+          BbV5Page(
+            padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
+            child: Column(
+              children: [
+                _DatingHeader(
+                  premium: premium,
+                  filtersActive: _filtersActive,
+                  onBack: () => _handleBack(context),
+                  onFilter: premium ? () => _openFilters(context) : null,
+                ),
+                if (premium) ...[
+                  const SizedBox(height: 20),
+                  _DatingTabs(
+                    activeTab: _tab,
+                    likesCount: likes.length,
+                    onTabChanged: (tab) {
+                      setState(() {
+                        _tab = tab;
+                      });
+                    },
+                  ),
+                ],
+                const SizedBox(height: 14),
+                Expanded(
+                  child: premium
+                      ? (_tab == 'discover'
+                          ? _buildDiscover(
+                              context,
+                              current,
+                              discoverAsync,
+                              filteredDiscover,
+                            )
+                          : _buildLikes(context, likesAsync, likes))
+                      : _buildLocked(context),
+                ),
+              ],
+            ),
+          ),
+          if (hasWidePhotoTapZone)
+            Positioned(
+              top: 128,
+              right: 0,
+              width: MediaQuery.sizeOf(context).width * 0.34,
+              height: MediaQuery.sizeOf(context).height * 0.5,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _submitting ? null : () => _showNextPhoto(current),
+                child: const SizedBox.expand(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _handleBack(BuildContext context) async {
+    final popped = await Navigator.of(context).maybePop();
+    if (!popped && context.mounted) {
+      context.goRoute(AppRoute.tonight);
+    }
+  }
+
+  Widget _buildLocked(BuildContext context) {
+    final bottomPadding = _datingBottomScrollPadding(context);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(0, 10, 0, bottomPadding),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: (constraints.maxHeight - 10 - bottomPadding)
+                  .clamp(0, double.infinity),
+            ),
+            child: IntrinsicHeight(
+              child: Column(
+                children: [
+                  BbV5Card(
+                    padding: const EdgeInsets.all(20),
+                    tint: BbV5Colors.rose,
+                    child: Column(
+                      children: [
+                        AspectRatio(
+                          aspectRatio: 0.82,
+                          child: Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  BbV5Colors.terraSoft,
+                                  BbV5Colors.brandSoft,
+                                  BbV5Colors.paperDeep,
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 96,
+                                  height: 96,
+                                  decoration: BoxDecoration(
+                                    color: BbV5Colors.paperHi,
+                                    borderRadius: BorderRadius.circular(29),
+                                    border: Border.all(color: BbV5Colors.hair),
+                                    boxShadow: BbV5Shadows.pill,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: const Text(
+                                    '💘',
+                                    style: TextStyle(fontSize: 42),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                Text(
+                                  'Свидания внутри Frendly+',
+                                  style: bbV5DisplayStyle(
+                                    fontSize: 26,
+                                    height: 1.08,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Свайпы, входящие лайки и быстрый переход к свиданию, только для подписки.',
+                                  style: AppTextStyles.bodySoft.copyWith(
+                                    color: BbV5Colors.inkMute,
+                                    fontSize: 14,
+                                    height: 1.45,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Row(
+                          children: [
+                            Expanded(
+                              child: _DatingMiniStat(
+                                label: 'Свайпы',
+                                value: '∞',
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: _DatingMiniStat(
+                                label: 'Лайки',
+                                value: '2',
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: _DatingMiniStat(
+                                label: 'Инвайт',
+                                value: '1 тап',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const BbV5Card(
+                    padding: EdgeInsets.all(16),
+                    radius: 24,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _LockedFeatureRow(
+                          title: 'Свайп-вправо / влево',
+                          subtitle:
+                              'Как в Tinder, но внутри текущего профиля Frendly',
+                        ),
+                        SizedBox(height: 12),
+                        _LockedFeatureRow(
+                          title: 'Кто лайкнул',
+                          subtitle: 'Отдельная вкладка для подписчиков',
+                        ),
+                        SizedBox(height: 12),
+                        _LockedFeatureRow(
+                          title: 'Перевести в свидание',
+                          subtitle: 'Сразу открыть сценарий с идеями места',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: BbV5PillButton(
+                      label: 'Открыть Frendly+',
+                      onPressed: () => context.pushRoute(AppRoute.paywall),
+                      dark: true,
+                      height: 56,
+                      expanded: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDiscover(
+    BuildContext context,
+    DatingProfileData? current,
+    AsyncValue<List<DatingProfileData>>? discoverAsync,
+    List<DatingProfileData> visibleProfiles,
+  ) {
+    return discoverAsync!.when(
+      data: (profiles) {
+        if (profiles.isEmpty) {
+          return const _DatingEmptyState(
+            icon: LucideIcons.sparkles,
+            title: 'Пока нет новых профилей',
+            subtitle: 'Загляни позже, когда рядом появятся новые анкеты',
+          );
+        }
+
+        if (visibleProfiles.isEmpty || current == null) {
+          return const _DatingEmptyState(
+            icon: LucideIcons.sparkles,
+            title: 'Никого под фильтр',
+            subtitle: 'Попробуй сбросить интересы или район',
+          );
+        }
+
+        final currentIndex = visibleProfiles.indexWhere(
+              (profile) => profile.userId == current.userId,
+            ) +
+            1;
+
+        return ListView(
+          padding: EdgeInsets.fromLTRB(
+            0,
+            0,
+            0,
+            _datingBottomScrollPadding(context, base: 156),
+          ),
+          children: [
+            _SwipeableDatingCard(
+              key: const ValueKey('dating-discover-card'),
+              enabled: !_submitting,
+              onSwipe: (direction) => _handleAction(
+                context,
+                current,
+                action:
+                    direction == DatingSwipeDirection.like ? 'like' : 'pass',
+              ),
+              child: _DatingProfileCard(
+                profile: current,
+                saved: _savedProfileIds.contains(current.userId),
+                photoIndex: _photoIndexFor(current),
+                actionsEnabled: !_submitting,
+                onPreviousPhoto:
+                    _submitting ? null : () => _showPreviousPhoto(current),
+                onNextPhoto: _submitting ? null : () => _showNextPhoto(current),
+                onSaveToggle: () {
+                  setState(() {
+                    if (_savedProfileIds.contains(current.userId)) {
+                      _savedProfileIds.remove(current.userId);
+                    } else {
+                      _savedProfileIds.add(current.userId);
+                    }
+                  });
+                },
+                onSkip: () => _handleAction(context, current, action: 'pass'),
+                onSuper: () => _handleAction(
+                  context,
+                  current,
+                  action: 'super_like',
+                ),
+                onLike: () => _handleAction(context, current, action: 'like'),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              '${currentIndex.toString().padLeft(2, '0')} / '
+              '${visibleProfiles.length.toString().padLeft(2, '0')}',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.caption.copyWith(
+                color: BbV5Colors.inkMute,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => const _DatingLoadingState(),
+      error: (_, __) => const _DatingEmptyState(
+        icon: LucideIcons.wifi_off,
+        title: 'Не получилось загрузить анкеты',
+        subtitle: 'Проверь соединение и попробуй обновить экран',
+      ),
+    );
+  }
+
+  Widget _buildLikes(
+    BuildContext context,
+    AsyncValue<List<DatingProfileData>>? likesAsync,
+    List<DatingProfileData> likes,
+  ) {
+    return likesAsync!.when(
+      data: (_) {
+        if (likes.isEmpty) {
+          return const _DatingEmptyState(
+            icon: LucideIcons.heart,
+            title: 'Пока нет входящих лайков',
+            subtitle: 'Лайкни пару карточек, и здесь появятся ответы',
+          );
+        }
+
+        return ListView.separated(
+          padding: EdgeInsets.fromLTRB(
+            0,
+            0,
+            0,
+            _datingBottomScrollPadding(context, base: 156),
+          ),
+          itemCount: likes.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final profile = likes[index];
+            return BbV5Card(
+              radius: 24,
+              padding: const EdgeInsets.all(14),
+              onTap: () => _handleAction(
+                context,
+                profile,
+                action: 'like',
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          BbV5Colors.terraSoft,
+                          BbV5Colors.brandSoft,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: BbV5Colors.hair),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    alignment: Alignment.center,
+                    child: _DatingThumbnail(profile: profile),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profile.age == null
+                              ? profile.name
+                              : '${profile.name}, ${profile.age}',
+                          overflow: TextOverflow.ellipsis,
+                          style: bbV5DisplayStyle(
+                            fontSize: 15,
+                            height: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          profile.about,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodySoft.copyWith(
+                            color: BbV5Colors.inkMute,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              LucideIcons.eye,
+                              size: 12,
+                              color: BbV5Colors.terra,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Лайкнул(а) тебя',
+                              style: AppTextStyles.caption.copyWith(
+                                color: BbV5Colors.terra,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: BbV5Colors.accent,
+                        shape: BoxShape.circle,
+                        boxShadow: BbV5Shadows.ink,
+                      ),
+                      child: Icon(
+                        LucideIcons.message_circle,
+                        size: 16,
+                        color: BbV5Colors.paperHi,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+      loading: () => const _DatingLoadingState(),
+      error: (_, __) => const _DatingEmptyState(
+        icon: LucideIcons.wifi_off,
+        title: 'Не получилось загрузить лайки',
+        subtitle: 'Проверь соединение и вернись к вкладке позже',
+      ),
+    );
+  }
+
+  Future<void> _handleAction(
+    BuildContext context,
+    DatingProfileData profile, {
+    required String action,
+  }) async {
+    if (_submitting) {
+      return;
+    }
+
+    final repository = ref.read(backendRepositoryProvider);
+    final container = ProviderScope.containerOf(context, listen: false);
+    final targetUserId = profile.userId;
+    setState(() {
+      _submitting = true;
+    });
+
+    try {
+      final result = await repository.sendDatingAction(
+        targetUserId: targetUserId,
+        action: action,
+      );
+
+      if (!mounted || !context.mounted) {
+        return;
+      }
+
+      setState(() {
+        _handledProfileIds.add(targetUserId);
+        _photoIndexes.remove(targetUserId);
+      });
+
+      container.invalidate(datingDiscoverProvider);
+      container.invalidate(datingLikesProvider);
+
+      if (result.matched && result.chatId != null) {
+        await context.pushRoute(
+          AppRoute.personalChat,
+          pathParameters: {'chatId': result.chatId!},
+        );
+      }
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не получилось сохранить действие')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+        });
+      }
+    }
+  }
+
+  List<DatingProfileData> _filterProfiles(List<DatingProfileData> profiles) {
+    return profiles.where((profile) {
+      final age = profile.age;
+      if (age != null &&
+          (age < _filterAge.start.round() || age > _filterAge.end.round())) {
+        return false;
+      }
+
+      if (_filterArea != 'Все') {
+        final area = (profile.area ?? '').toLowerCase();
+        if (area.isNotEmpty && !area.contains(_filterArea.toLowerCase())) {
+          return false;
+        }
+      }
+
+      if (_filterInterests.isNotEmpty) {
+        final tags = profile.tags.map((tag) => tag.toLowerCase()).toSet();
+        final hasCommonInterest = _filterInterests.any(
+          (interest) => tags.contains(interest.toLowerCase()),
+        );
+        if (!hasCommonInterest) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList(growable: false);
+  }
+
+  bool get _filtersActive {
+    return _filterArea != 'Все' ||
+        _filterTime != 'Сегодня вечером' ||
+        _filterInterests.isNotEmpty ||
+        _filterAge.start.round() != 22 ||
+        _filterAge.end.round() != 35;
+  }
+
+  void _openFilters(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: BbV5Colors.ink.withValues(alpha: 0.5),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, sheetSetState) {
+            void update(VoidCallback fn) {
+              setState(fn);
+              sheetSetState(() {});
+            }
+
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: BbV5Card(
+                    padding: const EdgeInsets.all(20),
+                    radius: 28,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    BbV5Kicker('Фильтры'),
+                                    SizedBox(height: 3),
+                                    BbV5HeroTitle(
+                                      title: 'Найти своих',
+                                      fontSize: 18,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              BbV5IconButton(
+                                icon: LucideIcons.x,
+                                size: 36,
+                                iconSize: 16,
+                                onPressed: () =>
+                                    Navigator.of(sheetContext).pop(),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          const BbV5Kicker('Район'),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: _datingAreaFilters
+                                .map(
+                                  (area) => BbV5Chip(
+                                    label: area,
+                                    active: _filterArea == area,
+                                    onTap: () => update(() {
+                                      _filterArea = area;
+                                    }),
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                          const SizedBox(height: 18),
+                          const BbV5Kicker('Когда'),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: _datingTimeFilters
+                                .map(
+                                  (time) => BbV5Chip(
+                                    label: time,
+                                    active: _filterTime == time,
+                                    onTap: () => update(() {
+                                      _filterTime = time;
+                                    }),
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                          const SizedBox(height: 18),
+                          const BbV5Kicker('Интересы'),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: _datingInterestFilters
+                                .map(
+                                  (interest) => BbV5Chip(
+                                    label: '#$interest',
+                                    active: _filterInterests.contains(interest),
+                                    onTap: () => update(() {
+                                      if (_filterInterests.contains(interest)) {
+                                        _filterInterests.remove(interest);
+                                      } else {
+                                        _filterInterests.add(interest);
+                                      }
+                                    }),
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                          const SizedBox(height: 18),
+                          BbV5Kicker(
+                            'Возраст · ${_filterAge.start.round()}-'
+                            '${_filterAge.end.round()}',
+                          ),
+                          RangeSlider(
+                            min: 18,
+                            max: 50,
+                            divisions: 32,
+                            values: _filterAge,
+                            activeColor: BbV5Colors.accent,
+                            inactiveColor: BbV5Colors.hair,
+                            labels: RangeLabels(
+                              _filterAge.start.round().toString(),
+                              _filterAge.end.round().toString(),
+                            ),
+                            onChanged: (values) => update(() {
+                              _filterAge = values;
+                            }),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: BbV5PillButton(
+                                  label: 'Сбросить',
+                                  onPressed: () => update(() {
+                                    _filterArea = 'Все';
+                                    _filterTime = 'Сегодня вечером';
+                                    _filterInterests.clear();
+                                    _filterAge = const RangeValues(22, 35);
+                                  }),
+                                  height: 48,
+                                  expanded: true,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: BbV5PillButton(
+                                  label: 'Показать',
+                                  onPressed: () {
+                                    Navigator.of(sheetContext).pop();
+                                    setState(() {
+                                      _photoIndexes.clear();
+                                    });
+                                  },
+                                  dark: true,
+                                  height: 48,
+                                  expanded: true,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  DatingProfileData? _currentProfile(List<DatingProfileData> profiles) {
+    if (profiles.isEmpty) {
+      return null;
+    }
+
+    for (final profile in profiles) {
+      if (!_handledProfileIds.contains(profile.userId)) {
+        return profile;
+      }
+    }
+
+    return null;
+  }
+
+  List<ProfilePhoto> _photosFor(DatingProfileData profile) {
+    if (profile.photos.isNotEmpty) {
+      return profile.photos;
+    }
+    if (profile.avatarUrl == null || profile.avatarUrl!.isEmpty) {
+      return const [];
+    }
+    return [
+      ProfilePhoto(
+        id: '${profile.userId}-avatar',
+        url: profile.avatarUrl!,
+        order: 0,
+      ),
+    ];
+  }
+
+  int _photoIndexFor(DatingProfileData profile) {
+    final photos = _photosFor(profile);
+    if (photos.isEmpty) {
+      return 0;
+    }
+    final stored = _photoIndexes[profile.userId] ?? 0;
+    return stored.clamp(0, photos.length - 1);
+  }
+
+  void _showPreviousPhoto(DatingProfileData profile) {
+    final photos = _photosFor(profile);
+    if (photos.length <= 1) {
+      return;
+    }
+    final currentIndex = _photoIndexFor(profile);
+    if (currentIndex == 0) {
+      return;
+    }
+    setState(() {
+      _photoIndexes[profile.userId] = currentIndex - 1;
+    });
+  }
+
+  void _showNextPhoto(DatingProfileData profile) {
+    final photos = _photosFor(profile);
+    if (photos.length <= 1) {
+      return;
+    }
+    final currentIndex = _photoIndexFor(profile);
+    if (currentIndex >= photos.length - 1) {
+      return;
+    }
+    setState(() {
+      _photoIndexes[profile.userId] = currentIndex + 1;
+    });
+  }
+
+  double _datingBottomScrollPadding(BuildContext context, {double base = 132}) {
+    return base + MediaQuery.paddingOf(context).bottom;
+  }
+}
+
+class _DatingHeader extends StatelessWidget {
+  const _DatingHeader({
+    required this.premium,
+    required this.filtersActive,
+    required this.onBack,
+    required this.onFilter,
+  });
+
+  final bool premium;
+  final bool filtersActive;
+  final VoidCallback onBack;
+  final VoidCallback? onFilter;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        BbV5IconButton(
+          icon: LucideIcons.arrow_left,
+          onPressed: onBack,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const BbV5Kicker('Frendly+ · свидания'),
+              const SizedBox(height: 3),
+              if (premium)
+                const BbV5HeroTitle(
+                  title: 'Свидания',
+                  accent: 'рядом',
+                  fontSize: 22,
+                )
+              else
+                Text(
+                  'Свидания рядом',
+                  style: bbV5DisplayStyle(
+                    color: BbV5Colors.ink,
+                    fontSize: 15,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (premium) ...[
+          const SizedBox(width: 8),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              BbV5IconButton(
+                icon: LucideIcons.list_filter,
+                onPressed: onFilter,
+              ),
+              if (filtersActive)
+                const Positioned(
+                  top: 7,
+                  right: 7,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: BbV5Colors.terra,
+                      shape: BoxShape.circle,
+                    ),
+                    child: SizedBox(width: 8, height: 8),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DatingTabs extends StatelessWidget {
+  const _DatingTabs({
+    required this.activeTab,
+    required this.likesCount,
+    required this.onTabChanged,
+  });
+
+  final String activeTab;
+  final int likesCount;
+  final ValueChanged<String> onTabChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 46,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: BbV5Colors.paperHi,
+        borderRadius: BorderRadius.circular(BbV5Radii.pill),
+        border: Border.all(color: BbV5Colors.hair),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1FFFFFFF),
+            blurRadius: 0,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _DatingTabButton(
+              label: 'Лента',
+              active: activeTab == 'discover',
+              onTap: () => onTabChanged('discover'),
+            ),
+          ),
+          Expanded(
+            child: _DatingTabButton(
+              label: 'Лайки',
+              suffix: likesCount > 0 ? ' · $likesCount' : null,
+              active: activeTab == 'likes',
+              onTap: () => onTabChanged('likes'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DatingTabButton extends StatelessWidget {
+  const _DatingTabButton({
+    required this.label,
+    required this.active,
+    required this.onTap,
+    this.suffix,
+  });
+
+  final String label;
+  final String? suffix;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(BbV5Radii.pill),
+      child: Container(
+        height: 38,
+        decoration: BoxDecoration(
+          color: active ? BbV5Colors.accent : Colors.transparent,
+          borderRadius: BorderRadius.circular(BbV5Radii.pill),
+          boxShadow: active ? BbV5Shadows.ink : null,
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: AppTextStyles.button.copyWith(
+                fontFamily: 'Sora',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: active ? BbV5Colors.paperHi : BbV5Colors.inkSoft,
+                letterSpacing: 0,
+              ),
+            ),
+            if (suffix != null)
+              Text(
+                suffix!,
+                style: AppTextStyles.button.copyWith(
+                  fontFamily: 'Sora',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: active ? BbV5Colors.paperHi : BbV5Colors.inkSoft,
+                  letterSpacing: 0,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DatingMiniStat extends StatelessWidget {
+  const _DatingMiniStat({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 72,
+      decoration: BoxDecoration(
+        color: BbV5Colors.paperHi,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: BbV5Colors.hair),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            value,
+            style: bbV5DisplayStyle(fontSize: 19),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              color: BbV5Colors.inkMute,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LockedFeatureRow extends StatelessWidget {
+  const _LockedFeatureRow({
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: AppTextStyles.body.copyWith(
+            color: BbV5Colors.ink,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: AppTextStyles.meta.copyWith(
+            color: BbV5Colors.inkMute,
+            height: 1.35,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DatingLoadingState extends StatelessWidget {
+  const _DatingLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: BbV5Card(
+        padding: EdgeInsets.all(24),
+        radius: 24,
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.4,
+            color: BbV5Colors.ink,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DatingEmptyState extends StatelessWidget {
+  const _DatingEmptyState({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: BbV5Card(
+        padding: const EdgeInsets.all(28),
+        radius: 24,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 32, color: BbV5Colors.terra),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: bbV5DisplayStyle(fontSize: 15),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodySoft.copyWith(
+                color: BbV5Colors.inkMute,
+                fontSize: 12.5,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum DatingSwipeDirection { pass, like }
+
+class _SwipeableDatingCard extends StatefulWidget {
+  const _SwipeableDatingCard({
+    required this.child,
+    required this.onSwipe,
+    super.key,
+    this.enabled = true,
+  });
+
+  final Widget child;
+  final bool enabled;
+  final void Function(DatingSwipeDirection direction) onSwipe;
+
+  @override
+  State<_SwipeableDatingCard> createState() => _SwipeableDatingCardState();
+}
+
+class _SwipeableDatingCardState extends State<_SwipeableDatingCard> {
+  final ValueNotifier<double> _dragDx = ValueNotifier<double>(0);
+
+  @override
+  void didUpdateWidget(covariant _SwipeableDatingCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.child != widget.child) {
+      _dragDx.value = 0;
+    }
+    if (!widget.enabled && _dragDx.value != 0) {
+      _dragDx.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _dragDx.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxVisualDx =
+            (constraints.maxWidth * 0.34).clamp(96.0, 132.0).toDouble();
+        final swipeThreshold = (maxVisualDx * 0.75).clamp(72.0, 110.0);
+
+        return GestureDetector(
+          onHorizontalDragUpdate: widget.enabled
+              ? (details) => _handleDragUpdate(details, maxVisualDx)
+              : null,
+          onHorizontalDragEnd:
+              widget.enabled ? (_) => _handleDragEnd(swipeThreshold) : null,
+          onHorizontalDragCancel: widget.enabled ? _resetDrag : null,
+          child: ValueListenableBuilder<double>(
+            valueListenable: _dragDx,
+            child: KeyedSubtree(
+              key: const ValueKey('dating-swipeable-card-surface'),
+              child: RepaintBoundary(child: widget.child),
+            ),
+            builder: (context, dx, child) {
+              final direction = dx == 0
+                  ? null
+                  : dx > 0
+                      ? DatingSwipeDirection.like
+                      : DatingSwipeDirection.pass;
+
+              return Transform(
+                alignment: Alignment.center,
+                transform: Matrix4.identity()
+                  ..translateByDouble(dx, 0, 0, 1)
+                  ..rotateZ(dx / 1800),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    child!,
+                    if (direction != null)
+                      Positioned(
+                        top: 26,
+                        right:
+                            direction == DatingSwipeDirection.like ? 26 : null,
+                        left:
+                            direction == DatingSwipeDirection.pass ? 26 : null,
+                        child: _SwipeDecisionPill(direction: direction),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  void _handleDragUpdate(DragUpdateDetails details, double maxVisualDx) {
+    final next = (_dragDx.value + details.delta.dx)
+        .clamp(-maxVisualDx, maxVisualDx)
+        .toDouble();
+    if (next != _dragDx.value) {
+      _dragDx.value = next;
+    }
+  }
+
+  void _handleDragEnd(double threshold) {
+    final dx = _dragDx.value;
+    final direction = dx >= threshold
+        ? DatingSwipeDirection.like
+        : dx <= -threshold
+            ? DatingSwipeDirection.pass
+            : null;
+
+    _resetDrag();
+
+    if (direction != null) {
+      widget.onSwipe(direction);
+    }
+  }
+
+  void _resetDrag() {
+    if (_dragDx.value != 0) {
+      _dragDx.value = 0;
+    }
+  }
+}
+
+class _DatingProfileCard extends StatelessWidget {
+  const _DatingProfileCard({
+    required this.profile,
+    required this.saved,
+    required this.photoIndex,
+    required this.actionsEnabled,
+    required this.onPreviousPhoto,
+    required this.onNextPhoto,
+    required this.onSaveToggle,
+    required this.onSkip,
+    required this.onSuper,
+    required this.onLike,
+  });
+
+  final DatingProfileData profile;
+  final bool saved;
+  final int photoIndex;
+  final bool actionsEnabled;
+  final VoidCallback? onPreviousPhoto;
+  final VoidCallback? onNextPhoto;
+  final VoidCallback onSaveToggle;
+  final VoidCallback onSkip;
+  final VoidCallback onSuper;
+  final VoidCallback onLike;
+
+  @override
+  Widget build(BuildContext context) {
+    final photos = profile.photos.isNotEmpty
+        ? profile.photos
+        : profile.avatarUrl == null || profile.avatarUrl!.isEmpty
+            ? const <ProfilePhoto>[]
+            : [
+                ProfilePhoto(
+                  id: '${profile.userId}-avatar',
+                  url: profile.avatarUrl!,
+                  order: 0,
+                ),
+              ];
+    final clampedPhotoIndex =
+        photos.isEmpty ? 0 : photoIndex.clamp(0, photos.length - 1);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [BbV5Colors.paperHi, BbV5Colors.paper],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: BbV5Colors.hair),
+        boxShadow: BbV5Shadows.card,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: 0.78,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: BbProfilePhotoImage(
+                    imageUrl:
+                        photos.isEmpty ? null : photos[clampedPhotoIndex].url,
+                    fallbackText: profile.photoEmoji,
+                    usageProfile: BbImageUsageProfile.hero,
+                    fallbackFontSize: 80,
+                  ),
+                ),
+                const Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: 112,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0x59000000), Color(0x00000000)],
+                      ),
+                    ),
+                  ),
+                ),
+                const Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: [0, 0.34, 0.62, 1],
+                        colors: [
+                          Color(0x00000000),
+                          Color(0x00000000),
+                          Color(0x73000000),
+                          Color(0xB3000000),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTap: onPreviousPhoto,
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          key: const ValueKey('dating-photo-next-zone'),
+                          behavior: HitTestBehavior.translucent,
+                          onTap: onNextPhoto,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  top: 12,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 28,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: BbV5Colors.paperHi.withValues(alpha: 0.92),
+                          borderRadius: BorderRadius.circular(BbV5Radii.pill),
+                          border: Border.all(color: BbV5Colors.hair),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              LucideIcons.sparkles,
+                              size: 12,
+                              color: BbV5Colors.terra,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Frendly+',
+                              style: AppTextStyles.caption.copyWith(
+                                color: BbV5Colors.ink,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      Semantics(
+                        button: true,
+                        label: 'Сохранить',
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onSaveToggle,
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: BbV5Colors.paperHi.withValues(alpha: 0.92),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: BbV5Colors.hair),
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(
+                              saved
+                                  ? Icons.bookmark_rounded
+                                  : LucideIcons.bookmark,
+                              size: 16,
+                              color: saved ? BbV5Colors.terra : BbV5Colors.ink,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  left: 20,
+                  right: 20,
+                  bottom: 20,
+                  child: _DatingPhotoInfoOverlay(profile: profile),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const BbV5Kicker('Prompt'),
+                const SizedBox(height: 6),
+                Text(
+                  '«${profile.prompt}»',
+                  style: AppTextStyles.bodySoft.copyWith(
+                    color: BbV5Colors.inkSoft,
+                    fontSize: 14,
+                    height: 1.45,
+                  ),
+                ),
+                if (profile.tags.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: profile.tags
+                        .map((tag) => _DatingTag(label: '#$tag'))
+                        .toList(growable: false),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                _DatingFollowRow(
+                  userId: profile.userId,
+                  name: profile.name,
+                  enabled: actionsEnabled,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _CardActionButton(
+                        label: 'Пропустить',
+                        icon: LucideIcons.x,
+                        onTap: actionsEnabled ? onSkip : null,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _CardActionButton(
+                        label: 'Супер',
+                        icon: LucideIcons.star,
+                        accent: true,
+                        onTap: actionsEnabled ? onSuper : null,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _CardActionButton(
+                        label: 'Лайк',
+                        icon: LucideIcons.heart,
+                        positive: true,
+                        onTap: actionsEnabled ? onLike : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DatingFollowRow extends ConsumerWidget {
+  const _DatingFollowRow({
+    required this.userId,
+    required this.name,
+    required this.enabled,
+  });
+
+  final String userId;
+  final String name;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final socialAsync = ref.watch(profileSocialProvider(userId));
+    final social = socialAsync.valueOrNull ?? _fallbackSocialFor(userId);
+    final actionsEnabled = enabled && socialAsync.valueOrNull != null;
+    final controller = ref.read(profileSocialProvider(userId).notifier);
+
+    return Container(
+      padding: const EdgeInsets.only(top: 12),
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: BbV5Colors.hairSoft),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: actionsEnabled ? controller.toggleFollow : null,
+              child: Container(
+                height: 36,
+                decoration: BoxDecoration(
+                  color:
+                      social.iFollow ? BbV5Colors.paperHi : BbV5Colors.accent,
+                  borderRadius: BorderRadius.circular(BbV5Radii.pill),
+                  border: Border.all(
+                    color: social.iFollow ? BbV5Colors.hair : BbV5Colors.accent,
+                  ),
+                  boxShadow:
+                      social.iFollow ? BbV5Shadows.pill : BbV5Shadows.ink,
+                ),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      social.iFollow
+                          ? LucideIcons.user_check
+                          : LucideIcons.user_plus,
+                      size: 14,
+                      color:
+                          social.iFollow ? BbV5Colors.ink : BbV5Colors.paperHi,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        social.iFollow
+                            ? 'Подписан · ${_formatDatingSocial(social.followers)}'
+                            : 'Подписаться · ${_formatDatingSocial(social.followers)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.caption.copyWith(
+                          color: social.iFollow
+                              ? BbV5Colors.ink
+                              : BbV5Colors.paperHi,
+                          fontFamily: 'Sora',
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: actionsEnabled ? controller.toggleLike : null,
+            child: Container(
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 13),
+              decoration: BoxDecoration(
+                color: BbV5Colors.paperHi,
+                borderRadius: BorderRadius.circular(BbV5Radii.pill),
+                border: Border.all(color: BbV5Colors.hair),
+                boxShadow: BbV5Shadows.pill,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.heart,
+                    size: 14,
+                    color: social.iLike ? BbV5Colors.terra : BbV5Colors.inkSoft,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _formatDatingSocial(social.likes),
+                    style: AppTextStyles.caption.copyWith(
+                      color: social.iLike ? BbV5Colors.terra : BbV5Colors.ink,
+                      fontFamily: 'Sora',
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+ProfileSocialData _fallbackSocialFor(String userId) {
+  final seed = userId.codeUnits.fold<int>(0, (sum, unit) => sum + unit);
+  return ProfileSocialData(
+    followers: 60 + seed % 480,
+    likes: 140 + seed % 1200,
+    superLikes: 8 + seed % 60,
+    iFollow: false,
+    iLike: false,
+    iSuper: false,
+  );
+}
+
+String _formatDatingSocial(int value) {
+  if (value >= 1000) {
+    final short = value / 1000;
+    return '${short.toStringAsFixed(short >= 10 ? 0 : 1)}к';
+  }
+  return value.toString();
+}
+
+class _DatingPhotoInfoOverlay extends StatelessWidget {
+  const _DatingPhotoInfoOverlay({required this.profile});
+
+  static const _defaultLanguage = DatingLanguageData(
+    flag: '🇷🇺',
+    label: 'Русский',
+  );
+  static const _defaultNationality = DatingLanguageData(
+    flag: '🇷🇺',
+    label: 'Россия',
+  );
+
+  final DatingProfileData profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final location = _locationLabel(profile);
+    final languages = profile.languages
+        .where(
+            (language) => language.flag.isNotEmpty || language.label.isNotEmpty)
+        .toList(growable: false);
+    final visibleLanguages =
+        (languages.isEmpty ? const [_defaultLanguage] : languages)
+            .take(2)
+            .toList(growable: false);
+    final extraLanguages =
+        (languages.isEmpty ? 1 : languages.length) - visibleLanguages.length;
+    final nationality = profile.nationality ?? _defaultNationality;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(LucideIcons.map_pin, size: 14, color: Colors.white),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                location,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.meta.copyWith(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _GlassPill(
+              height: 32,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    LucideIcons.languages,
+                    size: 14,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _languageLabel(visibleLanguages, extraLanguages),
+                    style: AppTextStyles.meta.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _GlassPill(
+              height: 32,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(LucideIcons.user, size: 14, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${nationality.flag} ${nationality.label}'.trim(),
+                    style: AppTextStyles.meta.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          profile.age == null
+              ? profile.name
+              : '${profile.name}, ${profile.age}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.screenTitle.copyWith(
+            color: Colors.white,
+            fontSize: 30,
+            fontWeight: FontWeight.w600,
+            height: 1,
+            letterSpacing: 0,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          profile.about,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.meta.copyWith(
+            color: Colors.white.withValues(alpha: 0.85),
+            fontSize: 13,
+            height: 1.25,
+          ),
+        ),
+      ],
+    );
+  }
+
+  static String _locationLabel(DatingProfileData profile) {
+    final city = _firstText([profile.city, 'Москва']);
+    final distance = _firstText([profile.distance, 'Рядом']);
+    return '$city · $distance';
+  }
+
+  static String _firstText(List<String?> values) {
+    for (final value in values) {
+      final trimmed = value?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) {
+        return trimmed;
+      }
+    }
+    return '';
+  }
+
+  static String _languageLabel(
+    List<DatingLanguageData> languages,
+    int extraLanguages,
+  ) {
+    final flags = languages
+        .map((language) => language.flag)
+        .where((flag) => flag.isNotEmpty)
+        .join(' ');
+    final firstLabel = languages.firstOrNull?.label ?? '';
+    final base =
+        [flags, firstLabel].where((part) => part.trim().isNotEmpty).join(' ');
+    if (extraLanguages <= 0) {
+      return base;
+    }
+    return '$base +$extraLanguages';
+  }
+}
+
+class _GlassPill extends StatelessWidget {
+  const _GlassPill({
+    required this.child,
+    required this.height,
+    required this.padding,
+  });
+
+  final Widget child;
+  final double height;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          height: height,
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+          ),
+          alignment: Alignment.center,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _DatingTag extends StatelessWidget {
+  const _DatingTag({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: BbV5Colors.paper,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: BbV5Colors.hair),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: AppTextStyles.meta.copyWith(
+          color: BbV5Colors.inkSoft,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0,
+        ),
+      ),
+    );
+  }
+}
+
+class _CardActionButton extends StatelessWidget {
+  const _CardActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.accent = false,
+    this.positive = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool accent;
+  final bool positive;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = positive
+        ? BbV5Colors.accent
+        : accent
+            ? BbV5Colors.paperHi
+            : BbV5Colors.paperHi;
+    final border = positive
+        ? BbV5Colors.accent
+        : accent
+            ? BbV5Colors.hair
+            : BbV5Colors.hair;
+    final foreground = positive
+        ? BbV5Colors.paperHi
+        : accent
+            ? BbV5Colors.gold
+            : BbV5Colors.inkSoft;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(BbV5Radii.pill),
+          border: Border.all(color: border),
+          boxShadow: positive ? BbV5Shadows.ink : BbV5Shadows.pill,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 15, color: foreground),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.meta.copyWith(
+                  color: foreground,
+                  fontFamily: 'Sora',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DatingThumbnail extends StatelessWidget {
+  const _DatingThumbnail({
+    required this.profile,
+  });
+
+  final DatingProfileData profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = profile.primaryPhoto?.url ??
+        profile.photos.firstOrNull?.url ??
+        profile.avatarUrl;
+
+    return BbProfilePhotoImage(
+      imageUrl: imageUrl,
+      fallbackText: profile.photoEmoji,
+      usageProfile: BbImageUsageProfile.avatar,
+      fallbackFontSize: 24,
+    );
+  }
+}
+
+class _SwipeDecisionPill extends StatelessWidget {
+  const _SwipeDecisionPill({
+    required this.direction,
+  });
+
+  final DatingSwipeDirection direction;
+
+  @override
+  Widget build(BuildContext context) {
+    final isLike = direction == DatingSwipeDirection.like;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isLike
+            ? BbV5Colors.accent.withValues(alpha: 0.92)
+            : BbV5Colors.paperHi.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        isLike ? 'Лайк' : 'Пропустить',
+        style: AppTextStyles.meta.copyWith(
+          color: isLike ? BbV5Colors.paperHi : BbV5Colors.ink,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+extension<T> on List<T> {
+  T? get firstOrNull => isEmpty ? null : first;
+}
