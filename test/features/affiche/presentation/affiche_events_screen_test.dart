@@ -79,6 +79,31 @@ void main() {
     expect(find.text('Афиша 0'), findsNothing);
   });
 
+  testWidgets('affiche screen reuses recently loaded filter pages', (
+    tester,
+  ) async {
+    _setMobileViewport(tester);
+    final repository = _PagedAfficheRepositoryState();
+
+    await tester.pumpWidget(_afficheApp(repository));
+    await tester.pumpAndSettle();
+
+    expect(repository.calls, hasLength(1));
+    expect(repository.calls.last.category, isNull);
+
+    await tester.tap(find.text('🎧 Концерты'));
+    await tester.pumpAndSettle();
+
+    expect(repository.calls, hasLength(2));
+    expect(repository.calls.last.category, 'concert');
+
+    await tester.tap(find.text('Все'));
+    await tester.pumpAndSettle();
+
+    expect(repository.calls, hasLength(2));
+    expect(find.text('Афиша 0'), findsOneWidget);
+  });
+
   testWidgets('affiche screen sends date and category filters', (tester) async {
     _setMobileViewport(tester);
     final repository = _PagedAfficheRepositoryState();

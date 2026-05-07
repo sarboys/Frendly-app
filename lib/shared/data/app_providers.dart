@@ -340,6 +340,8 @@ final afficheEventsProvider =
       .then((value) => value.items);
 });
 
+const _afficheFilterPageCacheTtl = Duration(minutes: 3);
+
 class AfficheEventsPagedState {
   const AfficheEventsPagedState({
     required this.items,
@@ -371,6 +373,23 @@ final afficheEventsPagedProvider = StateNotifierProvider.autoDispose.family<
     AfficheEventsPager,
     AsyncValue<AfficheEventsPagedState>,
     AfficheEventsQuery>((ref, query) {
+  if (query.query.isEmpty) {
+    final keepAliveLink = ref.keepAlive();
+    Timer? cacheTimer;
+
+    ref.onCancel(() {
+      cacheTimer?.cancel();
+      cacheTimer = Timer(_afficheFilterPageCacheTtl, keepAliveLink.close);
+    });
+    ref.onResume(() {
+      cacheTimer?.cancel();
+      cacheTimer = null;
+    });
+    ref.onDispose(() {
+      cacheTimer?.cancel();
+    });
+  }
+
   final pager = AfficheEventsPager(ref, query);
   unawaited(pager.loadFirstPage());
   return pager;
