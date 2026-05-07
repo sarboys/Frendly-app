@@ -19,6 +19,8 @@ enum BbAvatarSize {
   final double onlineDot;
 }
 
+const _avatarCacheKeyVersion = 'v2';
+
 class BbAvatar extends StatelessWidget {
   const BbAvatar({
     required this.name,
@@ -74,7 +76,8 @@ class BbAvatar extends StatelessWidget {
                       )
                     : CachedNetworkImage(
                         imageUrl: url,
-                        cacheKey: 'avatar-${size.name}-$url',
+                        cacheKey:
+                            'avatar-$_avatarCacheKeyVersion-${size.name}-$url',
                         width: size.dimension,
                         height: size.dimension,
                         fit: BoxFit.cover,

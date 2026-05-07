@@ -25,7 +25,7 @@ void main() {
     expect(image.imageUrl, 'https://cdn.example.com/profile.jpg');
     expect(
       image.cacheKey,
-      'profile-image-hero-https://cdn.example.com/profile.jpg',
+      'profile-image-v2-hero-https://cdn.example.com/profile.jpg',
     );
     expect(image.memCacheWidth, 1200);
     expect(image.memCacheHeight, 1600);

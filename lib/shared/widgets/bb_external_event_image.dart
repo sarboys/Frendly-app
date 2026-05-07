@@ -18,6 +18,8 @@ final externalEventImageCacheManager = CacheManager(
   ),
 );
 
+const _externalEventImageCacheKeyVersion = 'v2';
+
 class BbExternalEventImage extends StatelessWidget {
   const BbExternalEventImage({
     required this.imageUrl,
@@ -60,7 +62,7 @@ class BbExternalEventImage extends StatelessWidget {
   }
 
   static String cacheKeyFor(String url, BbExternalEventImageUsage usage) {
-    return 'external-event-image-${usage.name}-$url';
+    return 'external-event-image-$_externalEventImageCacheKeyVersion-${usage.name}-$url';
   }
 }
 

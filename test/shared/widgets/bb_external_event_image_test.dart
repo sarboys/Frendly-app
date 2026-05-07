@@ -25,7 +25,7 @@ void main() {
     expect(image.imageUrl, 'https://cdn.example.com/event.jpg');
     expect(
       image.cacheKey,
-      'external-event-image-card-https://cdn.example.com/event.jpg',
+      'external-event-image-v2-card-https://cdn.example.com/event.jpg',
     );
     expect(image.memCacheWidth, 900);
     expect(image.memCacheHeight, 520);

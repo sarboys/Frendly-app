@@ -37,7 +37,7 @@ void main() {
     expect(firstImage.memCacheWidth, 900);
     expect(
       firstImage.cacheKey,
-      'external-event-image-card-https://cdn.example.com/affiche-0.jpg',
+      'external-event-image-v2-card-https://cdn.example.com/affiche-0.jpg',
     );
 
     await tester.scrollUntilVisible(

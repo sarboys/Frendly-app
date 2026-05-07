@@ -10,6 +10,8 @@ enum BbImageUsageProfile {
   fullscreen,
 }
 
+const _profileImageCacheKeyVersion = 'v2';
+
 class BbProfilePhotoImage extends StatelessWidget {
   const BbProfilePhotoImage({
     required this.imageUrl,
@@ -59,7 +61,7 @@ class BbProfilePhotoImage extends StatelessWidget {
   }
 
   String _cacheKey(String url) {
-    return 'profile-image-${usageProfile.name}-$url';
+    return 'profile-image-$_profileImageCacheKeyVersion-${usageProfile.name}-$url';
   }
 
   _ProfileImageBucket get _bucket {

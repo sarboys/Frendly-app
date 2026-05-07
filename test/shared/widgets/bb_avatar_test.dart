@@ -46,7 +46,7 @@ void main() {
     expect(image.width, BbAvatarSize.lg.dimension);
     expect(image.height, BbAvatarSize.lg.dimension);
     expect(image.fit, BoxFit.cover);
-    expect(image.cacheKey, 'avatar-lg-https://cdn.example.com/avatar.jpg');
+    expect(image.cacheKey, 'avatar-v2-lg-https://cdn.example.com/avatar.jpg');
     expect(image.memCacheWidth, 168);
     expect(image.memCacheHeight, 168);
     expect(image.maxWidthDiskCache, 168);
