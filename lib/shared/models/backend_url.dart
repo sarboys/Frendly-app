@@ -10,8 +10,16 @@ String? resolveBackendUrl(String? raw) {
   }
 
   if (raw.startsWith('/')) {
-    return '${BackendConfig.apiBaseUrl}$raw';
+    return joinBackendUrl(BackendConfig.apiBaseUrl, raw);
   }
 
   return raw;
+}
+
+String joinBackendUrl(String baseUrl, String path) {
+  final cleanBase = baseUrl.replaceFirst(RegExp(r'/+$'), '');
+  if (!path.startsWith('/')) {
+    return '$cleanBase/$path';
+  }
+  return '$cleanBase$path';
 }

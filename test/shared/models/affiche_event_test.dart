@@ -1,5 +1,6 @@
 import 'package:big_break_mobile/app/core/config/backend_config.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
+import 'package:big_break_mobile/shared/models/backend_url.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -103,6 +104,16 @@ void main() {
     expect(
       event.imageUrl,
       '${BackendConfig.apiBaseUrl}/affiche/images?key=external-content%2Fitem.jpg',
+    );
+  });
+
+  test('joins relative backend urls without duplicate slash', () {
+    expect(
+      joinBackendUrl(
+        'https://api.frendly.tech/',
+        '/affiche/images?key=external-content%2Fitem.jpg',
+      ),
+      'https://api.frendly.tech/affiche/images?key=external-content%2Fitem.jpg',
     );
   });
 }
