@@ -9,7 +9,7 @@ class AppTextStyles {
         fontSize: 26,
         fontWeight: FontWeight.w600,
         height: 1.15,
-        letterSpacing: 0,
+        letterSpacing: -0.52,
       );
 
   static TextStyle get sectionTitle => const TextStyle(
@@ -17,7 +17,7 @@ class AppTextStyles {
         fontSize: 20,
         fontWeight: FontWeight.w600,
         height: 1.2,
-        letterSpacing: 0,
+        letterSpacing: -0.4,
       );
 
   static TextStyle get cardTitle => const TextStyle(
@@ -25,7 +25,7 @@ class AppTextStyles {
         fontSize: 18,
         fontWeight: FontWeight.w600,
         height: 1.25,
-        letterSpacing: 0,
+        letterSpacing: -0.36,
       );
 
   static TextStyle get itemTitle => const TextStyle(
@@ -33,7 +33,7 @@ class AppTextStyles {
         fontSize: 15,
         fontWeight: FontWeight.w600,
         height: 1.15,
-        letterSpacing: 0,
+        letterSpacing: -0.3,
       );
 
   static TextStyle get body => const TextStyle(

@@ -79,7 +79,11 @@ class _BbMessageActionsSheet extends StatelessWidget {
                       message.author,
                       style: AppTextStyles.caption.copyWith(
                         color: colors.inkSoft,
+                        fontFamily: 'Sora',
+                        fontSize: 10,
                         fontWeight: FontWeight.w600,
+                        height: 1.1,
+                        letterSpacing: 0,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -89,6 +93,8 @@ class _BbMessageActionsSheet extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.body.copyWith(
                         color: colors.foreground,
+                        fontSize: 13.5,
+                        height: 1.25,
                       ),
                     ),
                   ],
@@ -168,20 +174,23 @@ class _ActionTile extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
           child: Row(
             children: [
               Icon(
                 icon,
-                size: 18,
+                size: 16,
                 color: foreground,
               ),
               const SizedBox(width: AppSpacing.sm),
               Text(
                 label,
-                style: AppTextStyles.body.copyWith(
+                style: AppTextStyles.button.copyWith(
                   color: foreground,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
+                  height: 1.1,
+                  letterSpacing: 0,
                 ),
               ),
             ],

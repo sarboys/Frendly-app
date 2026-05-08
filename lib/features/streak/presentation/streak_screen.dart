@@ -37,7 +37,7 @@ class StreakScreen extends StatelessWidget {
               accent: 'streak',
               onBack: () => context.pop(),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Expanded(
               child: Stack(
                 children: [
@@ -83,24 +83,43 @@ class StreakScreen extends StatelessWidget {
                                         const BbV5Kicker('В этом месяце'),
                                         const SizedBox(height: 4),
                                         Text.rich(
-                                          const TextSpan(
+                                          TextSpan(
                                             children: [
-                                              TextSpan(text: '$current'),
+                                              const TextSpan(text: '$current'),
                                               TextSpan(
                                                 text: ' / $monthGoal вечеров',
+                                                style: AppTextStyles.screenTitle
+                                                    .copyWith(
+                                                  fontFamily: 'Sora',
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.w400,
+                                                  height: 1,
+                                                  letterSpacing: 0,
+                                                  color: BbV5Colors.inkMute,
+                                                  fontFeatures: const [
+                                                    FontFeature
+                                                        .tabularFigures(),
+                                                  ],
+                                                ),
                                               ),
                                             ],
                                           ),
                                           style: bbV5DisplayStyle(
                                             fontSize: 42,
                                             height: 1,
+                                            letterSpacing: -1.26,
+                                          ).copyWith(
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures(),
+                                            ],
                                           ),
                                         ),
                                         const SizedBox(height: 8),
                                         Text(
                                           'Ещё 2 встречи. Потом откроется десерт у Powerhouse.',
                                           style: AppTextStyles.meta.copyWith(
-                                            height: 1.4,
+                                            fontSize: 12.5,
+                                            height: 1.625,
                                             color: BbV5Colors.inkSoft,
                                           ),
                                         ),
@@ -125,7 +144,7 @@ class StreakScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                      const SliverToBoxAdapter(child: SizedBox(height: 20)),
                       const SliverToBoxAdapter(
                         child: _MonthMapCard(),
                       ),
@@ -147,6 +166,7 @@ class StreakScreen extends StatelessWidget {
                         trailingIcon: LucideIcons.chevron_right,
                         dark: true,
                         height: 48,
+                        fontSize: 13,
                         expanded: true,
                         onPressed: () => context.pushRoute(AppRoute.perks),
                       ),
@@ -180,6 +200,7 @@ class _MonthMapCard extends StatelessWidget {
           Text(
             '30 дней',
             style: AppTextStyles.caption.copyWith(
+              fontSize: 10.5,
               color: BbV5Colors.inkMute,
               letterSpacing: 0,
             ),
@@ -229,6 +250,7 @@ class _MonthMapCard extends StatelessWidget {
                       letterSpacing: 0,
                       fontWeight: FontWeight.w600,
                       color: went ? BbV5Colors.paperHi : BbV5Colors.inkMute,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
                 );
@@ -283,6 +305,7 @@ class _LegendDot extends StatelessWidget {
         Text(
           label,
           style: AppTextStyles.caption.copyWith(
+            fontSize: 10.5,
             color: BbV5Colors.inkSoft,
             letterSpacing: 0,
           ),
@@ -395,18 +418,25 @@ class _RewardCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                BbV5Kicker(item.threshold),
-                const SizedBox(height: 4),
+                Text(
+                  item.threshold,
+                  style: bbV5KickerStyle(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.8,
+                  ),
+                ),
+                const SizedBox(height: 2),
                 Text(
                   item.title,
-                  style: bbV5DisplayStyle(fontSize: 15, height: 1.1),
+                  style: bbV5DisplayStyle(fontSize: 14.5, height: 1.25),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   item.subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.caption.copyWith(
+                    fontSize: 11.5,
                     color: BbV5Colors.inkMute,
                     letterSpacing: 0,
                   ),

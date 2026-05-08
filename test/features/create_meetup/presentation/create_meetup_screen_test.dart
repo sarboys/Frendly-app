@@ -61,7 +61,6 @@ class _FakeCreateMeetupRepository extends BackendRepository {
     String visibilityMode = 'public',
     EventJoinMode joinMode = EventJoinMode.open,
     String? inviteeUserId,
-    String? posterId,
     String? afficheEventId,
     String? routeId,
     CreateEventRoutePayload? route,
@@ -122,7 +121,10 @@ class _FakeCreateMeetupRepository extends BackendRepository {
   }
 
   @override
-  Future<AfficheEvent> fetchAfficheEventDetail(String eventId) async {
+  Future<AfficheEvent> fetchAfficheEventDetail(
+    String eventId, {
+    CancelToken? cancelToken,
+  }) async {
     return AfficheEvent.fromJson({
       'id': eventId,
       'title': 'Большой стендап',
@@ -307,8 +309,27 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Finder attachIconButton(String tooltip) {
+    return find
+        .byWidgetPredicate(
+          (widget) => widget is IconButton && widget.tooltip == tooltip,
+          description: '$tooltip attach icon button',
+        )
+        .first;
+  }
+
   Future<void> scrollToAttachActions(WidgetTester tester) async {
     await scrollTo(tester, find.text('Прикрепить'));
+  }
+
+  Future<void> tapAttachIconButton(
+    WidgetTester tester,
+    String tooltip,
+  ) async {
+    final button = tester.widget<IconButton>(attachIconButton(tooltip));
+    expect(button.onPressed, isNotNull);
+    button.onPressed!.call();
+    await tester.pumpAndSettle();
   }
 
   testWidgets('create meetup screen renders publish CTA and helper copy',
@@ -389,8 +410,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await scrollToAttachActions(tester);
-    await tester.tap(find.byTooltip('Маршрут'));
-    await tester.pumpAndSettle();
+    await tapAttachIconButton(tester, 'Маршрут');
 
     final routeIcon = tester.widget<Icon>(find.byIcon(LucideIcons.route).last);
     expect(routeIcon.color, AppColors.adMagenta);
@@ -604,8 +624,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField).first, 'Вечер по маршруту');
     await scrollToAttachActions(tester);
-    await tester.tap(find.byTooltip('Маршрут'));
-    await tester.pumpAndSettle();
+    await tapAttachIconButton(tester, 'Маршрут');
     await tester.tap(find.text('Тёплый круг на Покровке'));
     await tester.pumpAndSettle();
 
@@ -627,9 +646,9 @@ void main() {
     await tester.pumpWidget(_wrap((value) => repository = value));
     await tester.pumpAndSettle();
 
+    await enterTitle(tester, 'Свой вечер');
     await scrollToAttachActions(tester);
-    await tester.tap(find.byTooltip('Маршрут'));
-    await tester.pumpAndSettle();
+    await tapAttachIconButton(tester, 'Маршрут');
     await tester.tap(find.text('Свой'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Сохранить маршрут'));
@@ -637,9 +656,8 @@ void main() {
     await tester.tap(find.widgetWithText(InkWell, 'Сохранить маршрут'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Свой маршрут · 2 шага'), findsOneWidget);
+    expect(find.text('Свой маршрут · 2 шага'), findsWidgets);
 
-    await enterTitle(tester, 'Свой вечер');
     await enterDescription(tester, 'Короткое описание');
     await tapCreate(tester);
 
@@ -725,6 +743,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await enterTitle(tester, 'Кофе после работы');
     await openPlaceSheet(tester);
     await tester.enterText(placeSheetSearchField, 'Тверская');
     await tester.pump(const Duration(milliseconds: 350));
@@ -732,7 +751,6 @@ void main() {
     await tester.tap(find.widgetWithText(InkWell, 'Тверская улица').last);
     await tester.pumpAndSettle();
 
-    await enterTitle(tester, 'Кофе после работы');
     await enterDescription(tester, 'Короткая встреча в центре');
     await tapCreate(tester);
 

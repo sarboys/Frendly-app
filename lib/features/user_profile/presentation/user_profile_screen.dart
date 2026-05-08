@@ -134,7 +134,11 @@ class UserProfileScreen extends ConsumerWidget {
                                 if ((profile.area ?? '').isNotEmpty)
                                   profile.area!,
                               ].join(' · '),
-                              style: AppTextStyles.meta,
+                              style: AppTextStyles.meta.copyWith(
+                                fontSize: 13,
+                                height: 1.2,
+                                color: colors.inkMute,
+                              ),
                             ),
                           ],
                         ),
@@ -229,7 +233,9 @@ class UserProfileScreen extends ConsumerWidget {
                                     Text(item,
                                         style: AppTextStyles.meta.copyWith(
                                             color: colors.inkSoft,
-                                            fontSize: 13)),
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            height: 1.2)),
                                   ],
                                 ),
                               ),
@@ -284,6 +290,8 @@ class UserProfileScreen extends ConsumerWidget {
                                           style: AppTextStyles.meta.copyWith(
                                             color: colors.inkSoft,
                                             fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            height: 1.2,
                                           ),
                                         ),
                                       ],
@@ -306,7 +314,11 @@ class UserProfileScreen extends ConsumerWidget {
                       title: 'О себе',
                       child: Text(
                         profile.bio ?? '',
-                        style: AppTextStyles.bodySoft,
+                        style: AppTextStyles.bodySoft.copyWith(
+                          fontSize: 14,
+                          height: 1.625,
+                          color: colors.inkSoft,
+                        ),
                       ),
                     ),
                   ],
@@ -359,6 +371,7 @@ class UserProfileScreen extends ConsumerWidget {
                                     style: AppTextStyles.body.copyWith(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
+                                      height: 1.1,
                                       color: colors.foreground,
                                     ),
                                   ),
@@ -411,6 +424,7 @@ class UserProfileScreen extends ConsumerWidget {
                                         style: AppTextStyles.body.copyWith(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
+                                          height: 1.1,
                                           color: colors.background,
                                         ),
                                       ),
@@ -453,7 +467,10 @@ Future<void> _showProfileActions(
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.flag_outlined),
-              title: const Text('Пожаловаться'),
+              title: Text(
+                'Пожаловаться',
+                style: AppTextStyles.itemTitle.copyWith(fontSize: 14),
+              ),
               onTap: () {
                 Navigator.of(sheetContext).pop();
                 outerContext.pushRoute(
@@ -465,7 +482,10 @@ Future<void> _showProfileActions(
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.block_outlined),
-              title: const Text('Заблокировать'),
+              title: Text(
+                'Заблокировать',
+                style: AppTextStyles.itemTitle.copyWith(fontSize: 14),
+              ),
               onTap: () async {
                 Navigator.of(sheetContext).pop();
                 await repository.createBlock(
@@ -503,6 +523,7 @@ class _UserSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 24),
       child: Column(
@@ -510,9 +531,16 @@ class _UserSection extends StatelessWidget {
         children: [
           Text(
             title,
-            style: AppTextStyles.caption.copyWith(letterSpacing: 0),
+            style: AppTextStyles.caption.copyWith(
+              fontFamily: 'Sora',
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              height: 1.1,
+              letterSpacing: 0.55,
+              color: colors.inkMute,
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 10),
           child,
         ],
       ),
@@ -541,9 +569,23 @@ class _TrustCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(value, style: AppTextStyles.itemTitle),
+          Text(
+            value,
+            style: AppTextStyles.itemTitle.copyWith(
+              fontSize: 16,
+              height: 1.15,
+              color: colors.foreground,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(label, style: AppTextStyles.caption),
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              fontSize: 11,
+              height: 1.2,
+              color: colors.inkMute,
+            ),
+          ),
         ],
       ),
     );

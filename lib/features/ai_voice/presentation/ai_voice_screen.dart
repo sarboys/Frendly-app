@@ -81,15 +81,22 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
                               : _startListening,
                     ),
                     const SizedBox(height: 20),
-                    BbV5Kicker(_phaseLabel),
+                    Text(
+                      _phaseLabel,
+                      style: bbV5KickerStyle(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 2.2,
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     if (_transcript.isEmpty)
                       Text(
                         'Скажи, какой вечер хочешь. Я соберу 2-3 места и предложу людей рядом.',
                         textAlign: TextAlign.center,
                         style: AppTextStyles.meta.copyWith(
+                          fontSize: 13,
                           color: BbV5Colors.inkSoft,
-                          height: 1.5,
+                          height: 1.625,
                         ),
                       )
                     else
@@ -98,10 +105,10 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
                         textAlign: TextAlign.center,
                         style: AppTextStyles.body.copyWith(
                           fontFamily: 'InstrumentSerif',
-                          fontSize: 18,
+                          fontSize: 16,
                           fontStyle: FontStyle.italic,
                           color: BbV5Colors.ink,
-                          height: 1.3,
+                          height: 1.375,
                         ),
                       ),
                   ],
@@ -109,7 +116,7 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
               ),
             ),
             if (_phase == _VoicePhase.idle) ...[
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              const SliverToBoxAdapter(child: SizedBox(height: 20)),
               SliverToBoxAdapter(
                 child: BbV5Section(
                   title: 'Или выбери пример',
@@ -143,6 +150,7 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
                   icon: LucideIcons.send,
                   dark: true,
                   height: 56,
+                  fontSize: 14,
                   expanded: true,
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -160,10 +168,10 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
 
   String get _phaseLabel {
     return switch (_phase) {
-      _VoicePhase.idle => 'Нажми и говори',
-      _VoicePhase.listening => 'Слушаю',
-      _VoicePhase.thinking => 'Собираю маршрут',
-      _VoicePhase.ready => 'Готово',
+      _VoicePhase.idle => 'НАЖМИ И ГОВОРИ',
+      _VoicePhase.listening => 'СЛУШАЮ…',
+      _VoicePhase.thinking => 'СОБИРАЮ МАРШРУТ',
+      _VoicePhase.ready => 'ГОТОВО',
     };
   }
 
@@ -358,9 +366,10 @@ class _PromptPreset extends StatelessWidget {
               '«$text»',
               style: AppTextStyles.body.copyWith(
                 fontFamily: 'InstrumentSerif',
+                fontSize: 13,
                 fontStyle: FontStyle.italic,
                 color: BbV5Colors.inkSoft,
-                height: 1.25,
+                height: 1.375,
               ),
             ),
           ),
@@ -405,7 +414,8 @@ class _RoutePlan extends StatelessWidget {
         style: TextButton.styleFrom(
           foregroundColor: BbV5Colors.accent,
           textStyle: AppTextStyles.caption.copyWith(
-            fontWeight: FontWeight.w700,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -492,15 +502,18 @@ class _StopRow extends StatelessWidget {
                     Text(
                       stop.time,
                       style: AppTextStyles.caption.copyWith(
+                        fontFamily: 'Sora',
                         color: stop.color,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
+                        letterSpacing: 1.1,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                     const SizedBox(width: 6),
                     Text(
                       '· ${stop.tag}',
                       style: AppTextStyles.caption.copyWith(
+                        fontSize: 10,
                         color: BbV5Colors.inkMute,
                         letterSpacing: 0,
                       ),
@@ -510,12 +523,13 @@ class _StopRow extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   stop.place,
-                  style: bbV5DisplayStyle(fontSize: 15, height: 1.1),
+                  style: bbV5DisplayStyle(fontSize: 15, height: 1.25),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   stop.subtitle,
                   style: AppTextStyles.caption.copyWith(
+                    fontSize: 11.5,
                     color: BbV5Colors.inkMute,
                     letterSpacing: 0,
                   ),
@@ -608,19 +622,29 @@ class _PersonCard extends StatelessWidget {
               child: Text(
                 person.name,
                 style: AppTextStyles.caption.copyWith(
+                  fontFamily: 'Sora',
+                  fontSize: 12,
                   color: BbV5Colors.paperHi,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: 0,
                 ),
               ),
             ),
           ),
           const SizedBox(height: 10),
-          BbV5Kicker(person.match.toUpperCase(), color: BbV5Colors.accent),
+          Text(
+            person.match.toUpperCase(),
+            style: bbV5KickerStyle(
+              color: BbV5Colors.accent,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.4,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(
             person.tags,
             style: AppTextStyles.caption.copyWith(
+              fontSize: 10.5,
               color: BbV5Colors.inkMute,
               letterSpacing: 0,
             ),

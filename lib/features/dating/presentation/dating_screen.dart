@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:ui';
 
+import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
@@ -66,6 +68,16 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
     final discover = discoverAsync?.valueOrNull ?? const <DatingProfileData>[];
     final filteredDiscover = _filterProfiles(discover);
     final current = _currentProfile(filteredDiscover);
+    if (premium && _tab == 'discover' && filteredDiscover.isNotEmpty) {
+      unawaited(
+        ref.read(appMediaPrewarmServiceProvider).warmProfileImages(
+              _prewarmPhotoUrls(filteredDiscover),
+              usageProfile: BbImageUsageProfile.hero,
+              limit: 6,
+              concurrency: 2,
+            ),
+      );
+    }
     final hasWidePhotoTapZone = premium &&
         _tab == 'discover' &&
         current != null &&
@@ -373,7 +385,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                 color: BbV5Colors.inkMute,
                 fontSize: 10.5,
                 fontWeight: FontWeight.w600,
-                letterSpacing: 0,
+                letterSpacing: 1.68,
               ),
             ),
           ],
@@ -455,10 +467,14 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                           overflow: TextOverflow.ellipsis,
                           style: bbV5DisplayStyle(
                             fontSize: 15,
-                            height: 1.1,
+                            height: 1.25,
+                          ).copyWith(
+                            fontFeatures: const [
+                              FontFeature.tabularFigures(),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 2),
                         Text(
                           profile.about,
                           maxLines: 1,
@@ -468,7 +484,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                             fontSize: 11.5,
                           ),
                         ),
-                        const SizedBox(height: 7),
+                        const SizedBox(height: 6),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -484,7 +500,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                                 color: BbV5Colors.terra,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
-                                letterSpacing: 0,
+                                letterSpacing: 0.6,
                               ),
                             ),
                           ],
@@ -646,15 +662,19 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                         children: [
                           Row(
                             children: [
-                              const Expanded(
+                              Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    BbV5Kicker('Фильтры'),
-                                    SizedBox(height: 3),
-                                    BbV5HeroTitle(
-                                      title: 'Найти своих',
-                                      fontSize: 18,
+                                    const BbV5Kicker('Фильтры'),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      'Найти своих',
+                                      style: bbV5DisplayStyle(
+                                        fontSize: 18,
+                                        height: 1.25,
+                                        letterSpacing: 0,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -668,7 +688,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           const BbV5Kicker('Район'),
                           const SizedBox(height: 8),
                           Wrap(
@@ -686,7 +706,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                                 )
                                 .toList(growable: false),
                           ),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 16),
                           const BbV5Kicker('Когда'),
                           const SizedBox(height: 8),
                           Wrap(
@@ -704,7 +724,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                                 )
                                 .toList(growable: false),
                           ),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 16),
                           const BbV5Kicker('Интересы'),
                           const SizedBox(height: 8),
                           Wrap(
@@ -726,11 +746,12 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                                 )
                                 .toList(growable: false),
                           ),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 16),
                           BbV5Kicker(
                             'Возраст · ${_filterAge.start.round()}-'
                             '${_filterAge.end.round()}',
                           ),
+                          const SizedBox(height: 8),
                           RangeSlider(
                             min: 18,
                             max: 50,
@@ -746,7 +767,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                               _filterAge = values;
                             }),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 20),
                           Row(
                             children: [
                               Expanded(
@@ -759,6 +780,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                                     _filterAge = const RangeValues(22, 35);
                                   }),
                                   height: 48,
+                                  fontSize: 13,
                                   expanded: true,
                                 ),
                               ),
@@ -774,6 +796,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                                   },
                                   dark: true,
                                   height: 48,
+                                  fontSize: 13,
                                   expanded: true,
                                 ),
                               ),
@@ -820,6 +843,22 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         order: 0,
       ),
     ];
+  }
+
+  Iterable<String?> _prewarmPhotoUrls(List<DatingProfileData> profiles) sync* {
+    var emittedProfiles = 0;
+    for (final profile in profiles) {
+      if (_handledProfileIds.contains(profile.userId)) {
+        continue;
+      }
+      for (final photo in _photosFor(profile).take(2)) {
+        yield photo.url;
+      }
+      emittedProfiles += 1;
+      if (emittedProfiles >= 3) {
+        break;
+      }
+    }
   }
 
   int _photoIndexFor(DatingProfileData profile) {
@@ -1037,6 +1076,7 @@ class _DatingTabButton extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                   color: active ? BbV5Colors.paperHi : BbV5Colors.inkSoft,
                   letterSpacing: 0,
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
           ],
@@ -1069,7 +1109,9 @@ class _DatingMiniStat extends StatelessWidget {
         children: [
           Text(
             value,
-            style: bbV5DisplayStyle(fontSize: 19),
+            style: bbV5DisplayStyle(fontSize: 19).copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
           const SizedBox(height: 2),
           Text(
@@ -1462,7 +1504,7 @@ class _DatingProfileCard extends StatelessWidget {
                                 color: BbV5Colors.ink,
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w600,
-                                letterSpacing: 0,
+                                letterSpacing: 0.84,
                               ),
                             ),
                           ],
@@ -1685,6 +1727,7 @@ class _DatingFollowRow extends ConsumerWidget {
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
                 ],
@@ -1761,6 +1804,7 @@ class _DatingPhotoInfoOverlay extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.meta.copyWith(
                   color: Colors.white.withValues(alpha: 0.9),
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1788,6 +1832,7 @@ class _DatingPhotoInfoOverlay extends StatelessWidget {
                     _languageLabel(visibleLanguages, extraLanguages),
                     style: AppTextStyles.meta.copyWith(
                       color: Colors.white,
+                      fontSize: 10.5,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1806,6 +1851,7 @@ class _DatingPhotoInfoOverlay extends StatelessWidget {
                     '${nationality.flag} ${nationality.label}'.trim(),
                     style: AppTextStyles.meta.copyWith(
                       color: Colors.white,
+                      fontSize: 10.5,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1823,10 +1869,11 @@ class _DatingPhotoInfoOverlay extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: AppTextStyles.screenTitle.copyWith(
             color: Colors.white,
-            fontSize: 30,
+            fontSize: 28,
             fontWeight: FontWeight.w600,
             height: 1,
-            letterSpacing: 0,
+            letterSpacing: -0.56,
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
         const SizedBox(height: 6),
@@ -1836,8 +1883,8 @@ class _DatingPhotoInfoOverlay extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: AppTextStyles.meta.copyWith(
             color: Colors.white.withValues(alpha: 0.85),
-            fontSize: 13,
-            height: 1.25,
+            fontSize: 12.5,
+            height: 1.375,
           ),
         ),
       ],
@@ -1931,9 +1978,9 @@ class _DatingTag extends StatelessWidget {
         label,
         style: AppTextStyles.meta.copyWith(
           color: BbV5Colors.inkSoft,
-          fontSize: 11.5,
+          fontSize: 10.5,
           fontWeight: FontWeight.w600,
-          letterSpacing: 0,
+          letterSpacing: 0.42,
         ),
       ),
     );
@@ -1988,7 +2035,7 @@ class _CardActionButton extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, size: 15, color: foreground),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             Flexible(
               child: Text(
                 label,
@@ -1997,7 +2044,7 @@ class _CardActionButton extends StatelessWidget {
                 style: AppTextStyles.meta.copyWith(
                   color: foreground,
                   fontFamily: 'Sora',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0,
                 ),

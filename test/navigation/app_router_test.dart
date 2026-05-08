@@ -91,24 +91,9 @@ void main() {
 
     expect(
       appRouter.namedLocation(
-        AppRoute.posters.name,
-      ),
-      '/posters',
-    );
-
-    expect(
-      appRouter.namedLocation(
         AppRoute.affiche.name,
       ),
       '/affiche',
-    );
-
-    expect(
-      appRouter.namedLocation(
-        AppRoute.poster.name,
-        pathParameters: const {'posterId': 'ps1'},
-      ),
-      '/poster/ps1',
     );
 
     expect(
@@ -198,6 +183,14 @@ void main() {
       ),
       '/stories/e1',
     );
+  });
+
+  test('router does not expose old search or posters routes', () {
+    final paths = AppRoute.values.map((route) => route.path).toSet();
+
+    expect(paths, isNot(contains('/search')));
+    expect(paths, isNot(contains('/posters')));
+    expect(paths, isNot(contains('/poster/:posterId')));
   });
 
   test(

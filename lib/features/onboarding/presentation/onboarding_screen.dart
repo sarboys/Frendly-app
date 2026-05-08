@@ -463,7 +463,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   Widget _buildStepHeading(String title, String subtitle) {
     final words = title.trim().split(RegExp(r'\s+'));
-    final accent = words.isEmpty ? null : words.last;
+    final accent = words.length <= 1 ? null : words.last;
     final lead =
         words.length <= 1 ? title : words.take(words.length - 1).join(' ');
 
@@ -472,16 +472,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       children: [
         BbV5Kicker('Шаг ${step + 1} из ${_steps.length}'),
         const SizedBox(height: 6),
-        BbV5HeroTitle(
+        _OnboardingTitle(
           title: lead,
           accent: accent,
-          fontSize: 28,
         ),
         const SizedBox(height: 8),
         Text(
           subtitle,
           style: AppTextStyles.bodySoft.copyWith(
-            fontSize: 13.5,
+            fontSize: 13,
             color: BbV5Colors.inkSoft,
           ),
         ),
@@ -798,6 +797,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 icon: null,
                 title: item.$2,
                 subtitle: item.$3,
+                subtitleFontSize: 12.5,
+                subtitleTopSpacing: 4,
                 onTap: () => setState(() {
                   _didTouchForm = true;
                   vibe = item.$1;
@@ -825,8 +826,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           'Покажем встречи 18+ корректно. Дату не публикуем.',
         ),
         const SizedBox(height: 24),
-        const BbV5Kicker('Дата рождения'),
-        const SizedBox(height: 10),
         Row(
           children: [
             Container(
@@ -849,6 +848,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 'Дата нужна для возрастных встреч и подсказок. В профиле она не видна.',
                 style: AppTextStyles.meta.copyWith(
                   color: BbV5Colors.inkSoft,
+                  fontSize: 12.5,
                   height: 1.4,
                 ),
               ),
@@ -867,7 +867,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 onChanged: (_) => _handleBirthPartsChanged(),
               ),
             ),
-            const SizedBox(width: AppSpacing.xs),
+            const SizedBox(width: 10),
             Expanded(
               child: _BirthPartField(
                 label: 'Месяц',
@@ -877,7 +877,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 onChanged: (_) => _handleBirthPartsChanged(),
               ),
             ),
-            const SizedBox(width: AppSpacing.xs),
+            const SizedBox(width: 10),
             Expanded(
               child: _BirthPartField(
                 label: 'Год',
@@ -1044,7 +1044,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
           ),
           style: AppTextStyles.body.copyWith(
+            fontFamily: 'Sora',
             color: BbV5Colors.ink,
+            fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -1529,6 +1531,43 @@ enum _PermissionType {
   contacts,
 }
 
+class _OnboardingTitle extends StatelessWidget {
+  const _OnboardingTitle({
+    required this.title,
+    required this.accent,
+  });
+
+  final String title;
+  final String? accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = bbV5DisplayStyle(fontSize: 26, height: 1.1);
+    final accentText = accent;
+    if (accentText == null || accentText.isEmpty) {
+      return Text(title, style: base);
+    }
+
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: title),
+          const TextSpan(text: ' '),
+          TextSpan(
+            text: accentText,
+            style: base.copyWith(
+              fontFamily: 'InstrumentSerif',
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ],
+      ),
+      style: base,
+    );
+  }
+}
+
 class _BirthPartField extends StatelessWidget {
   const _BirthPartField({
     required this.label,
@@ -1549,39 +1588,47 @@ class _BirthPartField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        BbV5Kicker(label),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          textInputAction:
-              maxLength == 4 ? TextInputAction.done : TextInputAction.next,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(maxLength),
-          ],
-          textAlign: TextAlign.center,
-          onChanged: onChanged,
-          decoration: InputDecoration(
-            hintText: hint,
-            counterText: '',
-            filled: true,
-            fillColor: BbV5Colors.paperHi,
-            contentPadding: const EdgeInsets.symmetric(vertical: 17),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: BbV5Colors.hair),
+        Text(
+          label,
+          style: bbV5KickerStyle(letterSpacing: 1.6),
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 56,
+          child: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            textInputAction:
+                maxLength == 4 ? TextInputAction.done : TextInputAction.next,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(maxLength),
+            ],
+            textAlign: TextAlign.center,
+            onChanged: onChanged,
+            decoration: InputDecoration(
+              hintText: hint,
+              counterText: '',
+              filled: true,
+              fillColor: BbV5Colors.paperHi,
+              contentPadding: const EdgeInsets.symmetric(vertical: 17),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: const BorderSide(color: BbV5Colors.hair),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: const BorderSide(color: BbV5Colors.hair),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: const BorderSide(color: BbV5Colors.ink),
+              ),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: BbV5Colors.hair),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: BbV5Colors.ink),
+            style: bbV5DisplayStyle(fontSize: 16, height: 1).copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
-          style: bbV5DisplayStyle(fontSize: 16, height: 1),
         ),
       ],
     );
@@ -1632,16 +1679,18 @@ class _PermissionCard extends StatelessWidget {
                   title,
                   style: AppTextStyles.body.copyWith(
                     fontFamily: 'Sora',
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: BbV5Colors.ink,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   subtitle,
                   style: AppTextStyles.caption.copyWith(
+                    fontSize: 11.5,
                     color: BbV5Colors.inkMute,
-                    height: 1.25,
+                    height: 1.375,
                     letterSpacing: 0,
                   ),
                 ),
@@ -1806,6 +1855,8 @@ class _ChoiceCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.subtitleFontSize = 12,
+    this.subtitleTopSpacing = 2,
   });
 
   final bool active;
@@ -1813,6 +1864,8 @@ class _ChoiceCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final double subtitleFontSize;
+  final double subtitleTopSpacing;
 
   @override
   Widget build(BuildContext context) {
@@ -1868,10 +1921,11 @@ class _ChoiceCard extends StatelessWidget {
                         color: BbV5Colors.ink,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: subtitleTopSpacing),
                     Text(
                       subtitle,
                       style: AppTextStyles.meta.copyWith(
+                        fontSize: subtitleFontSize,
                         color: BbV5Colors.inkMute,
                       ),
                     ),

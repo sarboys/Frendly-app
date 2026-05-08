@@ -308,7 +308,7 @@ class _PaywallHero extends StatelessWidget {
                   fontFamily: 'Sora',
                   fontSize: 10.5,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: 0,
+                  letterSpacing: 1.89,
                   color: BbV5Colors.paperHi,
                 ),
               ),
@@ -538,7 +538,10 @@ class _PlanTile extends StatelessWidget {
                     children: [
                       Text(
                         '${plan.priceRub} ₽',
-                        style: bbV5DisplayStyle(fontSize: 22, height: 1),
+                        style:
+                            bbV5DisplayStyle(fontSize: 22, height: 1).copyWith(
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
                       ),
                       if (plan.id == 'month')
                         Text(
@@ -554,6 +557,9 @@ class _PlanTile extends StatelessWidget {
                           style: AppTextStyles.meta.copyWith(
                             color: BbV5Colors.inkMute,
                             decoration: TextDecoration.lineThrough,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures(),
+                            ],
                           ),
                         ),
                       ],
@@ -566,6 +572,7 @@ class _PlanTile extends StatelessWidget {
                       style: AppTextStyles.caption.copyWith(
                         letterSpacing: 0,
                         color: BbV5Colors.inkMute,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ],
@@ -599,7 +606,7 @@ class _PlanBadge extends StatelessWidget {
         style: AppTextStyles.caption.copyWith(
           fontSize: 10,
           fontWeight: FontWeight.w600,
-          letterSpacing: 0,
+          letterSpacing: 0.8,
           color: BbV5Colors.paperHi,
         ),
       ),

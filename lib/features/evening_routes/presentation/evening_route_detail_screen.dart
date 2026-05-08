@@ -60,7 +60,7 @@ class _RouteDetailContent extends StatelessWidget {
             child: Column(
               children: [
                 _RouteDetailHeader(route: route),
-                const SizedBox(height: 18),
+                const SizedBox(height: 20),
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(0, 0, 0, 188),
@@ -120,7 +120,7 @@ class _RouteDetailHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const BbV5Kicker('Маршрут вечера'),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Text(
                 route.title,
                 maxLines: 1,
@@ -185,7 +185,7 @@ class _RouteHero extends StatelessWidget {
             style: AppTextStyles.meta.copyWith(
               color: BbV5Colors.inkSoft,
               fontSize: 13,
-              height: 1.45,
+              height: 1.625,
             ),
           ),
           const SizedBox(height: 16),
@@ -224,7 +224,7 @@ class _RouteHero extends StatelessWidget {
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.only(top: 14),
+              padding: const EdgeInsets.only(top: 16),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -241,7 +241,9 @@ class _RouteHero extends StatelessWidget {
                   ),
                   Text(
                     '${_formatRubles(route.totalPriceFrom)}₽',
-                    style: bbV5DisplayStyle(fontSize: 18),
+                    style: bbV5DisplayStyle(fontSize: 18).copyWith(
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
                   if (route.totalSavings > 0)
                     _RouteSavingsBadge(value: route.totalSavings),
@@ -284,9 +286,9 @@ class _RouteHeroStat extends StatelessWidget {
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: bbV5DisplayStyle(fontSize: 14),
+            style: bbV5DisplayStyle(fontSize: 14, height: 1),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             label,
             maxLines: 1,
@@ -338,6 +340,7 @@ class _RouteSavingsBadge extends StatelessWidget {
               fontSize: 10.5,
               fontWeight: FontWeight.w600,
               letterSpacing: 0,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -409,7 +412,7 @@ class _RouteStepCard extends StatelessWidget {
     final timeLabel = [
       step.time,
       if ((step.endTime ?? '').isNotEmpty) step.endTime!,
-    ].join(' - ');
+    ].join(' — ');
 
     return Padding(
       padding: const EdgeInsets.only(left: 0),
@@ -456,10 +459,13 @@ class _RouteStepCard extends StatelessWidget {
                               fontFamily: 'Sora',
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              letterSpacing: 0,
+                              letterSpacing: 1.6,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 2),
                           Text(
                             step.title,
                             maxLines: 2,
@@ -469,10 +475,10 @@ class _RouteStepCard extends StatelessWidget {
                               fontFamily: 'Sora',
                               fontSize: 14.5,
                               fontWeight: FontWeight.w600,
-                              height: 1.15,
+                              height: 1.25,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
                           Text(
                             '${step.venue} · ${step.address}',
                             maxLines: 2,
@@ -493,18 +499,18 @@ class _RouteStepCard extends StatelessWidget {
                   ],
                 ),
                 if ((step.description ?? '').trim().isNotEmpty) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Text(
                     step.description!,
                     style: AppTextStyles.meta.copyWith(
                       color: BbV5Colors.inkSoft,
                       fontSize: 12,
-                      height: 1.42,
+                      height: 1.625,
                     ),
                   ),
                 ],
                 if (step.walkMin != null && !isLast) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

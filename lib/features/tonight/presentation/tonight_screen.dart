@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
+import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/core/device/app_reverse_geocoding_service.dart';
 import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
-import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
@@ -13,6 +13,7 @@ import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/person_summary.dart';
+import 'package:big_break_mobile/features/tonight/presentation/v5_search_modal.dart';
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_brand_icon.dart';
 import 'package:big_break_mobile/shared/widgets/bb_system_overlays.dart';
@@ -20,7 +21,6 @@ import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart';
 
 const _streetWords = [
@@ -278,6 +278,9 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider('nearby'));
     final events = eventsAsync.valueOrNull ?? const [];
+    unawaited(
+      ref.read(eveningRouteTemplatesProvider(_tonightAfficheCity(ref)).future),
+    );
 
     return BbV5Scaffold(
       child: SafeArea(
@@ -292,13 +295,13 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
             ),
             const SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(20, 26, 20, 0),
+                padding: EdgeInsets.fromLTRB(20, 28, 20, 0),
                 child: _TonightHomeHero(),
               ),
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
+                padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
                 child: _TonightRadarCard(
                   eventsCount: events.length,
                   onOpenMap: () => context.goRoute(AppRoute.map),
@@ -309,10 +312,7 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
               child: _TonightGatheringNowSection(
                 events: events,
                 loading: eventsAsync.isLoading,
-                onOpenAll: () => context.pushRoute(
-                  AppRoute.search,
-                  queryParameters: {'preset': 'nearby'},
-                ),
+                onOpenAll: () => context.pushRoute(AppRoute.meetups),
                 onOpenEvent: (eventId) => context.pushRoute(
                   AppRoute.eventDetail,
                   pathParameters: {'eventId': eventId},
@@ -322,21 +322,18 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
             SliverToBoxAdapter(
               child: _TonightDatingSection(
                 onOpenAll: () => context.goRoute(AppRoute.dating),
-                onOpenPerson: (userId) => context.pushRoute(
-                  AppRoute.userProfile,
-                  pathParameters: {'userId': userId},
-                ),
+                onOpenPerson: (_) => context.goRoute(AppRoute.dating),
               ),
             ),
             const SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(20, 0, 20, 24),
+                padding: EdgeInsets.fromLTRB(20, 0, 20, 28),
                 child: _TonightAfficheSection(),
               ),
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
                 child: _TonightRoutesSection(
                   onOpenAll: () => unawaited(
                     _openCityLimitedFeature(
@@ -355,19 +352,19 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
             ),
             const SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(20, 0, 20, 24),
+                padding: EdgeInsets.fromLTRB(20, 0, 20, 28),
                 child: _TonightPulseSection(),
               ),
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
                 child: _TonightMetricsSection(eventsCount: events.length),
               ),
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
                 child: _TonightPersonalSection(
                   onOpenStreak: () => context.pushRoute(AppRoute.streak),
                   onOpenPerks: () => context.pushRoute(AppRoute.perks),
@@ -742,46 +739,7 @@ class _RadarLegend extends StatelessWidget {
   }
 }
 
-const _fallbackGatheringEvents = [
-  Event(
-    id: 'home-v5-brix',
-    title: 'Brix',
-    emoji: '🍷',
-    time: '20:00',
-    place: 'винный бар',
-    distance: '0.4 км',
-    attendees: ['А', 'Л', 'М'],
-    going: 8,
-    capacity: 10,
-    vibe: 'вино',
-    tone: EventTone.warm,
-    joined: false,
-  ),
-  Event(
-    id: 'home-v5-tverskaya',
-    title: 'Тверская в огнях',
-    emoji: '🎬',
-    time: '21:00',
-    place: 'маршрут',
-    distance: '0.7 км',
-    attendees: ['С', 'К', 'И'],
-    going: 6,
-    capacity: 10,
-    vibe: 'маршрут',
-    tone: EventTone.sage,
-    joined: false,
-  ),
-];
-
-String? _fallbackGatheringAssetPath(String eventId) {
-  return switch (eventId) {
-    'home-v5-brix' => 'assets/images/event-wine.jpg',
-    'home-v5-tverskaya' => 'assets/images/event-cinema.jpg',
-    _ => null,
-  };
-}
-
-class _TonightGatheringNowSection extends StatelessWidget {
+class _TonightGatheringNowSection extends StatefulWidget {
   const _TonightGatheringNowSection({
     required this.events,
     required this.loading,
@@ -795,13 +753,32 @@ class _TonightGatheringNowSection extends StatelessWidget {
   final ValueChanged<String> onOpenEvent;
 
   @override
+  State<_TonightGatheringNowSection> createState() =>
+      _TonightGatheringNowSectionState();
+}
+
+class _TonightGatheringNowSectionState
+    extends State<_TonightGatheringNowSection> {
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(viewportFraction: 0.55);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final realEvents = events.take(2).toList(growable: false);
-    final useFallback = realEvents.isEmpty && !loading;
-    final visible = useFallback ? _fallbackGatheringEvents : realEvents;
+    final visible = widget.events.take(5).toList(growable: false);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -814,34 +791,69 @@ class _TonightGatheringNowSection extends StatelessWidget {
                   key: const ValueKey('tonight-gathering-all'),
                   label: 'Смотреть все',
                   color: BbV5Colors.brandDeep,
-                  onTap: onOpenAll,
+                  onTap: widget.onOpenAll,
                 ),
               ],
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          if (loading && visible.isEmpty)
+          if (widget.loading && visible.isEmpty)
             const _GatheringSkeletonGrid()
+          else if (visible.isEmpty)
+            _GatheringEmptyCard(onTap: widget.onOpenAll)
           else
-            Row(
-              children: [
-                for (var index = 0; index < visible.length; index++) ...[
-                  Expanded(
+            SizedBox(
+              height: 244,
+              child: PageView.builder(
+                controller: _pageController,
+                padEnds: false,
+                itemCount: visible.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      right: index == visible.length - 1 ? 0 : AppSpacing.sm,
+                    ),
                     child: _GatheringCard(
                       event: visible[index],
-                      assetImagePath: useFallback
-                          ? _fallbackGatheringAssetPath(visible[index].id)
-                          : null,
-                      onTap: useFallback
-                          ? onOpenAll
-                          : () => onOpenEvent(visible[index].id),
+                      onTap: () => widget.onOpenEvent(visible[index].id),
                     ),
-                  ),
-                  if (index != visible.length - 1)
-                    const SizedBox(width: AppSpacing.sm),
-                ],
-              ],
+                  );
+                },
+              ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GatheringEmptyCard extends StatelessWidget {
+  const _GatheringEmptyCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5Card(
+      padding: const EdgeInsets.all(18),
+      radius: 24,
+      onTap: onTap,
+      child: Row(
+        children: [
+          const Icon(
+            LucideIcons.calendar_plus,
+            size: 24,
+            color: BbV5Colors.brandDeep,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'Пока нет встреч рядом. Открой список или создай свою.',
+              style: AppTextStyles.bodySoft.copyWith(
+                color: BbV5Colors.inkSoft,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -876,12 +888,10 @@ class _GatheringSkeletonGrid extends StatelessWidget {
 class _GatheringCard extends StatelessWidget {
   const _GatheringCard({
     required this.event,
-    required this.assetImagePath,
     required this.onTap,
   });
 
   final Event event;
-  final String? assetImagePath;
   final VoidCallback onTap;
 
   @override
@@ -911,13 +921,7 @@ class _GatheringCard extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      if (assetImagePath case final imagePath?)
-                        Image.asset(
-                          imagePath,
-                          fit: BoxFit.cover,
-                          filterQuality: FilterQuality.medium,
-                        )
-                      else if (imageUrl != null && imageUrl.isNotEmpty)
+                      if (imageUrl != null && imageUrl.isNotEmpty)
                         BbExternalEventImage(
                           imageUrl: imageUrl,
                           usage: BbExternalEventImageUsage.card,
@@ -977,7 +981,7 @@ class _GatheringCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: bbV5DisplayStyle(fontSize: 14),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Text(
                 '${event.place} · ${event.distance}',
                 maxLines: 1,
@@ -996,7 +1000,7 @@ class _GatheringCard extends StatelessWidget {
                   ),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.only(top: 10),
                   child: Row(
                     children: [
                       _AttendeeInitials(attendees: event.attendees),
@@ -1068,8 +1072,8 @@ class _AttendeeInitials extends StatelessWidget {
   Widget build(BuildContext context) {
     final visible = attendees.take(3).toList(growable: false);
     return SizedBox(
-      width: 52,
-      height: 22,
+      width: 48,
+      height: 20,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -1077,8 +1081,8 @@ class _AttendeeInitials extends StatelessWidget {
             Positioned(
               left: index * 14,
               child: Container(
-                width: 22,
-                height: 22,
+                width: 20,
+                height: 20,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: BbV5Colors.paperHi,
@@ -1118,7 +1122,7 @@ class _TonightDatingSection extends ConsumerWidget {
 
     return BbV5Section(
       title: 'Дейтинг · рядом',
-      margin: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+      margin: const EdgeInsets.fromLTRB(20, 28, 20, 28),
       right: _SectionAction(
         label: 'Все',
         color: BbV5Colors.terra,
@@ -1338,6 +1342,15 @@ class _TonightAfficheSection extends ConsumerWidget {
       ),
     );
     final affiche = afficheAsync.valueOrNull ?? const <AfficheEvent>[];
+    if (affiche.isNotEmpty) {
+      unawaited(
+        ref.read(appMediaPrewarmServiceProvider).warmExternalEventImages(
+              affiche.map((event) => event.imageUrl),
+              usage: BbExternalEventImageUsage.rail,
+              limit: 2,
+            ),
+      );
+    }
 
     return BbV5Section(
       title: 'Афиша города',
@@ -1505,6 +1518,8 @@ class _RouteHomeCard extends StatelessWidget {
               fontWeight: FontWeight.w500,
               letterSpacing: -0.56,
               color: BbV5Colors.brandDeep,
+            ).copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -1516,9 +1531,9 @@ class _RouteHomeCard extends StatelessWidget {
                   route.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: bbV5DisplayStyle(fontSize: 16, height: 1.1),
+                  style: bbV5DisplayStyle(fontSize: 16, height: 1.25),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   route.summary,
                   maxLines: 1,
@@ -1549,6 +1564,7 @@ class _RouteHomeCard extends StatelessWidget {
                         letterSpacing: 0,
                         color: BbV5Colors.inkMute,
                         fontWeight: FontWeight.w600,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ],
@@ -1825,9 +1841,9 @@ class _ImagePreviewCard extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: bbV5DisplayStyle(fontSize: 14, height: 1.1),
+                        style: bbV5DisplayStyle(fontSize: 14, height: 1.25),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         subtitle,
                         maxLines: 1,
@@ -1846,7 +1862,7 @@ class _ImagePreviewCard extends StatelessWidget {
                           ),
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.only(top: 8),
+                          padding: const EdgeInsets.only(top: 10),
                           child: Row(
                             children: [
                               Expanded(
@@ -1985,7 +2001,7 @@ class _TonightHeader extends ConsumerWidget {
           icon: LucideIcons.search,
           size: 40,
           iconSize: 16,
-          onPressed: () => _showTonightSearchModal(context),
+          onPressed: () => showV5SearchModal(context),
         ),
         const SizedBox(width: AppSpacing.xs),
         _HeaderAiButton(
@@ -2051,778 +2067,6 @@ class _HeaderAiButton extends StatelessWidget {
       ),
     );
   }
-}
-
-Future<void> _showTonightSearchModal(BuildContext context) {
-  return showGeneralDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    barrierLabel: 'Закрыть поиск',
-    barrierColor: Colors.transparent,
-    transitionDuration: const Duration(milliseconds: 180),
-    pageBuilder: (dialogContext, animation, secondaryAnimation) =>
-        _TonightSearchOverlay(originContext: context),
-    transitionBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
-      return FadeTransition(
-        opacity: curved,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, -0.03),
-            end: Offset.zero,
-          ).animate(curved),
-          child: child,
-        ),
-      );
-    },
-  );
-}
-
-const _searchRecentKey = 'v5.search.recent';
-
-enum _SearchKind { all, meetup, club, person, route, poster }
-
-class _SearchModalFilter {
-  const _SearchModalFilter(this.kind, this.label);
-
-  final _SearchKind kind;
-  final String label;
-}
-
-class _SearchModalItem {
-  const _SearchModalItem({
-    required this.kind,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final _SearchKind kind;
-  final String title;
-  final String subtitle;
-}
-
-const _searchModalFilters = [
-  _SearchModalFilter(_SearchKind.all, 'Всё'),
-  _SearchModalFilter(_SearchKind.meetup, 'Встречи'),
-  _SearchModalFilter(_SearchKind.club, 'Клубы'),
-  _SearchModalFilter(_SearchKind.person, 'Люди'),
-  _SearchModalFilter(_SearchKind.route, 'Маршруты'),
-  _SearchModalFilter(_SearchKind.poster, 'Афиша'),
-];
-
-const _searchModalItems = [
-  _SearchModalItem(
-    kind: _SearchKind.meetup,
-    title: 'Brix · вино после работы',
-    subtitle: 'сегодня · 20:00 · 0.4 км',
-  ),
-  _SearchModalItem(
-    kind: _SearchKind.meetup,
-    title: 'Late jazz · Powerhouse',
-    subtitle: 'сегодня · 23:00 · 1.2 км',
-  ),
-  _SearchModalItem(
-    kind: _SearchKind.meetup,
-    title: 'Утренний забег',
-    subtitle: 'сб · 8:00 · Парк Горького',
-  ),
-  _SearchModalItem(
-    kind: _SearchKind.club,
-    title: 'Винный четверг',
-    subtitle: '428 участников · ужины',
-  ),
-  _SearchModalItem(
-    kind: _SearchKind.club,
-    title: 'Wellness Mornings',
-    subtitle: '212 участников · спорт',
-  ),
-  _SearchModalItem(
-    kind: _SearchKind.club,
-    title: 'Fine Dining Society',
-    subtitle: '94 участника · закрытый',
-  ),
-  _SearchModalItem(
-    kind: _SearchKind.person,
-    title: 'Аня, 26',
-    subtitle: '0.4 км · арт',
-  ),
-  _SearchModalItem(
-    kind: _SearchKind.person,
-    title: 'Лев, 29',
-    subtitle: '0.8 км · джаз',
-  ),
-  _SearchModalItem(
-    kind: _SearchKind.person,
-    title: 'Мира, 24',
-    subtitle: '1.1 км · фото',
-  ),
-  _SearchModalItem(
-    kind: _SearchKind.route,
-    title: 'Тверская в огнях',
-    subtitle: '3 точки · 2.4 км · романтика',
-  ),
-  _SearchModalItem(
-    kind: _SearchKind.route,
-    title: 'Замоскворечье ночью',
-    subtitle: '4 точки · 3.1 км · атмосфера',
-  ),
-  _SearchModalItem(
-    kind: _SearchKind.poster,
-    title: 'Стендап-четверг',
-    subtitle: 'Stand-Up Store · 21:00',
-  ),
-  _SearchModalItem(
-    kind: _SearchKind.poster,
-    title: 'Therr Maitz',
-    subtitle: 'Stadium · 8 мая · 19:00',
-  ),
-];
-
-class _TonightSearchOverlay extends ConsumerStatefulWidget {
-  const _TonightSearchOverlay({required this.originContext});
-
-  final BuildContext originContext;
-
-  @override
-  ConsumerState<_TonightSearchOverlay> createState() =>
-      _TonightSearchOverlayState();
-}
-
-class _TonightSearchOverlayState extends ConsumerState<_TonightSearchOverlay> {
-  late final TextEditingController _controller;
-  late final Future<SharedPreferences> _preferencesFuture;
-  var _query = '';
-  var _filter = _SearchKind.all;
-  var _recent = const <String>[];
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController();
-    final preferences = ref.read(sharedPreferencesProvider);
-    _preferencesFuture = preferences == null
-        ? SharedPreferences.getInstance()
-        : Future.value(preferences);
-    unawaited(_loadRecent());
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadRecent() async {
-    final prefs = await _preferencesFuture;
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _recent = prefs.getStringList(_searchRecentKey) ?? const <String>[];
-    });
-  }
-
-  Future<void> _rememberRecent(String value) async {
-    final clean = value.trim();
-    if (clean.isEmpty) {
-      return;
-    }
-
-    final next = [clean, ..._recent.where((item) => item != clean)]
-        .take(5)
-        .toList(growable: false);
-    if (mounted) {
-      setState(() => _recent = next);
-    }
-
-    final prefs = await _preferencesFuture;
-    await prefs.setStringList(_searchRecentKey, next);
-  }
-
-  Future<void> _clearRecent() async {
-    setState(() => _recent = const <String>[]);
-    final prefs = await _preferencesFuture;
-    await prefs.remove(_searchRecentKey);
-  }
-
-  List<_SearchModalItem> get _results {
-    final normalized = _query.trim().toLowerCase();
-    return _searchModalItems.where((item) {
-      if (_filter != _SearchKind.all && item.kind != _filter) {
-        return false;
-      }
-      if (normalized.isEmpty) {
-        return true;
-      }
-      final source = '${item.title} ${item.subtitle}'.toLowerCase();
-      return source.contains(normalized);
-    }).toList(growable: false);
-  }
-
-  void _close() {
-    Navigator.of(context, rootNavigator: true).pop();
-  }
-
-  void _openItem(_SearchModalItem item) {
-    unawaited(_rememberRecent(item.title));
-    _close();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final origin = widget.originContext;
-      if (!origin.mounted) {
-        return;
-      }
-
-      switch (item.kind) {
-        case _SearchKind.meetup:
-          origin.pushRoute(
-            AppRoute.search,
-            queryParameters: {'preset': 'nearby'},
-          );
-        case _SearchKind.club:
-          origin.goRoute(AppRoute.communities);
-        case _SearchKind.person:
-          origin.goRoute(AppRoute.dating);
-        case _SearchKind.route:
-          origin.pushRoute(AppRoute.eveningRoutes);
-        case _SearchKind.poster:
-          origin.pushRoute(AppRoute.affiche);
-        case _SearchKind.all:
-          origin.pushRoute(AppRoute.search);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final modalMaxHeight = MediaQuery.sizeOf(context).height * 0.85;
-    final resultsMaxHeight =
-        (modalMaxHeight - 126).clamp(160.0, 460.0).toDouble();
-    final results = _results;
-    final showRecent = _query.trim().isEmpty && _recent.isNotEmpty;
-
-    return Material(
-      color: Colors.transparent,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: _close,
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: ColoredBox(
-                  color: BbV5Colors.ink.withValues(alpha: 0.55),
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            bottom: false,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: 440,
-                    maxHeight: modalMaxHeight,
-                  ),
-                  child: GestureDetector(
-                    onTap: () {},
-                    behavior: HitTestBehavior.opaque,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(28),
-                        gradient: const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [BbV5Colors.paperHi, BbV5Colors.paper],
-                        ),
-                        border: Border.all(color: BbV5Colors.hair),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x4A1F241D),
-                            blurRadius: 36,
-                            spreadRadius: -14,
-                            offset: Offset(0, 18),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(28),
-                        child: DefaultTextStyle.merge(
-                          style: AppTextStyles.body.copyWith(
-                            color: BbV5Colors.ink,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _SearchModalInput(
-                                        controller: _controller,
-                                        onChanged: (value) {
-                                          setState(() => _query = value);
-                                        },
-                                        onSubmitted: (value) {
-                                          unawaited(_rememberRecent(value));
-                                        },
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    _SearchModalCloseButton(onTap: _close),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
-                                SizedBox(
-                                  height: 32,
-                                  child: ListView.separated(
-                                    scrollDirection: Axis.horizontal,
-                                    clipBehavior: Clip.none,
-                                    itemBuilder: (context, index) {
-                                      final filter = _searchModalFilters[index];
-                                      return _SearchModalFilterChip(
-                                        label: filter.label,
-                                        active: filter.kind == _filter,
-                                        onTap: () {
-                                          setState(() => _filter = filter.kind);
-                                        },
-                                      );
-                                    },
-                                    separatorBuilder: (_, __) =>
-                                        const SizedBox(width: 6),
-                                    itemCount: _searchModalFilters.length,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    maxHeight: resultsMaxHeight,
-                                  ),
-                                  child: ListView(
-                                    padding: EdgeInsets.zero,
-                                    shrinkWrap: true,
-                                    children: [
-                                      if (showRecent) ...[
-                                        _SearchModalRecentHeader(
-                                          onClear: () => unawaited(
-                                            _clearRecent(),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        for (final recent in _recent) ...[
-                                          _SearchModalRecentRow(
-                                            title: recent,
-                                            onTap: () {
-                                              _controller.text = recent;
-                                              _controller.selection =
-                                                  TextSelection.collapsed(
-                                                offset: recent.length,
-                                              );
-                                              setState(() => _query = recent);
-                                            },
-                                          ),
-                                          const SizedBox(height: 8),
-                                        ],
-                                        const Padding(
-                                          padding: EdgeInsets.only(
-                                            top: 2,
-                                            bottom: 8,
-                                          ),
-                                          child: BbV5Kicker('Подсказки'),
-                                        ),
-                                      ],
-                                      for (var index = 0;
-                                          index < results.length;
-                                          index++) ...[
-                                        _SearchModalResultRow(
-                                          item: results[index],
-                                          onTap: () =>
-                                              _openItem(results[index]),
-                                        ),
-                                        if (index != results.length - 1)
-                                          const SizedBox(height: 6),
-                                      ],
-                                      if (results.isEmpty)
-                                        const _SearchModalEmptyState(),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SearchModalInput extends StatelessWidget {
-  const _SearchModalInput({
-    required this.controller,
-    required this.onChanged,
-    required this.onSubmitted,
-  });
-
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-  final ValueChanged<String> onSubmitted;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: BbV5Colors.paperHi,
-        borderRadius: BorderRadius.circular(BbV5Radii.pill),
-        border: Border.all(color: BbV5Colors.hair),
-        boxShadow: BbV5Shadows.pill,
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            LucideIcons.search,
-            size: 16,
-            color: BbV5Colors.inkMute,
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              autofocus: true,
-              textInputAction: TextInputAction.search,
-              onChanged: onChanged,
-              onSubmitted: onSubmitted,
-              style: AppTextStyles.body.copyWith(
-                fontSize: 14,
-                color: BbV5Colors.ink,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Найти людей, клубы, места…',
-                hintStyle: AppTextStyles.body.copyWith(
-                  fontSize: 14,
-                  color: BbV5Colors.inkMute,
-                ),
-                isCollapsed: true,
-                border: InputBorder.none,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SearchModalCloseButton extends StatelessWidget {
-  const _SearchModalCloseButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: BbV5Colors.paperHi,
-            shape: BoxShape.circle,
-            border: Border.all(color: BbV5Colors.hair),
-            boxShadow: BbV5Shadows.pill,
-          ),
-          child: const Icon(
-            LucideIcons.x,
-            size: 17,
-            color: BbV5Colors.ink,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SearchModalFilterChip extends StatelessWidget {
-  const _SearchModalFilterChip({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(BbV5Radii.pill),
-        child: Ink(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: active ? BbV5Colors.accent : BbV5Colors.paperHi,
-            borderRadius: BorderRadius.circular(BbV5Radii.pill),
-            border: Border.all(
-              color: active ? BbV5Colors.accent : BbV5Colors.hair,
-            ),
-            boxShadow: active ? BbV5Shadows.ink : BbV5Shadows.pill,
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: AppTextStyles.caption.copyWith(
-                fontFamily: 'Sora',
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0,
-                color: active ? BbV5Colors.paperHi : BbV5Colors.inkSoft,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SearchModalResultRow extends StatelessWidget {
-  const _SearchModalResultRow({
-    required this.item,
-    required this.onTap,
-  });
-
-  final _SearchModalItem item;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: BbV5Colors.paperHi,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: BbV5Colors.hair),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 40),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: BbV5Colors.paper,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: BbV5Colors.hair),
-                  ),
-                  child: Icon(
-                    _searchModalIcon(item.kind),
-                    size: 16,
-                    color: BbV5Colors.ink,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.body.copyWith(
-                          fontFamily: 'Sora',
-                          fontSize: 13,
-                          height: 1.15,
-                          fontWeight: FontWeight.w600,
-                          color: BbV5Colors.ink,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          const Icon(
-                            LucideIcons.map_pin,
-                            size: 11,
-                            color: BbV5Colors.inkMute,
-                          ),
-                          const SizedBox(width: 5),
-                          Expanded(
-                            child: Text(
-                              item.subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.caption.copyWith(
-                                fontSize: 11,
-                                letterSpacing: 0,
-                                color: BbV5Colors.inkMute,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SearchModalRecentHeader extends StatelessWidget {
-  const _SearchModalRecentHeader({required this.onClear});
-
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(child: BbV5Kicker('Недавние')),
-        InkWell(
-          onTap: onClear,
-          borderRadius: BorderRadius.circular(BbV5Radii.pill),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            child: Text(
-              'Очистить',
-              style: AppTextStyles.caption.copyWith(
-                fontSize: 11,
-                letterSpacing: 0,
-                color: BbV5Colors.inkSoft,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SearchModalRecentRow extends StatelessWidget {
-  const _SearchModalRecentRow({
-    required this.title,
-    required this.onTap,
-  });
-
-  final String title;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: BbV5Colors.paperHi,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: BbV5Colors.hair),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                LucideIcons.clock,
-                size: 15,
-                color: BbV5Colors.inkMute,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.caption.copyWith(
-                    fontSize: 12.5,
-                    letterSpacing: 0,
-                    fontWeight: FontWeight.w600,
-                    color: BbV5Colors.ink,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SearchModalEmptyState extends StatelessWidget {
-  const _SearchModalEmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 28),
-      child: Column(
-        children: [
-          Text(
-            'Ничего не нашли',
-            textAlign: TextAlign.center,
-            style: bbV5DisplayStyle(fontSize: 15),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Попробуй другой запрос',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.caption.copyWith(
-              fontSize: 12,
-              letterSpacing: 0,
-              color: BbV5Colors.inkMute,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-IconData _searchModalIcon(_SearchKind kind) {
-  return switch (kind) {
-    _SearchKind.person => LucideIcons.users,
-    _SearchKind.club => LucideIcons.heart,
-    _SearchKind.meetup => LucideIcons.calendar,
-    _SearchKind.route => LucideIcons.route,
-    _SearchKind.poster => LucideIcons.ticket,
-    _SearchKind.all => LucideIcons.search,
-  };
 }
 
 Future<void> _showTonightLocationSheet(BuildContext context) {
@@ -3131,7 +2375,7 @@ class _TonightLocationSheetState extends ConsumerState<_TonightLocationSheet> {
           AnimatedPadding(
             duration: const Duration(milliseconds: 160),
             curve: Curves.easeOut,
-            padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
             child: SafeArea(
               top: false,
               child: Align(
@@ -3155,10 +2399,14 @@ class _TonightLocationSheetState extends ConsumerState<_TonightLocationSheet> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const BbV5Kicker('Город'),
-                                    const SizedBox(height: 3),
+                                    const SizedBox(height: 2),
                                     Text(
                                       'Где ты сейчас',
-                                      style: bbV5DisplayStyle(fontSize: 18),
+                                      style: bbV5DisplayStyle(
+                                        fontSize: 18,
+                                        height: 1.25,
+                                        letterSpacing: 0,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -3209,6 +2457,8 @@ class _TonightLocationSheetState extends ConsumerState<_TonightLocationSheet> {
                                 child: Text(
                                   'Ничего не найдено',
                                   style: AppTextStyles.meta.copyWith(
+                                    fontSize: 12,
+                                    height: 1.25,
                                     color: BbV5Colors.inkMute,
                                   ),
                                 ),
@@ -3264,6 +2514,10 @@ class _TonightLocationSheetState extends ConsumerState<_TonightLocationSheet> {
                                 backgroundColor: BbV5Colors.accent,
                                 foregroundColor: BbV5Colors.paperHi,
                                 shape: const StadiumBorder(),
+                                textStyle: AppTextStyles.button.copyWith(
+                                  fontSize: 13,
+                                  height: 1.1,
+                                ),
                               ),
                               child: _saving
                                   ? const SizedBox(
@@ -3331,12 +2585,14 @@ class _CitySearchField extends StatelessWidget {
               onSubmitted: onSubmitted,
               style: AppTextStyles.body.copyWith(
                 fontSize: 14,
+                height: 1.2,
                 color: BbV5Colors.ink,
               ),
               decoration: InputDecoration(
                 hintText: 'Найти город...',
                 hintStyle: AppTextStyles.body.copyWith(
                   fontSize: 14,
+                  height: 1.2,
                   color: BbV5Colors.inkMute,
                 ),
                 isCollapsed: true,
@@ -3374,8 +2630,8 @@ class _AutoLocationRow extends StatelessWidget {
             children: [
               if (locating)
                 const SizedBox(
-                  width: 17,
-                  height: 17,
+                  width: 16,
+                  height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
                     color: BbV5Colors.paperHi,
@@ -3384,15 +2640,19 @@ class _AutoLocationRow extends StatelessWidget {
               else
                 const Icon(
                   LucideIcons.locate,
-                  size: 17,
+                  size: 16,
                   color: BbV5Colors.paperHi,
                 ),
               const SizedBox(width: 8),
               Text(
                 locating ? 'Определяем…' : 'Определить по геолокации',
                 style: AppTextStyles.body.copyWith(
+                  fontFamily: 'Sora',
+                  fontSize: 13,
+                  height: 1.1,
                   color: BbV5Colors.paperHi,
                   fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
                 ),
               ),
             ],
@@ -3430,7 +2690,7 @@ class _CityOptionRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Container(
           constraints: const BoxConstraints(minHeight: 48),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: background,
             borderRadius: BorderRadius.circular(16),
@@ -3442,7 +2702,7 @@ class _CityOptionRow extends StatelessWidget {
             children: [
               Icon(
                 LucideIcons.map_pin,
-                size: 15,
+                size: 14,
                 color: selected ? BbV5Colors.paperHi : BbV5Colors.inkMute,
               ),
               const SizedBox(width: 10),
@@ -3458,8 +2718,10 @@ class _CityOptionRow extends StatelessWidget {
                       style: AppTextStyles.body.copyWith(
                         fontFamily: 'Sora',
                         fontSize: 13,
+                        height: 1.25,
                         color: foreground,
                         fontWeight: FontWeight.w600,
+                        letterSpacing: 0,
                       ),
                     ),
                     const SizedBox(height: 1),
@@ -3469,6 +2731,7 @@ class _CityOptionRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.caption.copyWith(
                         fontSize: 10.5,
+                        height: 1.25,
                         color: muted,
                         letterSpacing: 0,
                       ),
@@ -3544,8 +2807,10 @@ class _LocationSuggestionRow extends StatelessWidget {
                       style: AppTextStyles.body.copyWith(
                         fontFamily: 'Sora',
                         fontSize: 13,
+                        height: 1.25,
                         color: BbV5Colors.ink,
                         fontWeight: FontWeight.w600,
+                        letterSpacing: 0,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -3554,7 +2819,10 @@ class _LocationSuggestionRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.meta.copyWith(
+                        fontSize: 10.5,
+                        height: 1.25,
                         color: BbV5Colors.inkMute,
+                        letterSpacing: 0,
                       ),
                     ),
                   ],
@@ -3842,6 +3110,8 @@ class _PulseRow extends StatelessWidget {
                     height: 1,
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.32,
+                  ).copyWith(
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -4020,6 +3290,8 @@ class _MetricCard extends StatelessWidget {
                   text: unit,
                   style: bbV5DisplayStyle(
                     fontSize: 18,
+                    height: 1,
+                    letterSpacing: -0.54,
                     color: BbV5Colors.inkSoft,
                   ),
                 ),
@@ -4032,6 +3304,8 @@ class _MetricCard extends StatelessWidget {
               height: 1,
               fontWeight: FontWeight.w500,
               letterSpacing: -1.08,
+            ).copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
           const SizedBox(height: 6),
@@ -4145,33 +3419,33 @@ class _PersonalPortalCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return BbV5Card(
       radius: 20,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       tint: tint,
       onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: BbV5Colors.paperHi,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: BbV5Colors.hair),
             ),
             child: Icon(icon, size: 18, color: color),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 8),
           Text(
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.body.copyWith(
               fontFamily: 'Sora',
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: FontWeight.w600,
-              height: 1.1,
+              height: 1.25,
               color: BbV5Colors.ink,
             ),
           ),
@@ -4182,6 +3456,7 @@ class _PersonalPortalCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.caption.copyWith(
               color: BbV5Colors.inkMute,
+              fontSize: 10,
               letterSpacing: 0,
             ),
           ),

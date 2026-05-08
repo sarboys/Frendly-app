@@ -88,11 +88,11 @@ class BbBottomNav extends ConsumerWidget {
                               top: -7,
                               child: Container(
                                 constraints: const BoxConstraints(
-                                  minWidth: 18,
-                                  minHeight: 18,
+                                  minWidth: 20,
+                                  minHeight: 20,
                                 ),
                                 padding:
-                                    const EdgeInsets.symmetric(horizontal: 4),
+                                    const EdgeInsets.symmetric(horizontal: 6),
                                 decoration: BoxDecoration(
                                   color: active
                                       ? BbV5Colors.paperHi
@@ -106,7 +106,8 @@ class BbBottomNav extends ConsumerWidget {
                                   '$unread',
                                   style: AppTextStyles.caption.copyWith(
                                     fontFamily: 'Sora',
-                                    fontSize: 9,
+                                    fontSize: 10,
+                                    height: 1,
                                     fontWeight: FontWeight.w600,
                                     color: active
                                         ? BbV5Colors.accent

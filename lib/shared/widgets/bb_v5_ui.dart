@@ -105,7 +105,7 @@ TextStyle bbV5DisplayStyle({
   double fontSize = 22,
   double height = 1.1,
   FontWeight fontWeight = FontWeight.w600,
-  double letterSpacing = -0.35,
+  double? letterSpacing,
   Color color = BbV5Colors.ink,
 }) {
   return AppTextStyles.screenTitle.copyWith(
@@ -113,7 +113,7 @@ TextStyle bbV5DisplayStyle({
     fontSize: fontSize,
     fontWeight: fontWeight,
     height: height,
-    letterSpacing: letterSpacing,
+    letterSpacing: letterSpacing ?? -fontSize * 0.02,
     color: color,
   );
 }
@@ -376,7 +376,7 @@ class BbV5HeroTitle extends StatelessWidget {
     final base = bbV5DisplayStyle(
       fontSize: fontSize,
       height: 1.25,
-      letterSpacing: -fontSize * 0.025,
+      letterSpacing: -fontSize * 0.02,
     );
     final accentText = accent;
     if (accentText == null || accentText.isEmpty) {
@@ -441,7 +441,7 @@ class BbV5Section extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           child,
         ],
       ),
@@ -606,6 +606,8 @@ class BbV5PillButton extends StatelessWidget {
                 style: AppTextStyles.button.copyWith(
                   fontSize: fontSize,
                   fontWeight: FontWeight.w600,
+                  height: 1.1,
+                  letterSpacing: 0,
                   color: dark ? BbV5Colors.paperHi : BbV5Colors.ink,
                 ),
               ),
@@ -728,13 +730,19 @@ class BbV5SearchPill extends StatelessWidget {
               controller: controller,
               onChanged: onChanged,
               style: AppTextStyles.meta.copyWith(
+                fontFamily: 'Manrope',
                 fontSize: 13,
+                fontWeight: FontWeight.w400,
+                height: 1.2,
                 color: BbV5Colors.ink,
               ),
               decoration: InputDecoration(
                 hintText: hintText,
                 hintStyle: AppTextStyles.meta.copyWith(
+                  fontFamily: 'Manrope',
                   fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  height: 1.2,
                   color: BbV5Colors.inkMute,
                 ),
                 border: InputBorder.none,

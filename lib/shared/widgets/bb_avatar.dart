@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 enum BbAvatarSize {
   xs(24, 10, 6),
+  chat(28, 10, 7),
   sm(36, 12, 8),
   md(44, 14, 10),
   lg(56, 16, 12),

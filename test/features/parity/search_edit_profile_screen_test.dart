@@ -1,5 +1,4 @@
 import 'package:big_break_mobile/features/edit_profile/presentation/edit_profile_screen.dart';
-import 'package:big_break_mobile/features/search/presentation/search_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
@@ -20,14 +19,6 @@ Widget _wrap(Widget child, {List<Override> extraOverrides = const []}) {
 }
 
 void main() {
-  testWidgets('search screen shows richer suggested people subtitles',
-      (tester) async {
-    await tester.pumpWidget(_wrap(const SearchScreen()));
-    await tester.pumpAndSettle();
-
-    expect(find.text('2 общих интереса'), findsWidgets);
-  });
-
   testWidgets('edit profile keeps age numeric and updates bio counter',
       (tester) async {
     await tester.pumpWidget(_wrap(const EditProfileScreen()));

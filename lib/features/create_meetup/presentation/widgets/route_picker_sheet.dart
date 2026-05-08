@@ -4,6 +4,7 @@ import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/models/create_event_route.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -220,8 +221,10 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
                         Text(
                           'Маршрут вечера',
                           style: AppTextStyles.itemTitle.copyWith(
-                            fontSize: 17,
+                            fontSize: 18,
+                            height: 1.25,
                             fontWeight: FontWeight.w600,
+                            letterSpacing: 0,
                             color: dark ? AppColors.adFg : colors.foreground,
                           ),
                         ),
@@ -230,6 +233,8 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
                           'Готовый или свой — несколько мест за вечер',
                           style: AppTextStyles.caption.copyWith(
                             color: dark ? AppColors.adFgMute : colors.inkMute,
+                            fontSize: 11.5,
+                            height: 1.35,
                           ),
                         ),
                       ],
@@ -440,7 +445,8 @@ class _RouteTabButton extends StatelessWidget {
             Text(
               label,
               style: AppTextStyles.itemTitle.copyWith(
-                fontSize: 14,
+                fontSize: 12,
+                height: 1.1,
                 fontWeight: FontWeight.w600,
                 color: active
                     ? dark
@@ -510,10 +516,14 @@ class _ReadyRoutesTab extends StatelessWidget {
                       hintText: 'Найти маршрут или место',
                       hintStyle: AppTextStyles.bodySoft.copyWith(
                         color: dark ? AppColors.adFgMute : colors.inkMute,
+                        fontSize: 13.5,
+                        height: 1.2,
                       ),
                     ),
                     style: AppTextStyles.bodySoft.copyWith(
                       color: dark ? AppColors.adFg : colors.foreground,
+                      fontSize: 13.5,
+                      height: 1.2,
                     ),
                   ),
                 ),
@@ -531,6 +541,8 @@ class _ReadyRoutesTab extends StatelessWidget {
                     'Ничего не нашлось — попробуй собрать свой маршрут',
                     style: AppTextStyles.body.copyWith(
                       color: dark ? AppColors.adFgMute : colors.inkMute,
+                      fontSize: 12.5,
+                      height: 1.35,
                     ),
                   ),
                 );
@@ -554,6 +566,8 @@ class _ReadyRoutesTab extends StatelessWidget {
                 'Не получилось загрузить маршруты',
                 style: AppTextStyles.body.copyWith(
                   color: dark ? AppColors.adFgMute : colors.inkMute,
+                  fontSize: 12.5,
+                  height: 1.35,
                 ),
               ),
             ),
@@ -623,7 +637,8 @@ class _ReadyRouteRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.itemTitle.copyWith(
-                          fontSize: 14,
+                          fontSize: 14.5,
+                          height: 1.25,
                           fontWeight: FontWeight.w600,
                           color: dark ? AppColors.adFg : colors.foreground,
                         ),
@@ -645,7 +660,8 @@ class _ReadyRouteRow extends StatelessWidget {
                               style: AppTextStyles.caption.copyWith(
                                 color:
                                     dark ? AppColors.adFgMute : colors.inkMute,
-                                fontSize: 12,
+                                fontSize: 11.5,
+                                height: 1.25,
                               ),
                             ),
                           ),
@@ -674,7 +690,8 @@ class _ReadyRouteRow extends StatelessWidget {
                               style: AppTextStyles.caption.copyWith(
                                 color:
                                     dark ? AppColors.adFgMute : colors.inkMute,
-                                fontSize: 12,
+                                fontSize: 11.5,
+                                height: 1.25,
                               ),
                             ),
                           ),
@@ -695,8 +712,10 @@ class _ReadyRouteRow extends StatelessWidget {
                     '${steps.length} шагов',
                     style: AppTextStyles.caption.copyWith(
                       color: dark ? AppColors.adFgMute : colors.inkMute,
+                      fontSize: 10.5,
+                      height: 1.1,
                       fontWeight: FontWeight.w600,
-                      letterSpacing: 0,
+                      letterSpacing: 0.42,
                     ),
                   ),
                 ),
@@ -712,7 +731,8 @@ class _ReadyRouteRow extends StatelessWidget {
                     '−${route.totalSavings} ₽',
                     style: AppTextStyles.meta.copyWith(
                       color: dark ? AppColors.adCyan : colors.primary,
-                      fontSize: 13,
+                      fontSize: 12.5,
+                      height: 1.1,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -851,7 +871,8 @@ class _CustomRouteTab extends StatelessWidget {
                           'Добавить шаг',
                           style: AppTextStyles.bodySoft.copyWith(
                             color: dark ? AppColors.adFgSoft : colors.inkSoft,
-                            fontSize: 13,
+                            fontSize: 12.5,
+                            height: 1.1,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -909,7 +930,9 @@ class _CustomRouteTab extends StatelessWidget {
                       : dark
                           ? AppColors.adFgMute
                           : colors.inkMute,
-                  fontSize: 15,
+                  fontSize: 14,
+                  height: 1.1,
+                  letterSpacing: 0,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1131,12 +1154,9 @@ class _RouteSectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
     return Text(
-      text,
-      style: AppTextStyles.caption.copyWith(
+      text.toUpperCase(),
+      style: bbV5KickerStyle(
         color: dark ? AppColors.adFgMute : colors.inkMute,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0,
-        fontSize: 11,
       ),
     );
   }
@@ -1185,6 +1205,8 @@ class _RouteBoxTextField extends StatelessWidget {
           hintText: hint,
           hintStyle: AppTextStyles.meta.copyWith(
             color: dark ? AppColors.adFgMute : colors.inkMute,
+            fontSize: fontSize,
+            height: 1.15,
           ),
           filled: true,
           fillColor: dark ? AppColors.adBg : colors.background,
@@ -1211,6 +1233,8 @@ class _RouteBoxTextField extends StatelessWidget {
           color: dark ? AppColors.adFg : colors.foreground,
           fontSize: fontSize,
           fontWeight: fontWeight,
+          height: 1.15,
+          letterSpacing: 0,
         ),
         onChanged: onChanged,
       ),

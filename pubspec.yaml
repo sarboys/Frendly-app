@@ -51,8 +51,6 @@ flutter:
   assets:
     - assets/fonts/
     - assets/images/logo-fr-orange.jpg
-    - assets/images/event-wine.jpg
-    - assets/images/event-cinema.jpg
   fonts:
     - family: Sora
       fonts:

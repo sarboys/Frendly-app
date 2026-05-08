@@ -83,13 +83,13 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
               ),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
                   children: [
                     Container(
                       padding: const EdgeInsets.all(AppSpacing.md),
                       decoration: BoxDecoration(
                         color: colors.destructive.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -112,7 +112,11 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                                 const SizedBox(height: 4),
                                 Text(
                                   'Команда модерации проверит профиль за 24 часа. Это анонимно, пользователь не узнает.',
-                                  style: AppTextStyles.bodySoft,
+                                  style: AppTextStyles.bodySoft.copyWith(
+                                    fontSize: 12,
+                                    height: 1.625,
+                                    color: colors.inkSoft,
+                                  ),
                                 ),
                               ],
                             ),
@@ -120,7 +124,19 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Что случилось',
+                      style: AppTextStyles.caption.copyWith(
+                        fontFamily: 'Sora',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        height: 1.1,
+                        letterSpacing: 0.55,
+                        color: colors.inkMute,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     ...reasons.map(
                       (reason) => _ReasonTile(
                         label: reason.$2,
@@ -129,12 +145,12 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                         onTap: () => setState(() => _reason = reason.$1),
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.md),
+                    const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(AppSpacing.md),
                       decoration: BoxDecoration(
                         color: colors.card,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: colors.border),
                       ),
                       child: Column(
@@ -143,7 +159,9 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                           Text(
                             'Подробности (по желанию)',
                             style: AppTextStyles.body.copyWith(
+                              fontSize: 14,
                               fontWeight: FontWeight.w600,
+                              height: 1.25,
                             ),
                           ),
                           const SizedBox(height: AppSpacing.sm),
@@ -154,17 +172,25 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                             decoration: InputDecoration(
                               hintText:
                                   'Что произошло? Когда, где, как себя вёл?',
-                              hintStyle: AppTextStyles.bodySoft
-                                  .copyWith(color: colors.inkMute),
+                              hintStyle: AppTextStyles.bodySoft.copyWith(
+                                fontSize: 14,
+                                height: 1.625,
+                                color: colors.inkMute,
+                              ),
                               border: InputBorder.none,
                               counterText: '',
                               contentPadding: EdgeInsets.zero,
                             ),
-                            style: AppTextStyles.bodySoft,
+                            style: AppTextStyles.bodySoft.copyWith(
+                              fontSize: 14,
+                              height: 1.625,
+                              color: colors.inkSoft,
+                            ),
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(height: 16),
                     InkWell(
                       onTap: () => setState(() => _block = !_block),
                       borderRadius: BorderRadius.circular(16),
@@ -213,11 +239,17 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                                 children: [
                                   Text(
                                     'Заблокировать ${profile.displayName}',
-                                    style: AppTextStyles.body,
+                                    style: AppTextStyles.itemTitle.copyWith(
+                                      fontSize: 14,
+                                      height: 1.15,
+                                    ),
                                   ),
                                   Text(
                                     'Не увидите друг друга в приложении',
-                                    style: AppTextStyles.meta,
+                                    style: AppTextStyles.meta.copyWith(
+                                      fontWeight: FontWeight.w400,
+                                      color: colors.inkMute,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -241,7 +273,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                     ),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                     child: SizedBox(
                       width: double.infinity,
                       height: 56,
@@ -249,7 +281,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                         style: FilledButton.styleFrom(
                           backgroundColor: colors.destructive,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                         ),
                         onPressed: _reason == null || _submitting
@@ -350,11 +382,20 @@ class _ReasonTile extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: AppTextStyles.itemTitle),
+            Text(
+              label,
+              style: AppTextStyles.itemTitle.copyWith(
+                fontSize: 14,
+                height: 1.15,
+              ),
+            ),
             const SizedBox(height: 2),
             Text(
               subtitle,
-              style: AppTextStyles.meta.copyWith(color: colors.inkMute),
+              style: AppTextStyles.meta.copyWith(
+                fontWeight: FontWeight.w400,
+                color: colors.inkMute,
+              ),
             ),
           ],
         ),

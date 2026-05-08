@@ -204,7 +204,7 @@ class _RoutesHeaderTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = bbV5DisplayStyle(fontSize: 22, height: 1.1);
+    final base = bbV5DisplayStyle(fontSize: 22, height: 1.25);
     return Text.rich(
       TextSpan(
         children: [
@@ -317,7 +317,7 @@ class _MoodChipV5 extends StatelessWidget {
                   fontSize: 11.5,
                   fontWeight: FontWeight.w600,
                   color: active ? BbV5Colors.paperHi : BbV5Colors.inkSoft,
-                  letterSpacing: 0,
+                  letterSpacing: 0.23,
                 ),
               ),
             ],

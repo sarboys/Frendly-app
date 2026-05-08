@@ -1,4 +1,3 @@
-import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
@@ -83,12 +82,12 @@ class _MemoryMapScreenState extends State<MemoryMapScreen> {
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(4, 14, 4, 16),
+                padding: const EdgeInsets.fromLTRB(4, 20, 4, 16),
                 child: Text(
                   'Только для тебя. Точки показывают, где ты был и с кем пересёкся.',
                   style: AppTextStyles.meta.copyWith(
                     color: BbV5Colors.inkSoft,
-                    height: 1.45,
+                    height: 1.625,
                   ),
                 ),
               ),
@@ -186,13 +185,14 @@ class _MemoryMapScreenState extends State<MemoryMapScreen> {
                 children: [
                   const Icon(
                     LucideIcons.lock,
-                    size: 13,
+                    size: 12,
                     color: BbV5Colors.inkMute,
                   ),
                   const SizedBox(width: 6),
                   Text(
                     'Карта приватная. Видна только тебе',
                     style: AppTextStyles.caption.copyWith(
+                      fontSize: 10.5,
                       color: BbV5Colors.inkMute,
                       letterSpacing: 0,
                     ),
@@ -384,9 +384,9 @@ class _ActivePinCard extends StatelessWidget {
               children: [
                 Text(
                   pin.title,
-                  style: bbV5DisplayStyle(fontSize: 15, height: 1.1),
+                  style: bbV5DisplayStyle(fontSize: 15, height: 1.25),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Row(
                   children: [
                     const Icon(
@@ -398,6 +398,7 @@ class _ActivePinCard extends StatelessWidget {
                     Text(
                       pin.subtitle,
                       style: AppTextStyles.caption.copyWith(
+                        fontSize: 11.5,
                         color: BbV5Colors.inkMute,
                         letterSpacing: 0,
                       ),
@@ -414,6 +415,7 @@ class _ActivePinCard extends StatelessWidget {
                     Text(
                       '· пересёкся здесь',
                       style: AppTextStyles.caption.copyWith(
+                        fontSize: 10.5,
                         color: BbV5Colors.inkMute,
                         letterSpacing: 0,
                       ),
@@ -448,7 +450,9 @@ class _PersonBubble extends StatelessWidget {
       child: Text(
         text,
         style: AppTextStyles.caption.copyWith(
-          fontWeight: FontWeight.w700,
+          fontFamily: 'Sora',
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
           color: BbV5Colors.ink,
           letterSpacing: 0,
         ),
@@ -472,7 +476,7 @@ class _MapStats extends StatelessWidget {
       children: [
         for (final item in _items) ...[
           Expanded(child: _StatCard(item: item)),
-          if (item != _items.last) const SizedBox(width: AppSpacing.xs),
+          if (item != _items.last) const SizedBox(width: 10),
         ],
       ],
     );
@@ -491,16 +495,19 @@ class _StatCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       child: Column(
         children: [
-          Icon(item.icon, size: 15, color: BbV5Colors.inkMute),
-          const SizedBox(height: 8),
+          Icon(item.icon, size: 14, color: BbV5Colors.inkMute),
+          const SizedBox(height: 6),
           Text(
             item.value,
-            style: bbV5DisplayStyle(fontSize: 18, height: 1),
+            style: bbV5DisplayStyle(fontSize: 18, height: 1).copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
           const SizedBox(height: 6),
           Text(
             item.label,
             style: AppTextStyles.caption.copyWith(
+              fontSize: 10,
               color: BbV5Colors.inkMute,
               letterSpacing: 0,
             ),

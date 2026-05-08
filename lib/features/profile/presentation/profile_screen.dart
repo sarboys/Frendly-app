@@ -198,7 +198,11 @@ class _ProfileHeroCard extends StatelessWidget {
                               style: bbV5DisplayStyle(
                                 fontSize: 20,
                                 height: 1.25,
-                                letterSpacing: -0.5,
+                                letterSpacing: -0.4,
+                              ).copyWith(
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
                               ),
                             ),
                           ),
@@ -256,7 +260,7 @@ class _ProfileHeroCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           const Divider(height: 1, color: BbV5Colors.hairSoft),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.lg),
           _ProfileStatsGrid(profile: profile),
           const SizedBox(height: AppSpacing.md),
           _ProfileSignalRow(profile: profile),
@@ -393,7 +397,7 @@ class _MetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: BbV5Colors.paper,
         borderRadius: BorderRadius.circular(16),
@@ -403,23 +407,25 @@ class _MetricTile extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(icon, size: 14, color: BbV5Colors.inkMute),
-          const SizedBox(height: 5),
+          const SizedBox(height: 6),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               value,
               maxLines: 1,
-              style: bbV5DisplayStyle(fontSize: 14, height: 1),
+              style: bbV5DisplayStyle(fontSize: 15, height: 1).copyWith(
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 6),
           Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: AppTextStyles.caption.copyWith(
-              fontSize: 9,
+              fontSize: 9.5,
               letterSpacing: 0,
               color: BbV5Colors.inkMute,
             ),
@@ -501,7 +507,7 @@ class _FrendlyPlusCard extends StatelessWidget {
               color: BbV5Colors.terra,
             ),
           ),
-          const SizedBox(width: AppSpacing.md),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -520,7 +526,7 @@ class _FrendlyPlusCard extends StatelessWidget {
                   ),
                   style: bbV5DisplayStyle(fontSize: 14.5),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   'Dating, фильтры и приоритет в заявках',
                   maxLines: 2,
@@ -556,9 +562,16 @@ class _ProfileSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BbV5Section(
-      title: title,
-      child: child,
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          BbV5Kicker(title),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
     );
   }
 }
@@ -661,7 +674,7 @@ class _VibeCard extends StatelessWidget {
             (vibe == null || vibe!.trim().isEmpty) ? 'Спокойно' : vibe!,
             style: bbV5DisplayStyle(fontSize: 15),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 4),
           Text(
             'Камерные встречи, разговор без спешки',
             style: AppTextStyles.meta.copyWith(
@@ -691,7 +704,7 @@ class _AboutCard extends StatelessWidget {
       value,
       style: AppTextStyles.body.copyWith(
         fontSize: 13.5,
-        height: 1.45,
+        height: 1.625,
         color: BbV5Colors.inkSoft,
       ),
     );
@@ -718,11 +731,11 @@ class _HistoryGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 8,
       crossAxisSpacing: 8,
-      childAspectRatio: 2.25,
+      childAspectRatio: 2.2,
       children: items
           .map(
             (item) => Container(
-              padding: const EdgeInsets.all(11),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: BbV5Colors.paperHi,
                 borderRadius: BorderRadius.circular(16),
@@ -737,10 +750,12 @@ class _HistoryGrid extends StatelessWidget {
                     child: Text(
                       item.value,
                       maxLines: 1,
-                      style: bbV5DisplayStyle(fontSize: 20, height: 1),
+                      style: bbV5DisplayStyle(fontSize: 20, height: 1).copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 6),
                   Text(
                     item.label,
                     maxLines: 1,

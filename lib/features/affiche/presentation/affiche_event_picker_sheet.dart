@@ -146,7 +146,10 @@ class _AfficheEventPickerSheetState
               child: AfficheSearchField(
                 controller: _queryController,
                 onChanged: _handleQueryChanged,
-                hintText: 'Событие, артист, площадка',
+                hintText: 'Концерт, спектакль, матч',
+                height: 48,
+                iconSize: 18,
+                fontSize: 14,
               ),
             ),
             AfficheFilterSection(
@@ -232,7 +235,11 @@ class _AffichePickerEmpty extends StatelessWidget {
         child: Text(
           message,
           textAlign: TextAlign.center,
-          style: AppTextStyles.meta.copyWith(color: colors.inkMute),
+          style: AppTextStyles.meta.copyWith(
+            color: colors.inkMute,
+            fontSize: 13,
+            height: 1.35,
+          ),
         ),
       ),
     );

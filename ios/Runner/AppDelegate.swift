@@ -4,6 +4,8 @@ import YandexLoginSDK
 import YandexMapsMobile
 
 private let mapkitApiKeyInfoKey = "MapkitApiKey"
+private let dartDefinesInfoKey = "DartDefines"
+private let mapkitDartDefineKey = "BIG_BREAK_MAPKIT_API_KEY"
 private let pushTokenChannelName = "app.push.token"
 private let pushTokenStorageKey = "app.push.token.cached"
 private let socialShareChannelName = "app.social.share"
@@ -63,7 +65,19 @@ private let yandexClientIdInfoKey = "YandexClientId"
   }
 
   private func configuredMapkitApiKey() -> String? {
-    Bundle.main.object(forInfoDictionaryKey: mapkitApiKeyInfoKey) as? String
+    if let key = normalizedMapkitApiKey(
+      Bundle.main.object(forInfoDictionaryKey: mapkitApiKeyInfoKey) as? String
+    ) {
+      return key
+    }
+
+    if let key = normalizedMapkitApiKey(
+      ProcessInfo.processInfo.environment[mapkitDartDefineKey]
+    ) {
+      return key
+    }
+
+    return mapkitApiKeyFromDartDefines()
   }
 
   private func configureMapkit(apiKey: String?) {
@@ -71,14 +85,49 @@ private let yandexClientIdInfoKey = "YandexClientId"
       return
     }
 
-    let key = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    guard !key.isEmpty, !key.hasPrefix("$(") else {
+    guard let key = normalizedMapkitApiKey(apiKey) else {
       NSLog("BIG_BREAK_MAPKIT_API_KEY is not set")
       return
     }
 
     YMKMapKit.setApiKey(key)
     isMapkitConfigured = true
+  }
+
+  private func normalizedMapkitApiKey(_ value: String?) -> String? {
+    let key = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !key.isEmpty, !key.hasPrefix("$(") else {
+      return nil
+    }
+    return key
+  }
+
+  private func mapkitApiKeyFromDartDefines() -> String? {
+    guard let encodedDefines = Bundle.main.object(
+      forInfoDictionaryKey: dartDefinesInfoKey
+    ) as? String else {
+      return nil
+    }
+
+    for encodedDefine in encodedDefines.split(separator: ",") {
+      guard let data = Data(base64Encoded: String(encodedDefine)),
+            let define = String(data: data, encoding: .utf8) else {
+        continue
+      }
+
+      let parts = define.split(
+        separator: "=",
+        maxSplits: 1,
+        omittingEmptySubsequences: false
+      )
+      guard parts.count == 2, parts[0] == mapkitDartDefineKey else {
+        continue
+      }
+
+      return normalizedMapkitApiKey(String(parts[1]))
+    }
+
+    return nil
   }
 
   private func registerPushTokenChannel(with registrar: FlutterPluginRegistrar) {

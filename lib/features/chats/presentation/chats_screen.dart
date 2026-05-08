@@ -9,6 +9,7 @@ import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/after_dark/presentation/after_dark_style.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_providers.dart';
+import 'package:big_break_mobile/features/tonight/presentation/v5_search_modal.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
@@ -59,11 +60,11 @@ class ChatsScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(20, 40, 20, 128),
               children: [
                 _V5ChatsHeader(
-                  onSearch: () => context.pushRoute(AppRoute.search),
+                  onSearch: () => showV5SearchModal(context),
                 ),
                 const SizedBox(height: 24),
                 InkWell(
-                  onTap: () => context.pushRoute(AppRoute.search),
+                  onTap: () => showV5SearchModal(context),
                   borderRadius: BorderRadius.circular(BbV5Radii.pill),
                   child: const _V5SearchLauncher(),
                 ),
@@ -872,11 +873,12 @@ class _V5FallbackChatRow extends StatelessWidget {
                             ? BbV5Colors.ink
                             : BbV5Colors.inkMute,
                         letterSpacing: 0,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 5),
+                const SizedBox(height: 2),
                 Text(
                   item.last,
                   maxLines: 1,
@@ -888,7 +890,7 @@ class _V5FallbackChatRow extends StatelessWidget {
                     fontWeight: FontWeight.w400,
                   ),
                 ),
-                const SizedBox(height: 7),
+                const SizedBox(height: 6),
                 Row(
                   children: [
                     Text(
@@ -1129,11 +1131,14 @@ class _V5MeetupChatRow extends StatelessWidget {
                                     ? BbV5Colors.ink
                                     : BbV5Colors.inkMute,
                                 letterSpacing: 0,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 2),
                         Wrap(
                           spacing: 7,
                           runSpacing: 6,
@@ -1183,7 +1188,7 @@ class _V5MeetupChatRow extends StatelessWidget {
                             ),
                           ),
                         ],
-                        const SizedBox(height: 7),
+                        const SizedBox(height: 6),
                         Row(
                           children: [
                             Expanded(
@@ -1284,11 +1289,14 @@ class _V5PersonalChatRow extends StatelessWidget {
                             fontSize: 10.5,
                             color: BbV5Colors.inkMute,
                             letterSpacing: 0,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures(),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 2),
                     Row(
                       children: [
                         Expanded(
@@ -1505,7 +1513,10 @@ class _V5ChatState extends StatelessWidget {
           Text(
             text,
             textAlign: TextAlign.center,
-            style: AppTextStyles.meta.copyWith(color: BbV5Colors.inkMute),
+            style: AppTextStyles.meta.copyWith(
+              color: BbV5Colors.inkMute,
+              fontSize: 13,
+            ),
           ),
         ],
       ),
@@ -1546,15 +1557,16 @@ class _V5AiChatCard extends StatelessWidget {
             'Знакомства, предложения встреч, ответы — на автопилоте.',
             style: AppTextStyles.meta.copyWith(
               color: BbV5Colors.inkSoft,
-              height: 1.35,
+              height: 1.625,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
           BbV5PillButton(
             label: 'Включить',
             icon: LucideIcons.sparkles,
             dark: true,
             height: 44,
+            fontSize: 13,
             onPressed: () {},
           ),
         ],

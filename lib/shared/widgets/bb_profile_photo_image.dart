@@ -41,7 +41,7 @@ class BbProfilePhotoImage extends StatelessWidget {
 
     return CachedNetworkImage(
       imageUrl: url,
-      cacheKey: _cacheKey(url),
+      cacheKey: cacheKeyFor(url, usageProfile),
       fit: fit,
       memCacheWidth: _bucket.width,
       memCacheHeight: _bucket.height,
@@ -60,7 +60,7 @@ class BbProfilePhotoImage extends StatelessWidget {
     );
   }
 
-  String _cacheKey(String url) {
+  static String cacheKeyFor(String url, BbImageUsageProfile usageProfile) {
     return 'profile-image-$_profileImageCacheKeyVersion-${usageProfile.name}-$url';
   }
 

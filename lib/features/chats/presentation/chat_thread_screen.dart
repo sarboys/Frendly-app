@@ -144,7 +144,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                                     'Сегодня',
                                     style: bbV5KickerStyle().copyWith(
                                       fontSize: 9.5,
-                                      letterSpacing: 0,
+                                      letterSpacing: 2.09,
                                     ),
                                   ),
                                 ),
@@ -437,7 +437,10 @@ class _SystemPill extends StatelessWidget {
               textAlign: TextAlign.center,
               style: AppTextStyles.caption.copyWith(
                 color: BbV5Colors.inkMute,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
                 height: 1.2,
+                letterSpacing: 0.4,
               ),
             ),
           ),

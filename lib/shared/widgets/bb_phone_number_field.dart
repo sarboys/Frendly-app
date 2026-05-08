@@ -134,32 +134,77 @@ Future<BbPhoneCountry?> showBbPhoneCountryPicker({
 }) {
   return showModalBottomSheet<BbPhoneCountry>(
     context: context,
-    builder: (context) => SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Выбери страну',
-              style: AppTextStyles.sectionTitle.copyWith(fontSize: 20),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            for (final item in bbPhoneCountries)
-              ListTile(
-                selected: item == selected,
-                contentPadding: EdgeInsets.zero,
-                title: Text(item.label),
-                subtitle: Text(item.dialCode),
-                leading: Text(item.flag, style: const TextStyle(fontSize: 22)),
-                onTap: () => Navigator.of(context).pop(item),
+    builder: (context) {
+      final colors = AppColors.of(context);
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Выбери страну',
+                style: AppTextStyles.sectionTitle.copyWith(
+                  fontSize: 20,
+                  height: 1.2,
+                ),
               ),
-          ],
+              const SizedBox(height: AppSpacing.md),
+              for (final item in bbPhoneCountries)
+                InkWell(
+                  onTap: () => Navigator.of(context).pop(item),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          item.flag,
+                          style: const TextStyle(fontSize: 18, height: 1.1),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            item.label,
+                            style: AppTextStyles.meta.copyWith(
+                              color: colors.foreground,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              height: 1.2,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          item.dialCode,
+                          style: AppTextStyles.meta.copyWith(
+                            color: colors.inkMute,
+                            fontFamily: 'Sora',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            height: 1.2,
+                          ),
+                        ),
+                        if (item == selected) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.check_rounded,
+                            size: 14,
+                            color: colors.primary,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
 
@@ -182,34 +227,45 @@ class BbPhoneNumberField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        children: [
-          InkWell(
+    return Row(
+      children: [
+        SizedBox(
+          height: 56,
+          child: InkWell(
             onTap: onCountryTap,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(18),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
-                color: colors.muted,
-                borderRadius: BorderRadius.circular(14),
+                color: colors.card,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: colors.border),
               ),
+              alignment: Alignment.center,
               child: Text(
                 '${country.flag} ${country.dialCode}',
                 style: AppTextStyles.body.copyWith(
+                  fontFamily: 'Sora',
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
+                  height: 1.1,
+                  letterSpacing: 0,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: Container(
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: colors.card,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: colors.border),
+            ),
+            alignment: Alignment.center,
             child: TextField(
               key: fieldKey,
               controller: controller,
@@ -222,12 +278,18 @@ class BbPhoneNumberField extends StatelessWidget {
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: country.placeholder,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
               ),
-              style: AppTextStyles.sectionTitle.copyWith(fontSize: 18),
+              style: AppTextStyles.sectionTitle.copyWith(
+                fontSize: 16,
+                height: 1.1,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

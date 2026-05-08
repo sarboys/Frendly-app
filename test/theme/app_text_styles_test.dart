@@ -14,10 +14,10 @@ void main() {
     expect(AppTextStyles.cardTitle.fontWeight, FontWeight.w600);
     expect(AppTextStyles.itemTitle.fontWeight, FontWeight.w600);
     expect(AppTextStyles.button.fontWeight, FontWeight.w600);
-    expect(AppTextStyles.screenTitle.letterSpacing, 0);
-    expect(AppTextStyles.sectionTitle.letterSpacing, 0);
-    expect(AppTextStyles.cardTitle.letterSpacing, 0);
-    expect(AppTextStyles.itemTitle.letterSpacing, 0);
+    expect(AppTextStyles.screenTitle.letterSpacing, -0.52);
+    expect(AppTextStyles.sectionTitle.letterSpacing, -0.4);
+    expect(AppTextStyles.cardTitle.letterSpacing, -0.36);
+    expect(AppTextStyles.itemTitle.letterSpacing, -0.3);
     expect(AppTextStyles.button.letterSpacing, 0);
   });
 

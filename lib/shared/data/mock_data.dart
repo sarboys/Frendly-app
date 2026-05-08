@@ -9,7 +9,6 @@ import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:big_break_mobile/shared/models/safety_hub.dart';
 import 'package:big_break_mobile/shared/models/message.dart';
 import 'package:big_break_mobile/shared/models/personal_chat.dart';
-import 'package:big_break_mobile/shared/models/poster.dart';
 import 'package:big_break_mobile/shared/models/story.dart';
 import 'package:big_break_mobile/shared/models/subscription.dart';
 import 'package:big_break_mobile/shared/models/user_settings.dart';
@@ -264,68 +263,6 @@ final mockPersonalChats = <PersonalChat>[
     lastTime: 'вчера',
     unread: 0,
     online: false,
-  ),
-];
-
-final mockPosters = <Poster>[
-  Poster(
-    id: 'ps1',
-    title: 'Молчат Дома · большой концерт',
-    category: PosterCategory.concert,
-    emoji: '🎸',
-    startsAt: DateTime(2026, 4, 26, 20),
-    dateLabel: 'Сб, 26 апр',
-    timeLabel: '20:00',
-    venue: 'Adrenaline Stadium',
-    address: 'Ленинградское ш. 80',
-    distance: '4.2 км',
-    priceFrom: 3500,
-    ticketUrl: 'https://afisha.yandex.ru',
-    provider: 'Яндекс Афиша',
-    tone: EventTone.evening,
-    tags: ['пост-панк', '18+', 'танцпол'],
-    description: 'Юбилейный тур группы. Новый альбом и старые хиты.',
-    isFeatured: true,
-  ),
-  Poster(
-    id: 'ps2',
-    title: 'ЦСКА — Спартак · дерби',
-    category: PosterCategory.sport,
-    emoji: '⚽',
-    startsAt: DateTime(2026, 4, 27, 19),
-    dateLabel: 'Вс, 27 апр',
-    timeLabel: '19:00',
-    venue: 'ВЭБ Арена',
-    address: '3-я Песчаная ул. 2',
-    distance: '8.1 км',
-    priceFrom: 1200,
-    ticketUrl: 'https://kassir.ru',
-    provider: 'Kassir',
-    tone: EventTone.warm,
-    tags: ['футбол', 'РПЛ', 'семейный сектор'],
-    description:
-        'Главное московское дерби сезона. Атмосфера и фанатские перформансы.',
-    isFeatured: true,
-  ),
-  Poster(
-    id: 'ps3',
-    title: 'Кандинский. Контрапункт',
-    category: PosterCategory.exhibition,
-    emoji: '🎨',
-    startsAt: DateTime(2026, 4, 29, 11),
-    dateLabel: 'Вт, 29 апр',
-    timeLabel: '11:00–22:00',
-    venue: 'Третьяковка на Крымском',
-    address: 'Крымский Вал 10',
-    distance: '3.4 км',
-    priceFrom: 800,
-    ticketUrl: 'https://tretyakov.ru',
-    provider: 'Третьяковка',
-    tone: EventTone.sage,
-    tags: ['живопись', 'до 31 мая'],
-    description:
-        'Большая ретроспектива с архивными работами и звуковой инсталляцией.',
-    isFeatured: true,
   ),
 ];
 

@@ -92,17 +92,23 @@ class AfficheSearchField extends StatelessWidget {
     required this.onChanged,
     super.key,
     this.hintText = 'Событие, артист, площадка',
+    this.height = 44,
+    this.iconSize = 16,
+    this.fontSize = 13,
   });
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final String hintText;
+  final double height;
+  final double iconSize;
+  final double fontSize;
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
     return Container(
-      height: 48,
+      height: height,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: colors.card,
@@ -111,8 +117,8 @@ class AfficheSearchField extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(LucideIcons.search, size: 18, color: colors.inkMute),
-          const SizedBox(width: AppSpacing.sm),
+          Icon(LucideIcons.search, size: iconSize, color: colors.inkMute),
+          const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: controller,
@@ -122,9 +128,17 @@ class AfficheSearchField extends StatelessWidget {
                 hintText: hintText,
                 hintStyle: AppTextStyles.bodySoft.copyWith(
                   color: colors.inkMute,
+                  fontSize: fontSize,
+                  height: 1.2,
                 ),
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
               ),
-              style: AppTextStyles.body,
+              style: AppTextStyles.bodySoft.copyWith(
+                color: colors.foreground,
+                fontSize: fontSize,
+                height: 1.2,
+              ),
             ),
           ),
         ],
@@ -148,7 +162,7 @@ class AfficheFilterSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 42,
+      height: 32,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -190,8 +204,8 @@ class AfficheFilterChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
       child: Container(
-        height: 36,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: active ? colors.foreground : colors.card,
@@ -210,8 +224,12 @@ class AfficheFilterChip extends StatelessWidget {
             Text(
               label,
               style: AppTextStyles.meta.copyWith(
+                fontFamily: 'Sora',
                 color: foreground,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w600,
+                height: 1.1,
+                letterSpacing: 0.23,
               ),
             ),
           ],

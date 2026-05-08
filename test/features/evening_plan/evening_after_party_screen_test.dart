@@ -87,7 +87,10 @@ class _AfterPartyRepository extends BackendRepository {
   String? fetchSessionId;
 
   @override
-  Future<Map<String, dynamic>> fetchEveningAfterParty(String sessionId) async {
+  Future<Map<String, dynamic>> fetchEveningAfterParty(
+    String sessionId, {
+    CancelToken? cancelToken,
+  }) async {
     fetchSessionId = sessionId;
     return {
       'sessionId': sessionId,
@@ -110,7 +113,10 @@ class _FailingFeedbackRepository extends BackendRepository {
   _FailingFeedbackRepository(Ref ref) : super(ref: ref, dio: Dio());
 
   @override
-  Future<Map<String, dynamic>> fetchEveningAfterParty(String sessionId) async {
+  Future<Map<String, dynamic>> fetchEveningAfterParty(
+    String sessionId, {
+    CancelToken? cancelToken,
+  }) async {
     return {
       'sessionId': sessionId,
       'participantsCount': 4,

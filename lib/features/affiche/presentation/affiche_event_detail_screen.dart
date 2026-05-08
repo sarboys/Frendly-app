@@ -164,7 +164,7 @@ class _AfficheEventDetailBody extends StatelessWidget {
                                         style: AppTextStyles.bodySoft.copyWith(
                                           color: BbV5Colors.inkSoft,
                                           fontSize: 13,
-                                          height: 1.45,
+                                          height: 1.625,
                                         ),
                                       ),
                                     ],
@@ -218,6 +218,7 @@ class _AfficheEventDetailBody extends StatelessWidget {
                               queryParameters: {'afficheEventId': event.id},
                             ),
                             height: 48,
+                            fontSize: 13,
                             expanded: true,
                           ),
                           if (actionUrl != null && actionUrl.isNotEmpty) ...[
@@ -230,6 +231,7 @@ class _AfficheEventDetailBody extends StatelessWidget {
                               dark: true,
                               onPressed: () => _openAction(context, actionUrl),
                               height: 56,
+                              fontSize: 14,
                               expanded: true,
                             ),
                           ],
@@ -286,7 +288,10 @@ class _AfficheEventDetailBody extends StatelessWidget {
                 Text(
                   'Открыть адрес',
                   style: AppTextStyles.itemTitle.copyWith(
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
+                    height: 1.25,
+                    letterSpacing: -0.3,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -366,7 +371,7 @@ class _AfficheDetailHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               BbV5Kicker(provider),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 meta,
                 maxLines: 1,
@@ -457,9 +462,9 @@ class _AfficheHeroTicket extends StatelessWidget {
                     fontFamily: 'Sora',
                     color: Colors.white,
                     fontSize: 24,
-                    height: 1.08,
+                    height: 1.25,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: 0,
+                    letterSpacing: -0.6,
                   ),
                 ),
               ],
@@ -564,10 +569,10 @@ class _TogetherCallout extends StatelessWidget {
             children: [
               const Icon(
                 LucideIcons.users,
-                size: 17,
+                size: 16,
                 color: BbV5Colors.brand,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   'Идти веселее вместе',
@@ -581,12 +586,13 @@ class _TogetherCallout extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             'Собери компанию из этого события, друзья присоединятся в один клик.',
             style: AppTextStyles.meta.copyWith(
               color: BbV5Colors.inkSoft,
-              height: 1.35,
+              fontSize: 12,
+              height: 1.625,
             ),
           ),
         ],
@@ -632,7 +638,7 @@ class _InfoTile extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
         color: BbV5Colors.paper,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: BbV5Colors.hair),
       ),
       child: Column(
@@ -640,7 +646,7 @@ class _InfoTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, size: 15, color: BbV5Colors.inkMute),
+              Icon(icon, size: 14, color: BbV5Colors.inkMute),
               const SizedBox(width: 6),
               Text(
                 label,
@@ -648,7 +654,7 @@ class _InfoTile extends StatelessWidget {
                   color: BbV5Colors.inkMute,
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: 0,
+                  letterSpacing: 1.4,
                 ),
               ),
               if (onTap != null) ...[
@@ -661,7 +667,7 @@ class _InfoTile extends StatelessWidget {
               ],
             ],
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: 6),
           Text(
             value.isEmpty ? 'Не указано' : value,
             maxLines: 2,
@@ -670,10 +676,12 @@ class _InfoTile extends StatelessWidget {
               fontFamily: 'Sora',
               fontSize: 13,
               fontWeight: FontWeight.w600,
+              height: 1.25,
               color: BbV5Colors.ink,
             ),
           ),
-          if ((subtitle ?? '').isNotEmpty)
+          if ((subtitle ?? '').isNotEmpty) ...[
+            const SizedBox(height: 4),
             Text(
               subtitle!,
               maxLines: 1,
@@ -683,6 +691,7 @@ class _InfoTile extends StatelessWidget {
                 fontSize: 11,
               ),
             ),
+          ],
         ],
       ),
     );
@@ -693,7 +702,7 @@ class _InfoTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         child: content,
       ),
     );
@@ -716,17 +725,48 @@ class _MapOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon, color: colors.foreground),
-      title: Text(title, style: AppTextStyles.itemTitle),
-      subtitle: Text(
-        subtitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: AppTextStyles.meta.copyWith(color: colors.inkMute),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, size: 16, color: colors.foreground),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTextStyles.itemTitle.copyWith(
+                        fontSize: 13.5,
+                        height: 1.25,
+                        letterSpacing: -0.27,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.meta.copyWith(
+                        color: colors.inkMute,
+                        fontSize: 11.5,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      onTap: onTap,
     );
   }
 }
@@ -739,7 +779,7 @@ class _TagPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: BbV5Colors.paper,
         borderRadius: AppRadii.pillBorder,

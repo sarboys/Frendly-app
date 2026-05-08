@@ -60,7 +60,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
               onBack: () => _handleBack(context),
               onCreate: () => _openCreate(context, canCreate),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 20),
             Row(
               children: [
                 Expanded(
@@ -102,7 +102,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Expanded(
               child: communitiesAsync.when(
                 data: (feedState) {
@@ -146,13 +146,13 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
                           0 => _CommunitiesHeroCard(
                               communities: feedState.items,
                             ),
-                          1 => const SizedBox(height: 16),
+                          1 => const SizedBox(height: 24),
                           2 => _CommunitiesSectionHeader(
                               count: filtered.length,
                               filtersActive: _filtersActive,
                               onReset: _resetFilters,
                             ),
-                          3 => const SizedBox(height: 8),
+                          3 => const SizedBox(height: 12),
                           4 when filtered.isEmpty => const _CommunitiesEmpty(),
                           _ => _CommunityFeedListItem(
                               index: index - 4,
@@ -372,6 +372,7 @@ class _CommunitiesScreenState extends ConsumerState<CommunitiesScreen> {
                             onPressed: () => Navigator.of(sheetContext).pop(),
                             dark: true,
                             height: 48,
+                            fontSize: 13,
                             expanded: true,
                           ),
                         ],
@@ -444,7 +445,7 @@ class _ClubsHeaderTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = bbV5DisplayStyle(fontSize: 22, height: 1.1);
+    final base = bbV5DisplayStyle(fontSize: 22, height: 1.25);
     return Text.rich(
       TextSpan(
         children: [
@@ -520,12 +521,12 @@ class _CommunitiesHeroCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      'Frendly+',
+                      'FRENDLY+',
                       style: AppTextStyles.caption.copyWith(
                         color: BbV5Colors.terra,
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        letterSpacing: 0,
+                        letterSpacing: 0.8,
                       ),
                     ),
                   ],
@@ -572,7 +573,7 @@ class _CommunitiesHeroTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = bbV5DisplayStyle(fontSize: 19, height: 1.12);
+    final base = bbV5DisplayStyle(fontSize: 19, height: 1.25);
     return Text.rich(
       TextSpan(
         children: [
@@ -620,9 +621,11 @@ class _CommunityHeroStat extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             value,
-            style: bbV5DisplayStyle(fontSize: 18, height: 1),
+            style: bbV5DisplayStyle(fontSize: 18, height: 1).copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 4),
           Text(
             label,
             maxLines: 1,
@@ -630,7 +633,7 @@ class _CommunityHeroStat extends StatelessWidget {
             style: AppTextStyles.caption.copyWith(
               color: BbV5Colors.inkMute,
               fontSize: 10,
-              letterSpacing: 0,
+              letterSpacing: 0.57,
             ),
           ),
         ],
@@ -740,15 +743,13 @@ class _CommunityListCard extends StatelessWidget {
                         children: [
                           Text(
                             community.name,
-                            style: bbV5DisplayStyle(
-                              fontSize: 15.5,
-                              height: 1.1,
-                            ),
+                            style:
+                                bbV5DisplayStyle(fontSize: 15.5, height: 1.25),
                           ),
                           if (community.privacy == CommunityPrivacy.private)
                             const _CommunityMiniBadge(
                               icon: LucideIcons.lock,
-                              label: 'Закрытый',
+                              label: 'ЗАКРЫТЫЙ',
                               tone: BbV5Colors.inkSoft,
                             ),
                           if (community.premiumOnly)
@@ -759,7 +760,7 @@ class _CommunityListCard extends StatelessWidget {
                             ),
                         ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
                         community.description,
                         maxLines: 2,
@@ -767,7 +768,7 @@ class _CommunityListCard extends StatelessWidget {
                         style: AppTextStyles.bodySoft.copyWith(
                           color: BbV5Colors.inkMute,
                           fontSize: 11.5,
-                          height: 1.35,
+                          height: 1.375,
                         ),
                       ),
                     ],
@@ -780,7 +781,7 @@ class _CommunityListCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           DecoratedBox(
             decoration: const BoxDecoration(
               border: Border(
@@ -788,7 +789,7 @@ class _CommunityListCard extends StatelessWidget {
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.only(top: 12),
               child: Row(
                 children: [
                   _CommunityMetaPill(
@@ -823,7 +824,7 @@ class _CommunityListCard extends StatelessWidget {
             ),
           ),
           if (community.nextMeetup case final meetup?) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             _CommunityNextMeetup(
               meetup: meetup,
               tone: tone,
@@ -933,6 +934,7 @@ class _CommunityUnreadBadge extends StatelessWidget {
           fontFamily: 'Sora',
           fontSize: 10.5,
           fontWeight: FontWeight.w600,
+          fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
     );
@@ -953,7 +955,7 @@ class _CommunityMetaPill extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 13, color: BbV5Colors.inkSoft),
+        Icon(icon, size: 12, color: BbV5Colors.inkSoft),
         const SizedBox(width: 4),
         Text(
           label,
@@ -962,6 +964,7 @@ class _CommunityMetaPill extends StatelessWidget {
             fontSize: 10.5,
             fontWeight: FontWeight.w600,
             letterSpacing: 0,
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
       ],
@@ -999,6 +1002,7 @@ class _CommunityOnlinePill extends StatelessWidget {
             fontSize: 10.5,
             fontWeight: FontWeight.w600,
             letterSpacing: 0,
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
       ],
@@ -1052,7 +1056,12 @@ class _CommunityNextMeetup extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const BbV5Kicker('Ближайшая встреча', maxLines: 1),
+                  Text(
+                    'Ближайшая встреча',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: bbV5KickerStyle(letterSpacing: 1.6),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     '${meetup.title} · ${meetup.time}',
@@ -1076,6 +1085,7 @@ class _CommunityNextMeetup extends StatelessWidget {
                 fontSize: 10.5,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ],

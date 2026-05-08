@@ -64,7 +64,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
             ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                 children: [
                   if (isLoadingRemote)
                     Padding(
@@ -78,15 +78,22 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                     ),
                   Text(
                     'Разреши доступ',
-                    style: AppTextStyles.sectionTitle.copyWith(fontSize: 28),
+                    style: AppTextStyles.sectionTitle.copyWith(
+                      fontSize: 28,
+                      height: 1.15,
+                      letterSpacing: 0,
+                    ),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
+                  const SizedBox(height: 8),
                   Text(
                     'Без этого Frendly работает скучнее. Можно поменять в настройках в любой момент.',
-                    style:
-                        AppTextStyles.bodySoft.copyWith(color: colors.inkMute),
+                    style: AppTextStyles.bodySoft.copyWith(
+                      color: colors.inkMute,
+                      fontSize: 15,
+                      height: 1.4,
+                    ),
                   ),
-                  const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(height: 28),
                   _PermissionTile(
                     title: 'Геолокация',
                     description: 'Покажем встречи и людей в твоём районе',
@@ -115,10 +122,14 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                     value: _allowContacts,
                     onChanged: _handleContactsToggle,
                   ),
-                  const SizedBox(height: AppSpacing.lg),
+                  const SizedBox(height: 24),
                   Text(
                     'Frendly никогда не публикует твоё точное местоположение и не делится контактами с третьими сторонами.',
-                    style: AppTextStyles.meta.copyWith(color: colors.inkMute),
+                    style: AppTextStyles.meta.copyWith(
+                      color: colors.inkMute,
+                      fontSize: 12,
+                      height: 1.625,
+                    ),
                   ),
                 ],
               ),
@@ -135,7 +146,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                   ),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                   child: SizedBox(
                     width: double.infinity,
                     height: 56,
@@ -143,7 +154,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                       style: FilledButton.styleFrom(
                         backgroundColor: colors.foreground,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                       ),
                       onPressed: _saving
@@ -193,7 +204,9 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                       child: Text(
                         'Продолжить',
                         style: AppTextStyles.button.copyWith(
-                          color: colors.primaryForeground,
+                          fontSize: 16,
+                          height: 1.1,
+                          color: colors.background,
                         ),
                       ),
                     ),
@@ -380,12 +393,23 @@ class _PermissionTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: AppTextStyles.itemTitle.copyWith(fontSize: 16)),
-                  const SizedBox(height: 4),
-                  Text(description,
-                      style:
-                          AppTextStyles.meta.copyWith(color: colors.inkMute)),
+                  Text(
+                    title,
+                    style: AppTextStyles.itemTitle.copyWith(
+                      fontSize: 16,
+                      height: 1.15,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    style: AppTextStyles.meta.copyWith(
+                      color: colors.inkMute,
+                      fontSize: 13,
+                      height: 1.375,
+                    ),
+                  ),
                 ],
               ),
             ),

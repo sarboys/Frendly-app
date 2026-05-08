@@ -400,12 +400,15 @@ class _TrustScoreCard extends StatelessWidget {
                       style: AppTextStyles.itemTitle.copyWith(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
+                        height: 1.15,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '$score из 100 · $level',
                       style: AppTextStyles.meta.copyWith(
+                        fontSize: 12,
+                        height: 1.25,
                         color: colors.inkSoft,
                       ),
                     ),
@@ -472,6 +475,7 @@ class _SosHeroCard extends StatelessWidget {
                       style: AppTextStyles.itemTitle.copyWith(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
+                        height: 1.15,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -479,7 +483,7 @@ class _SosHeroCard extends StatelessWidget {
                       'Одно нажатие — все доверенные контакты получат ссылку на встречу, список участников и твою геолокацию.',
                       style: AppTextStyles.meta.copyWith(
                         color: colors.inkMute,
-                        height: 1.35,
+                        height: 1.625,
                       ),
                     ),
                   ],
@@ -510,6 +514,7 @@ class _SosHeroCard extends StatelessWidget {
                 style: AppTextStyles.button.copyWith(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
+                  height: 1.1,
                   color: colors.destructiveForeground,
                 ),
               ),
@@ -548,7 +553,10 @@ class _TrustedContactsSection extends StatelessWidget {
                     'Доверенные контакты',
                     style: AppTextStyles.caption.copyWith(
                       color: colors.inkMute,
+                      fontSize: 11,
+                      height: 1.1,
                       fontWeight: FontWeight.w600,
+                      letterSpacing: 0.55,
                     ),
                   ),
                 ),
@@ -592,7 +600,7 @@ class _TrustedContactsSection extends StatelessWidget {
               'Контакты не видят твой профиль. Они получают сообщение, только когда ты сама нажмёшь SOS или поделишься планом.',
               style: AppTextStyles.caption.copyWith(
                 color: colors.inkMute,
-                height: 1.35,
+                height: 1.625,
               ),
             ),
           ),
@@ -700,6 +708,7 @@ class _ScopeBadge extends StatelessWidget {
           fontSize: 10,
           height: 1,
           fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
         ),
       ),
     );
@@ -744,12 +753,14 @@ class _AddContactRow extends StatelessWidget {
                       style: AppTextStyles.body.copyWith(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
+                        height: 1.15,
                       ),
                     ),
                     Text(
                       'Телефон, Telegram или email',
                       style: AppTextStyles.meta.copyWith(
                         color: colors.inkMute,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ],
@@ -784,9 +795,10 @@ class _SosIncludedCard extends StatelessWidget {
             style: AppTextStyles.itemTitle.copyWith(
               fontSize: 14,
               fontWeight: FontWeight.w600,
+              height: 1.15,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           const _Bullet(
               icon: LucideIcons.link_2,
               text: 'Ссылка на текущую встречу и её план'),
@@ -837,7 +849,7 @@ class _Bullet extends StatelessWidget {
               style: AppTextStyles.meta.copyWith(
                 fontSize: 12.5,
                 color: colors.inkSoft,
-                height: 1.25,
+                height: 1.375,
               ),
             ),
           ),
@@ -871,7 +883,10 @@ class _SafetyGroup extends StatelessWidget {
                 title,
                 style: AppTextStyles.caption.copyWith(
                   color: colors.inkMute,
+                  fontSize: 11,
+                  height: 1.1,
                   fontWeight: FontWeight.w600,
+                  letterSpacing: 0.55,
                 ),
               ),
             ),
@@ -939,11 +954,15 @@ class _ToggleRow extends StatelessWidget {
                   style: AppTextStyles.body.copyWith(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
+                    height: 1.15,
                   ),
                 ),
                 Text(
                   sub,
-                  style: AppTextStyles.meta.copyWith(color: colors.inkMute),
+                  style: AppTextStyles.meta.copyWith(
+                    color: colors.inkMute,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
               ],
             ),
@@ -998,11 +1017,15 @@ class _ActionRow extends StatelessWidget {
                     style: AppTextStyles.body.copyWith(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
+                      height: 1.15,
                     ),
                   ),
                   Text(
                     sub,
-                    style: AppTextStyles.meta.copyWith(color: colors.inkMute),
+                    style: AppTextStyles.meta.copyWith(
+                      color: colors.inkMute,
+                      fontWeight: FontWeight.w400,
+                    ),
                   ),
                 ],
               ),
@@ -1037,6 +1060,7 @@ class _HelpCard extends StatelessWidget {
             style: AppTextStyles.itemTitle.copyWith(
               fontSize: 14,
               fontWeight: FontWeight.w600,
+              height: 1.15,
             ),
           ),
           const SizedBox(height: 4),
@@ -1044,7 +1068,7 @@ class _HelpCard extends StatelessWidget {
             'Команда саппорта Frendly отвечает 24/7. В чрезвычайной ситуации звони 112.',
             style: AppTextStyles.meta.copyWith(
               color: colors.inkMute,
-              height: 1.35,
+              height: 1.625,
             ),
           ),
           const SizedBox(height: 12),
@@ -1066,6 +1090,7 @@ class _HelpCard extends StatelessWidget {
                   color: colors.background,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
+                  height: 1.1,
                 ),
               ),
             ),
@@ -1165,7 +1190,11 @@ class _AddContactSheetState extends State<_AddContactSheet> {
               const SizedBox(height: 6),
               Text(
                 'Доставим через: ${info.hint}',
-                style: AppTextStyles.caption.copyWith(color: colors.inkMute),
+                style: AppTextStyles.caption.copyWith(
+                  fontSize: 11,
+                  height: 1.2,
+                  color: colors.inkMute,
+                ),
               ),
               const SizedBox(height: 16),
               const _FieldLabel(text: 'Когда уведомлять'),
@@ -1224,6 +1253,7 @@ class _AddContactSheetState extends State<_AddContactSheet> {
                     style: AppTextStyles.button.copyWith(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
+                      height: 1.1,
                       color: colors.background,
                     ),
                   ),
@@ -1373,6 +1403,7 @@ class _ConfirmState extends StatelessWidget {
                 style: AppTextStyles.itemTitle.copyWith(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
+                  height: 1.15,
                 ),
               ),
             ),
@@ -1390,7 +1421,7 @@ class _ConfirmState extends StatelessWidget {
           style: AppTextStyles.meta.copyWith(
             color: colors.inkMute,
             fontSize: 12.5,
-            height: 1.35,
+            height: 1.625,
           ),
         ),
         const SizedBox(height: 16),
@@ -1430,7 +1461,9 @@ class _ConfirmState extends StatelessWidget {
                 style: AppTextStyles.caption.copyWith(
                   color: colors.inkMute,
                   fontSize: 10,
+                  height: 1.1,
                   fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
                 ),
               ),
               const SizedBox(height: 8),
@@ -1442,7 +1475,7 @@ class _ConfirmState extends StatelessWidget {
                 style: AppTextStyles.meta.copyWith(
                   fontSize: 12.5,
                   color: colors.inkSoft,
-                  height: 1.35,
+                  height: 1.625,
                 ),
               ),
             ],
@@ -1476,6 +1509,7 @@ class _ConfirmState extends StatelessWidget {
                     style: AppTextStyles.body.copyWith(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
+                      height: 1.1,
                     ),
                   ),
                 ),
@@ -1499,6 +1533,7 @@ class _ConfirmState extends StatelessWidget {
                     style: AppTextStyles.button.copyWith(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
+                      height: 1.1,
                       color: colors.destructiveForeground,
                     ),
                   ),
@@ -1539,13 +1574,18 @@ class _SentState extends StatelessWidget {
             style: AppTextStyles.itemTitle.copyWith(
               fontSize: 17,
               fontWeight: FontWeight.w600,
+              height: 1.15,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             '$count контактов получают сообщение прямо сейчас',
             textAlign: TextAlign.center,
-            style: AppTextStyles.meta.copyWith(color: colors.inkMute),
+            style: AppTextStyles.meta.copyWith(
+              color: colors.inkMute,
+              fontSize: 13,
+              height: 1.25,
+            ),
           ),
         ],
       ),
@@ -1606,6 +1646,7 @@ class _SosRecipientRow extends StatelessWidget {
             style: AppTextStyles.caption.copyWith(
               color: colors.secondary,
               fontWeight: FontWeight.w600,
+              height: 1.2,
             ),
           ),
         ],
@@ -1666,6 +1707,7 @@ class _SheetTitle extends StatelessWidget {
             style: AppTextStyles.itemTitle.copyWith(
               fontSize: 17,
               fontWeight: FontWeight.w600,
+              height: 1.15,
             ),
           ),
         ),
@@ -1718,7 +1760,9 @@ class _ChannelButton extends StatelessWidget {
               info.label,
               style: AppTextStyles.meta.copyWith(
                 color: active ? colors.primary : colors.inkSoft,
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
+                height: 1.15,
               ),
             ),
           ],
@@ -1765,6 +1809,7 @@ class _ScopeOption extends StatelessWidget {
                     style: AppTextStyles.meta.copyWith(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
+                      height: 1.15,
                     ),
                   ),
                 ),
@@ -1777,7 +1822,7 @@ class _ScopeOption extends StatelessWidget {
               sub,
               style: AppTextStyles.caption.copyWith(
                 color: colors.inkMute,
-                height: 1.25,
+                height: 1.375,
               ),
             ),
           ],
@@ -1801,7 +1846,9 @@ class _FieldLabel extends StatelessWidget {
         text,
         style: AppTextStyles.meta.copyWith(
           color: colors.inkSoft,
+          fontSize: 12,
           fontWeight: FontWeight.w600,
+          height: 1.2,
         ),
       ),
     );
@@ -1833,16 +1880,20 @@ class _SheetTextField extends StatelessWidget {
         keyboardType: keyboardType,
         textInputAction: textInputAction,
         onChanged: onChanged,
-        style: AppTextStyles.body.copyWith(fontSize: 14),
+        style: AppTextStyles.body.copyWith(
+          fontSize: 14,
+          height: 1.2,
+        ),
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: AppTextStyles.body.copyWith(
             fontSize: 14,
+            height: 1.2,
             color: colors.inkMute,
           ),
           filled: true,
           fillColor: colors.card,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: colors.border),

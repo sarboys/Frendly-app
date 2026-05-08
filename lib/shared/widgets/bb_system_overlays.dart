@@ -113,9 +113,9 @@ class _AnnouncementBanner extends StatelessWidget {
     final colors = AppColors.of(context);
     final style = _announcementStyle(colors, data.severity);
     final label = switch (data.severity) {
-      AnnouncementSeverity.critical => 'Обновление',
-      AnnouncementSeverity.warning => 'Важно',
-      AnnouncementSeverity.info => 'Объявление',
+      AnnouncementSeverity.critical => 'ОБНОВЛЕНИЕ',
+      AnnouncementSeverity.warning => 'ВАЖНО',
+      AnnouncementSeverity.info => 'ОБЪЯВЛЕНИЕ',
     };
 
     return IgnorePointer(
@@ -182,10 +182,19 @@ class _AnnouncementBanner extends StatelessWidget {
                                   label,
                                   style: AppTextStyles.caption.copyWith(
                                     color: style.tone,
+                                    fontFamily: 'Sora',
                                     fontSize: 10,
                                     height: 1.1,
                                     fontWeight: FontWeight.w600,
-                                    letterSpacing: 0,
+                                    letterSpacing: 1.4,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '·',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: colors.inkMute,
+                                    fontSize: 10,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -205,7 +214,8 @@ class _AnnouncementBanner extends StatelessWidget {
                                 color: colors.foreground,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
-                                height: 1.1,
+                                height: 1.25,
+                                letterSpacing: 0,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -213,8 +223,8 @@ class _AnnouncementBanner extends StatelessWidget {
                               data.message,
                               style: AppTextStyles.meta.copyWith(
                                 color: colors.inkSoft,
-                                fontSize: 12,
-                                height: 1.2,
+                                fontSize: 12.5,
+                                height: 1.375,
                               ),
                             ),
                             if (data.ctaLabel case final ctaLabel?) ...[
@@ -242,6 +252,8 @@ class _AnnouncementBanner extends StatelessWidget {
                                           color: colors.background,
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600,
+                                          height: 1.1,
+                                          letterSpacing: 0,
                                         ),
                                       ),
                                       const SizedBox(width: 6),
@@ -463,7 +475,8 @@ class _CityLimitToast extends StatelessWidget {
                             color: colors.background,
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            height: 1.1,
+                            height: 1.25,
+                            letterSpacing: 0,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -472,7 +485,7 @@ class _CityLimitToast extends StatelessWidget {
                           style: AppTextStyles.meta.copyWith(
                             color: colors.background.withValues(alpha: 0.8),
                             fontSize: 12,
-                            height: 1.2,
+                            height: 1.375,
                           ),
                         ),
                       ],
@@ -610,8 +623,9 @@ class _ChatMembersSheet extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.meta.copyWith(
                               color: colors.inkMute,
-                              fontSize: 13,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w500,
+                              height: 1.25,
                             ),
                           ),
                         ],
@@ -638,8 +652,8 @@ class _ChatMembersSheet extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                 child: Container(
-                  height: 40,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  height: 44,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
                     color: colors.muted,
                     borderRadius: BorderRadius.circular(16),
@@ -648,7 +662,7 @@ class _ChatMembersSheet extends StatelessWidget {
                     children: [
                       Icon(
                         LucideIcons.search,
-                        size: 18,
+                        size: 16,
                         color: colors.inkMute,
                       ),
                       const SizedBox(width: AppSpacing.xs),
@@ -658,7 +672,8 @@ class _ChatMembersSheet extends StatelessWidget {
                             hintText: 'Найти участника',
                             hintStyle: AppTextStyles.bodySoft.copyWith(
                               color: colors.inkMute,
-                              fontSize: 14,
+                              fontSize: 13,
+                              height: 1.2,
                             ),
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
@@ -668,7 +683,8 @@ class _ChatMembersSheet extends StatelessWidget {
                           ),
                           style: AppTextStyles.bodySoft.copyWith(
                             color: colors.foreground,
-                            fontSize: 14,
+                            fontSize: 13,
+                            height: 1.2,
                           ),
                         ),
                       ),
@@ -809,8 +825,10 @@ class _InviteFriendsRow extends StatelessWidget {
                       'Пригласить друзей',
                       style: AppTextStyles.itemTitle.copyWith(
                         color: colors.foreground,
-                        fontSize: 15,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w600,
+                        height: 1.25,
+                        letterSpacing: -0.27,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -818,7 +836,8 @@ class _InviteFriendsRow extends StatelessWidget {
                       'Поделиться ссылкой на встречу',
                       style: AppTextStyles.meta.copyWith(
                         color: colors.inkMute,
-                        fontSize: 12,
+                        fontSize: 11,
+                        height: 1.25,
                       ),
                     ),
                   ],
@@ -859,12 +878,12 @@ class _MemberRow extends StatelessWidget {
         onTap: onOpenProfile,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Row(
             children: [
               BbAvatar(
                 name: member.displayName,
-                size: BbAvatarSize.lg,
+                size: BbAvatarSize.md,
                 online: online,
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -884,8 +903,10 @@ class _MemberRow extends StatelessWidget {
                               : member.displayName,
                           style: AppTextStyles.itemTitle.copyWith(
                             color: colors.foreground,
-                            fontSize: 15,
+                            fontSize: 13.5,
                             fontWeight: FontWeight.w600,
+                            height: 1.25,
+                            letterSpacing: -0.27,
                           ),
                         ),
                         if (isHost)
@@ -914,6 +935,7 @@ class _MemberRow extends StatelessWidget {
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
                                     height: 1.1,
+                                    letterSpacing: 0,
                                   ),
                                 ),
                               ],
@@ -930,7 +952,8 @@ class _MemberRow extends StatelessWidget {
                               : 'Участник',
                       style: AppTextStyles.meta.copyWith(
                         color: colors.inkMute,
-                        fontSize: 12,
+                        fontSize: 11,
+                        height: 1.25,
                       ),
                     ),
                     if (member.userId != null && member.social.hasSignal) ...[

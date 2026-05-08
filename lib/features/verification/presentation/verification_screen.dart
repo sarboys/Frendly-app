@@ -37,27 +37,35 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
                     ),
                   ),
                 ),
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 child: Row(
                   children: [
                     IconButton(
                       onPressed: () => context.pop(),
+                      constraints: const BoxConstraints.tightFor(
+                        width: 40,
+                        height: 40,
+                      ),
+                      padding: EdgeInsets.zero,
                       icon: const Icon(Icons.chevron_left_rounded, size: 28),
                     ),
                     Expanded(
                       child: Text(
                         'Верификация',
                         textAlign: TextAlign.center,
-                        style: AppTextStyles.itemTitle.copyWith(fontSize: 16),
+                        style: AppTextStyles.itemTitle.copyWith(
+                          fontSize: 16,
+                          letterSpacing: 0,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 48),
+                    const SizedBox(width: 40),
                   ],
                 ),
               ),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
                   children: [
                     Container(
                       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -79,7 +87,7 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
                             decoration: BoxDecoration(
                               color: colors.secondaryForeground
                                   .withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(18),
+                              borderRadius: BorderRadius.circular(16),
                             ),
                             child: Icon(
                               Icons.verified_user_outlined,
@@ -92,21 +100,25 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
                             'Получи синюю галочку',
                             style: AppTextStyles.sectionTitle.copyWith(
                               color: colors.secondaryForeground,
-                              fontSize: 24,
+                              fontSize: 22,
+                              height: 1.25,
+                              letterSpacing: 0,
                             ),
                           ),
-                          const SizedBox(height: AppSpacing.sm),
+                          const SizedBox(height: 6),
                           Text(
                             'Верифицированные профили получают в 3 раза больше приглашений и видны в фильтре «только проверенные».',
                             style: AppTextStyles.bodySoft.copyWith(
                               color: colors.secondaryForeground
                                   .withValues(alpha: 0.9),
+                              fontSize: 13,
+                              height: 1.625,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
+                    const SizedBox(height: 24),
                     _StepTile(
                       index: 1,
                       icon: Icons.camera_alt_outlined,
@@ -115,6 +127,7 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
                       done: verification.selfieDone ||
                           verification.status == 'verified',
                     ),
+                    const SizedBox(height: 12),
                     _StepTile(
                       index: 2,
                       icon: Icons.description_outlined,
@@ -123,6 +136,7 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
                       done: verification.documentDone ||
                           verification.status == 'verified',
                     ),
+                    const SizedBox(height: 12),
                     _StepTile(
                       index: 3,
                       icon: Icons.schedule_outlined,
@@ -134,20 +148,22 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
                               : 'Ждёт документ',
                       done: verification.status == 'verified',
                     ),
-                    const SizedBox(height: AppSpacing.lg),
+                    const SizedBox(height: 24),
                     Container(
                       padding: const EdgeInsets.all(AppSpacing.md),
                       decoration: BoxDecoration(
                         color: colors.secondarySoft,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             'Что будет с документом',
-                            style:
-                                AppTextStyles.itemTitle.copyWith(fontSize: 13),
+                            style: AppTextStyles.itemTitle.copyWith(
+                              fontSize: 13,
+                              letterSpacing: 0,
+                            ),
                           ),
                           const SizedBox(height: 6),
                           Text(
@@ -156,7 +172,8 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
                             '· Никогда не передаём третьим сторонам',
                             style: AppTextStyles.meta.copyWith(
                               color: colors.inkSoft,
-                              height: 1.5,
+                              fontWeight: FontWeight.w400,
+                              height: 1.625,
                             ),
                           ),
                         ],
@@ -177,7 +194,7 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
                     ),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                     child: Column(
                       children: [
                         SizedBox(
@@ -187,7 +204,7 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
                             style: FilledButton.styleFrom(
                               backgroundColor: colors.foreground,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(16),
                               ),
                             ),
                             onPressed: _submitting ||
@@ -250,6 +267,7 @@ class _VerificationScreenState extends ConsumerState<VerificationScreen> {
                           'Около 2 минут',
                           style: AppTextStyles.meta.copyWith(
                             color: colors.inkMute,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ],
@@ -289,11 +307,10 @@ class _StepTile extends StatelessWidget {
     final colors = AppColors.of(context);
     final subtitleColor = done ? colors.inkSoft : colors.inkMute;
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: colors.card,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colors.border),
       ),
       child: Row(
@@ -312,8 +329,8 @@ class _StepTile extends StatelessWidget {
               ),
               if (done)
                 Positioned(
-                  right: -2,
-                  bottom: -2,
+                  right: -4,
+                  bottom: -4,
                   child: Container(
                     width: 24,
                     height: 24,
@@ -331,16 +348,22 @@ class _StepTile extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(width: AppSpacing.sm),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppTextStyles.itemTitle),
+                Text(
+                  title,
+                  style: AppTextStyles.itemTitle.copyWith(letterSpacing: 0),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: AppTextStyles.meta.copyWith(color: subtitleColor),
+                  style: AppTextStyles.meta.copyWith(
+                    color: subtitleColor,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
               ],
             ),

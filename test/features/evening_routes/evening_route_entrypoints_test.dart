@@ -138,7 +138,10 @@ class _UnavailableEveningPlanRepository extends BackendRepository {
   _UnavailableEveningPlanRepository(Ref ref) : super(ref: ref, dio: Dio());
 
   @override
-  Future<Map<String, dynamic>> fetchEveningRoute(String routeId) async {
+  Future<Map<String, dynamic>> fetchEveningRoute(
+    String routeId, {
+    CancelToken? cancelToken,
+  }) async {
     throw StateError('Network disabled in route entry tests');
   }
 

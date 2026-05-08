@@ -10,6 +10,7 @@ import 'package:big_break_mobile/app/theme/app_radii.dart';
 import 'package:big_break_mobile/app/theme/app_shadows.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/tonight/presentation/v5_search_modal.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
@@ -1085,7 +1086,7 @@ class _RadarTopControls extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => context.pushRoute(AppRoute.search),
+                      onTap: () => showV5SearchModal(context),
                       child: Container(
                         height: 44,
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1124,6 +1125,7 @@ class _RadarTopControls extends StatelessWidget {
                               '+14°',
                               style: AppTextStyles.caption.copyWith(
                                 fontFamily: 'Sora',
+                                fontSize: 10.5,
                                 fontWeight: FontWeight.w600,
                                 color: BbV5Colors.inkMute,
                               ),
@@ -1148,7 +1150,7 @@ class _RadarTopControls extends StatelessWidget {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: _radarFilters.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
                   itemBuilder: (context, index) {
                     final item = _radarFilters[index];
                     return _RadarFilterChip(
@@ -1778,12 +1780,13 @@ class _RadarEventCard extends StatelessWidget {
                   color: BbV5Colors.ink,
                 ),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Text(
                 '${event.vibe} · ${event.distance}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.caption.copyWith(
+                  fontSize: 10.5,
                   color: BbV5Colors.inkMute,
                 ),
               ),
@@ -1792,7 +1795,7 @@ class _RadarEventCard extends StatelessWidget {
                 children: [
                   const Icon(
                     LucideIcons.users,
-                    size: 12,
+                    size: 10,
                     color: BbV5Colors.inkSoft,
                   ),
                   const SizedBox(width: 4),
@@ -1800,6 +1803,7 @@ class _RadarEventCard extends StatelessWidget {
                     child: Text(
                       '${event.going} идут',
                       style: AppTextStyles.caption.copyWith(
+                        fontSize: 10,
                         fontWeight: FontWeight.w600,
                         color: BbV5Colors.inkSoft,
                       ),

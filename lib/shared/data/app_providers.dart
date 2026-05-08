@@ -26,7 +26,6 @@ import 'package:big_break_mobile/shared/models/onboarding_data.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
 import 'package:big_break_mobile/shared/models/person_summary.dart';
 import 'package:big_break_mobile/shared/models/personal_chat.dart';
-import 'package:big_break_mobile/shared/models/poster.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/models/safety_hub.dart';
 import 'package:big_break_mobile/shared/models/subscription.dart';
@@ -209,66 +208,6 @@ final eventDetailProvider = FutureProvider.autoDispose
   return repository.fetchEventDetail(eventId, cancelToken: cancelToken);
 });
 
-class PostersQuery {
-  const PostersQuery({
-    required this.query,
-    required this.category,
-    required this.featuredOnly,
-  });
-
-  final String query;
-  final PosterCategory? category;
-  final bool featuredOnly;
-
-  @override
-  bool operator ==(Object other) {
-    return other is PostersQuery &&
-        other.query == query &&
-        other.category == category &&
-        other.featuredOnly == featuredOnly;
-  }
-
-  @override
-  int get hashCode => Object.hash(query, category, featuredOnly);
-}
-
-final featuredPostersProvider = FutureProvider<List<Poster>>((ref) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  await authBootstrap;
-  return repository
-      .fetchPosters(
-        featured: true,
-        limit: 6,
-      )
-      .then((value) => value.items);
-});
-
-final posterFeedProvider = FutureProvider.autoDispose
-    .family<List<Poster>, PostersQuery>((ref, query) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository
-      .fetchPosters(
-        q: query.query.isEmpty ? null : query.query,
-        category: query.category?.name,
-        featured: query.featuredOnly ? true : null,
-        cancelToken: cancelToken,
-      )
-      .then((value) => value.items);
-});
-
-final posterDetailProvider =
-    FutureProvider.autoDispose.family<Poster, String>((ref, posterId) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository.fetchPosterDetail(posterId, cancelToken: cancelToken);
-});
-
 class AfficheEventsQuery {
   const AfficheEventsQuery({
     required this.city,
@@ -321,10 +260,8 @@ final afficheEventsProvider =
   ref,
   query,
 ) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
   final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
   return repository
       .fetchAfficheEvents(
         city: query.city,
@@ -451,9 +388,7 @@ class AfficheEventsPager
   }
 
   Future<PaginatedResponse<AfficheEvent>> _fetchPage({String? cursor}) async {
-    final authBootstrap = ref.read(authBootstrapProvider.future);
     final repository = ref.read(backendRepositoryProvider);
-    await authBootstrap;
     return repository.fetchAfficheEvents(
       city: query.city,
       q: query.query.isEmpty ? null : query.query,
@@ -471,10 +406,8 @@ class AfficheEventsPager
 
 final afficheEventDetailProvider = FutureProvider.autoDispose
     .family<AfficheEvent, String>((ref, eventId) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
   final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
   return repository.fetchAfficheEventDetail(eventId, cancelToken: cancelToken);
 });
 

@@ -452,12 +452,20 @@ class _PersonalChatScreenState extends ConsumerState<PersonalChatScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(chat?.name ?? 'Личный чат',
-                          style: AppTextStyles.itemTitle),
+                      Text(
+                        chat?.name ?? 'Личный чат',
+                        style: AppTextStyles.itemTitle.copyWith(
+                          fontSize: 14,
+                          height: 1.25,
+                          letterSpacing: -0.28,
+                        ),
+                      ),
                       Text(
                         (chat?.online ?? false) ? 'в сети' : 'был недавно',
-                        style:
-                            AppTextStyles.meta.copyWith(color: colors.online),
+                        style: AppTextStyles.meta.copyWith(
+                          color: colors.online,
+                          fontSize: 10.5,
+                        ),
                       ),
                     ],
                   ),

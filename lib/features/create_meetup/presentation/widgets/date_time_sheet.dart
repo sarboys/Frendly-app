@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 
 Future<DateTime?> showDateTimeSheet(
@@ -70,7 +71,11 @@ class _DateTimeSheetState extends State<_DateTimeSheet> {
                     child: Text(
                       'Когда',
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.itemTitle.copyWith(fontSize: 16),
+                      style: bbV5DisplayStyle(
+                        fontSize: 18,
+                        height: 1.25,
+                        letterSpacing: 0,
+                      ),
                     ),
                   ),
                   IconButton(
@@ -95,10 +100,8 @@ class _DateTimeSheetState extends State<_DateTimeSheet> {
                     const SizedBox(height: AppSpacing.md),
                     Text(
                       'Время',
-                      style: AppTextStyles.caption.copyWith(
+                      style: bbV5KickerStyle(
                         color: colors.inkMute,
-                        letterSpacing: 0,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
@@ -137,6 +140,9 @@ class _DateTimeSheetState extends State<_DateTimeSheet> {
                       child: Text(
                         '${MaterialLocalizations.of(context).formatFullDate(_date)} · ${_hour.toString().padLeft(2, '0')}:${_minute.toString().padLeft(2, '0')}',
                         style: AppTextStyles.body.copyWith(
+                          fontFamily: 'Sora',
+                          fontSize: 13.5,
+                          height: 1.25,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -166,6 +172,9 @@ class _DateTimeSheetState extends State<_DateTimeSheet> {
                         child: Text(
                           'Готово',
                           style: AppTextStyles.button.copyWith(
+                            fontSize: 14,
+                            height: 1.1,
+                            letterSpacing: 0,
                             color: colors.primaryForeground,
                           ),
                         ),
@@ -256,8 +265,10 @@ class _WheelPickerState extends State<_WheelPicker> {
             return Center(
               child: Text(
                 widget.format(value),
-                style: AppTextStyles.sectionTitle.copyWith(
+                style: bbV5DisplayStyle(
                   fontSize: 20,
+                  height: 1,
+                  letterSpacing: -0.4,
                   color: active ? colors.foreground : colors.inkMute,
                 ),
               ),

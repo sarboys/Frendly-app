@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
@@ -113,7 +115,9 @@ class BbChatBubble extends StatelessWidget {
                           text,
                           style: AppTextStyles.body.copyWith(
                             color: mineForeground,
+                            fontSize: useV5 ? 13.5 : null,
                             fontWeight: FontWeight.w400,
+                            height: useV5 ? 1.375 : null,
                           ),
                         ),
                       if (attachments.isNotEmpty) ...[
@@ -152,8 +156,10 @@ class BbChatBubble extends StatelessWidget {
                   color: useV5
                       ? BbV5Colors.inkMute
                       : mineForeground.withValues(alpha: 0.68),
-                  fontSize: 11,
+                  fontSize: useV5 ? 9.5 : 11,
                   letterSpacing: 0,
+                  fontFeatures:
+                      useV5 ? const [FontFeature.tabularFigures()] : null,
                 ),
               ),
             ),
@@ -183,14 +189,19 @@ class BbChatBubble extends StatelessWidget {
             children: [
               if (showAuthor)
                 Padding(
-                  padding:
-                      const EdgeInsets.only(left: AppSpacing.sm, bottom: 4),
+                  padding: EdgeInsets.only(
+                    left: useV5 ? 4 : AppSpacing.sm,
+                    bottom: 4,
+                  ),
                   child: Text(
                     author,
                     style: AppTextStyles.caption.copyWith(
                       color: useV5 ? BbV5Colors.inkSoft : colors.inkSoft,
                       fontFamily: 'Sora',
+                      fontSize: useV5 ? 10 : null,
                       fontWeight: FontWeight.w600,
+                      height: useV5 ? 1.1 : null,
+                      letterSpacing: 0,
                     ),
                   ),
                 ),
@@ -230,7 +241,9 @@ class BbChatBubble extends StatelessWidget {
                             text,
                             style: AppTextStyles.body.copyWith(
                               color: themForeground,
+                              fontSize: useV5 ? 13.5 : null,
                               fontWeight: FontWeight.w400,
+                              height: useV5 ? 1.375 : null,
                             ),
                           ),
                         if (attachments.isNotEmpty) ...[
@@ -265,13 +278,15 @@ class BbChatBubble extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Padding(
-                padding: const EdgeInsets.only(left: AppSpacing.sm),
+                padding: EdgeInsets.only(left: useV5 ? 4 : AppSpacing.sm),
                 child: Text(
                   time,
                   style: AppTextStyles.caption.copyWith(
                     color: useV5 ? BbV5Colors.inkMute : colors.inkMute,
-                    fontSize: 11,
+                    fontSize: useV5 ? 9.5 : 11,
                     letterSpacing: 0,
+                    fontFeatures:
+                        useV5 ? const [FontFeature.tabularFigures()] : null,
                   ),
                 ),
               ),
@@ -298,9 +313,11 @@ class _AuthorAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final useV5 =
+        AppColors.of(context).background == AppColors.lightTheme.background;
     final avatar = BbAvatar(
       name: author,
-      size: BbAvatarSize.sm,
+      size: useV5 ? BbAvatarSize.chat : BbAvatarSize.sm,
       imageUrl: imageUrl,
     );
     final handleTap = onTap;
@@ -513,6 +530,28 @@ class _AttachmentTile extends StatelessWidget {
         ? colors.bubbleMeForeground.withValues(alpha: 0.16)
         : colors.background;
 
+    if (attachment.isVoice) {
+      return SizedBox(
+        width: math.min(MediaQuery.sizeOf(context).width * 0.58, 236),
+        child: BbVoiceMessage(
+          chatId: chatId,
+          playbackId: messageClientId.isEmpty ? attachment.id : messageClientId,
+          attachmentId: attachment.id,
+          isMine: isMine,
+          url: attachment.url,
+          localPath: attachment.localPath,
+          durationMs: attachment.durationMs ?? 0,
+          waveform: attachment.waveform ?? const [],
+          resolveLocalPath: onVoiceResolvePath == null
+              ? null
+              : () => onVoiceResolvePath!(attachment),
+          resolveRemoteUrl: onVoiceResolveRemoteUrl == null
+              ? null
+              : () => onVoiceResolveRemoteUrl!(attachment),
+        ),
+      );
+    }
+
     return Material(
       color: background,
       borderRadius: BorderRadius.circular(16),
@@ -531,135 +570,112 @@ class _AttachmentTile extends StatelessWidget {
                   isPending: isPending,
                   isReady: _isLocationReady,
                 )
-              : attachment.isVoice
-                  ? SizedBox(
-                      width: 184,
-                      child: BbVoiceMessage(
-                        chatId: chatId,
-                        playbackId: messageClientId.isEmpty
-                            ? attachment.id
-                            : messageClientId,
-                        attachmentId: attachment.id,
-                        isMine: isMine,
-                        url: attachment.url,
-                        localPath: attachment.localPath,
-                        durationMs: attachment.durationMs ?? 0,
-                        waveform: attachment.waveform ?? const [],
-                        resolveLocalPath: onVoiceResolvePath == null
-                            ? null
-                            : () => onVoiceResolvePath!(attachment),
-                        resolveRemoteUrl: onVoiceResolveRemoteUrl == null
-                            ? null
-                            : () => onVoiceResolveRemoteUrl!(attachment),
-                      ),
-                    )
-                  : _isImageReady
-                      ? Stack(
-                          children: [
-                            BbChatAttachmentImage(
-                              attachment: attachment,
-                              width: 184,
-                              height: 148,
-                              fit: BoxFit.cover,
-                              borderRadius: BorderRadius.circular(16),
-                              placeholderColor: background,
-                              foregroundColor: foreground,
-                              resolveLocalPath: onImageResolveLocalPath,
-                              resolveRemoteUrl: onImageResolveRemoteUrl,
-                            ),
-                            if (attachment.status == 'uploading')
-                              Positioned.fill(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        foreground,
-                                      ),
-                                    ),
+              : _isImageReady
+                  ? Stack(
+                      children: [
+                        BbChatAttachmentImage(
+                          attachment: attachment,
+                          width: 184,
+                          height: 148,
+                          fit: BoxFit.cover,
+                          borderRadius: BorderRadius.circular(16),
+                          placeholderColor: background,
+                          foregroundColor: foreground,
+                          resolveLocalPath: onImageResolveLocalPath,
+                          resolveRemoteUrl: onImageResolveRemoteUrl,
+                        ),
+                        if (attachment.status == 'uploading')
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              alignment: Alignment.center,
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    foreground,
                                   ),
                                 ),
                               ),
-                          ],
-                        )
-                      : Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 28,
-                              height: 28,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: foreground.withValues(
-                                    alpha: isMine ? 0.14 : 0.08),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: _isReady
-                                  ? Icon(
-                                      _iconForAttachment(attachment),
-                                      size: 16,
-                                      color: foreground,
-                                    )
-                                  : SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                                foreground),
-                                      ),
-                                    ),
                             ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Flexible(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    attachment.fileName,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTextStyles.body.copyWith(
-                                      color: foreground,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _isReady
-                                        ? 'Скачать на телефон'
-                                        : 'Загрузка файла...',
-                                    style: AppTextStyles.caption.copyWith(
-                                      color: subtitleColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (_isReady) ...[
-                              const SizedBox(width: AppSpacing.xs),
-                              GestureDetector(
-                                onTap: onDownloadTap == null
-                                    ? null
-                                    : () => onDownloadTap!(attachment),
-                                child: Icon(
-                                  Icons.download_rounded,
-                                  size: 18,
+                          ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: foreground.withValues(
+                                alpha: isMine ? 0.14 : 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: _isReady
+                              ? Icon(
+                                  _iconForAttachment(attachment),
+                                  size: 16,
                                   color: foreground,
+                                )
+                              : SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        foreground),
+                                  ),
+                                ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                attachment.fileName,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.body.copyWith(
+                                  color: foreground,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _isReady
+                                    ? 'Скачать на телефон'
+                                    : 'Загрузка файла...',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: subtitleColor,
                                 ),
                               ),
                             ],
-                          ],
+                          ),
                         ),
+                        if (_isReady) ...[
+                          const SizedBox(width: AppSpacing.xs),
+                          GestureDetector(
+                            onTap: onDownloadTap == null
+                                ? null
+                                : () => onDownloadTap!(attachment),
+                            child: Icon(
+                              Icons.download_rounded,
+                              size: 18,
+                              color: foreground,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
         ),
       ),
     );

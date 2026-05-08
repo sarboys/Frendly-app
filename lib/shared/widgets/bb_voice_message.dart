@@ -194,10 +194,15 @@ class BbVoiceMessage extends ConsumerWidget {
                   _formatDuration(remaining),
                   textAlign: TextAlign.right,
                   style: AppTextStyles.caption.copyWith(
+                    fontFamily: useV5 ? 'Sora' : null,
+                    fontSize: useV5 ? 10.5 : null,
+                    height: useV5 ? 1.1 : null,
                     color: isMine
                         ? foreground.withValues(alpha: 0.8)
                         : (useV5 ? BbV5Colors.inkSoft : colors.inkSoft),
                     fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
               ),

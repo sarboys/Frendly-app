@@ -53,6 +53,8 @@
 	<string>$(YANDEX_CLIENT_ID)</string>
 	<key>MapkitApiKey</key>
 	<string>$(BIG_BREAK_MAPKIT_API_KEY)</string>
+	<key>DartDefines</key>
+	<string>$(DART_DEFINES)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>

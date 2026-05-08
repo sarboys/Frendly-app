@@ -178,7 +178,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     'FRENDLY · v1.0',
                     style: AppTextStyles.caption.copyWith(
                       fontSize: 10.5,
-                      letterSpacing: 0,
+                      letterSpacing: 1.68,
                       color: BbV5Colors.inkMute,
                     ),
                   ),
@@ -372,22 +372,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               Text(
                 'Аккаунт и безопасность',
-                style: AppTextStyles.sectionTitle.copyWith(fontSize: 20),
+                style: bbV5DisplayStyle(fontSize: 18, height: 1.2),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 'Телефон: +7 ··· 87',
-                style: AppTextStyles.body,
+                style: bbV5DisplayStyle(fontSize: 13.5, height: 1.25),
               ),
               const SizedBox(height: 6),
               Text(
                 'Вход: Apple ID',
-                style: AppTextStyles.body,
+                style: bbV5DisplayStyle(fontSize: 13.5, height: 1.25),
               ),
               const SizedBox(height: 6),
               Text(
                 'Пароль здесь не используется. Вход идет по коду и Apple ID.',
-                style: AppTextStyles.meta.copyWith(color: colors.inkMute),
+                style: AppTextStyles.meta.copyWith(
+                  color: colors.inkMute,
+                  fontSize: 12.5,
+                  height: 1.45,
+                ),
               ),
             ],
           ),
@@ -413,12 +417,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               Text(
                 'Помощь',
-                style: AppTextStyles.sectionTitle.copyWith(fontSize: 20),
+                style: bbV5DisplayStyle(fontSize: 18, height: 1.2),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 'Если что-то сломалось, открой Безопасность и поддержку или напиши в саппорт из Safety Hub.',
-                style: AppTextStyles.body,
+                style: AppTextStyles.bodySoft.copyWith(
+                  color: colors.foreground,
+                  fontSize: 13.5,
+                  height: 1.625,
+                ),
               ),
             ],
           ),
@@ -444,12 +452,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               Text(
                 'Условия и приватность',
-                style: AppTextStyles.sectionTitle.copyWith(fontSize: 20),
+                style: bbV5DisplayStyle(fontSize: 18, height: 1.2),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 'Мы показываем только нужные данные для встреч, не публикуем точную точку без согласия и даём управлять приватностью прямо в настройках.',
-                style: AppTextStyles.body,
+                style: AppTextStyles.bodySoft.copyWith(
+                  color: colors.foreground,
+                  fontSize: 13.5,
+                  height: 1.625,
+                ),
               ),
             ],
           ),
@@ -511,7 +523,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             children: [
               Text(
                 title,
-                style: AppTextStyles.sectionTitle.copyWith(fontSize: 20),
+                style: bbV5DisplayStyle(fontSize: 18, height: 1.2),
               ),
               const SizedBox(height: AppSpacing.md),
               for (final option in options)
@@ -541,8 +553,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           Expanded(
                             child: Text(
                               option,
-                              style: AppTextStyles.body.copyWith(
+                              style: AppTextStyles.itemTitle.copyWith(
+                                fontSize: 13.5,
                                 fontWeight: FontWeight.w600,
+                                height: 1.25,
+                                letterSpacing: -0.27,
                               ),
                             ),
                           ),

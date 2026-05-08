@@ -23,7 +23,6 @@ import 'package:big_break_mobile/shared/models/paginated_response.dart';
 import 'package:big_break_mobile/shared/models/partner_offer_code.dart';
 import 'package:big_break_mobile/shared/models/person_summary.dart';
 import 'package:big_break_mobile/shared/models/personal_chat.dart';
-import 'package:big_break_mobile/shared/models/poster.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/models/public_share.dart';
 import 'package:big_break_mobile/shared/models/safety_hub.dart';
@@ -92,49 +91,6 @@ final backendRepositoryProvider = Provider<BackendRepository>((ref) {
     dio: ref.read(apiClientProvider).dio,
   );
 });
-
-class GroupedSearchResults {
-  const GroupedSearchResults({
-    required this.meetups,
-    required this.evenings,
-    required this.routes,
-    required this.posters,
-    required this.affiche,
-  });
-
-  final List<Event> meetups;
-  final List<AfterDarkEvent> evenings;
-  final List<EveningRouteTemplateSummary> routes;
-  final List<Poster> posters;
-  final List<AfficheEvent> affiche;
-
-  factory GroupedSearchResults.fromJson(Map<String, dynamic> json) {
-    return GroupedSearchResults(
-      meetups: ((json['meetups'] as List?) ?? const [])
-          .whereType<Map>()
-          .map((item) => Event.fromJson(Map<String, dynamic>.from(item)))
-          .toList(growable: false),
-      evenings: ((json['evenings'] as List?) ?? const [])
-          .whereType<Map>()
-          .map((item) =>
-              AfterDarkEvent.fromJson(Map<String, dynamic>.from(item)))
-          .toList(growable: false),
-      routes: ((json['routes'] as List?) ?? const [])
-          .whereType<Map>()
-          .map((item) => EveningRouteTemplateSummary.fromJson(
-              Map<String, dynamic>.from(item)))
-          .toList(growable: false),
-      posters: ((json['posters'] as List?) ?? const [])
-          .whereType<Map>()
-          .map((item) => Poster.fromJson(Map<String, dynamic>.from(item)))
-          .toList(growable: false),
-      affiche: ((json['affiche'] as List?) ?? const [])
-          .whereType<Map>()
-          .map((item) => AfficheEvent.fromJson(Map<String, dynamic>.from(item)))
-          .toList(growable: false),
-    );
-  }
-}
 
 class BackendRepository {
   BackendRepository({
@@ -445,44 +401,6 @@ class BackendRepository {
     return EventDetail.fromJson(response.data!);
   }
 
-  Future<PaginatedResponse<Poster>> fetchPosters({
-    String? q,
-    String? category,
-    bool? featured,
-    String? cursor,
-    int limit = 24,
-    String? date,
-    CancelToken? cancelToken,
-  }) async {
-    final response = await dio.get<Map<String, dynamic>>(
-      '/posters',
-      queryParameters: {
-        if (q != null && q.isNotEmpty) 'q': q,
-        if (category != null && category.isNotEmpty) 'category': category,
-        if (featured != null) 'featured': featured.toString(),
-        if (date != null && date.isNotEmpty && date != 'any') 'date': date,
-        if (cursor != null) 'cursor': cursor,
-        'limit': limit,
-      },
-      cancelToken: cancelToken,
-    );
-    return PaginatedResponse.fromJson(
-      response.data!,
-      Poster.fromJson,
-    );
-  }
-
-  Future<Poster> fetchPosterDetail(
-    String posterId, {
-    CancelToken? cancelToken,
-  }) async {
-    final response = await dio.get<Map<String, dynamic>>(
-      '/posters/$posterId',
-      cancelToken: cancelToken,
-    );
-    return Poster.fromJson(response.data!);
-  }
-
   Future<PaginatedResponse<AfficheEvent>> fetchAfficheEvents({
     String? city,
     String? q,
@@ -525,42 +443,6 @@ class BackendRepository {
       cancelToken: cancelToken,
     );
     return AfficheEvent.fromJson(response.data!);
-  }
-
-  Future<GroupedSearchResults> searchGrouped({
-    String? q,
-    String? lifestyle,
-    String? price,
-    String? gender,
-    String? access,
-    String? date,
-    int meetupsLimit = 4,
-    int eveningsLimit = 3,
-    int routesLimit = 3,
-    int postersLimit = 6,
-    int afficheLimit = 6,
-    String? city,
-    CancelToken? cancelToken,
-  }) async {
-    final response = await dio.get<Map<String, dynamic>>(
-      '/search',
-      queryParameters: {
-        if (q != null && q.isNotEmpty) 'q': q,
-        if (lifestyle != null && lifestyle.isNotEmpty) 'lifestyle': lifestyle,
-        if (price != null && price.isNotEmpty) 'price': price,
-        if (gender != null && gender.isNotEmpty) 'gender': gender,
-        if (access != null && access.isNotEmpty) 'access': access,
-        if (date != null && date.isNotEmpty && date != 'any') 'date': date,
-        if (city != null && city.isNotEmpty) 'city': city,
-        'meetupsLimit': meetupsLimit,
-        'eveningsLimit': eveningsLimit,
-        'routesLimit': routesLimit,
-        'postersLimit': postersLimit,
-        'afficheLimit': afficheLimit,
-      },
-      cancelToken: cancelToken,
-    );
-    return GroupedSearchResults.fromJson(response.data!);
   }
 
   Future<EventDetail> joinEvent(String eventId) async {
@@ -923,7 +805,6 @@ class BackendRepository {
     String visibilityMode = 'public',
     EventJoinMode joinMode = EventJoinMode.open,
     String? inviteeUserId,
-    String? posterId,
     String? afficheEventId,
     String? routeId,
     CreateEventRoutePayload? route,
@@ -966,7 +847,6 @@ class BackendRepository {
         'genderMode': genderMode,
         'visibilityMode': visibilityMode,
         if (inviteeUserId != null) 'inviteeUserId': inviteeUserId,
-        if (posterId != null) 'posterId': posterId,
         if (afficheEventId != null) 'afficheEventId': afficheEventId,
         if (routeId != null) 'routeId': routeId,
         if (route != null) 'route': route.toJson(),

@@ -367,6 +367,7 @@ class _BbComposerState extends State<BbComposer> {
       overlayBox.size.height - offset.dy,
     );
 
+    final menuItemHeight = useV5 ? 40.0 : kMinInteractiveDimension;
     final action = await showMenu<BbComposerAttachmentAction>(
       context: context,
       position: position,
@@ -377,24 +378,30 @@ class _BbComposerState extends State<BbComposer> {
           color: useV5 ? BbV5Colors.hair : colors.border,
         ),
       ),
-      items: const [
+      items: [
         PopupMenuItem(
           value: BbComposerAttachmentAction.photo,
-          child: _AttachmentMenuItem(
+          height: menuItemHeight,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: const _AttachmentMenuItem(
             icon: Icons.image_outlined,
             label: 'Фото',
           ),
         ),
         PopupMenuItem(
           value: BbComposerAttachmentAction.file,
-          child: _AttachmentMenuItem(
+          height: menuItemHeight,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: const _AttachmentMenuItem(
             icon: Icons.attach_file_rounded,
             label: 'Файл',
           ),
         ),
         PopupMenuItem(
           value: BbComposerAttachmentAction.location,
-          child: _AttachmentMenuItem(
+          height: menuItemHeight,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: const _AttachmentMenuItem(
             icon: Icons.place_outlined,
             label: 'Геолокация',
           ),
@@ -415,7 +422,7 @@ class _BbComposerState extends State<BbComposer> {
     final colors = AppColors.of(context);
     final useV5 = colors.background == AppColors.lightTheme.background;
     final composerPadding = useV5
-        ? const EdgeInsets.fromLTRB(12, 6, 12, 8)
+        ? const EdgeInsets.fromLTRB(20, 10, 20, 20)
         : const EdgeInsets.fromLTRB(12, 8, 12, 12);
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -589,7 +596,6 @@ class _BbComposerState extends State<BbComposer> {
   }
 
   Widget _buildV5ComposerRow() {
-    final showSendAction = _hasText || !_canRecordVoice;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -609,21 +615,21 @@ class _BbComposerState extends State<BbComposer> {
         Expanded(
           child: Container(
             key: const Key('bb-composer-input-shell'),
-            constraints: const BoxConstraints(minHeight: 40),
+            constraints: const BoxConstraints(minHeight: 44),
             decoration: BoxDecoration(
               color: BbV5Colors.paperHi,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(24),
               border: Border.all(color: BbV5Colors.hair),
               boxShadow: BbV5Shadows.pill,
             ),
-            padding: const EdgeInsets.only(left: 16, right: 14),
+            padding: const EdgeInsets.only(left: 16, right: 6),
             alignment: Alignment.center,
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 7),
                     child: TextField(
                       controller: _controller,
                       focusNode: _inputFocusNode,
@@ -639,39 +645,52 @@ class _BbComposerState extends State<BbComposer> {
                         hintText: widget.hintText,
                         hintStyle: AppTextStyles.body.copyWith(
                           color: BbV5Colors.inkMute,
+                          fontSize: 13.5,
                         ),
                         border: InputBorder.none,
                         isCollapsed: true,
                       ),
                       style: AppTextStyles.body.copyWith(
                         color: BbV5Colors.ink,
+                        fontSize: 13.5,
                       ),
                     ),
                   ),
                 ),
+                if (_hasText || !_canRecordVoice)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6, bottom: 4),
+                    child: _CircleButton(
+                      key: const Key('bb-composer-send-button'),
+                      icon: _sending
+                          ? Icons.more_horiz_rounded
+                          : Icons.send_rounded,
+                      size: 34,
+                      iconSize: 16,
+                      foreground: BbV5Colors.paperHi,
+                      background: BbV5Colors.accent,
+                      shadows: BbV5Shadows.ink,
+                      onTap: widget.enabled ? _submit : null,
+                    ),
+                  ),
               ],
             ),
           ),
         ),
-        const SizedBox(width: AppSpacing.xs),
-        _CircleButton(
-          key: showSendAction
-              ? const Key('bb-composer-send-button')
-              : const Key('bb-composer-mic-button'),
-          icon: showSendAction
-              ? (_sending ? Icons.more_horiz_rounded : Icons.send_rounded)
-              : Icons.mic_none_rounded,
-          size: 44,
-          foreground: showSendAction ? BbV5Colors.paperHi : BbV5Colors.ink,
-          background: showSendAction ? BbV5Colors.accent : BbV5Colors.paperHi,
-          borderColor: showSendAction ? null : BbV5Colors.hair,
-          shadows: showSendAction ? BbV5Shadows.ink : BbV5Shadows.pill,
-          onTap: widget.enabled
-              ? (showSendAction
-                  ? _submit
-                  : (_sending ? null : _startVoiceRecording))
-              : null,
-        ),
+        if (_canRecordVoice) ...[
+          const SizedBox(width: AppSpacing.xs),
+          _CircleButton(
+            key: const Key('bb-composer-mic-button'),
+            icon: Icons.mic_none_rounded,
+            size: 44,
+            iconSize: 18,
+            foreground: BbV5Colors.ink,
+            background: BbV5Colors.paperHi,
+            borderColor: BbV5Colors.hair,
+            shadows: BbV5Shadows.pill,
+            onTap: widget.enabled && !_sending ? _startVoiceRecording : null,
+          ),
+        ],
       ],
     );
   }
@@ -878,9 +897,12 @@ class _RecordingComposerRow extends StatelessWidget {
                   _formatDuration(duration),
                   maxLines: 1,
                   style: AppTextStyles.bodySoft.copyWith(
+                    fontFamily: useV5 ? 'Sora' : null,
                     color: foreground,
-                    fontSize: 13,
+                    fontSize: useV5 ? 12 : 13,
+                    height: useV5 ? 1.1 : null,
                     fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
@@ -907,6 +929,8 @@ class _RecordingComposerRow extends StatelessWidget {
                       maxLines: 1,
                       style: AppTextStyles.caption.copyWith(
                         color: muted,
+                        fontSize: useV5 ? 10.5 : null,
+                        height: useV5 ? 1.1 : null,
                         letterSpacing: 0,
                       ),
                     ),
@@ -1005,17 +1029,20 @@ class _AttachmentMenuItem extends StatelessWidget {
     final colors = AppColors.of(context);
     final useV5 = colors.background == AppColors.lightTheme.background;
     final foreground = useV5 ? BbV5Colors.ink : colors.foreground;
-    final iconColor = useV5 ? BbV5Colors.accent : colors.primary;
+    final iconColor = useV5 ? BbV5Colors.inkSoft : colors.primary;
 
     return Row(
       children: [
-        Icon(icon, size: 18, color: iconColor),
-        const SizedBox(width: 10),
+        Icon(icon, size: useV5 ? 16 : 18, color: iconColor),
+        SizedBox(width: useV5 ? 12 : 10),
         Text(
           label,
           style: AppTextStyles.meta.copyWith(
             color: foreground,
-            fontWeight: FontWeight.w600,
+            fontSize: useV5 ? 13 : null,
+            fontWeight: useV5 ? FontWeight.w500 : FontWeight.w600,
+            height: useV5 ? 1.1 : null,
+            letterSpacing: 0,
           ),
         ),
       ],

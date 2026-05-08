@@ -243,35 +243,42 @@ class _LiquidWord extends StatelessWidget {
     final exit = _interval(value, 0.7, 0.82, curve: Curves.easeOutCubic);
     return Opacity(
       opacity: (1 - exit).clamp(0, 1),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: List.generate(letters.length, (index) {
-          final progress = _interval(
-            value,
-            0.44 + index * 0.025,
-            0.62 + index * 0.025,
-            curve: Curves.easeOutCubic,
-          );
-          final first = index == 0;
-          return Opacity(
-            opacity: progress,
-            child: Transform.translate(
-              offset: Offset(0, 22 * (1 - progress)),
-              child: Text(
-                letters[index],
-                style: TextStyle(
-                  fontFamily: first ? 'Sora' : 'InstrumentSerif',
-                  fontStyle: first ? FontStyle.normal : FontStyle.italic,
-                  fontSize: 56,
-                  height: 1,
-                  fontWeight: first ? FontWeight.w700 : FontWeight.w400,
-                  color: BbV5Colors.paper,
+      child: SizedBox(
+        width: 300,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: List.generate(letters.length, (index) {
+              final progress = _interval(
+                value,
+                0.44 + index * 0.025,
+                0.62 + index * 0.025,
+                curve: Curves.easeOutCubic,
+              );
+              final first = index == 0;
+              return Opacity(
+                opacity: progress,
+                child: Transform.translate(
+                  offset: Offset(0, 22 * (1 - progress)),
+                  child: Text(
+                    letters[index],
+                    style: TextStyle(
+                      fontFamily: first ? 'Sora' : 'InstrumentSerif',
+                      fontStyle: first ? FontStyle.normal : FontStyle.italic,
+                      fontSize: 56,
+                      height: 1,
+                      fontWeight: first ? FontWeight.w700 : FontWeight.w400,
+                      color: BbV5Colors.paper,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          );
-        }),
+              );
+            }),
+          ),
+        ),
       ),
     );
   }
@@ -309,6 +316,7 @@ class _LiquidLogo extends StatelessWidget {
                 fontSize: 30,
                 color: BbV5Colors.paper,
                 fontWeight: FontWeight.w700,
+                letterSpacing: -1.2,
               ),
             ),
           ),
@@ -319,8 +327,9 @@ class _LiquidLogo extends StatelessWidget {
             'ВЕЧЕР НАЧИНАЕТСЯ МЯГКО',
             style: AppTextStyles.caption.copyWith(
               color: BbV5Colors.inkMute,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.8,
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              letterSpacing: 2.16,
             ),
           ),
         ],
@@ -389,9 +398,9 @@ class _BrandReveal extends StatelessWidget {
               child: Text(
                 letters[index],
                 style: TextStyle(
-                  fontFamily: 'Sora',
+                  fontFamily: isFirst ? 'Sora' : 'InstrumentSerif',
                   fontStyle: isFirst ? FontStyle.normal : FontStyle.italic,
-                  fontSize: 44,
+                  fontSize: 28,
                   height: 1,
                   fontWeight: isFirst ? FontWeight.w600 : FontWeight.w400,
                   color: isFirst ? BbV5Colors.ink : BbV5Colors.terra,

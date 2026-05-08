@@ -40,6 +40,7 @@ import 'package:big_break_mobile/features/live_meetup/presentation/live_meetup_s
 import 'package:big_break_mobile/features/match/presentation/match_screen.dart';
 import 'package:big_break_mobile/features/map/presentation/map_screen.dart';
 import 'package:big_break_mobile/features/memory_map/presentation/memory_map_screen.dart';
+import 'package:big_break_mobile/features/meetups/presentation/meetups_screen.dart';
 import 'package:big_break_mobile/features/meetup_chat/presentation/meetup_chat_screen.dart';
 import 'package:big_break_mobile/features/notifications/presentation/notifications_screen.dart';
 import 'package:big_break_mobile/features/onboarding/presentation/onboarding_screen.dart';
@@ -48,11 +49,8 @@ import 'package:big_break_mobile/features/perks/presentation/perks_screen.dart';
 import 'package:big_break_mobile/features/paywall/presentation/paywall_screen.dart';
 import 'package:big_break_mobile/features/permissions/presentation/permissions_screen.dart';
 import 'package:big_break_mobile/features/phone_auth/presentation/phone_auth_screen.dart';
-import 'package:big_break_mobile/features/posters/presentation/poster_detail_screen.dart';
-import 'package:big_break_mobile/features/posters/presentation/posters_screen.dart';
 import 'package:big_break_mobile/features/profile/presentation/profile_screen.dart';
 import 'package:big_break_mobile/features/report/presentation/report_screen.dart';
-import 'package:big_break_mobile/features/search/presentation/search_screen.dart';
 import 'package:big_break_mobile/features/safety/presentation/safety_hub_screen.dart';
 import 'package:big_break_mobile/features/share_card/presentation/share_card_screen.dart';
 import 'package:big_break_mobile/features/settings/presentation/settings_screen.dart';
@@ -318,15 +316,6 @@ GoRouter buildAppRouter({
         pageBuilder: (context, state) => _slidePage(const OnboardingScreen()),
       ),
       GoRoute(
-        path: AppRoute.search.path,
-        name: AppRoute.search.name,
-        pageBuilder: (context, state) => _slidePage(
-          SearchScreen(
-            preset: SearchPreset.parse(state.uri.queryParameters['preset']),
-          ),
-        ),
-      ),
-      GoRoute(
         path: AppRoute.map.path,
         name: AppRoute.map.name,
         pageBuilder: (context, state) => _slidePage(
@@ -492,17 +481,10 @@ GoRouter buildAppRouter({
         ),
       ),
       GoRoute(
-        path: AppRoute.posters.path,
-        name: AppRoute.posters.name,
-        pageBuilder: (context, state) => _slidePage(const PostersScreen()),
-      ),
-      GoRoute(
-        path: AppRoute.poster.path,
-        name: AppRoute.poster.name,
+        path: AppRoute.meetups.path,
+        name: AppRoute.meetups.name,
         pageBuilder: (context, state) => _slidePage(
-          PosterDetailScreen(
-            posterId: state.pathParameters['posterId']!,
-          ),
+          const MeetupsScreen(),
         ),
       ),
       GoRoute(
@@ -527,7 +509,6 @@ GoRouter buildAppRouter({
         pageBuilder: (context, state) => _slidePage(
           CreateMeetupScreen(
             inviteeUserId: state.uri.queryParameters['inviteeUserId'],
-            posterId: state.uri.queryParameters['posterId'],
             afficheEventId: state.uri.queryParameters['afficheEventId'],
             communityId: state.uri.queryParameters['communityId'],
             editEventId: state.uri.queryParameters['editEventId'],

@@ -45,15 +45,15 @@ class EveningRouteCard extends StatelessWidget {
                     children: [
                       if (kicker.isNotEmpty) ...[
                         BbV5Kicker(kicker, maxLines: 1),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                       ],
                       Text(
                         route.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: bbV5DisplayStyle(fontSize: 18, height: 1.1),
+                        style: bbV5DisplayStyle(fontSize: 18, height: 1.25),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
                         route.blurb,
                         maxLines: 2,
@@ -61,7 +61,7 @@ class EveningRouteCard extends StatelessWidget {
                         style: AppTextStyles.meta.copyWith(
                           color: BbV5Colors.inkSoft,
                           fontSize: 12,
-                          height: 1.35,
+                          height: 1.625,
                         ),
                       ),
                     ],
@@ -73,9 +73,9 @@ class EveningRouteCard extends StatelessWidget {
                 ],
               ],
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: 12),
             Wrap(
-              spacing: AppSpacing.md,
+              spacing: 12,
               runSpacing: 8,
               children: [
                 _RouteMeta(icon: LucideIcons.clock, label: route.durationLabel),
@@ -90,10 +90,10 @@ class EveningRouteCard extends StatelessWidget {
               ],
             ),
             if (visibleSteps.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: 16),
               _RouteStepStrip(steps: visibleSteps),
             ],
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -105,7 +105,7 @@ class EveningRouteCard extends StatelessWidget {
                     expanded: true,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
+                const SizedBox(width: 8),
                 Expanded(
                   child: BbV5PillButton(
                     label: 'Запустить',
@@ -144,10 +144,10 @@ class _SavingsBadge extends StatelessWidget {
         boxShadow: BbV5Shadows.pill,
       ),
       child: Text(
-        '-${_formatRubles(value)}₽',
+        '−${_formatRubles(value)}₽',
         style: AppTextStyles.caption.copyWith(
           fontSize: 10,
-          letterSpacing: 0,
+          letterSpacing: 0.6,
           color: BbV5Colors.terra,
           fontWeight: FontWeight.w600,
         ),
@@ -170,8 +170,8 @@ class _RouteMeta extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 13, color: BbV5Colors.inkSoft),
-        const SizedBox(width: 5),
+        Icon(icon, size: 12, color: BbV5Colors.inkSoft),
+        const SizedBox(width: 4),
         Flexible(
           child: Text(
             label,

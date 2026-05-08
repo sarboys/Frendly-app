@@ -1,18 +1,16 @@
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/app/theme/app_colors.dart';
-import 'package:big_break_mobile/app/theme/app_radii.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/host_dashboard.dart';
-import 'package:big_break_mobile/shared/widgets/async_value_view.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
+import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 class HostDashboardScreen extends ConsumerStatefulWidget {
   const HostDashboardScreen({
@@ -28,441 +26,306 @@ class HostDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _HostDashboardScreenState extends ConsumerState<HostDashboardScreen> {
-  String? _selectedEventId;
   _HostedMeetupsTab _tab = _HostedMeetupsTab.upcoming;
   final Set<String> _processingRequestIds = <String>{};
 
   @override
-  void initState() {
-    super.initState();
-    _selectedEventId = widget.initialEventId;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     final dashboardAsync = ref.watch(hostDashboardProvider);
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
+    return BbV5Scaffold(
+      child: SafeArea(
         bottom: false,
-        child: AsyncValueView<HostDashboardData>(
-          value: dashboardAsync,
-          data: (dashboard) {
-            final selectedEventId = _selectedEventId ??
-                (dashboard.events.isEmpty ? null : dashboard.events.first.id);
-            final heroNames = <String>{
-              ...dashboard.requests.map((request) => request.userName),
-              ...dashboard.events.expand((event) => event.attendees),
-            }.toList(growable: false);
-            final now = DateTime.now();
-            final upcomingEvents = dashboard.events.where((event) {
-              final startsAtIso = event.startsAtIso;
-              if (startsAtIso == null) {
-                return true;
-              }
-              final startsAt = DateTime.tryParse(startsAtIso);
-              return startsAt == null || startsAt.isAfter(now);
-            }).toList(growable: false);
-            final pastEvents = dashboard.events.where((event) {
-              final startsAtIso = event.startsAtIso;
-              if (startsAtIso == null) {
-                return false;
-              }
-              final startsAt = DateTime.tryParse(startsAtIso);
-              return startsAt != null && !startsAt.isAfter(now);
-            }).toList(growable: false);
-            final visibleEvents = _tab == _HostedMeetupsTab.upcoming
-                ? upcomingEvents
-                : pastEvents;
-            final selectedEventAsync = selectedEventId == null
-                ? null
-                : ref.watch(hostEventProvider(selectedEventId));
-
-            return Column(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: colors.border.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ),
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () => context.pop(),
-                        icon: const Icon(Icons.chevron_left_rounded, size: 28),
-                      ),
-                      Expanded(
-                        child: Text(
-                          'Хост-панель',
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.itemTitle.copyWith(fontSize: 16),
-                        ),
-                      ),
-                      const SizedBox(width: 48),
-                    ],
-                  ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: dashboardAsync.when(
+              data: _buildDashboard,
+              loading: () => const Center(
+                child: CircularProgressIndicator(
+                  color: BbV5Colors.accent,
                 ),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                    children: [
-                      Row(
-                        children: [
-                          _StatCard(
-                            icon: LucideIcons.calendar_days,
-                            value: '${dashboard.stats.meetupsCount}',
-                            label: 'Встреч',
-                          ),
-                          const SizedBox(width: 8),
-                          _StatCard(
-                            icon: LucideIcons.star,
-                            value: dashboard.stats.rating.toStringAsFixed(1),
-                            label: 'Рейтинг',
-                          ),
-                          const SizedBox(width: 8),
-                          _StatCard(
-                            icon: LucideIcons.trending_up,
-                            value: '${dashboard.stats.fillRate}%',
-                            label: 'Заполняемость',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Container(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              colors.primary,
-                              colors.primary.withValues(alpha: 0.8),
-                            ],
-                          ),
-                          borderRadius: AppRadii.cardBorder,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Этот месяц',
-                              style: AppTextStyles.caption.copyWith(
-                                color: colors.primaryForeground
-                                    .withValues(alpha: 0.85),
-                                letterSpacing: 0,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  '${dashboard.stats.meetupsCount}',
-                                  style: AppTextStyles.screenTitle.copyWith(
-                                    color: colors.primaryForeground,
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.xs),
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(bottom: 6),
-                                    child: Text(
-                                      'встреч ты уже собрал',
-                                      style: AppTextStyles.meta.copyWith(
-                                        color: colors.primaryForeground
-                                            .withValues(alpha: 0.92),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (heroNames.isNotEmpty) ...[
-                              const SizedBox(height: AppSpacing.md),
-                              Row(
-                                children: [
-                                  BbAvatarStack(
-                                    names: heroNames,
-                                    size: BbAvatarSize.sm,
-                                    max: 5,
-                                  ),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  Expanded(
-                                    child: Text(
-                                      dashboard.pendingRequestsCount > 0
-                                          ? '+ ещё ${dashboard.pendingRequestsCount} заявки ждут ответа'
-                                          : 'Все новые заявки разобраны',
-                                      style: AppTextStyles.caption.copyWith(
-                                        color: colors.primaryForeground
-                                            .withValues(alpha: 0.88),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      if (dashboard.requests.isNotEmpty) ...[
-                        Row(
-                          children: [
-                            Text(
-                              'Новые заявки',
-                              style: AppTextStyles.caption.copyWith(
-                                color: colors.inkMute,
-                                letterSpacing: 0,
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.xs),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colors.primary,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                '${dashboard.requests.length}',
-                                style: AppTextStyles.caption.copyWith(
-                                  color: colors.primaryForeground,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        ...dashboard.requests.map(
-                          (request) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _RequestCard(
-                              request: request,
-                              busy: _processingRequestIds.contains(request.id),
-                              onApprove: () async {
-                                if (_processingRequestIds
-                                    .contains(request.id)) {
-                                  return;
-                                }
-                                final repository =
-                                    ref.read(backendRepositoryProvider);
-                                final messenger = ScaffoldMessenger.of(context);
-                                setState(() {
-                                  _processingRequestIds.add(request.id);
-                                });
-                                try {
-                                  await repository
-                                      .approveJoinRequest(request.id);
-                                  if (!mounted) {
-                                    return;
-                                  }
-                                  _invalidateHostData(request.eventId);
-                                } catch (_) {
-                                  if (mounted) {
-                                    messenger.showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                            'Не получилось принять заявку'),
-                                      ),
-                                    );
-                                  }
-                                } finally {
-                                  if (mounted) {
-                                    setState(() {
-                                      _processingRequestIds.remove(request.id);
-                                    });
-                                  }
-                                }
-                              },
-                              onReject: () async {
-                                if (_processingRequestIds
-                                    .contains(request.id)) {
-                                  return;
-                                }
-                                final repository =
-                                    ref.read(backendRepositoryProvider);
-                                final messenger = ScaffoldMessenger.of(context);
-                                setState(() {
-                                  _processingRequestIds.add(request.id);
-                                });
-                                try {
-                                  await repository
-                                      .rejectJoinRequest(request.id);
-                                  if (!mounted) {
-                                    return;
-                                  }
-                                  _invalidateHostData(request.eventId);
-                                } catch (_) {
-                                  if (mounted) {
-                                    messenger.showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                            'Не получилось отклонить заявку'),
-                                      ),
-                                    );
-                                  }
-                                } finally {
-                                  if (mounted) {
-                                    setState(() {
-                                      _processingRequestIds.remove(request.id);
-                                    });
-                                  }
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                      ],
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: colors.muted,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _MeetupsTabButton(
-                                label: 'Предстоящие',
-                                selected: _tab == _HostedMeetupsTab.upcoming,
-                                onTap: () {
-                                  setState(() {
-                                    _tab = _HostedMeetupsTab.upcoming;
-                                  });
-                                },
-                              ),
-                            ),
-                            Expanded(
-                              child: _MeetupsTabButton(
-                                label: 'Прошедшие',
-                                selected: _tab == _HostedMeetupsTab.past,
-                                onTap: () {
-                                  setState(() {
-                                    _tab = _HostedMeetupsTab.past;
-                                  });
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      ...visibleEvents.map(
-                        (event) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _HostedEventTile(
-                            event: event,
-                            selected: event.id == selectedEventId,
-                            onTap: () {
-                              setState(() {
-                                _selectedEventId = event.id;
-                              });
-                            },
-                          ),
-                        ),
-                      ),
-                      if (_tab == _HostedMeetupsTab.past &&
-                          visibleEvents.isEmpty) ...[
-                        Container(
-                          padding: const EdgeInsets.all(AppSpacing.lg),
-                          decoration: BoxDecoration(
-                            color: colors.card,
-                            borderRadius: AppRadii.cardBorder,
-                            border: Border.all(color: colors.border),
-                          ),
-                          child: Text(
-                            'Пока нет завершённых встреч.',
-                            style: AppTextStyles.bodySoft.copyWith(
-                              color: colors.inkSoft,
-                            ),
-                          ),
-                        ),
-                      ],
-                      if (_tab == _HostedMeetupsTab.upcoming &&
-                          selectedEventAsync != null) ...[
-                        const SizedBox(height: AppSpacing.lg),
-                        AsyncValueView<HostEventData>(
-                          value: selectedEventAsync,
-                          data: (hostEvent) => _SelectedEventPanel(
-                            hostEvent: hostEvent,
-                            onStartLive: () async {
-                              final repository =
-                                  ref.read(backendRepositoryProvider);
-                              await repository.startLiveMeetup(
-                                hostEvent.event.id,
-                              );
-                              if (!mounted) {
-                                return;
-                              }
-                              _invalidateHostData(hostEvent.event.id);
-                            },
-                            onFinishLive: () async {
-                              final repository =
-                                  ref.read(backendRepositoryProvider);
-                              await repository.finishLiveMeetup(
-                                hostEvent.event.id,
-                              );
-                              if (!mounted) {
-                                return;
-                              }
-                              _invalidateHostData(hostEvent.event.id);
-                            },
-                            onManualCheckIn: (userId) async {
-                              final repository =
-                                  ref.read(backendRepositoryProvider);
-                              await repository.manualCheckIn(
-                                hostEvent.event.id,
-                                userId: userId,
-                              );
-                              if (!mounted) {
-                                return;
-                              }
-                              _invalidateHostData(hostEvent.event.id);
-                            },
-                            onOpenLive: () => context.pushRoute(
-                              AppRoute.liveMeetup,
-                              pathParameters: {'eventId': hostEvent.event.id},
-                            ),
-                            onOpenEvent: () => context.pushRoute(
-                              AppRoute.eventDetail,
-                              pathParameters: {'eventId': hostEvent.event.id},
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
+              ),
+              error: (_, __) => _HostErrorState(
+                onRetry: () => ref.invalidate(hostDashboardProvider),
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  void _invalidateHostData(String eventId) {
-    if (!mounted) {
+  Widget _buildDashboard(HostDashboardData dashboard) {
+    final heroNames = <String>{
+      ...dashboard.requests.map((request) => request.userName),
+      ...dashboard.events.expand((event) => event.attendees),
+    }.toList(growable: false);
+    final visibleEvents = _eventsForTab(dashboard.events);
+
+    return RefreshIndicator(
+      color: BbV5Colors.accent,
+      onRefresh: () async {
+        ref.invalidate(hostDashboardProvider);
+        await ref.read(hostDashboardProvider.future);
+      },
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+        children: [
+          BbV5TopBar(
+            kicker: 'Хост-панель',
+            title: 'Твои',
+            accent: 'вечера',
+            right: BbV5IconButton(
+              icon: LucideIcons.bell,
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Уведомления скоро появятся')),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _HeroMetric(
+            count: dashboard.stats.meetupsCount,
+            pendingRequests: dashboard.pendingRequestsCount,
+            names: heroNames,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              _HostStatCard(
+                icon: LucideIcons.calendar_days,
+                value: '${dashboard.stats.meetupsCount}',
+                label: 'Встреч',
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              _HostStatCard(
+                icon: LucideIcons.star,
+                value: dashboard.stats.rating.toStringAsFixed(1),
+                label: 'Рейтинг',
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              _HostStatCard(
+                icon: LucideIcons.trending_up,
+                value: '${dashboard.stats.fillRate}%',
+                label: 'Заполн.',
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _CreateMeetupCta(
+            onTap: () => context.pushRoute(AppRoute.createMeetup),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _RequestsSection(
+            requests: dashboard.requests,
+            busyIds: _processingRequestIds,
+            onApprove: (request) => _reviewRequest(
+              request,
+              approve: true,
+            ),
+            onReject: (request) => _reviewRequest(
+              request,
+              approve: false,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _HostedTabs(
+            tab: _tab,
+            onChanged: (tab) {
+              setState(() {
+                _tab = tab;
+              });
+            },
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (visibleEvents.isEmpty)
+            _HostedEmptyState(tab: _tab)
+          else
+            ...visibleEvents.map(
+              (event) => Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: _HostedEventTile(
+                  event: event,
+                  onTap: () => context.pushRoute(
+                    AppRoute.eventDetail,
+                    pathParameters: {'eventId': event.id},
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Event> _eventsForTab(List<Event> events) {
+    if (_tab == _HostedMeetupsTab.drafts) {
+      return const [];
+    }
+
+    final now = DateTime.now();
+    final filtered = events.where((event) {
+      final startsAt = DateTime.tryParse(event.startsAtIso ?? '');
+      if (startsAt == null) {
+        return _tab == _HostedMeetupsTab.upcoming;
+      }
+      return _tab == _HostedMeetupsTab.upcoming
+          ? startsAt.isAfter(now)
+          : !startsAt.isAfter(now);
+    }).toList(growable: false);
+
+    final selected = widget.initialEventId;
+    if (selected == null) {
+      return filtered;
+    }
+
+    return [
+      ...filtered.where((event) => event.id == selected),
+      ...filtered.where((event) => event.id != selected),
+    ];
+  }
+
+  Future<void> _reviewRequest(
+    HostJoinRequest request, {
+    required bool approve,
+  }) async {
+    if (_processingRequestIds.contains(request.id)) {
       return;
     }
-    ref.invalidate(hostDashboardProvider);
-    ref.invalidate(hostEventProvider(eventId));
-    ref.invalidate(eventDetailProvider(eventId));
-    ref.invalidate(liveMeetupProvider(eventId));
+
+    final repository = ref.read(backendRepositoryProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    final container = ProviderScope.containerOf(context, listen: false);
+
+    setState(() {
+      _processingRequestIds.add(request.id);
+    });
+
+    try {
+      if (approve) {
+        await repository.approveJoinRequest(request.id);
+      } else {
+        await repository.rejectJoinRequest(request.id);
+      }
+      if (!mounted) {
+        return;
+      }
+      container
+        ..invalidate(hostDashboardProvider)
+        ..invalidate(hostEventProvider(request.eventId))
+        ..invalidate(eventDetailProvider(request.eventId))
+        ..invalidate(liveMeetupProvider(request.eventId));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(approve ? 'Заявка принята' : 'Заявка отклонена'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            approve
+                ? 'Не получилось принять заявку'
+                : 'Не получилось отклонить заявку',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processingRequestIds.remove(request.id);
+        });
+      }
+    }
   }
 }
 
-enum _HostedMeetupsTab { upcoming, past }
+enum _HostedMeetupsTab { upcoming, past, drafts }
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({
+class _HeroMetric extends StatelessWidget {
+  const _HeroMetric({
+    required this.count,
+    required this.pendingRequests,
+    required this.names,
+  });
+
+  final int count;
+  final int pendingRequests;
+  final List<String> names;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5Card(
+      padding: const EdgeInsets.all(20),
+      radius: 28,
+      tint: BbV5Colors.terraSoft,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const BbV5Kicker('Этот месяц'),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '$count',
+                style: bbV5DisplayStyle(
+                  fontSize: 44,
+                  height: 1,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    'встреч ты уже собрал',
+                    style: AppTextStyles.caption.copyWith(
+                      color: BbV5Colors.inkSoft,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (names.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                BbAvatarStack(
+                  names: names,
+                  size: BbAvatarSize.sm,
+                  max: 5,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    pendingRequests > 0
+                        ? '+ ещё $pendingRequests заявки ждут ответа'
+                        : 'Все новые заявки разобраны',
+                    style: AppTextStyles.caption.copyWith(
+                      color: BbV5Colors.inkMute,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _HostStatCard extends StatelessWidget {
+  const _HostStatCard({
     required this.icon,
     required this.value,
     required this.label,
@@ -474,26 +337,176 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: colors.card,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: colors.border),
-        ),
+      child: BbV5Card(
+        padding: const EdgeInsets.all(12),
+        radius: 18,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 16, color: colors.inkMute),
-            const SizedBox(height: 10),
-            Text(value, style: AppTextStyles.cardTitle),
-            const SizedBox(height: 4),
-            Text(label, style: AppTextStyles.caption),
+            Icon(icon, size: 15, color: BbV5Colors.inkMute),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: bbV5DisplayStyle(
+                fontSize: 20,
+                height: 1,
+                letterSpacing: 0,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: AppTextStyles.caption.copyWith(
+                fontSize: 10,
+                color: BbV5Colors.inkMute,
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CreateMeetupCta extends StatelessWidget {
+  const _CreateMeetupCta({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: BbV5Colors.accent,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: BbV5Shadows.ink,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  LucideIcons.plus,
+                  color: BbV5Colors.paperHi,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Создать вечер',
+                      style: AppTextStyles.itemTitle.copyWith(
+                        color: BbV5Colors.paperHi,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Или собери через AI за минуту',
+                      style: AppTextStyles.caption.copyWith(
+                        color: BbV5Colors.paperHi.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                LucideIcons.chevron_right,
+                size: 17,
+                color: BbV5Colors.paperHi,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RequestsSection extends StatelessWidget {
+  const _RequestsSection({
+    required this.requests,
+    required this.busyIds,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final List<HostJoinRequest> requests;
+  final Set<String> busyIds;
+  final ValueChanged<HostJoinRequest> onApprove;
+  final ValueChanged<HostJoinRequest> onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final pendingCount = requests
+        .where((request) => request.status == EventJoinRequestStatus.pending)
+        .length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              Expanded(child: BbV5Kicker('Новые заявки · $pendingCount')),
+              Text(
+                'Все',
+                style: AppTextStyles.caption.copyWith(
+                  fontFamily: 'Sora',
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: BbV5Colors.terra,
+                ),
+              ),
+              const SizedBox(width: 3),
+              const Icon(
+                LucideIcons.chevron_right,
+                size: 13,
+                color: BbV5Colors.terra,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (requests.isEmpty)
+          BbV5Card(
+            padding: const EdgeInsets.all(16),
+            radius: 20,
+            child: Text(
+              'Новых заявок нет.',
+              style: AppTextStyles.bodySoft.copyWith(
+                color: BbV5Colors.inkSoft,
+              ),
+            ),
+          )
+        else
+          ...requests.map(
+            (request) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _RequestCard(
+                request: request,
+                busy: busyIds.contains(request.id),
+                onApprove: () => onApprove(request),
+                onReject: () => onReject(request),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -508,73 +521,174 @@ class _RequestCard extends StatelessWidget {
 
   final HostJoinRequest request;
   final bool busy;
-  final Future<void> Function() onApprove;
-  final Future<void> Function() onReject;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: AppRadii.cardBorder,
-        border: Border.all(color: colors.border),
-      ),
+    final reviewed = request.status != EventJoinRequestStatus.pending;
+
+    return BbV5Card(
+      padding: const EdgeInsets.all(16),
+      radius: 20,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              BbAvatar(name: request.userName, imageUrl: request.avatarUrl),
+              BbAvatar(
+                name: request.userName,
+                imageUrl: request.avatarUrl,
+              ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(request.userName, style: AppTextStyles.itemTitle),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            request.userName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.itemTitle.copyWith(
+                              fontSize: 13.5,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          LucideIcons.star,
+                          size: 12,
+                          color: BbV5Colors.gold,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${request.compatibilityScore}%',
+                          style: AppTextStyles.caption.copyWith(
+                            color: BbV5Colors.gold,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 2),
                     Text(
-                      request.eventTitle,
+                      'на «${request.eventTitle}»',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.caption.copyWith(
-                        color: colors.inkMute,
+                        color: BbV5Colors.inkMute,
                       ),
                     ),
-                    Text(
-                      '${request.compatibilityScore}% совпадение',
-                      style: AppTextStyles.meta.copyWith(
-                        color: colors.inkSoft,
+                    if ((request.note ?? '').trim().isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        '«${request.note!.trim()}»',
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySoft.copyWith(
+                          fontFamily: 'InstrumentSerif',
+                          fontStyle: FontStyle.italic,
+                          color: BbV5Colors.inkSoft,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
             ],
           ),
-          if ((request.note ?? '').isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(request.note!, style: AppTextStyles.bodySoft),
-          ],
           const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: busy ? null : onReject,
-                  child: Text(busy ? '...' : 'Отклонить'),
+          if (reviewed)
+            Container(
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: request.status == EventJoinRequestStatus.approved
+                    ? BbV5Colors.brandSoft
+                    : BbV5Colors.hairSoft,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                request.status == EventJoinRequestStatus.approved
+                    ? 'Принято'
+                    : 'Отклонено',
+                style: AppTextStyles.caption.copyWith(
+                  fontFamily: 'Sora',
+                  fontWeight: FontWeight.w600,
+                  color: request.status == EventJoinRequestStatus.approved
+                      ? BbV5Colors.brandDeep
+                      : BbV5Colors.inkMute,
                 ),
               ),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(
-                child: FilledButton(
-                  onPressed: busy ? null : onApprove,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: colors.foreground,
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: BbV5PillButton(
+                    label: busy ? '...' : 'Отклонить',
+                    icon: LucideIcons.x,
+                    height: 40,
+                    expanded: true,
+                    onPressed: busy ? null : onReject,
                   ),
-                  child: Text(busy ? '...' : 'Принять'),
                 ),
-              ),
-            ],
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: BbV5PillButton(
+                    label: busy ? '...' : 'Принять',
+                    icon: LucideIcons.check,
+                    dark: true,
+                    height: 40,
+                    expanded: true,
+                    onPressed: busy ? null : onApprove,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HostedTabs extends StatelessWidget {
+  const _HostedTabs({
+    required this.tab,
+    required this.onChanged,
+  });
+
+  final _HostedMeetupsTab tab;
+  final ValueChanged<_HostedMeetupsTab> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: BbV5Colors.hairSoft,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: BbV5Colors.hair),
+      ),
+      child: Row(
+        children: [
+          _HostedTabButton(
+            label: 'Предстоящие',
+            selected: tab == _HostedMeetupsTab.upcoming,
+            onTap: () => onChanged(_HostedMeetupsTab.upcoming),
+          ),
+          _HostedTabButton(
+            label: 'Прошедшие',
+            selected: tab == _HostedMeetupsTab.past,
+            onTap: () => onChanged(_HostedMeetupsTab.past),
+          ),
+          _HostedTabButton(
+            label: 'Черновики',
+            selected: tab == _HostedMeetupsTab.drafts,
+            onTap: () => onChanged(_HostedMeetupsTab.drafts),
           ),
         ],
       ),
@@ -582,8 +696,8 @@ class _RequestCard extends StatelessWidget {
   }
 }
 
-class _MeetupsTabButton extends StatelessWidget {
-  const _MeetupsTabButton({
+class _HostedTabButton extends StatelessWidget {
+  const _HostedTabButton({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -595,21 +709,28 @@ class _MeetupsTabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 36,
-        decoration: BoxDecoration(
-          color: selected ? colors.background : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: AppTextStyles.meta.copyWith(
-            color: selected ? colors.foreground : colors.inkMute,
-            fontWeight: FontWeight.w600,
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? BbV5Colors.paperHi : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: selected ? BbV5Shadows.pill : null,
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.caption.copyWith(
+              fontFamily: 'Sora',
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: selected ? BbV5Colors.ink : BbV5Colors.inkMute,
+            ),
           ),
         ),
       ),
@@ -620,170 +741,219 @@ class _MeetupsTabButton extends StatelessWidget {
 class _HostedEventTile extends StatelessWidget {
   const _HostedEventTile({
     required this.event,
-    required this.selected,
     required this.onTap,
   });
 
   final Event event;
-  final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return InkWell(
+    final imageUrl = event.imageUrl?.trim();
+
+    return BbV5Card(
+      padding: const EdgeInsets.all(12),
+      radius: 20,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: selected ? colors.primarySoft : colors.card,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? colors.primary : colors.border,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 56,
+            height: 56,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: imageUrl != null && imageUrl.isNotEmpty
+                  ? BbExternalEventImage(
+                      imageUrl: imageUrl,
+                      usage: BbExternalEventImageUsage.rail,
+                    )
+                  : DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: _eventGradient(event.tone),
+                      ),
+                      child: Center(
+                        child: Text(
+                          event.emoji,
+                          style: const TextStyle(fontSize: 24, height: 1),
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.itemTitle.copyWith(fontSize: 13),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${_statusLabel(event)} · ${event.time} · ${event.place}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption.copyWith(
+                    fontSize: 10.5,
+                    color: BbV5Colors.inkMute,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    _MiniMetric(
+                      icon: LucideIcons.users,
+                      label: '${event.going}/${event.capacity}',
+                    ),
+                    const SizedBox(width: 12),
+                    _MiniMetric(
+                      icon: LucideIcons.eye,
+                      label: event.isHost ? 'хост' : 'карточка',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          const Icon(
+            LucideIcons.chevron_right,
+            size: 17,
+            color: BbV5Colors.inkMute,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniMetric extends StatelessWidget {
+  const _MiniMetric({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: BbV5Colors.inkSoft),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            color: BbV5Colors.inkSoft,
           ),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: colors.warmStart,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              alignment: Alignment.center,
-              child: Text(event.emoji, style: const TextStyle(fontSize: 24)),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(event.title, style: AppTextStyles.itemTitle),
-                  const SizedBox(height: 2),
-                  Text(event.time, style: AppTextStyles.meta),
-                ],
-              ),
-            ),
-            Text(
-              '${event.going}/${event.capacity}',
-              style: AppTextStyles.meta.copyWith(color: colors.inkSoft),
-            ),
-          ],
+      ],
+    );
+  }
+}
+
+class _HostedEmptyState extends StatelessWidget {
+  const _HostedEmptyState({required this.tab});
+
+  final _HostedMeetupsTab tab;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = switch (tab) {
+      _HostedMeetupsTab.upcoming => 'Пока нет предстоящих встреч.',
+      _HostedMeetupsTab.past => 'Пока нет прошедших встреч.',
+      _HostedMeetupsTab.drafts =>
+        'Черновики появятся после сохранения встречи.',
+    };
+
+    return BbV5Card(
+      padding: const EdgeInsets.all(16),
+      radius: 20,
+      child: Text(
+        text,
+        style: AppTextStyles.bodySoft.copyWith(
+          color: BbV5Colors.inkSoft,
         ),
       ),
     );
   }
 }
 
-class _SelectedEventPanel extends StatelessWidget {
-  const _SelectedEventPanel({
-    required this.hostEvent,
-    required this.onStartLive,
-    required this.onFinishLive,
-    required this.onManualCheckIn,
-    required this.onOpenLive,
-    required this.onOpenEvent,
-  });
+class _HostErrorState extends StatelessWidget {
+  const _HostErrorState({required this.onRetry});
 
-  final HostEventData hostEvent;
-  final Future<void> Function() onStartLive;
-  final Future<void> Function() onFinishLive;
-  final Future<void> Function(String userId) onManualCheckIn;
-  final VoidCallback onOpenLive;
-  final VoidCallback onOpenEvent;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: AppRadii.cardBorder,
-        border: Border.all(color: colors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Center(
+        child: BbV5Card(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child:
-                    Text(hostEvent.event.title, style: AppTextStyles.cardTitle),
+              Text(
+                'Не получилось загрузить хост-панель',
+                style: bbV5DisplayStyle(fontSize: 18, letterSpacing: 0),
               ),
-              TextButton(
-                onPressed: onOpenEvent,
-                child: const Text('Карточка'),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton(
-                  onPressed: hostEvent.liveStatus == EventLiveStatus.live
-                      ? onFinishLive
-                      : onStartLive,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: colors.foreground,
-                  ),
-                  child: Text(
-                    hostEvent.liveStatus == EventLiveStatus.live
-                        ? 'Завершить live'
-                        : 'Запустить live',
-                  ),
+              const SizedBox(height: 8),
+              Text(
+                'Проверь соединение и попробуй ещё раз.',
+                style: AppTextStyles.bodySoft.copyWith(
+                  color: BbV5Colors.inkSoft,
                 ),
               ),
-              const SizedBox(width: AppSpacing.xs),
-              OutlinedButton(
-                onPressed: onOpenLive,
-                child: const Text('Открыть live'),
+              const SizedBox(height: 16),
+              BbV5PillButton(
+                label: 'Повторить',
+                icon: LucideIcons.refresh_cw,
+                onPressed: onRetry,
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Участники',
-            style: AppTextStyles.caption.copyWith(
-              color: colors.inkMute,
-              letterSpacing: 0,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          ...hostEvent.attendees.map(
-            (attendee) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: BbAvatar(
-                name: attendee.displayName,
-                imageUrl: attendee.avatarUrl,
-              ),
-              title: Text(
-                attendee.displayName,
-                style: AppTextStyles.itemTitle,
-              ),
-              subtitle: Text(
-                attendee.attendanceStatus == EventAttendanceStatus.checkedIn
-                    ? 'на месте'
-                    : 'ещё не отметился',
-                style: AppTextStyles.meta,
-              ),
-              trailing:
-                  attendee.attendanceStatus == EventAttendanceStatus.checkedIn
-                      ? Icon(
-                          LucideIcons.badge_check,
-                          color: colors.secondary,
-                        )
-                      : TextButton(
-                          onPressed: () => onManualCheckIn(attendee.userId),
-                          child: const Text('Check-in'),
-                        ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
+}
+
+String _statusLabel(Event event) {
+  if (event.liveStatus == EventLiveStatus.live) {
+    return 'идёт сейчас';
+  }
+  final startsAt = DateTime.tryParse(event.startsAtIso ?? '');
+  if (startsAt != null && startsAt.isBefore(DateTime.now())) {
+    return 'завершена';
+  }
+  return 'скоро';
+}
+
+LinearGradient _eventGradient(EventTone tone) {
+  return switch (tone) {
+    EventTone.sage => const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [BbV5Colors.brandSoft, BbV5Colors.brand],
+      ),
+    EventTone.evening => const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [BbV5Colors.gold, BbV5Colors.terra],
+      ),
+    EventTone.warm => const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [BbV5Colors.terraSoft, BbV5Colors.paperDeep],
+      ),
+  };
 }

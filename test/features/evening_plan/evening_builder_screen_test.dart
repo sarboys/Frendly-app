@@ -245,7 +245,9 @@ class _FakeEveningBuilderRepository extends BackendRepository {
   Map<String, String?>? lastResolvePayload;
 
   @override
-  Future<Map<String, dynamic>> fetchEveningOptions() async {
+  Future<Map<String, dynamic>> fetchEveningOptions({
+    CancelToken? cancelToken,
+  }) async {
     return {
       'moods': [
         {
@@ -260,6 +262,7 @@ class _FakeEveningBuilderRepository extends BackendRepository {
 
   @override
   Future<Map<String, dynamic>> resolveEveningRoute({
+    CancelToken? cancelToken,
     String? goal,
     String? mood,
     String? budget,

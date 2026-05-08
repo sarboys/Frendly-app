@@ -47,7 +47,7 @@ class BbPinnedMeetupCard extends StatelessWidget {
             place,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: bbV5DisplayStyle(fontSize: 22, height: 1.08),
+            style: bbV5DisplayStyle(fontSize: 20, height: 1.25),
           ),
           const SizedBox(height: 16),
           Wrap(
@@ -182,7 +182,7 @@ class _PinnedInitial extends StatelessWidget {
         label,
         style: AppTextStyles.caption.copyWith(
           fontFamily: 'Sora',
-          fontSize: dark ? 10 : 11,
+          fontSize: dark ? 9 : 10,
           fontWeight: FontWeight.w600,
           letterSpacing: 0,
           color: dark ? BbV5Colors.paperHi : BbV5Colors.ink,
@@ -216,8 +216,8 @@ class _PinnedPillAction extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(BbV5Radii.pill),
           child: Ink(
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 17),
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               color: dark ? BbV5Colors.accent : BbV5Colors.paperHi,
               borderRadius: BorderRadius.circular(BbV5Radii.pill),
@@ -230,21 +230,21 @@ class _PinnedPillAction extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (!dark) ...[
-                  Icon(icon, size: 17, color: BbV5Colors.ink),
-                  const SizedBox(width: 8),
+                  Icon(icon, size: 14, color: BbV5Colors.ink),
+                  const SizedBox(width: 6),
                 ],
                 Text(
                   label,
                   style: AppTextStyles.button.copyWith(
                     fontFamily: 'Sora',
-                    fontSize: 12.5,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w600,
                     color: dark ? BbV5Colors.paperHi : BbV5Colors.ink,
                   ),
                 ),
                 if (dark) ...[
                   const SizedBox(width: 7),
-                  Icon(icon, size: 15, color: BbV5Colors.paperHi),
+                  Icon(icon, size: 14, color: BbV5Colors.paperHi),
                 ],
               ],
             ),
@@ -269,14 +269,14 @@ class _PinnedMeta extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: BbV5Colors.inkSoft),
+        Icon(icon, size: 12, color: BbV5Colors.inkSoft),
         const SizedBox(width: 6),
         Text(
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: AppTextStyles.caption.copyWith(
-            fontSize: 11.5,
+            fontSize: 11,
             color: BbV5Colors.inkSoft,
             letterSpacing: 0,
           ),
@@ -329,24 +329,26 @@ class _TicketAction extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const BbV5Kicker(
+                      Text(
                         'билет на событие',
                         maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: bbV5KickerStyle(letterSpacing: 1.6),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         'от ${_formatRubles(chat.ticketPriceFrom!)} ₽ · осталось...',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: bbV5DisplayStyle(fontSize: 13.5, height: 1.1),
+                        style: bbV5DisplayStyle(fontSize: 12.5, height: 1.25),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 10),
                 Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 15),
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: BbV5Colors.accent,
@@ -359,7 +361,7 @@ class _TicketAction extends StatelessWidget {
                         'Купить',
                         style: AppTextStyles.button.copyWith(
                           fontFamily: 'Sora',
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: BbV5Colors.paperHi,
                         ),

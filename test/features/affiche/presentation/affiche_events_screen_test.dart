@@ -40,12 +40,11 @@ void main() {
       'external-event-image-v4-card-https://cdn.example.com/affiche-0.jpg',
     );
 
-    await tester.scrollUntilVisible(
-      find.text('Афиша 16'),
-      420,
-      scrollable: find.byType(Scrollable).last,
+    await _dragUntil(
+      tester,
+      () => repository.calls.length >= 2,
+      step: 420,
     );
-    await tester.pumpAndSettle();
 
     expect(repository.calls, hasLength(2));
     expect(repository.calls.last.cursor, '18');
@@ -64,8 +63,13 @@ void main() {
 
     await tester.tap(find.byTooltip('Фильтры'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Платные'));
-    await tester.tap(find.text('Показать события'));
+    await _dragUntil(
+      tester,
+      () => find.text('Платные').evaluate().isNotEmpty,
+      step: 220,
+    );
+    await _tapFilterChip(tester, 'Платные');
+    await tester.tap(find.widgetWithText(FilledButton, 'Показать события'));
     await tester.pump();
 
     expect(find.text('Афиша 0'), findsOneWidget);
@@ -152,8 +156,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Завтра'), findsOneWidget);
-    expect(find.text('Бесплатные'), findsOneWidget);
     expect(find.text('Стендап'), findsOneWidget);
+    await _dragUntil(
+      tester,
+      () => find.text('Бесплатные').evaluate().isNotEmpty,
+      step: 220,
+    );
+    expect(find.text('Бесплатные'), findsOneWidget);
   });
 
   testWidgets('affiche filter sheet exposes range, time, category and radius', (
@@ -182,6 +191,33 @@ void main() {
     );
     expect(find.text('Радиус · 30 км'), findsOneWidget);
   });
+}
+
+Future<void> _tapFilterChip(WidgetTester tester, String label) async {
+  final labelFinder = find.text(label);
+  await tester.ensureVisible(labelFinder);
+  await tester.pumpAndSettle();
+  await tester.tap(
+    find
+        .ancestor(
+          of: labelFinder,
+          matching: find.byType(InkWell),
+        )
+        .last,
+  );
+  await tester.pump();
+}
+
+Future<void> _dragUntil(
+  WidgetTester tester,
+  bool Function() done, {
+  required double step,
+  int maxScrolls = 12,
+}) async {
+  for (var i = 0; i < maxScrolls && !done(); i++) {
+    await tester.drag(find.byType(Scrollable).last, Offset(0, -step));
+    await tester.pumpAndSettle();
+  }
 }
 
 Widget _afficheApp(_PagedAfficheRepositoryState repository) {

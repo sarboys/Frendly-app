@@ -49,7 +49,7 @@ class DefaultAppAttachmentService implements AppAttachmentService {
       <String, Future<String?>>{};
   var _downloadUrlCacheGeneration = 0;
 
-  static const _downloadUrlTtl = Duration(minutes: 2);
+  static const _downloadUrlTtl = Duration(minutes: 4);
 
   @override
   Future<String?> getDownloadUrl(MessageAttachment attachment) async {

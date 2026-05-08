@@ -18,6 +18,7 @@ class _FakeCommunityRepository extends BackendRepository {
 
   @override
   Future<PaginatedResponse<Community>> fetchCommunities({
+    CancelToken? cancelToken,
     String? cursor,
     int limit = 20,
   }) async {
@@ -39,6 +40,7 @@ class _FakeCommunityRepository extends BackendRepository {
   @override
   Future<PaginatedResponse<CommunityMediaItem>> fetchCommunityMedia(
     String communityId, {
+    CancelToken? cancelToken,
     String? cursor,
     int limit = 30,
   }) async {

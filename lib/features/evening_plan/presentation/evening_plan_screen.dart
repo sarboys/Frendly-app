@@ -1340,8 +1340,10 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
                         'Перк партнёра',
                         style: AppTextStyles.caption.copyWith(
                           color: colors.inkMute,
+                          fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          letterSpacing: 0,
+                          height: 1.1,
+                          letterSpacing: 1.54,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -1382,6 +1384,8 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
                               overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.caption.copyWith(
                                 color: colors.inkMute,
+                                fontSize: 12,
+                                height: 1.2,
                               ),
                             ),
                           ),
@@ -1445,8 +1449,10 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
                             'Твой бонус',
                             style: AppTextStyles.caption.copyWith(
                               color: colors.inkSoft,
+                              fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              letterSpacing: 0,
+                              height: 1.1,
+                              letterSpacing: 1.54,
                             ),
                           ),
                         ],
@@ -1505,7 +1511,8 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
                     item,
                     style: AppTextStyles.meta.copyWith(
                       color: colors.inkSoft,
-                      height: 1.35,
+                      fontSize: 13,
+                      height: 1.375,
                     ),
                   ),
                 ),
@@ -1557,6 +1564,7 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
         _SheetActionButton(
           label: 'Забронировать с перком',
           trailingIcon: LucideIcons.arrow_right,
+          fontSize: 15,
           onTap: () => setState(() {
             _step = _RedeemStep.form;
           }),
@@ -1579,8 +1587,10 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
           'Детали брони',
           style: AppTextStyles.caption.copyWith(
             color: AppColors.of(context).inkMute,
+            fontSize: 12,
             fontWeight: FontWeight.w600,
-            letterSpacing: 0,
+            height: 1.1,
+            letterSpacing: 1.68,
           ),
         ),
         const SizedBox(height: 10),
@@ -1592,7 +1602,11 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
             decoration: const InputDecoration.collapsed(
               hintText: 'Как обратиться',
             ),
-            style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600),
+            style: AppTextStyles.body.copyWith(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              height: 1.25,
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -1605,7 +1619,11 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
             decoration: const InputDecoration.collapsed(
               hintText: '+7 999 000 00 00',
             ),
-            style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600),
+            style: AppTextStyles.body.copyWith(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              height: 1.25,
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -1623,7 +1641,9 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
                 child: Text(
                   '$_people ${_people == 1 ? 'гость' : _people < 5 ? 'гостя' : 'гостей'}',
                   style: AppTextStyles.body.copyWith(
-                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    height: 1.25,
                   ),
                 ),
               ),
@@ -1650,6 +1670,7 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
         const SizedBox(height: AppSpacing.md),
         _SheetActionButton(
           label: 'Подтвердить бронь',
+          fontSize: 15,
           onTap: () => setState(() {
             _step = _RedeemStep.success;
           }),
@@ -1696,7 +1717,11 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
         Text(
           'Покажи код на входе — перк применят автоматически',
           textAlign: TextAlign.center,
-          style: AppTextStyles.meta.copyWith(color: colors.inkSoft),
+          style: AppTextStyles.meta.copyWith(
+            color: colors.inkSoft,
+            fontSize: 13,
+            height: 1.35,
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         InkWell(
@@ -1730,8 +1755,10 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
                   'Промокод',
                   style: AppTextStyles.caption.copyWith(
                     color: colors.inkMute,
+                    fontSize: 10,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: 0,
+                    height: 1.1,
+                    letterSpacing: 2,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -1744,6 +1771,11 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
                           fontSize: 22,
                           fontWeight: FontWeight.w600,
                           color: colors.foreground,
+                          height: 1.2,
+                          letterSpacing: 1.1,
+                          fontFeatures: const [
+                            FontFeature.tabularFigures(),
+                          ],
                         ),
                       ),
                     ),
@@ -1761,6 +1793,7 @@ class _PerkRedeemSheetState extends State<_PerkRedeemSheet> {
         const SizedBox(height: AppSpacing.sm),
         _SheetActionButton(
           label: 'Готово',
+          fontSize: 15,
           onTap: () => Navigator.of(context).pop(),
         ),
         const SizedBox(height: AppSpacing.xs),
@@ -1913,6 +1946,8 @@ class _LaunchEveningSheetState extends State<_LaunchEveningSheet> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.meta.copyWith(
+                            fontSize: 11,
+                            height: 1.2,
                             color: colors.inkMute,
                           ),
                         ),
@@ -1958,7 +1993,12 @@ class _LaunchEveningSheetState extends State<_LaunchEveningSheet> {
                               '${index + 1}/${route.steps.length}',
                               style: AppTextStyles.caption.copyWith(
                                 color: colors.inkMute,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                height: 1.1,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
                               ),
                             ),
                           ],
@@ -1977,6 +2017,8 @@ class _LaunchEveningSheetState extends State<_LaunchEveningSheet> {
                         Text(
                           step.time,
                           style: AppTextStyles.caption.copyWith(
+                            fontSize: 10,
+                            height: 1.1,
                             color: colors.inkMute,
                           ),
                         ),
@@ -2047,6 +2089,8 @@ class _LaunchEveningSheetState extends State<_LaunchEveningSheet> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.meta.copyWith(
+                            fontSize: 13,
+                            height: 1.2,
                             color: colors.foreground,
                             fontWeight: FontWeight.w600,
                           ),
@@ -2057,6 +2101,8 @@ class _LaunchEveningSheetState extends State<_LaunchEveningSheet> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.caption.copyWith(
+                            fontSize: 11,
+                            height: 1.2,
                             color: colors.inkMute,
                           ),
                         ),
@@ -2075,8 +2121,11 @@ class _LaunchEveningSheetState extends State<_LaunchEveningSheet> {
                     child: Text(
                       'После публикации',
                       style: AppTextStyles.caption.copyWith(
+                        fontFamily: 'Sora',
+                        fontSize: 12,
                         color: colors.foreground,
                         fontWeight: FontWeight.w600,
+                        height: 1.1,
                       ),
                     ),
                   ),
@@ -2087,6 +2136,7 @@ class _LaunchEveningSheetState extends State<_LaunchEveningSheet> {
             _SheetActionButton(
               label: 'Опубликовать и собрать людей',
               trailingIcon: LucideIcons.arrow_right,
+              fontSize: 15,
               onTap: () => Navigator.of(context).pop(
                 _LaunchEveningChoice(
                   privacy: _privacy,
@@ -2181,7 +2231,11 @@ class _PrivacyOptionTile extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       text,
-                      style: AppTextStyles.caption.copyWith(color: secondary),
+                      style: AppTextStyles.caption.copyWith(
+                        color: secondary,
+                        fontSize: 11,
+                        height: 1.15,
+                      ),
                     ),
                   ],
                 ),
@@ -2219,8 +2273,10 @@ class _LaunchSectionTitle extends StatelessWidget {
       label,
       style: AppTextStyles.caption.copyWith(
         color: colors.inkMute,
-        letterSpacing: 0,
+        fontSize: 11,
         fontWeight: FontWeight.w600,
+        height: 1.1,
+        letterSpacing: 1.54,
       ),
     );
   }
@@ -2381,6 +2437,7 @@ class _SheetActionButton extends StatelessWidget {
     required this.label,
     this.icon,
     this.trailingIcon,
+    this.fontSize = 14,
     this.done = false,
     this.secondary = false,
     this.onTap,
@@ -2389,6 +2446,7 @@ class _SheetActionButton extends StatelessWidget {
   final String label;
   final IconData? icon;
   final IconData? trailingIcon;
+  final double fontSize;
   final bool done;
   final bool secondary;
   final VoidCallback? onTap;
@@ -2438,7 +2496,7 @@ class _SheetActionButton extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.button.copyWith(
-                  fontSize: 14,
+                  fontSize: fontSize,
                   fontWeight: FontWeight.w600,
                   color: foreground,
                 ),
@@ -2469,7 +2527,7 @@ class _RedeemField extends StatelessWidget {
     final colors = AppColors.of(context);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
         color: colors.card,
         borderRadius: BorderRadius.circular(16),
@@ -2484,7 +2542,8 @@ class _RedeemField extends StatelessWidget {
               fontSize: 10,
               fontWeight: FontWeight.w600,
               color: colors.inkMute,
-              letterSpacing: 0,
+              height: 1.1,
+              letterSpacing: 1.4,
             ),
           ),
           const SizedBox(height: 4),
@@ -2597,7 +2656,8 @@ class _TinyPill extends StatelessWidget {
           fontSize: 10,
           fontWeight: FontWeight.w600,
           color: foreground,
-          letterSpacing: 0,
+          height: 1.1,
+          letterSpacing: 1.6,
         ),
       ),
     );
@@ -2643,7 +2703,8 @@ class _DetailStatusChip extends StatelessWidget {
               fontSize: 9,
               fontWeight: FontWeight.w600,
               color: used ? colors.secondary : colors.inkMute,
-              letterSpacing: 0,
+              height: 1.1,
+              letterSpacing: 0.72,
             ),
           ),
         ],

@@ -207,7 +207,7 @@ class _EventDetailBody extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             BbV5Kicker('Встреча · ${event.distance}'),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 2),
                             Text(
                               event.title,
                               maxLines: 1,
@@ -313,11 +313,14 @@ class _EventDetailBody extends StatelessWidget {
                       AppRoute.report,
                       pathParameters: {'userId': event.host.id},
                     ),
-                    icon: const Icon(LucideIcons.flag, size: 14),
+                    icon: const Icon(LucideIcons.flag, size: 12),
                     label: const Text('Пожаловаться на встречу'),
                     style: TextButton.styleFrom(
                       foregroundColor: BbV5Colors.inkMute,
-                      textStyle: AppTextStyles.meta,
+                      textStyle: AppTextStyles.meta.copyWith(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ),
@@ -410,6 +413,7 @@ class _EventDetailBody extends StatelessWidget {
                                                 : 'Присоединиться',
                                 style: AppTextStyles.button.copyWith(
                                   color: BbV5Colors.paperHi,
+                                  fontSize: 14,
                                 ),
                               ),
                             ),
@@ -571,7 +575,7 @@ class _V5MeetupHeroCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         BbV5Kicker('${event.vibe} · ${event.time}'),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         BbV5HeroTitle(
                           title: _titleLead(event.title),
                           accent: _titleAccent(event.title),
@@ -659,16 +663,23 @@ class _V5InfoTile extends StatelessWidget {
               Icon(icon, size: 14, color: BbV5Colors.inkMute),
               const SizedBox(width: 6),
               Expanded(
-                child: BbV5Kicker(label, maxLines: 1),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: bbV5KickerStyle(letterSpacing: 1.4),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: bbV5DisplayStyle(fontSize: 13, height: 1.1),
+            style: bbV5DisplayStyle(fontSize: 13, height: 1.25).copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -678,6 +689,7 @@ class _V5InfoTile extends StatelessWidget {
             style: AppTextStyles.caption.copyWith(
               color: BbV5Colors.inkMute,
               letterSpacing: 0,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -700,7 +712,7 @@ class _V5HostCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const BbV5Kicker('Хост вечера'),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Row(
             children: [
               BbAvatar(
@@ -734,7 +746,7 @@ class _V5HostCard extends StatelessWidget {
                         ],
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Row(
                       children: [
                         const Icon(
@@ -748,6 +760,9 @@ class _V5HostCard extends StatelessWidget {
                           style: AppTextStyles.caption.copyWith(
                             color: BbV5Colors.inkMute,
                             letterSpacing: 0,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures(),
+                            ],
                           ),
                         ),
                       ],
@@ -795,15 +810,15 @@ class _V5HostQuote extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const BbV5Kicker('От хоста'),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
             '«$note»',
             style: AppTextStyles.body.copyWith(
               fontFamily: 'InstrumentSerif',
-              fontSize: 16,
+              fontSize: 15,
               fontStyle: FontStyle.italic,
               color: BbV5Colors.inkSoft,
-              height: 1.45,
+              height: 1.625,
             ),
           ),
         ],
@@ -842,10 +857,8 @@ class _V5ProgramCard extends StatelessWidget {
       title: 'Программа вечера',
       right: Text(
         '3 шага',
-        style: AppTextStyles.caption.copyWith(
-          color: BbV5Colors.inkMute,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.4,
+        style: bbV5KickerStyle(letterSpacing: 1.8).copyWith(
+          fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
       margin: EdgeInsets.zero,
@@ -922,9 +935,9 @@ class _V5ProgramStep extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: bbV5DisplayStyle(fontSize: 14, height: 1.1),
+                    style: bbV5DisplayStyle(fontSize: 13.5, height: 1.25),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: AppTextStyles.caption.copyWith(
@@ -938,6 +951,7 @@ class _V5ProgramStep extends StatelessWidget {
                       note,
                       style: AppTextStyles.caption.copyWith(
                         color: BbV5Colors.inkSoft,
+                        fontSize: 11.5,
                         letterSpacing: 0,
                       ),
                     ),
@@ -988,7 +1002,9 @@ class _V5AttendeesRail extends StatelessWidget {
                 'Все ›',
                 style: AppTextStyles.caption.copyWith(
                   color: BbV5Colors.terra,
-                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Sora',
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: 0,
                 ),
               ),
@@ -1086,11 +1102,12 @@ class _V5AttendeeCard extends StatelessWidget {
               color: BbV5Colors.ink,
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 2),
           Text(
             attendee.role,
             style: AppTextStyles.caption.copyWith(
               color: BbV5Colors.inkMute,
+              fontSize: 10,
               letterSpacing: 0,
             ),
           ),
@@ -1167,9 +1184,9 @@ class _V5MiniMapCard extends StatelessWidget {
                         event.place,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: bbV5DisplayStyle(fontSize: 14),
+                        style: bbV5DisplayStyle(fontSize: 13.5),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         '${event.distance} · в 15 минутах от тебя',
                         style: AppTextStyles.caption.copyWith(
@@ -1263,9 +1280,9 @@ class _V5PerkCard extends StatelessWidget {
               children: [
                 Text(
                   'Бонус от $partner',
-                  style: bbV5DisplayStyle(fontSize: 13, height: 1.1),
+                  style: bbV5DisplayStyle(fontSize: 12.5, height: 1.25),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   event.partnerOffer ??
                       'Бокал игристого на компанию 3+ при чек-ине',
@@ -1279,6 +1296,10 @@ class _V5PerkCard extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => context.pushRoute(AppRoute.perks),
+            style: TextButton.styleFrom(
+              textStyle: AppTextStyles.button.copyWith(fontSize: 11),
+              foregroundColor: BbV5Colors.terra,
+            ),
             child: const Text('Открыть'),
           ),
         ],
@@ -1322,14 +1343,15 @@ class _V5SafeWalkCard extends StatelessWidget {
               children: [
                 Text(
                   'Безопасный вечер',
-                  style: bbV5DisplayStyle(fontSize: 13, height: 1.1),
+                  style: bbV5DisplayStyle(fontSize: 12.5, height: 1.25),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   'Хост и $verifiedCount участник верифицированы. Можешь поделиться маршрутом с близким.',
                   style: AppTextStyles.caption.copyWith(
                     color: BbV5Colors.inkSoft,
-                    height: 1.35,
+                    fontSize: 11,
+                    height: 1.625,
                     letterSpacing: 0,
                   ),
                 ),
@@ -1343,6 +1365,7 @@ class _V5SafeWalkCard extends StatelessWidget {
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     foregroundColor: BbV5Colors.brandDeep,
+                    textStyle: AppTextStyles.button.copyWith(fontSize: 11),
                   ),
                   child: const Text('Включить Safe Walk'),
                 ),

@@ -693,6 +693,7 @@ class _MutableDatingRepository extends BackendRepository {
 
   @override
   Future<PaginatedResponse<DatingProfileData>> fetchDatingDiscover({
+    CancelToken? cancelToken,
     String? cursor,
     int limit = 20,
   }) async {

@@ -135,8 +135,10 @@ class _SocialFull extends StatelessWidget {
                       borderRadius: BorderRadius.circular(16),
                     ),
                     textStyle: AppTextStyles.body.copyWith(
-                      fontSize: 14,
+                      fontSize: 12.5,
+                      height: 1.1,
                       fontWeight: FontWeight.w600,
+                      letterSpacing: 0,
                     ),
                   ),
                 ),
@@ -203,8 +205,10 @@ class _SocialCompact extends StatelessWidget {
               ),
               padding: const EdgeInsets.symmetric(horizontal: 12),
               textStyle: AppTextStyles.caption.copyWith(
-                fontSize: 12,
+                fontSize: 11.5,
+                height: 1.1,
                 fontWeight: FontWeight.w600,
+                letterSpacing: 0,
               ),
             ),
           ),
@@ -277,8 +281,13 @@ class _SocialCountIcon extends StatelessWidget {
         Text(
           _formatSocialCount(value),
           style: AppTextStyles.caption.copyWith(
+            fontFamily: 'Sora',
             fontSize: 12,
+            height: 1.1,
+            fontWeight: FontWeight.w600,
             color: color,
+            letterSpacing: 0,
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
       ],
@@ -333,9 +342,11 @@ class _SocialStat extends StatelessWidget {
             value,
             style: AppTextStyles.itemTitle.copyWith(
               fontSize: 15,
+              height: 1,
               color: active && accent == _SocialAccent.neutral
                   ? colors.background
                   : colors.foreground,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
           const SizedBox(height: 2),
@@ -344,7 +355,8 @@ class _SocialStat extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.caption.copyWith(
-              fontSize: 10,
+              fontSize: 9.5,
+              height: 1.1,
               letterSpacing: 0,
               color: active && accent == _SocialAccent.neutral
                   ? colors.background.withValues(alpha: 0.74)

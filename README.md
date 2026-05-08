@@ -52,8 +52,9 @@ flutter run \
   --dart-define=BIG_BREAK_TELEGRAM_BOT_USERNAME=your_bot
 ```
 
-Android берет MapKit ключ из `BIG_BREAK_MAPKIT_API_KEY`.
-Можно передать его через `--dart-define`, переменную окружения или Gradle property.
+Android и iOS берут MapKit ключ из `BIG_BREAK_MAPKIT_API_KEY`.
+Для Flutter CLI передавай его через `--dart-define`.
+Для Android также работают переменная окружения и Gradle property.
 Реальный ключ не коммить.
 
 ## Сборка руками в Xcode
@@ -67,11 +68,12 @@ open mobile/ios/Runner.xcworkspace
 
 3. В Xcode выбери scheme `Runner`.
 4. Выбери устройство или симулятор.
-5. Открой `Runner` -> `Signing & Capabilities`.
-6. Выбери свой `Team`.
-7. Если Xcode попросит, поменяй `Bundle Identifier` на уникальный.
-8. Нажми `Product` -> `Build`.
-9. Для запуска нажми `Product` -> `Run`.
+5. Добавь `BIG_BREAK_MAPKIT_API_KEY` в `Edit Scheme` -> `Run` -> `Arguments` -> `Environment Variables` или в User-Defined build setting.
+6. Открой `Runner` -> `Signing & Capabilities`.
+7. Выбери свой `Team`.
+8. Если Xcode попросит, поменяй `Bundle Identifier` на уникальный.
+9. Нажми `Product` -> `Build`.
+10. Для запуска нажми `Product` -> `Run`.
 
 Если Pods не подтянулись или Xcode ругается на зависимости:
 

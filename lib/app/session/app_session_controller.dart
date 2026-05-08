@@ -10,7 +10,6 @@ import 'package:big_break_mobile/features/chats/presentation/chats_providers.dar
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
 import 'package:big_break_mobile/features/evening_plan/presentation/evening_edit_state.dart';
-import 'package:big_break_mobile/features/search/presentation/search_providers.dart';
 import 'package:big_break_mobile/features/tonight/presentation/tonight_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
@@ -145,9 +144,6 @@ class AppSessionController {
     ref.invalidate(eventsProvider);
     ref.invalidate(mapEventsProvider);
     ref.invalidate(eventDetailProvider);
-    ref.invalidate(featuredPostersProvider);
-    ref.invalidate(posterFeedProvider);
-    ref.invalidate(posterDetailProvider);
     ref.invalidate(afficheEventsProvider);
     ref.invalidate(afficheEventsPagedProvider);
     ref.invalidate(afficheEventDetailProvider);
@@ -180,7 +176,6 @@ class AppSessionController {
     ref.invalidate(afterDarkEventDetailProvider);
     ref.invalidate(datingDiscoverProvider);
     ref.invalidate(datingLikesProvider);
-    ref.invalidate(searchResultsProvider);
     ref.invalidate(communitiesFeedProvider);
     ref.invalidate(communityMediaFeedProvider);
     ref.invalidate(communitiesProvider);

@@ -18,7 +18,6 @@ import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/event_detail.dart';
-import 'package:big_break_mobile/shared/models/poster.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -84,7 +83,6 @@ class CreateMeetupScreen extends ConsumerStatefulWidget {
   const CreateMeetupScreen({
     super.key,
     this.inviteeUserId,
-    this.posterId,
     this.afficheEventId,
     this.communityId,
     this.editEventId,
@@ -92,7 +90,6 @@ class CreateMeetupScreen extends ConsumerStatefulWidget {
   });
 
   final String? inviteeUserId;
-  final String? posterId;
   final String? afficheEventId;
   final String? communityId;
   final String? editEventId;
@@ -130,11 +127,10 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
   PartnerVenue? _partnerVenue;
   double capacity = 8;
   DateTime startsAt = DateTime.now().add(const Duration(hours: 2));
-  Poster? _poster;
   AfficheEvent? _afficheEvent;
   CreateMeetupRouteSelection? _routeSelection;
   bool _creating = false;
-  bool _loadingPoster = false;
+  bool _loadingAfficheEvent = false;
   String? _createIdempotencyKey;
   String? _editSeededEventId;
 
@@ -142,7 +138,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
   void initState() {
     super.initState();
     _applyModeDefaults(widget.initialMode);
-    _loadInitialPoster();
     _loadInitialAfficheEvent();
   }
 
@@ -156,32 +151,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     super.dispose();
   }
 
-  Future<void> _loadInitialPoster() async {
-    final posterId = widget.posterId;
-    if (posterId == null || posterId.isEmpty) {
-      return;
-    }
-
-    setState(() {
-      _loadingPoster = true;
-    });
-
-    try {
-      final posterFuture = ref.read(posterDetailProvider(posterId).future);
-      final poster = await posterFuture;
-      if (!mounted) {
-        return;
-      }
-      _applyPosterSelection(poster);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loadingPoster = false;
-        });
-      }
-    }
-  }
-
   Future<void> _loadInitialAfficheEvent() async {
     final eventId = widget.afficheEventId;
     if (eventId == null || eventId.isEmpty) {
@@ -189,7 +158,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     }
 
     setState(() {
-      _loadingPoster = true;
+      _loadingAfficheEvent = true;
     });
 
     try {
@@ -202,7 +171,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     } finally {
       if (mounted) {
         setState(() {
-          _loadingPoster = false;
+          _loadingAfficheEvent = false;
         });
       }
     }
@@ -355,7 +324,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                         children: [
                           if (!isEditMode) ...[
                             _buildV5ModeTabs(),
-                            const SizedBox(height: AppSpacing.md),
+                            const SizedBox(height: 20),
                           ],
                           _buildV5PreviewCard(
                             isDatingMode: isDatingMode,
@@ -425,17 +394,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                 : 'Собрать своих';
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 32, 20, 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            BbV5Colors.paperHi.withValues(alpha: 0.94),
-            BbV5Colors.paper.withValues(alpha: 0.78),
-            BbV5Colors.paper.withValues(alpha: 0),
-          ],
-        ),
-      ),
       child: Row(
         children: [
           BbV5IconButton(
@@ -448,12 +406,12 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 BbV5Kicker(isEditMode ? 'редактирование' : 'новая встреча'),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   headerTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: bbV5DisplayStyle(fontSize: 15, height: 1.2),
+                  style: bbV5DisplayStyle(fontSize: 15, height: 1.25),
                 ),
               ],
             ),
@@ -527,7 +485,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 text: TextSpan(
-                  style: bbV5DisplayStyle(fontSize: 24, height: 1.08),
+                  style: bbV5DisplayStyle(fontSize: 24, height: 1.25),
                   children: [
                     TextSpan(
                       text: _previewTitle(
@@ -545,7 +503,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
             children: [
               const Icon(
                 LucideIcons.map_pin,
-                size: 13,
+                size: 12,
                 color: BbV5Colors.inkSoft,
               ),
               const SizedBox(width: 6),
@@ -595,7 +553,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
             Expanded(
               child: BbV5Card(
                 radius: BbV5Radii.md,
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -610,10 +568,12 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                         counterText: '',
                         border: InputBorder.none,
                         isDense: true,
-                        contentPadding: const EdgeInsets.only(top: 7),
+                        contentPadding: const EdgeInsets.only(top: 4),
                         hintStyle: AppTextStyles.body.copyWith(
+                          fontFamily: 'Sora',
                           color: BbV5Colors.inkMute,
                           fontSize: 15,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       style: bbV5DisplayStyle(fontSize: 15, height: 1.25),
@@ -641,7 +601,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
             final active = emoji == item.emoji;
             return _V5RoundChoice(
               active: active,
-              child: Icon(item.icon, size: 18),
+              child: Icon(item.icon, size: 16),
               onTap: () => setState(() => emoji = item.emoji),
             );
           },
@@ -688,7 +648,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                 final next = await showPlaceSheet(
                   context,
                   initialValue: placeSelection,
-                  onPickPoster: () async {
+                  onPickAfficheEvent: () async {
                     final event = await showAfficheEventPickerSheet(
                       context,
                       initialValue: _afficheEvent,
@@ -725,8 +685,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                 child: _V5AttachButton(
                   icon: LucideIcons.ticket,
                   label: 'Афиша',
-                  active: _poster != null || _afficheEvent != null,
-                  onTap: _openPosterPicker,
+                  active: _afficheEvent != null,
+                  onTap: _openAffichePicker,
                 ),
               ),
               const SizedBox(width: 8),
@@ -749,7 +709,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
               ),
             ],
           ),
-          if (_loadingPoster)
+          if (_loadingAfficheEvent)
             const Padding(
               padding: EdgeInsets.only(top: 12),
               child: Center(
@@ -759,22 +719,13 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                 ),
               ),
             )
-          else if (_poster != null)
-            _V5AttachedSourceCard(
-              icon: LucideIcons.ticket,
-              kicker: 'событие',
-              title: _poster!.meetupTitle,
-              subtitle: _poster!.placeLabel,
-              onOpen: _openPosterPicker,
-              onClear: () => setState(_clearSourceSelection),
-            )
           else if (_afficheEvent != null)
             _V5AttachedSourceCard(
               icon: LucideIcons.ticket,
               kicker: 'событие',
               title: _afficheEvent!.title,
               subtitle: _afficheEvent!.placeLabel,
-              onOpen: _openPosterPicker,
+              onOpen: _openAffichePicker,
               onClear: () => setState(_clearSourceSelection),
             )
           else if (_partnerVenue != null)
@@ -811,7 +762,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
               children: [
                 const Icon(
                   LucideIcons.users,
-                  size: 16,
+                  size: 14,
                   color: BbV5Colors.inkSoft,
                 ),
                 const SizedBox(width: 8),
@@ -820,6 +771,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                     'Максимум гостей',
                     style: AppTextStyles.caption.copyWith(
                       color: BbV5Colors.inkSoft,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -836,6 +788,9 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                     style: bbV5DisplayStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w500,
+                      height: 1,
+                    ).copyWith(
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
               ],
@@ -860,8 +815,20 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('2', style: AppTextStyles.caption),
-                Text(isDatingMode ? '2' : '20', style: AppTextStyles.caption),
+                Text(
+                  '2',
+                  style: AppTextStyles.caption.copyWith(
+                    fontSize: 10,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                Text(
+                  isDatingMode ? '2' : '20',
+                  style: AppTextStyles.caption.copyWith(
+                    fontSize: 10,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
               ],
             ),
             if (!isDatingMode) ...[
@@ -921,7 +888,11 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(
               _lifestyleHint(),
-              style: AppTextStyles.meta.copyWith(color: BbV5Colors.inkMute),
+              style: AppTextStyles.meta.copyWith(
+                color: BbV5Colors.inkMute,
+                fontSize: 11.5,
+                height: 1.625,
+              ),
             ),
           ),
         ],
@@ -1009,6 +980,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                   Text(
                     '₽',
                     style: AppTextStyles.body.copyWith(
+                      fontFamily: 'Sora',
+                      fontSize: 14,
                       color: BbV5Colors.inkSoft,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1019,7 +992,11 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
             const SizedBox(height: 10),
             Text(
               _priceHint(isDatingMode),
-              style: AppTextStyles.meta.copyWith(color: BbV5Colors.inkMute),
+              style: AppTextStyles.meta.copyWith(
+                color: BbV5Colors.inkMute,
+                fontSize: 11.5,
+                height: 1.625,
+              ),
             ),
           ],
         ),
@@ -1188,6 +1165,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                             : 'Что за встреча? Чего ждать?',
                     hintStyle: AppTextStyles.bodySoft.copyWith(
                       color: BbV5Colors.inkMute,
+                      fontSize: 13.5,
+                      height: 1.625,
                     ),
                     border: InputBorder.none,
                     counterText: '',
@@ -1195,6 +1174,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                   ),
                   style: AppTextStyles.bodySoft.copyWith(
                     color: BbV5Colors.ink,
+                    fontSize: 13.5,
+                    height: 1.625,
                   ),
                 ),
                 Align(
@@ -1203,6 +1184,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                     '${_descriptionController.text.length}/$maxLength',
                     style: AppTextStyles.caption.copyWith(
                       color: BbV5Colors.inkMute,
+                      fontSize: 10,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
                 ),
@@ -1233,16 +1216,17 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const BbV5Kicker('AI compass'),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     'Напишет описание за тебя',
-                    style: bbV5DisplayStyle(fontSize: 13, height: 1.2),
+                    style: bbV5DisplayStyle(fontSize: 13, height: 1.25),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(
                     'в твоём тоне, на основе вайба и места',
                     style: AppTextStyles.caption.copyWith(
                       color: BbV5Colors.inkMute,
+                      fontSize: 10.5,
                       letterSpacing: 0,
                     ),
                   ),
@@ -1357,7 +1341,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             if (isDatingMode) ...[
-                              const Icon(LucideIcons.heart, size: 17),
+                              const Icon(LucideIcons.heart, size: 16),
                               const SizedBox(width: 8),
                             ],
                             Flexible(
@@ -1369,7 +1353,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            const Icon(LucideIcons.chevron_right, size: 17),
+                            const Icon(LucideIcons.chevron_right, size: 16),
                           ],
                         ),
                 ),
@@ -1385,6 +1369,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                   textAlign: TextAlign.center,
                   style: AppTextStyles.caption.copyWith(
                     color: BbV5Colors.inkMute,
+                    fontSize: 10.5,
                     letterSpacing: 0,
                   ),
                 ),
@@ -1583,7 +1568,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
             ? EventJoinMode.request
             : EventJoinMode.open,
         inviteeUserId: widget.inviteeUserId,
-        posterId: _poster?.id,
         afficheEventId: _afficheEvent?.id,
         routeId:
             _routeSelection?.custom == true ? null : _routeSelection?.routeId,
@@ -1714,7 +1698,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
 
   void _applyPartnerVenue(PartnerVenue venue) {
     _partnerVenue = venue;
-    _poster = null;
     _afficheEvent = null;
     _routeSelection = null;
     placeSelection = PlaceSelection(
@@ -1772,43 +1755,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     return parsed;
   }
 
-  void _applyPosterSelection(Poster poster) {
-    final previousTitle = _poster == null ? null : _posterAutoTitle(_poster!);
-    final previousDescription = _poster?.description;
-    final shouldReplaceTitle = _titleController.text.trim().isEmpty ||
-        (previousTitle != null &&
-            _titleController.text.trim() == previousTitle);
-    final shouldReplaceDescription =
-        _descriptionController.text.trim().isEmpty ||
-            (previousDescription != null &&
-                _descriptionController.text.trim() == previousDescription);
-
-    setState(() {
-      _poster = poster;
-      _afficheEvent = null;
-      _partnerVenue = null;
-      _routeSelection = null;
-      emoji = poster.emoji;
-      startsAt = poster.startsAt;
-      placeSelection = PlaceSelection(
-        name: poster.venue,
-        address: poster.address,
-        distance: poster.distance,
-        distanceKm: _distanceKmFromLabel(poster.distance),
-        emoji: poster.emoji,
-      );
-      _placeController.text = _placeLabel();
-      if (shouldReplaceTitle) {
-        _titleController.text = _posterAutoTitle(poster);
-      }
-      if (shouldReplaceDescription) {
-        _descriptionController.text = poster.description;
-      }
-    });
-  }
-
-  String _posterAutoTitle(Poster poster) => poster.meetupTitle;
-
   void _applyAfficheSelection(AfficheEvent event) {
     final previousTitle =
         _afficheEvent == null ? null : _afficheAutoTitle(_afficheEvent!);
@@ -1823,7 +1769,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
 
     setState(() {
       _afficheEvent = event;
-      _poster = null;
       _partnerVenue = null;
       _routeSelection = null;
       emoji = _emojiForAfficheCategory(event.category);
@@ -1867,7 +1812,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     }
   }
 
-  Future<void> _openPosterPicker() async {
+  Future<void> _openAffichePicker() async {
     final event = await showAfficheEventPickerSheet(
       context,
       initialValue: _afficheEvent,
@@ -1916,7 +1861,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
             : firstStep.place.trim();
 
     _routeSelection = route;
-    _poster = null;
     _afficheEvent = null;
     _partnerVenue = null;
     emoji = firstEmoji;
@@ -1935,7 +1879,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
   }
 
   void _clearSourceSelection({bool resetPlace = true}) {
-    _poster = null;
     _afficheEvent = null;
     _partnerVenue = null;
     _routeSelection = null;
@@ -2036,7 +1979,7 @@ class _V5Tag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: BbV5Colors.paper,
         borderRadius: BorderRadius.circular(BbV5Radii.pill),
@@ -2140,7 +2083,7 @@ class _V5EmojiButton extends StatelessWidget {
                 child: Center(
                   child: Icon(
                     icon,
-                    size: 26,
+                    size: 24,
                     color: BbV5Colors.ink,
                   ),
                 ),
@@ -2150,8 +2093,8 @@ class _V5EmojiButton extends StatelessWidget {
               right: -4,
               bottom: -4,
               child: Container(
-                width: 26,
-                height: 26,
+                width: 24,
+                height: 24,
                 decoration: BoxDecoration(
                   color: BbV5Colors.accent,
                   shape: BoxShape.circle,
@@ -2159,7 +2102,7 @@ class _V5EmojiButton extends StatelessWidget {
                 ),
                 child: const Icon(
                   Icons.image_outlined,
-                  size: 13,
+                  size: 12,
                   color: BbV5Colors.paperHi,
                 ),
               ),
@@ -2248,13 +2191,18 @@ class _V5FieldRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    BbV5Kicker(label),
-                    const SizedBox(height: 4),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: bbV5KickerStyle(letterSpacing: 1.8),
+                    ),
+                    const SizedBox(height: 2),
                     Text(
                       value,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: bbV5DisplayStyle(fontSize: 13.5, height: 1.2),
+                      style: bbV5DisplayStyle(fontSize: 13.5, height: 1.25),
                     ),
                   ],
                 ),
@@ -2296,7 +2244,7 @@ class _V5IconBubble extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: borderColor),
       ),
-      child: Icon(icon, size: 17, color: color),
+      child: Icon(icon, size: 16, color: color),
     );
   }
 }
@@ -2382,7 +2330,7 @@ class _V5AttachedSourceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.only(top: 8),
       child: BbV5Card(
         radius: BbV5Radii.md,
         padding: const EdgeInsets.all(14),
@@ -2396,12 +2344,12 @@ class _V5AttachedSourceCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   BbV5Kicker(kicker),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: bbV5DisplayStyle(fontSize: 13, height: 1.2),
+                    style: bbV5DisplayStyle(fontSize: 13, height: 1.25),
                   ),
                   if (subtitle case final subtitle?) ...[
                     const SizedBox(height: 3),
@@ -2422,8 +2370,8 @@ class _V5AttachedSourceCard extends StatelessWidget {
             BbV5IconButton(
               icon: LucideIcons.x,
               onPressed: onClear,
-              size: 34,
-              iconSize: 15,
+              size: 32,
+              iconSize: 14,
             ),
           ],
         ),
@@ -2513,7 +2461,7 @@ class _V5SegmentButton extends StatelessWidget {
                   size: 16,
                   color: active ? BbV5Colors.paperHi : BbV5Colors.inkSoft,
                 ),
-                const SizedBox(width: 5),
+                const SizedBox(width: 6),
               ],
               Flexible(
                 child: Text(
@@ -2582,9 +2530,9 @@ class _V5AccessRow extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: bbV5DisplayStyle(fontSize: 13.5, height: 1.2),
+                        style: bbV5DisplayStyle(fontSize: 13.5, height: 1.25),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         subtitle,
                         maxLines: 2,
@@ -2675,9 +2623,9 @@ class _V5DateIdeaCard extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: bbV5DisplayStyle(fontSize: 13.5, height: 1.2),
+                  style: bbV5DisplayStyle(fontSize: 13.5, height: 1.25),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   subtitle,
                   maxLines: 2,
@@ -2735,10 +2683,10 @@ class _V5VisibilityTile extends StatelessWidget {
               children: [
                 Icon(
                   icon,
-                  size: 17,
+                  size: 16,
                   color: active ? BbV5Colors.paperHi : BbV5Colors.ink,
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Text(
                   title,
                   maxLines: 2,
@@ -2751,7 +2699,7 @@ class _V5VisibilityTile extends StatelessWidget {
                     color: active ? BbV5Colors.paperHi : BbV5Colors.ink,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   subtitle,
                   maxLines: 2,
@@ -2823,184 +2771,6 @@ class _FieldCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SourceActionRow extends StatelessWidget {
-  const _SourceActionRow({
-    required this.posterActive,
-    required this.partnerActive,
-    required this.routeActive,
-    required this.onPosterTap,
-    required this.onPartnerTap,
-    required this.onRouteTap,
-  });
-
-  final bool posterActive;
-  final bool partnerActive;
-  final bool routeActive;
-  final VoidCallback onPosterTap;
-  final VoidCallback onPartnerTap;
-  final VoidCallback onRouteTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _SourceActionButton(
-              tooltip: 'Афиша',
-              active: posterActive,
-              icon: LucideIcons.ticket,
-              onTap: onPosterTap,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: _SourceActionButton(
-              tooltip: 'Партнёр',
-              active: partnerActive,
-              icon: LucideIcons.gift,
-              onTap: onPartnerTap,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: _SourceActionButton(
-              tooltip: 'Маршрут',
-              active: routeActive,
-              icon: LucideIcons.route,
-              onTap: onRouteTap,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SourceActionButton extends StatelessWidget {
-  const _SourceActionButton({
-    required this.tooltip,
-    required this.active,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String tooltip;
-  final bool active;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          height: 36,
-          decoration: BoxDecoration(
-            color: active ? colors.foreground : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          alignment: Alignment.center,
-          child: Icon(
-            icon,
-            size: 20,
-            color: active ? colors.background : colors.inkSoft,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PosterPreviewCard extends StatelessWidget {
-  const _PosterPreviewCard({
-    required this.poster,
-    required this.onOpen,
-    required this.onClear,
-  });
-
-  final Poster poster;
-  final VoidCallback onOpen;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: colors.primarySoft,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            alignment: Alignment.center,
-            child: Text(poster.emoji, style: const TextStyle(fontSize: 24)),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(LucideIcons.ticket, size: 12, color: colors.inkMute),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Идём на событие',
-                      style: AppTextStyles.caption.copyWith(
-                        color: colors.inkMute,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  poster.title,
-                  style: AppTextStyles.body.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  '${poster.dateLabel} · ${poster.timeLabel}',
-                  style: AppTextStyles.meta.copyWith(color: colors.inkMute),
-                ),
-              ],
-            ),
-          ),
-          TextButton(onPressed: onOpen, child: const Text('Заменить')),
-          IconButton(
-            onPressed: onClear,
-            icon: Icon(Icons.close_rounded, color: colors.inkMute),
-          ),
-        ],
       ),
     );
   }
@@ -3599,9 +3369,11 @@ class _PriceInput extends StatelessWidget {
         decoration: InputDecoration(
           hintText: placeholder,
           hintStyle: AppTextStyles.body.copyWith(
+            fontFamily: 'Sora',
             color: BbV5Colors.inkMute,
             fontSize: 14,
             fontWeight: FontWeight.w400,
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
           filled: false,
           border: InputBorder.none,
@@ -3618,6 +3390,7 @@ class _PriceInput extends StatelessWidget {
           fontSize: 14,
           fontWeight: FontWeight.w600,
           color: BbV5Colors.ink,
+          fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
     );

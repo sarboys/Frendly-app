@@ -304,7 +304,7 @@ class _AuthDivider extends StatelessWidget {
             color: BbV5Colors.inkMute,
             fontSize: 10,
             fontWeight: FontWeight.w600,
-            letterSpacing: 0,
+            letterSpacing: 1.8,
           ),
         ),
         const SizedBox(width: AppSpacing.sm),

@@ -351,6 +351,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
                       child: Text(
                         isOtp ? 'Войти' : 'Получить код',
                         style: AppTextStyles.button.copyWith(
+                          fontSize: 14,
                           color: BbV5Colors.paperHi,
                         ),
                       ),
@@ -386,17 +387,19 @@ class _PhoneStep extends StatelessWidget {
       children: [
         const BbV5Kicker('Вход по SMS'),
         const SizedBox(height: 8),
-        const BbV5HeroTitle(
+        const _PhoneAuthTitle(
           title: 'Введи свой',
           accent: 'номер',
-          fontSize: 28,
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           'Пришлём код подтверждения в SMS.',
-          style: AppTextStyles.bodySoft.copyWith(color: BbV5Colors.inkSoft),
+          style: AppTextStyles.bodySoft.copyWith(
+            color: BbV5Colors.inkSoft,
+            fontSize: 13.5,
+          ),
         ),
-        const SizedBox(height: AppSpacing.xxl),
+        const SizedBox(height: AppSpacing.xl),
         BbPhoneNumberField(
           controller: controller,
           country: country,
@@ -406,7 +409,10 @@ class _PhoneStep extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         Text(
           'Нажимая «Получить код», ты принимаешь Условия и Политику приватности.',
-          style: AppTextStyles.meta.copyWith(color: BbV5Colors.inkMute),
+          style: AppTextStyles.meta.copyWith(
+            color: BbV5Colors.inkMute,
+            fontSize: 11,
+          ),
         ),
       ],
     );
@@ -433,16 +439,19 @@ class _OtpStep extends StatelessWidget {
       children: [
         const BbV5Kicker('Подтверждение'),
         const SizedBox(height: 8),
-        Text(
-          'Код из SMS',
-          style: bbV5DisplayStyle(fontSize: 28, height: 1.1),
+        const _PhoneAuthTitle(
+          title: 'Код из',
+          accent: 'SMS',
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           'Отправили на $maskedPhone. Подсказка для прототипа: 1234.',
-          style: AppTextStyles.bodySoft.copyWith(color: BbV5Colors.inkSoft),
+          style: AppTextStyles.bodySoft.copyWith(
+            color: BbV5Colors.inkSoft,
+            fontSize: 13.5,
+          ),
         ),
-        const SizedBox(height: AppSpacing.xxl),
+        const SizedBox(height: AppSpacing.xl),
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => focusNode.requestFocus(),
@@ -484,8 +493,8 @@ class _OtpStep extends StatelessWidget {
                   final active = controller.text.length == index ||
                       (index == 3 && controller.text.length == 4);
                   return Container(
-                    width: 64,
-                    height: 72,
+                    width: 56,
+                    height: 64,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: BbV5Colors.paperHi,
@@ -504,7 +513,9 @@ class _OtpStep extends StatelessWidget {
                     ),
                     child: Text(
                       char,
-                      style: bbV5DisplayStyle(fontSize: 28, height: 1),
+                      style: bbV5DisplayStyle(fontSize: 24, height: 1).copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                   );
                 }),
@@ -519,13 +530,47 @@ class _OtpStep extends StatelessWidget {
             child: Text(
               'Отправить код снова · 0:42',
               style: AppTextStyles.meta.copyWith(
+                fontFamily: 'Sora',
                 color: BbV5Colors.terra,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PhoneAuthTitle extends StatelessWidget {
+  const _PhoneAuthTitle({
+    required this.title,
+    required this.accent,
+  });
+
+  final String title;
+  final String accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = bbV5DisplayStyle(fontSize: 28, height: 1.1);
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: title),
+          const TextSpan(text: ' '),
+          TextSpan(
+            text: accent,
+            style: base.copyWith(
+              fontFamily: 'InstrumentSerif',
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ],
+      ),
+      style: base,
     );
   }
 }

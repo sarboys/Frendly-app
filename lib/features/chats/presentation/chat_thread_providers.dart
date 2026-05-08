@@ -52,7 +52,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
           return;
         }
         state = AsyncValue.data(_decorateMessages(result.items));
-        _warmVoiceAttachments(result.items);
+        _warmRecentAttachments(result.items);
       } catch (_) {
         if (!mounted) {
           return;
@@ -457,7 +457,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
       final nextMessage =
           Message.fromJson(payload, currentUserId: currentUserId);
       _upsertMessage(nextMessage);
-      _warmVoiceAttachments([nextMessage]);
+      _warmRecentAttachments([nextMessage]);
       _scheduleMarkRead();
       _refreshChatSummaryProviders(nextMessage);
       return;
@@ -478,7 +478,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
           Message.fromJson(payload, currentUserId: currentUserId);
       final wasLast = _isLastMessage(nextMessage.id);
       _upsertMessage(nextMessage);
-      _warmVoiceAttachments([nextMessage]);
+      _warmRecentAttachments([nextMessage]);
       if (wasLast) {
         _refreshChatSummaryProviders(nextMessage);
       }
@@ -571,7 +571,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         return;
       }
       state = AsyncValue.data(_decorateSortedMessages(merged));
-      _warmVoiceAttachments(synced);
+      _warmRecentAttachments(synced);
       _scheduleMarkRead();
     }
   }
@@ -584,7 +584,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
     }
 
     state = AsyncValue.data(_decorateMessages(result.items));
-    _warmVoiceAttachments(result.items);
+    _warmRecentAttachments(result.items);
 
     final lastEventId = result.lastEventId;
     if (lastEventId != null) {
@@ -628,20 +628,24 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
     return lastEventId;
   }
 
-  void _warmVoiceAttachments(Iterable<Message> messages) {
+  void _warmRecentAttachments(Iterable<Message> messages) {
     final service = ref.read(appAttachmentServiceProvider);
-    final attachments = messages
+    final readyRemoteAttachments = messages
         .expand((message) => message.attachments)
         .where(
           (attachment) =>
-              attachment.isVoice &&
               attachment.status == 'ready' &&
               attachment.url != null &&
               (attachment.localPath == null || attachment.localPath!.isEmpty),
-        )
+        );
+    final voiceAttachments = readyRemoteAttachments
+        .where((attachment) => attachment.isVoice)
         .take(3);
+    final imageAttachments = readyRemoteAttachments
+        .where((attachment) => attachment.mimeType.startsWith('image/'))
+        .take(4);
 
-    for (final attachment in attachments) {
+    for (final attachment in [...voiceAttachments, ...imageAttachments]) {
       unawaited(service.warmCache(attachment));
     }
   }
@@ -1142,10 +1146,6 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
   }
 
   Uint8List? _localBytesForMessage(PlatformFile file) {
-    final path = file.path;
-    if (path != null && path.isNotEmpty) {
-      return null;
-    }
     return file.bytes;
   }
 }

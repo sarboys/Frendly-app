@@ -631,12 +631,16 @@ class _FakeCommunityPostRepository extends BackendRepository {
   }
 
   @override
-  Future<Community> fetchCommunity(String communityId) async {
+  Future<Community> fetchCommunity(
+    String communityId, {
+    CancelToken? cancelToken,
+  }) async {
     return mockCommunities.firstWhere((community) => community.id == 'c1');
   }
 
   @override
   Future<PaginatedResponse<Community>> fetchCommunities({
+    CancelToken? cancelToken,
     String? cursor,
     int limit = 20,
   }) async {
@@ -671,12 +675,16 @@ class _FakeCommunityCreateRepository extends BackendRepository {
   }
 
   @override
-  Future<Community> fetchCommunity(String communityId) async {
+  Future<Community> fetchCommunity(
+    String communityId, {
+    CancelToken? cancelToken,
+  }) async {
     return community;
   }
 
   @override
   Future<PaginatedResponse<Community>> fetchCommunities({
+    CancelToken? cancelToken,
     String? cursor,
     int limit = 20,
   }) async {

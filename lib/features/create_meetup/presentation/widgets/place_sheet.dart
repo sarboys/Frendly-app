@@ -5,6 +5,7 @@ import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart' show Point;
@@ -34,7 +35,7 @@ class PlaceSelection {
 Future<PlaceSelection?> showPlaceSheet(
   BuildContext context, {
   required PlaceSelection initialValue,
-  VoidCallback? onPickPoster,
+  VoidCallback? onPickAfficheEvent,
 }) {
   final container = ProviderScope.containerOf(context, listen: false);
 
@@ -46,7 +47,7 @@ Future<PlaceSelection?> showPlaceSheet(
       container: container,
       child: _PlaceSheet(
         initialValue: initialValue,
-        onPickPoster: onPickPoster,
+        onPickAfficheEvent: onPickAfficheEvent,
       ),
     ),
   );
@@ -115,11 +116,11 @@ const _nearbyPlaces = [
 class _PlaceSheet extends ConsumerStatefulWidget {
   const _PlaceSheet({
     required this.initialValue,
-    this.onPickPoster,
+    this.onPickAfficheEvent,
   });
 
   final PlaceSelection initialValue;
-  final VoidCallback? onPickPoster;
+  final VoidCallback? onPickAfficheEvent;
 
   @override
   ConsumerState<_PlaceSheet> createState() => _PlaceSheetState();
@@ -184,7 +185,11 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                     child: Text(
                       'Где встречаемся',
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.itemTitle.copyWith(fontSize: 16),
+                      style: bbV5DisplayStyle(
+                        fontSize: 18,
+                        height: 1.25,
+                        letterSpacing: 0,
+                      ),
                     ),
                   ),
                   IconButton(
@@ -225,9 +230,14 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                           hintText: 'Кафе, бар, парк или адрес',
                           hintStyle: AppTextStyles.bodySoft.copyWith(
                             color: colors.inkMute,
+                            fontSize: 13.5,
+                            height: 1.2,
                           ),
                         ),
-                        style: AppTextStyles.body,
+                        style: AppTextStyles.body.copyWith(
+                          fontSize: 13.5,
+                          height: 1.2,
+                        ),
                       ),
                     ),
                     if (_queryController.text.isNotEmpty)
@@ -247,7 +257,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                 ),
               ),
             ),
-            if (widget.onPickPoster != null)
+            if (widget.onPickAfficheEvent != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                 child: SizedBox(
@@ -256,11 +266,17 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                   child: FilledButton.icon(
                     onPressed: () {
                       Navigator.of(context).pop();
-                      widget.onPickPoster?.call();
+                      widget.onPickAfficheEvent?.call();
                     },
                     icon: const Icon(Icons.confirmation_number_outlined,
                         size: 18),
                     label: const Text('Идём на событие из афиши'),
+                    style: FilledButton.styleFrom(
+                      textStyle: AppTextStyles.button.copyWith(
+                        fontSize: 13,
+                        height: 1.1,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -324,6 +340,8 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                             textAlign: TextAlign.center,
                             style: AppTextStyles.meta.copyWith(
                               color: colors.inkMute,
+                              fontSize: 12.5,
+                              height: 1.35,
                             ),
                           ),
                         ],
@@ -337,6 +355,8 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                         textAlign: TextAlign.center,
                         style: AppTextStyles.meta.copyWith(
                           color: colors.inkMute,
+                          fontSize: 12.5,
+                          height: 1.35,
                         ),
                       ),
                     )
@@ -361,6 +381,12 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                       icon: const Icon(Icons.place_outlined, size: 18),
                       label: Text(
                           'Использовать «${_queryController.text.trim()}»'),
+                      style: OutlinedButton.styleFrom(
+                        textStyle: AppTextStyles.button.copyWith(
+                          fontSize: 13,
+                          height: 1.1,
+                        ),
+                      ),
                     ),
                   ],
                 ],
@@ -538,10 +564,8 @@ class _ListTitle extends StatelessWidget {
         ],
         Text(
           title,
-          style: AppTextStyles.caption.copyWith(
+          style: bbV5KickerStyle(
             color: colors.inkMute,
-            letterSpacing: 0,
-            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -596,15 +620,21 @@ class _PlaceRow extends StatelessWidget {
                     Text(
                       place.name,
                       style: AppTextStyles.body.copyWith(
+                        fontFamily: 'Sora',
+                        fontSize: 13.5,
+                        height: 1.25,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       place.category == null
                           ? place.address
                           : '${place.address} · ${place.category}',
                       style: AppTextStyles.meta.copyWith(
                         color: colors.inkMute,
+                        fontSize: 11,
+                        height: 1.25,
                       ),
                     ),
                   ],
@@ -615,6 +645,8 @@ class _PlaceRow extends StatelessWidget {
                   place.distance!,
                   style: AppTextStyles.meta.copyWith(
                     color: colors.inkMute,
+                    fontSize: 10.5,
+                    height: 1.1,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

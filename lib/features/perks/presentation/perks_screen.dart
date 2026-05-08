@@ -93,12 +93,12 @@ class _PerksScreenState extends State<PerksScreen> {
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(4, 14, 4, 16),
+                padding: const EdgeInsets.fromLTRB(4, 20, 4, 16),
                 child: Text(
                   'Закреплённые бонусы за check-in компанией. Чем больше людей пришло, тем больше открыто.',
                   style: AppTextStyles.meta.copyWith(
                     color: BbV5Colors.inkSoft,
-                    height: 1.45,
+                    height: 1.625,
                   ),
                 ),
               ),
@@ -157,6 +157,7 @@ class _PerksScreenState extends State<PerksScreen> {
                 label: 'Открыть ещё через Streak',
                 icon: LucideIcons.sparkles,
                 height: 48,
+                fontSize: 13,
                 expanded: true,
                 onPressed: () => context.pushRoute(AppRoute.streak),
               ),
@@ -262,31 +263,37 @@ class _PerkTicket extends StatelessWidget {
                           Row(
                             children: [
                               Flexible(
-                                child: BbV5Kicker(
+                                child: Text(
                                   perk.venue.toUpperCase(),
-                                  color: perk.color,
                                   maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: bbV5KickerStyle(
+                                    color: perk.color,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.8,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 6),
                               Text(
                                 '· ${perk.type}',
                                 style: AppTextStyles.caption.copyWith(
+                                  fontSize: 10,
                                   color: BbV5Colors.inkMute,
                                   letterSpacing: 0,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
                           Text(
                             perk.perk,
                             style: bbV5DisplayStyle(
-                              fontSize: 16,
-                              height: 1.15,
+                              fontSize: 15.5,
+                              height: 1.25,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
                           Row(
                             children: [
                               const Icon(
@@ -299,6 +306,7 @@ class _PerkTicket extends StatelessWidget {
                                 child: Text(
                                   perk.condition,
                                   style: AppTextStyles.caption.copyWith(
+                                    fontSize: 11.5,
                                     color: BbV5Colors.inkMute,
                                     letterSpacing: 0,
                                   ),
@@ -354,8 +362,10 @@ class _PerkTicket extends StatelessWidget {
                           Text(
                             'Активирован',
                             style: AppTextStyles.caption.copyWith(
+                              fontFamily: 'Sora',
+                              fontSize: 11.5,
                               color: BbV5Colors.brandDeep,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                               letterSpacing: 0,
                             ),
                           ),
@@ -376,8 +386,10 @@ class _PerkTicket extends StatelessWidget {
                       Text(
                         'ЗАБЛОКИРОВАНО',
                         style: AppTextStyles.caption.copyWith(
+                          fontSize: 10.5,
                           color: BbV5Colors.inkMute,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.05,
                         ),
                       ),
                   ],

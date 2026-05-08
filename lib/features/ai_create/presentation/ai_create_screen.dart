@@ -118,12 +118,14 @@ class _AiCreateScreenState extends State<AiCreateScreen> {
   @override
   Widget build(BuildContext context) {
     final plan = _plan;
+    final bottomPadding = 120 + MediaQuery.paddingOf(context).bottom;
 
     return BbV5Scaffold(
       child: BbV5Page(
-        padding: const EdgeInsets.fromLTRB(20, 32, 20, 120),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         child: CustomScrollView(
           slivers: [
+            const SliverToBoxAdapter(child: SizedBox(height: 32)),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 20),
@@ -193,6 +195,7 @@ class _AiCreateScreenState extends State<AiCreateScreen> {
             SliverToBoxAdapter(
               child: BbV5Section(
                 title: 'настроение',
+                margin: const EdgeInsets.only(top: 16),
                 child: GridView.count(
                   crossAxisCount: 3,
                   shrinkWrap: true,
@@ -275,6 +278,7 @@ class _AiCreateScreenState extends State<AiCreateScreen> {
                       Text(
                         'AI учитывает погоду, твой круг, афишу города',
                         style: AppTextStyles.caption.copyWith(
+                          fontSize: 11.5,
                           color: BbV5Colors.inkMute,
                           letterSpacing: 0,
                         ),
@@ -296,6 +300,7 @@ class _AiCreateScreenState extends State<AiCreateScreen> {
                   ),
                 ),
               ),
+            SliverToBoxAdapter(child: SizedBox(height: bottomPadding)),
           ],
         ),
       ),
@@ -574,7 +579,8 @@ class _PlanStepRow extends StatelessWidget {
                     style: AppTextStyles.body.copyWith(
                       fontFamily: 'Sora',
                       fontSize: 15,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
                       color: BbV5Colors.ink,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
@@ -585,7 +591,7 @@ class _PlanStepRow extends StatelessWidget {
                     style: AppTextStyles.caption.copyWith(
                       color: step.color,
                       fontSize: 9,
-                      letterSpacing: 0,
+                      letterSpacing: 1.44,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -610,10 +616,11 @@ class _PlanStepRow extends StatelessWidget {
                       fontFamily: 'Sora',
                       fontSize: 13.5,
                       fontWeight: FontWeight.w600,
+                      height: 1.25,
                       color: BbV5Colors.ink,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     step.subtitle,
                     maxLines: 1,

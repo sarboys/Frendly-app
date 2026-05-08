@@ -955,8 +955,9 @@ class _V5MeetupCompactCapsule extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.caption.copyWith(
                         fontFamily: 'Sora',
-                        fontSize: 11.5,
+                        fontSize: 12.5,
                         fontWeight: FontWeight.w600,
+                        height: 1.25,
                         letterSpacing: 0,
                         color: BbV5Colors.ink,
                       ),
@@ -967,6 +968,7 @@ class _V5MeetupCompactCapsule extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.caption.copyWith(
+                        fontSize: 10.5,
                         color: BbV5Colors.inkMute,
                         letterSpacing: 0,
                       ),
@@ -1051,8 +1053,8 @@ class _V5MeetupChatHeader extends StatelessWidget {
                     initials,
                     style: AppTextStyles.body.copyWith(
                       fontFamily: 'Sora',
-                      fontSize: 14,
-                      letterSpacing: 0,
+                      fontSize: 13,
+                      letterSpacing: 0.52,
                       fontWeight: FontWeight.w600,
                       color: BbV5Colors.ink,
                     ),
@@ -1084,7 +1086,7 @@ class _V5MeetupChatHeader extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: bbV5DisplayStyle(fontSize: 15, height: 1.16),
+                  style: bbV5DisplayStyle(fontSize: 14, height: 1.25),
                 ),
                 const SizedBox(height: 3),
                 Row(
@@ -1097,7 +1099,7 @@ class _V5MeetupChatHeader extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.caption.copyWith(
-                          fontSize: 11,
+                          fontSize: 10.5,
                           letterSpacing: 0,
                           color: BbV5Colors.inkMute,
                         ),
@@ -1241,7 +1243,7 @@ class _V5EditMeetupDialogState extends State<_V5EditMeetupDialog> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 16),
                     Text(
                       _titleController.text.trim().isEmpty
                           ? widget.event.title
@@ -1250,7 +1252,7 @@ class _V5EditMeetupDialogState extends State<_V5EditMeetupDialog> {
                       overflow: TextOverflow.ellipsis,
                       style: bbV5DisplayStyle(fontSize: 20, height: 1.1),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     _V5EditTextField(
                       label: 'Название',
                       controller: _titleController,
@@ -1279,6 +1281,7 @@ class _V5EditMeetupDialogState extends State<_V5EditMeetupDialog> {
                             label: 'Отмена',
                             onPressed: widget.onClose,
                             height: 48,
+                            fontSize: 13,
                             expanded: true,
                           ),
                         ),
@@ -1289,6 +1292,7 @@ class _V5EditMeetupDialogState extends State<_V5EditMeetupDialog> {
                             dark: true,
                             onPressed: _saveAndClose,
                             height: 48,
+                            fontSize: 13,
                             expanded: true,
                           ),
                         ),
@@ -1325,8 +1329,10 @@ class _V5EditTextField extends StatelessWidget {
           label,
           style: AppTextStyles.caption.copyWith(
             fontFamily: 'Sora',
+            fontSize: 10.5,
             fontWeight: FontWeight.w600,
-            letterSpacing: 0,
+            height: 1.1,
+            letterSpacing: 1.68,
             color: BbV5Colors.inkMute,
           ),
         ),
@@ -1339,7 +1345,7 @@ class _V5EditTextField extends StatelessWidget {
             decoration: InputDecoration(
               filled: true,
               fillColor: BbV5Colors.paper,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(BbV5Radii.pill),
                 borderSide: const BorderSide(color: BbV5Colors.hair),

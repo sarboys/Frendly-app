@@ -69,7 +69,7 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
             child: Column(
               children: [
                 _CommunityDetailHeader(community: community),
-                const SizedBox(height: 18),
+                const SizedBox(height: 20),
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
@@ -85,7 +85,7 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                           pathParameters: {'communityId': community.id},
                         ),
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 20),
                       _CommunityTabs(
                         meetupCount: community.meetups.length,
                         selected: _tab,
@@ -95,7 +95,7 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                           });
                         },
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 20),
                       switch (_tab) {
                         _CommunityTab.overview =>
                           _CommunityOverview(community: community),
@@ -212,12 +212,12 @@ class _CommunityHeroCard extends StatelessWidget {
                       children: [
                         Text(
                           community.name,
-                          style: bbV5DisplayStyle(fontSize: 20),
+                          style: bbV5DisplayStyle(fontSize: 20, height: 1.25),
                         ),
                         if (private)
                           const _CommunityV5Badge(
                             icon: LucideIcons.lock,
-                            label: 'Закрытое',
+                            label: 'ЗАКРЫТЫЙ',
                             tone: BbV5Colors.inkSoft,
                           ),
                         if (community.premiumOnly)
@@ -228,7 +228,7 @@ class _CommunityHeroCard extends StatelessWidget {
                           ),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Text(
                       community.mood,
                       maxLines: 1,
@@ -243,13 +243,13 @@ class _CommunityHeroCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           Text(
             community.description,
             style: AppTextStyles.meta.copyWith(
               color: BbV5Colors.inkSoft,
               fontSize: 13,
-              height: 1.45,
+              height: 1.625,
             ),
           ),
           const SizedBox(height: 16),
@@ -306,7 +306,7 @@ class _CommunityHeroCard extends StatelessWidget {
             ],
           ),
           if (private && !joined) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               'Вступление по заявке',
               style: AppTextStyles.caption.copyWith(
@@ -415,8 +415,13 @@ class _CommunityDetailStat extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(value, style: bbV5DisplayStyle(fontSize: 18, height: 1)),
-          const SizedBox(height: 5),
+          Text(
+            value,
+            style: bbV5DisplayStyle(fontSize: 18, height: 1).copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          const SizedBox(height: 6),
           Text(
             label,
             maxLines: 1,
@@ -457,13 +462,17 @@ class _SocialPill extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 16, color: BbV5Colors.inkSoft),
+            Icon(icon, size: 14, color: BbV5Colors.inkSoft),
             const SizedBox(height: 8),
             Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.caption.copyWith(color: BbV5Colors.inkMute),
+              style: AppTextStyles.caption.copyWith(
+                color: BbV5Colors.inkMute,
+                fontSize: 10,
+                letterSpacing: 0,
+              ),
             ),
             const SizedBox(height: 2),
             Text(
@@ -472,6 +481,7 @@ class _SocialPill extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.meta.copyWith(
                 color: BbV5Colors.ink,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -551,7 +561,7 @@ class _CommunityTabButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(BbV5Radii.pill),
         child: Container(
-          height: 38,
+          height: 36,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(BbV5Radii.pill),
             boxShadow: active ? BbV5Shadows.ink : null,
@@ -617,13 +627,13 @@ class _CommunityOverview extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Text(
                   item.blurb,
                   style: AppTextStyles.meta.copyWith(
                     color: BbV5Colors.inkSoft,
                     fontSize: 12,
-                    height: 1.45,
+                    height: 1.625,
                   ),
                 ),
               ],
@@ -828,11 +838,11 @@ class _CommunityMeetupCard extends StatelessWidget {
                             color: BbV5Colors.ink,
                             fontFamily: 'Sora',
                             fontSize: 14.5,
-                            height: 1.15,
+                            height: 1.25,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
                           '${meetup.time} · ${meetup.place}',
                           maxLines: 1,
@@ -843,7 +853,7 @@ class _CommunityMeetupCard extends StatelessWidget {
                             letterSpacing: 0,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
                           '${meetup.format} · ${meetup.going} идут',
                           maxLines: 1,

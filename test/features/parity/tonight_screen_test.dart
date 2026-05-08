@@ -1,4 +1,6 @@
 import 'package:big_break_mobile/app/app.dart';
+import 'package:big_break_mobile/app/core/device/app_location_service.dart';
+import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/tonight/presentation/tonight_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -11,6 +13,7 @@ import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../test_overrides.dart';
@@ -37,7 +40,7 @@ void main() {
     await _pumpTonightApp(tester);
 
     expect(find.text('FRENDLY'), findsOneWidget);
-    expect(find.text('Город дышит —'), findsOneWidget);
+    expect(find.textContaining('Город дышит'), findsOneWidget);
     expect(find.text('Радар вечера'), findsOneWidget);
     expect(find.text('Сейчас собираются'), findsOneWidget);
 
@@ -71,10 +74,20 @@ void main() {
     }
   });
 
-  testWidgets('tonight gathering CTA opens search preset', (
+  testWidgets('tonight gathering CTA opens the v5 map surface', (
     tester,
   ) async {
-    await _pumpTonightApp(tester);
+    await _pumpTonightApp(
+      tester,
+      extraOverrides: [
+        appLocationServiceProvider.overrideWithValue(
+          const _NoLocationService(),
+        ),
+        mapkitBootstrapProvider.overrideWithValue(
+          const _ImmediateMapkitBootstrap(),
+        ),
+      ],
+    );
 
     await _dragUntilVisible(
       tester,
@@ -84,8 +97,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('tonight-gathering-all')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Рядом с тобой'), findsOneWidget);
-    expect(find.text('Недавнее'), findsNothing);
+    expect(find.text('Рядом сегодня'), findsOneWidget);
+    expect(find.text('Сейчас собираются'), findsNothing);
   });
 
   testWidgets('tonight header AI opens city limited flow', (
@@ -169,6 +182,39 @@ void main() {
 
     expect(find.text('Сергей, 31'), findsOneWidget);
     expect(find.text('2 общих интереса'), findsNothing);
+  });
+
+  testWidgets('tonight dating preview opens v5 dating, not old user profile', (
+    tester,
+  ) async {
+    await _pumpTonightApp(
+      tester,
+      extraOverrides: [
+        peopleProvider.overrideWith(
+          (ref) async => const [
+            PersonSummary(
+              id: 'user-dasha',
+              name: 'Даша',
+              age: 34,
+              area: 'Патриаршие пруды',
+              common: ['Кино', 'Вино'],
+              online: true,
+              verified: true,
+              vibe: 'вечер',
+              avatarUrl: 'https://cdn.example.com/dasha.jpg',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    await _dragUntilVisible(tester, find.text('Даша, 34'), 420);
+    await tester.tap(find.text('Даша, 34'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Frendly+ · свидания'), findsOneWidget);
+    expect(find.text('Встреч'), findsNothing);
+    expect(find.text('Рейтинг'), findsNothing);
   });
 
   testWidgets('tonight does not fall back to old poster teaser', (
@@ -327,6 +373,30 @@ Future<void> _dragUntilVisible(
   if (finder.evaluate().isNotEmpty) {
     await tester.ensureVisible(finder);
     await tester.pumpAndSettle();
+  }
+}
+
+class _ImmediateMapkitBootstrap implements MapkitBootstrap {
+  const _ImmediateMapkitBootstrap();
+
+  @override
+  Future<void> ensureInitialized() async {}
+}
+
+class _NoLocationService implements AppLocationService {
+  const _NoLocationService();
+
+  @override
+  Future<Position?> getCurrentPosition() async => null;
+
+  @override
+  double distanceBetween({
+    required double startLatitude,
+    required double startLongitude,
+    required double endLatitude,
+    required double endLongitude,
+  }) {
+    return 0;
   }
 }
 

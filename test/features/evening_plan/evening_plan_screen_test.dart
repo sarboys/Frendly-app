@@ -409,7 +409,10 @@ class _UnavailableEveningPlanRepository extends BackendRepository {
   _UnavailableEveningPlanRepository(Ref ref) : super(ref: ref, dio: Dio());
 
   @override
-  Future<Map<String, dynamic>> fetchEveningRoute(String routeId) async {
+  Future<Map<String, dynamic>> fetchEveningRoute(
+    String routeId, {
+    CancelToken? cancelToken,
+  }) async {
     throw StateError('Network disabled in plan screen widget tests');
   }
 
@@ -426,7 +429,10 @@ class _FakeEveningPlanRepository extends BackendRepository {
   _FakeEveningPlanRepository(Ref ref) : super(ref: ref, dio: Dio());
 
   @override
-  Future<Map<String, dynamic>> fetchEveningRoute(String routeId) async {
+  Future<Map<String, dynamic>> fetchEveningRoute(
+    String routeId, {
+    CancelToken? cancelToken,
+  }) async {
     return {
       'id': routeId,
       'title': 'Backend Plan Route',
@@ -463,7 +469,10 @@ class _PublishingEveningPlanRepository extends BackendRepository {
   _PublishingEveningPlanRepository(Ref ref) : super(ref: ref, dio: Dio());
 
   @override
-  Future<Map<String, dynamic>> fetchEveningRoute(String routeId) async {
+  Future<Map<String, dynamic>> fetchEveningRoute(
+    String routeId, {
+    CancelToken? cancelToken,
+  }) async {
     throw StateError('Use local route fallback');
   }
 

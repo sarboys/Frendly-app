@@ -3,6 +3,7 @@ import 'package:big_break_mobile/app/theme/app_radii.dart';
 import 'package:big_break_mobile/app/theme/app_shadows.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 
@@ -262,10 +263,10 @@ class _PartnerPickerSheetState extends State<_PartnerPickerSheet> {
                             const SizedBox(width: 4),
                             Text(
                               'Партнёры Frendly',
-                              style: AppTextStyles.caption.copyWith(
+                              style: bbV5KickerStyle(
                                 color: colors.inkMute,
-                                letterSpacing: 0,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 9.5,
+                                letterSpacing: 1.71,
                               ),
                             ),
                           ],
@@ -273,7 +274,11 @@ class _PartnerPickerSheetState extends State<_PartnerPickerSheet> {
                         const SizedBox(height: 2),
                         Text(
                           'Партнёрские места',
-                          style: AppTextStyles.itemTitle.copyWith(fontSize: 16),
+                          style: bbV5DisplayStyle(
+                            fontSize: 18,
+                            height: 1.25,
+                            letterSpacing: 0,
+                          ),
                         ),
                       ],
                     ),
@@ -308,7 +313,14 @@ class _PartnerPickerSheetState extends State<_PartnerPickerSheet> {
                           hintText: 'Заведение, район или перк',
                           hintStyle: AppTextStyles.bodySoft.copyWith(
                             color: colors.inkMute,
+                            fontSize: 13.5,
+                            height: 1.2,
                           ),
+                        ),
+                        style: AppTextStyles.bodySoft.copyWith(
+                          color: colors.foreground,
+                          fontSize: 13.5,
+                          height: 1.2,
                         ),
                       ),
                     ),
@@ -383,6 +395,8 @@ class _PartnerPickerSheetState extends State<_PartnerPickerSheet> {
                         textAlign: TextAlign.center,
                         style: AppTextStyles.meta.copyWith(
                           color: colors.inkMute,
+                          fontSize: 12.5,
+                          height: 1.35,
                         ),
                       ),
                     )
@@ -398,6 +412,8 @@ class _PartnerPickerSheetState extends State<_PartnerPickerSheet> {
                     textAlign: TextAlign.center,
                     style: AppTextStyles.caption.copyWith(
                       color: colors.inkMute,
+                      fontSize: 10.5,
+                      height: 1.45,
                     ),
                   ),
                 ],
@@ -443,7 +459,10 @@ class _CategoryChip extends StatelessWidget {
             label,
             style: AppTextStyles.meta.copyWith(
               color: active ? colors.background : colors.inkSoft,
+              fontSize: 11.5,
+              height: 1.1,
               fontWeight: FontWeight.w600,
+              letterSpacing: 0.23,
             ),
           ),
         ),
@@ -472,10 +491,8 @@ class _ListTitle extends StatelessWidget {
         ],
         Text(
           title,
-          style: AppTextStyles.caption.copyWith(
+          style: bbV5KickerStyle(
             color: colors.inkMute,
-            letterSpacing: 0,
-            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -519,6 +536,8 @@ class _FeaturedPartnerCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.caption.copyWith(
                           color: colors.inkMute,
+                          fontSize: 10.5,
+                          height: 1.25,
                         ),
                       ),
                     ],
@@ -575,7 +594,11 @@ class _PartnerRow extends StatelessWidget {
                       '${venue.area} · ${venue.address}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.meta.copyWith(color: colors.inkMute),
+                      style: AppTextStyles.meta.copyWith(
+                        color: colors.inkMute,
+                        fontSize: 11,
+                        height: 1.25,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -588,6 +611,8 @@ class _PartnerRow extends StatelessWidget {
                           venue.rating.toStringAsFixed(1),
                           style: AppTextStyles.caption.copyWith(
                             color: colors.inkSoft,
+                            fontSize: 10.5,
+                            height: 1.1,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -601,6 +626,8 @@ class _PartnerRow extends StatelessWidget {
                 venue.distance,
                 style: AppTextStyles.caption.copyWith(
                   color: colors.inkMute,
+                  fontSize: 10.5,
+                  height: 1.1,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -627,7 +654,11 @@ class _PartnerTitle extends StatelessWidget {
             venue.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.itemTitle.copyWith(fontSize: 14),
+            style: AppTextStyles.itemTitle.copyWith(
+              fontSize: 13.5,
+              height: 1.25,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         if (venue.verified) ...[
@@ -686,6 +717,8 @@ class _PerkPill extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.caption.copyWith(
                 color: colors.primary,
+                fontSize: 10.5,
+                height: 1.1,
                 fontWeight: FontWeight.w600,
               ),
             ),

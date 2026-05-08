@@ -138,14 +138,6 @@ List<Override> buildTestOverrides() {
     verificationProvider.overrideWith((ref) async => mockVerificationState),
     safetyHubProvider.overrideWith((ref) async => mockSafetyHubData),
     storiesProvider.overrideWith((ref, eventId) async => mockStories),
-    featuredPostersProvider.overrideWith((ref) async => mockPosters),
-    posterFeedProvider.overrideWith((ref, query) async => mockPosters),
-    posterDetailProvider.overrideWith((ref, posterId) async {
-      return mockPosters.firstWhere(
-        (poster) => poster.id == posterId,
-        orElse: () => mockPosters.first,
-      );
-    }),
     matchesProvider.overrideWith((ref) async => mockMatches),
     subscriptionPlansProvider.overrideWith(
       (ref) async => mockSubscriptionPlans,

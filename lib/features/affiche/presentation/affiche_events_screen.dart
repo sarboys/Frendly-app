@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_radii.dart';
@@ -100,6 +101,14 @@ class _AfficheEventsScreenState extends ConsumerState<AfficheEventsScreen> {
       final page = next.valueOrNull;
       if (page != null) {
         _lastPageState = page;
+        unawaited(
+          ref.read(appMediaPrewarmServiceProvider).warmExternalEventImages(
+                page.items.map((event) => event.imageUrl),
+                usage: BbExternalEventImageUsage.card,
+                limit: 8,
+                concurrency: 2,
+              ),
+        );
       }
     });
     final eventsAsync = ref.watch(pagedProvider);
@@ -382,7 +391,7 @@ class _AfficheV5FilterButton extends StatelessWidget {
               top: 4,
               right: 4,
               child: Container(
-                constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
@@ -394,8 +403,9 @@ class _AfficheV5FilterButton extends StatelessWidget {
                   '$activeCount',
                   style: AppTextStyles.caption.copyWith(
                     color: BbV5Colors.paperHi,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
               ),
@@ -517,7 +527,7 @@ class _AfficheGridCardV5 extends StatelessWidget {
                                 fontFamily: 'Sora',
                                 fontSize: 9.5,
                                 fontWeight: FontWeight.w600,
-                                letterSpacing: 0,
+                                letterSpacing: 0.57,
                                 color: BbV5Colors.ink,
                               ),
                             ),
@@ -529,7 +539,7 @@ class _AfficheGridCardV5 extends StatelessWidget {
                 ),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                    padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -543,18 +553,18 @@ class _AfficheGridCardV5 extends StatelessWidget {
                               fontFamily: 'Sora',
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              height: 1.2,
+                              height: 1.25,
                               letterSpacing: 0,
                               color: BbV5Colors.ink,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 7),
+                        const SizedBox(height: 6),
                         Row(
                           children: [
                             const Icon(
                               LucideIcons.map_pin,
-                              size: 11,
+                              size: 10,
                               color: BbV5Colors.inkMute,
                             ),
                             const SizedBox(width: 4),
@@ -587,6 +597,9 @@ class _AfficheGridCardV5 extends StatelessWidget {
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w600,
                                   color: BbV5Colors.terra,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
                                 ),
                               ),
                             ),
@@ -756,13 +769,17 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, AppSpacing.lg, 20, 0),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         'Фильтры афиши',
-                        style: AppTextStyles.sectionTitle,
+                        style: AppTextStyles.sectionTitle.copyWith(
+                          fontSize: 22,
+                          height: 1.2,
+                          letterSpacing: 0,
+                        ),
                       ),
                     ),
                     TextButton(
@@ -779,7 +796,9 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
                         'Сбросить',
                         style: AppTextStyles.meta.copyWith(
                           color: colors.primary,
+                          fontSize: 13,
                           fontWeight: FontWeight.w600,
+                          height: 1.2,
                         ),
                       ),
                     ),
@@ -789,7 +808,7 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
               Expanded(
                 child: ListView(
                   controller: controller,
-                  padding: const EdgeInsets.fromLTRB(20, AppSpacing.lg, 20, 16),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                   children: [
                     _FilterGroup(
                       title: 'Диапазон дат',
@@ -826,7 +845,10 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
                     Text(
                       'Радиус · ${_radiusKm.round()} км',
                       style: AppTextStyles.meta.copyWith(
+                        color: colors.inkSoft,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
+                        height: 1.2,
                       ),
                     ),
                     Slider(
@@ -840,6 +862,10 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
                       onChanged: (value) => setState(() {
                         _radiusKm = value;
                       }),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: _RadiusScaleLabels(),
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     _FilterGroup(
@@ -867,7 +893,7 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
                   style: FilledButton.styleFrom(
                     backgroundColor: colors.foreground,
                     foregroundColor: colors.background,
-                    minimumSize: const Size.fromHeight(52),
+                    minimumSize: const Size.fromHeight(48),
                     shape: const RoundedRectangleBorder(
                       borderRadius: AppRadii.inputBorder,
                     ),
@@ -876,7 +902,7 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
                     'Показать события',
                     style: AppTextStyles.button.copyWith(
                       color: colors.background,
-                      fontSize: 15,
+                      fontSize: 14,
                     ),
                   ),
                 ),
@@ -911,6 +937,32 @@ const _timeOfDayOptions = [
   AfficheFilterOption(label: 'Ночь', value: 'night'),
 ];
 
+class _RadiusScaleLabels extends StatelessWidget {
+  const _RadiusScaleLabels();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    final style = AppTextStyles.meta.copyWith(
+      fontFamily: 'Sora',
+      color: colors.inkMute,
+      fontSize: 10.5,
+      fontWeight: FontWeight.w600,
+      height: 1.1,
+      letterSpacing: 1.47,
+    );
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text('ВСЕ', style: style),
+        Text('10 км', style: style),
+        Text('20 км', style: style),
+        Text('30 км', style: style),
+      ],
+    );
+  }
+}
+
 class _FilterGroup extends StatelessWidget {
   const _FilterGroup({
     required this.title,
@@ -931,7 +983,12 @@ class _FilterGroup extends StatelessWidget {
       children: [
         Text(
           title,
-          style: AppTextStyles.meta.copyWith(fontWeight: FontWeight.w600),
+          style: AppTextStyles.meta.copyWith(
+            color: AppColors.of(context).inkSoft,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            height: 1.2,
+          ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Wrap(
@@ -972,7 +1029,12 @@ class _MultiFilterGroup extends StatelessWidget {
       children: [
         Text(
           title,
-          style: AppTextStyles.meta.copyWith(fontWeight: FontWeight.w600),
+          style: AppTextStyles.meta.copyWith(
+            color: AppColors.of(context).inkSoft,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            height: 1.2,
+          ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Wrap(
