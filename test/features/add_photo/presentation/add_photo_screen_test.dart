@@ -356,7 +356,7 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('profile-photo-gallery-pageview')),
-      findsNothing,
+      findsOneWidget,
     );
     expect(find.byType(Image), findsWidgets);
   });

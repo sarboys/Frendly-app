@@ -89,7 +89,7 @@ TextStyle bbV5KickerStyle({
   Color color = BbV5Colors.inkMute,
   double fontSize = 10,
   double letterSpacing = 2.4,
-  FontWeight fontWeight = FontWeight.w600,
+  FontWeight fontWeight = FontWeight.w500,
 }) {
   return AppTextStyles.caption.copyWith(
     fontFamily: 'Sora',

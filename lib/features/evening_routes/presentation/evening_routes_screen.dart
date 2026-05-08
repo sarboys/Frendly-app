@@ -4,7 +4,6 @@ import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/evening_routes/presentation/evening_route_card.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
-import 'package:big_break_mobile/shared/widgets/bb_bottom_nav.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -38,13 +37,6 @@ class _EveningRoutesScreenState extends ConsumerState<EveningRoutesScreen> {
     final routesAsync = ref.watch(eveningRouteTemplatesProvider(city));
 
     return BbV5Scaffold(
-      extendBody: true,
-      bottomNavigationBar: BbV5GlassBottomBar(
-        child: BbBottomNav(
-          location: AppRoute.eveningRoutes.path,
-          onTap: (tab) => context.goRoute(tab.route),
-        ),
-      ),
       child: BbV5Page(
         padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
         child: Column(

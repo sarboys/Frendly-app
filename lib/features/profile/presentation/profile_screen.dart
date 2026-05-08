@@ -4,7 +4,7 @@ import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/utils/location_label.dart';
-import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
+import 'package:big_break_mobile/shared/widgets/bb_profile_photo_gallery.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -164,104 +164,75 @@ class _ProfileHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shortName = _shortName(profile.displayName);
+    final title =
+        profile.age == null ? shortName : '$shortName, ${profile.age}';
     final location = composeLocationLabel(profile.city, profile.area);
+    final photos = _heroPhotosFor(profile);
 
     return BbV5Card(
       tint: BbV5Colors.terraSoft,
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          BbProfilePhotoGallery(
+            displayName: title,
+            photos: photos,
+            photoPreviews: photoPreviews,
+            height: 356,
+          ),
+          const SizedBox(height: AppSpacing.md),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _ProfileAvatarTile(
-                profile: profile,
-                photoPreviews: photoPreviews,
-                onCameraTap: () => context.pushRoute(AppRoute.editProfile),
-              ),
-              const SizedBox(width: AppSpacing.md),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              profile.age == null
-                                  ? shortName
-                                  : '$shortName, ${profile.age}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: bbV5DisplayStyle(
-                                fontSize: 20,
-                                height: 1.25,
-                                letterSpacing: -0.4,
-                              ).copyWith(
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
-                              ),
-                            ),
-                          ),
-                          if (profile.verified) ...[
-                            const SizedBox(width: 6),
-                            const Icon(
-                              LucideIcons.shield_check,
-                              size: 17,
-                              color: BbV5Colors.brand,
-                            ),
-                          ],
-                        ],
+                child: Row(
+                  children: [
+                    const Icon(
+                      LucideIcons.map_pin,
+                      size: 13,
+                      color: BbV5Colors.inkMute,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        location.isEmpty ? 'Москва · Чистые пруды' : location,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.meta.copyWith(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w400,
+                          color: BbV5Colors.inkMute,
+                        ),
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(
-                            LucideIcons.map_pin,
-                            size: 12,
-                            color: BbV5Colors.inkMute,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              location.isEmpty
-                                  ? 'Москва · Чистые пруды'
-                                  : location,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.meta.copyWith(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w400,
-                                color: BbV5Colors.inkMute,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      BbV5PillButton(
-                        label: 'Изменить',
-                        icon: LucideIcons.pen_line,
-                        height: 32,
-                        fontSize: 11.5,
-                        iconSize: 12,
-                        padding: const EdgeInsets.symmetric(horizontal: 13),
-                        onPressed: () =>
-                            context.pushRoute(AppRoute.editProfile),
+                    ),
+                    if (profile.verified) ...[
+                      const SizedBox(width: 8),
+                      const Icon(
+                        LucideIcons.shield_check,
+                        size: 17,
+                        color: BbV5Colors.brand,
                       ),
                     ],
-                  ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              BbV5PillButton(
+                label: 'Изменить',
+                icon: LucideIcons.pen_line,
+                height: 34,
+                fontSize: 11.5,
+                iconSize: 12,
+                padding: const EdgeInsets.symmetric(horizontal: 13),
+                onPressed: () => context.pushRoute(AppRoute.editProfile),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
           const Divider(height: 1, color: BbV5Colors.hairSoft),
-          const SizedBox(height: AppSpacing.lg),
-          _ProfileStatsGrid(profile: profile),
+          const SizedBox(height: AppSpacing.md),
+          _ProfileStatsRow(profile: profile),
           const SizedBox(height: AppSpacing.md),
           _ProfileSignalRow(profile: profile),
         ],
@@ -270,113 +241,65 @@ class _ProfileHeroCard extends StatelessWidget {
   }
 }
 
-class _ProfileAvatarTile extends StatelessWidget {
-  const _ProfileAvatarTile({
-    required this.profile,
-    required this.photoPreviews,
-    required this.onCameraTap,
-  });
-
-  final ProfileData profile;
-  final Map<String, Uint8List> photoPreviews;
-  final VoidCallback onCameraTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final primaryPhoto = profile.photos.isEmpty ? null : profile.photos.first;
-    final previewBytes =
-        primaryPhoto == null ? null : photoPreviews[primaryPhoto.id];
-    final imageUrl = profile.avatarUrl ?? primaryPhoto?.url;
-
-    return SizedBox(
-      width: 86,
-      height: 86,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            left: 0,
-            top: 0,
-            width: 80,
-            height: 80,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: DecoratedBox(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [BbV5Colors.terraSoft, BbV5Colors.brandSoft],
-                  ),
-                ),
-                child: previewBytes == null
-                    ? BbProfilePhotoImage(
-                        imageUrl: imageUrl,
-                        fallbackText: _initial(profile.displayName),
-                        usageProfile: BbImageUsageProfile.avatar,
-                        fallbackFontSize: 26,
-                      )
-                    : Image.memory(
-                        previewBytes,
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
-                        cacheWidth: 260,
-                        cacheHeight: 260,
-                      ),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 1,
-            bottom: 1,
-            child: BbV5IconButton(
-              icon: LucideIcons.camera,
-              onPressed: onCameraTap,
-              dark: true,
-              size: 28,
-              iconSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
+List<ProfilePhoto> _heroPhotosFor(ProfileData profile) {
+  if (profile.photos.isNotEmpty) {
+    return profile.photos;
   }
+
+  final avatarUrl = profile.avatarUrl?.trim();
+  if (avatarUrl == null || avatarUrl.isEmpty) {
+    return const [];
+  }
+
+  return [
+    ProfilePhoto(
+      id: 'avatar-fallback',
+      url: avatarUrl,
+      order: 0,
+    ),
+  ];
 }
 
-class _ProfileStatsGrid extends StatelessWidget {
-  const _ProfileStatsGrid({required this.profile});
+class _ProfileStatsRow extends StatelessWidget {
+  const _ProfileStatsRow({required this.profile});
 
   final ProfileData profile;
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 4,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      childAspectRatio: 0.82,
+    return Row(
       children: [
-        _MetricTile(
-          icon: LucideIcons.users,
-          value: _formatCount(profile.social.followers),
-          label: 'Подписчиков',
+        Expanded(
+          child: _MetricTile(
+            key: const ValueKey('profile-stat-followers'),
+            icon: LucideIcons.users,
+            value: _formatCount(profile.social.followers),
+            semanticLabel: 'Подписчиков',
+          ),
         ),
-        _MetricTile(
-          icon: LucideIcons.heart,
-          value: _formatCount(profile.social.likes),
-          label: 'Лайков',
+        Expanded(
+          child: _MetricTile(
+            key: const ValueKey('profile-stat-likes'),
+            icon: LucideIcons.heart,
+            value: _formatCount(profile.social.likes),
+            semanticLabel: 'Лайков',
+          ),
         ),
-        _MetricTile(
-          icon: LucideIcons.star,
-          value: profile.rating.toStringAsFixed(1),
-          label: 'Рейтинг',
+        Expanded(
+          child: _MetricTile(
+            key: const ValueKey('profile-stat-rating'),
+            icon: LucideIcons.star,
+            value: profile.rating.toStringAsFixed(1),
+            semanticLabel: 'Рейтинг',
+          ),
         ),
-        _MetricTile(
-          icon: LucideIcons.shield_check,
-          value: '${profile.meetupCount}',
-          label: 'Встреч',
+        Expanded(
+          child: _MetricTile(
+            key: const ValueKey('profile-stat-meetups'),
+            icon: LucideIcons.shield_check,
+            value: '${profile.meetupCount}',
+            semanticLabel: 'Встреч',
+          ),
         ),
       ],
     );
@@ -387,50 +310,39 @@ class _MetricTile extends StatelessWidget {
   const _MetricTile({
     required this.icon,
     required this.value,
-    required this.label,
+    required this.semanticLabel,
+    super.key,
   });
 
   final IconData icon;
   final String value;
-  final String label;
+  final String semanticLabel;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: BbV5Colors.paper,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: BbV5Colors.hair),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 14, color: BbV5Colors.inkMute),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              maxLines: 1,
-              style: bbV5DisplayStyle(fontSize: 15, height: 1).copyWith(
-                fontFeatures: const [FontFeature.tabularFigures()],
+    return Semantics(
+      label: '$semanticLabel $value',
+      child: ExcludeSemantics(
+        child: SizedBox(
+          height: 48,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 15, color: BbV5Colors.inkMute),
+              const SizedBox(height: 6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  style: bbV5DisplayStyle(fontSize: 16, height: 1).copyWith(
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.caption.copyWith(
-              fontSize: 9.5,
-              letterSpacing: 0,
-              color: BbV5Colors.inkMute,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -888,11 +800,6 @@ String _shortName(String value) {
     return 'Профиль';
   }
   return parts.first;
-}
-
-String _initial(String value) {
-  final short = _shortName(value);
-  return short.characters.first.toUpperCase();
 }
 
 String _formatCount(int value) {

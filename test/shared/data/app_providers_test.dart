@@ -6,6 +6,7 @@ import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
+import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
@@ -45,6 +46,35 @@ class _ChatsShouldNotLoadWithoutAuthRepository extends BackendRepository {
   }) async {
     personalCalls += 1;
     throw StateError('personal chats should stay idle without auth');
+  }
+}
+
+class _RouteTemplatesRepository extends BackendRepository {
+  _RouteTemplatesRepository({
+    required super.ref,
+    required super.dio,
+    this.error,
+  });
+
+  final Object? error;
+  var templateCalls = 0;
+
+  @override
+  Future<PaginatedResponse<EveningRouteTemplateSummary>>
+      fetchEveningRouteTemplates({
+    String city = 'Москва',
+    String? q,
+    int limit = 20,
+  }) async {
+    templateCalls += 1;
+    final error = this.error;
+    if (error != null) {
+      throw error;
+    }
+    return const PaginatedResponse<EveningRouteTemplateSummary>(
+      items: [],
+      nextCursor: null,
+    );
   }
 }
 
@@ -967,6 +997,77 @@ void main() {
     expect(meetupChats, isEmpty);
     expect(personalChats, isEmpty);
     expect(repositoryBuilt, isFalse);
+  });
+
+  test('route catalog stays empty without auth instead of using fallback data',
+      () async {
+    var repositoryBuilt = false;
+    final container = ProviderContainer(
+      overrides: [
+        backendRepositoryProvider.overrideWith((ref) {
+          repositoryBuilt = true;
+          return _RouteTemplatesRepository(ref: ref, dio: Dio());
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final routes = await container.read(
+      eveningRouteTemplatesProvider('Москва').future,
+    );
+
+    expect(routes, isEmpty);
+    expect(repositoryBuilt, isFalse);
+  });
+
+  test('route catalog keeps empty backend response instead of fallback data',
+      () async {
+    late _RouteTemplatesRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _RouteTemplatesRepository(ref: ref, dio: Dio());
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final routes = await container.read(
+      eveningRouteTemplatesProvider('Москва').future,
+    );
+
+    expect(routes, isEmpty);
+    expect(repository.templateCalls, 1);
+  });
+
+  test('route catalog exposes backend errors instead of fallback data',
+      () async {
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
+        backendRepositoryProvider.overrideWith(
+          (ref) => _RouteTemplatesRepository(
+            ref: ref,
+            dio: Dio(),
+            error: StateError('route template request failed'),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await expectLater(
+      container.read(eveningRouteTemplatesProvider('Москва').future),
+      throwsA(isA<StateError>()),
+    );
   });
 
   test('onboarding provider prefers local state before backend fetch',

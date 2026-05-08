@@ -99,8 +99,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Аккаунт'), findsOneWidget);
-    expect(find.text('Подписчиков'), findsOneWidget);
-    expect(find.text('Лайков'), findsOneWidget);
+    expect(find.text('Подписчиков'), findsNothing);
+    expect(find.text('Лайков'), findsNothing);
+    expect(find.text('Рейтинг'), findsNothing);
+    expect(find.text('Встреч'), findsNothing);
     expect(find.text('Никита, 28'), findsOneWidget);
     expect(find.text('Никита М, 28'), findsNothing);
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -700));
@@ -155,6 +157,85 @@ void main() {
 
     final exception = tester.takeException();
     expect(exception, isNull);
+  });
+
+  testWidgets('profile hero uses large swipeable photos and even metrics',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const ProfileScreen(),
+        extraOverrides: [
+          profileProvider.overrideWith(
+            (ref) async => const ProfileData(
+              id: 'user-me',
+              displayName: 'Никита М',
+              verified: true,
+              online: true,
+              age: 28,
+              city: 'Москва',
+              area: 'Чистые пруды',
+              bio: 'bio',
+              vibe: 'Спокойно',
+              rating: 4.8,
+              meetupCount: 12,
+              avatarUrl: 'https://cdn.example.com/profile-1.jpg',
+              photos: [
+                ProfilePhoto(
+                  id: 'photo-1',
+                  url: 'https://cdn.example.com/profile-1.jpg',
+                  order: 0,
+                ),
+                ProfilePhoto(
+                  id: 'photo-2',
+                  url: 'https://cdn.example.com/profile-2.jpg',
+                  order: 1,
+                ),
+              ],
+              interests: ['Кофе'],
+              intent: ['Друзья'],
+              social: ProfileSocialData(
+                followers: 248,
+                likes: 1340,
+                superLikes: 32,
+                iFollow: false,
+                iLike: false,
+                iSuper: false,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('profile-photo-gallery-pageview')),
+      findsOneWidget,
+    );
+    expect(find.text('1/2'), findsOneWidget);
+
+    for (final label in ['Подписчиков', 'Лайков', 'Рейтинг', 'Встреч']) {
+      expect(find.text(label), findsNothing);
+    }
+
+    final statKeys = [
+      'profile-stat-followers',
+      'profile-stat-likes',
+      'profile-stat-rating',
+      'profile-stat-meetups',
+    ];
+    final centers = [
+      for (final key in statKeys)
+        tester.getCenter(find.byKey(ValueKey(key))).dx,
+    ];
+    final gaps = [
+      centers[1] - centers[0],
+      centers[2] - centers[1],
+      centers[3] - centers[2],
+    ];
+
+    expect((gaps[0] - gaps[1]).abs(), lessThan(1));
+    expect((gaps[1] - gaps[2]).abs(), lessThan(1));
   });
 
   testWidgets('read all clears unread indicator in notifications', (

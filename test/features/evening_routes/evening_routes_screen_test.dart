@@ -20,16 +20,15 @@ void main() {
 
     expect(find.text('Frendly Routes'), findsOneWidget);
     expect(find.text('Маршруты вечера'), findsOneWidget);
-    expect(find.text('Город · '), findsOneWidget);
-    expect(find.text('2 маршрутов'), findsOneWidget);
-    expect(find.text('Спокойно'), findsWidgets);
+    expect(find.text('2 маршрутов · Москва'), findsOneWidget);
+    expect(find.text('Спокойно'), findsOneWidget);
     expect(find.text('Знакомства'), findsOneWidget);
-    expect(find.text('Рекомендованный сегодня'), findsOneWidget);
-    expect(find.text('Другие маршруты'), findsOneWidget);
-    expect(find.text('-650₽'), findsOneWidget);
+    expect(find.text('Тёплый круг на Покровке'), findsOneWidget);
+    expect(find.text('Свидание Noir'), findsOneWidget);
+    expect(find.text('−650₽'), findsOneWidget);
     expect(find.text('≈ 1 400 ₽'), findsNothing);
     expect(find.text('экономия 650 ₽ по перкам'), findsNothing);
-    expect(find.text('Не нашёл свой? Собери AI-маршрут'), findsOneWidget);
+    expect(find.text('Не нашёл свой? Собери AI-маршрут'), findsNothing);
 
     await tester.enterText(find.byType(TextField), 'no-route');
     await tester.pumpAndSettle();
@@ -44,7 +43,7 @@ void main() {
     expect(find.text('Свидание Noir'), findsOneWidget);
   });
 
-  testWidgets('route card actions open EveningPlan and launch sheet entry', (
+  testWidgets('route card actions open detail and launch entry', (
     tester,
   ) async {
     _setMobileViewport(tester);
@@ -55,7 +54,7 @@ void main() {
     await tester.tap(find.text('Подробнее').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('plan:r-cozy-circle launch:0'), findsOneWidget);
+    expect(find.text('detail:template-cozy launch:0'), findsOneWidget);
 
     await tester.pumpWidget(_routesApp());
     await tester.pumpAndSettle();
@@ -63,7 +62,7 @@ void main() {
     await tester.tap(find.text('Запустить').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('plan:r-cozy-circle launch:1'), findsOneWidget);
+    expect(find.text('detail:template-cozy launch:1'), findsOneWidget);
   });
 
   testWidgets('routes screen does not build every route card at once', (
@@ -98,12 +97,12 @@ Widget _routesApp({List<EveningRouteTemplateSummary>? routes}) {
         ),
       ),
       GoRoute(
-        path: AppRoute.eveningPlan.path,
-        name: AppRoute.eveningPlan.name,
+        path: AppRoute.eveningRouteDetail.path,
+        name: AppRoute.eveningRouteDetail.name,
         builder: (context, state) => Scaffold(
           body: Center(
             child: Text(
-              'plan:${state.pathParameters['routeId']} '
+              'detail:${state.pathParameters['templateId']} '
               'launch:${state.uri.queryParameters['launch'] ?? '0'}',
             ),
           ),

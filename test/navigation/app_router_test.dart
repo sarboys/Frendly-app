@@ -1,7 +1,12 @@
+import 'package:big_break_mobile/app/navigation/app_shell.dart';
 import 'package:big_break_mobile/app/navigation/app_router.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/shared/models/onboarding_data.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../test_overrides.dart';
 
 void main() {
   test('router exposes splash route as default location', () {
@@ -242,5 +247,34 @@ void main() {
       ),
       AppRoute.onboarding.path,
     );
+  });
+
+  testWidgets('router keeps route catalog inside the shell', (tester) async {
+    tester.view.physicalSize = const Size(390, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final router = buildAppRouter(
+      authenticated: true,
+      isAuthenticated: () => true,
+      pendingSetupPath: () => null,
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: buildTestOverrides(),
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+
+    router.go(AppRoute.eveningRoutes.path);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppShell), findsOneWidget);
+    expect(find.text('Маршруты вечера'), findsOneWidget);
   });
 }

@@ -2,14 +2,17 @@ import 'package:big_break_mobile/app/app.dart';
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
+import 'package:big_break_mobile/features/meetups/presentation/meetups_screen.dart';
 import 'package:big_break_mobile/features/tonight/presentation/tonight_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
+import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:big_break_mobile/shared/models/person_summary.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
+import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -59,6 +62,25 @@ void main() {
     expect(find.text('Билеты на эту неделю'), findsNothing);
   });
 
+  testWidgets('tonight routes section uses backend route templates', (
+    tester,
+  ) async {
+    await _pumpTonightDirect(
+      tester,
+      extraOverrides: [
+        eveningRouteTemplatesProvider.overrideWith(
+          (ref, city) async => const [_tonightRouteTemplate],
+        ),
+      ],
+    );
+
+    await _dragUntilVisible(tester, find.text('Backend маршрут'), 420);
+
+    expect(find.text('Backend маршрут'), findsOneWidget);
+    expect(find.text('Тверская в огнях'), findsNothing);
+    expect(find.text('Замоскворечье ночью'), findsNothing);
+  });
+
   testWidgets('tonight radar legend keeps full row width', (tester) async {
     await _pumpTonightDirect(tester);
 
@@ -74,7 +96,7 @@ void main() {
     }
   });
 
-  testWidgets('tonight gathering CTA opens the v5 map surface', (
+  testWidgets('tonight gathering CTA opens the v5 meetups surface', (
     tester,
   ) async {
     await _pumpTonightApp(
@@ -97,8 +119,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('tonight-gathering-all')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Рядом сегодня'), findsOneWidget);
-    expect(find.text('Сейчас собираются'), findsNothing);
+    expect(find.byType(MeetupsScreen), findsOneWidget);
+    expect(find.text('Радар вечера'), findsNothing);
   });
 
   testWidgets('tonight header AI opens city limited flow', (
@@ -182,6 +204,43 @@ void main() {
 
     expect(find.text('Сергей, 31'), findsOneWidget);
     expect(find.text('2 общих интереса'), findsNothing);
+  });
+
+  testWidgets('tonight dating cards render profile photos', (
+    tester,
+  ) async {
+    await _pumpTonightApp(
+      tester,
+      extraOverrides: [
+        peopleProvider.overrideWith(
+          (ref) async => const [
+            PersonSummary(
+              id: 'user-sergey',
+              name: 'Сергей',
+              age: 31,
+              area: 'Центр',
+              common: ['Музыка', 'Бары'],
+              online: true,
+              verified: true,
+              vibe: 'джаз',
+              avatarUrl: 'https://cdn.example.com/sergey.jpg',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    await _dragUntilVisible(tester, find.text('Сергей, 31'), 420);
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is BbProfilePhotoImage &&
+            widget.imageUrl == 'https://cdn.example.com/sergey.jpg' &&
+            widget.usageProfile == BbImageUsageProfile.card,
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('tonight dating preview opens v5 dating, not old user profile', (
@@ -452,6 +511,39 @@ const _afficheFixtures = [
     tags: ['спорт'],
   ),
 ];
+
+const _tonightRouteTemplate = EveningRouteTemplateSummary(
+  id: 'template-backend-route',
+  routeId: 'route-backend',
+  title: 'Backend маршрут',
+  blurb: 'Реальный шаблон из API',
+  city: 'Москва',
+  area: 'Патрики',
+  vibe: 'спокойно',
+  budget: 'mid',
+  durationLabel: '2 часа',
+  totalPriceFrom: 1800,
+  totalSavings: 300,
+  hostsCount: 4,
+  stepsPreview: [
+    EveningRouteTemplateStepPreview(
+      title: 'Кофе',
+      venue: 'Кофейня',
+      emoji: '☕',
+      time: '19:00',
+      kind: 'cafe',
+    ),
+    EveningRouteTemplateStepPreview(
+      title: 'Кино',
+      venue: 'Кинотеатр',
+      emoji: '🎬',
+      time: '20:30',
+      kind: 'show',
+    ),
+  ],
+  partnerOffersPreview: [],
+  nearestSessions: [],
+);
 
 final _eventFromAfficheFixture = Event.fromJson({
   'id': 'event-affiche',

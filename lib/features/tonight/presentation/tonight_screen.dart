@@ -12,10 +12,12 @@ import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
+import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:big_break_mobile/shared/models/person_summary.dart';
 import 'package:big_break_mobile/features/tonight/presentation/v5_search_modal.dart';
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_brand_icon.dart';
+import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_system_overlays.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
@@ -278,9 +280,8 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider('nearby'));
     final events = eventsAsync.valueOrNull ?? const [];
-    unawaited(
-      ref.read(eveningRouteTemplatesProvider(_tonightAfficheCity(ref)).future),
-    );
+    final routeTemplatesAsync =
+        ref.watch(eveningRouteTemplatesProvider(_tonightAfficheCity(ref)));
 
     return BbV5Scaffold(
       child: SafeArea(
@@ -335,6 +336,7 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
                 child: _TonightRoutesSection(
+                  routesAsync: routeTemplatesAsync,
                   onOpenAll: () => unawaited(
                     _openCityLimitedFeature(
                       context,
@@ -343,9 +345,9 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
                       route: AppRoute.eveningRoutes,
                     ),
                   ),
-                  onOpenRoute: (routeId) => context.pushRoute(
-                    AppRoute.eveningPlan,
-                    pathParameters: {'routeId': routeId},
+                  onOpenRoute: (templateId) => context.pushRoute(
+                    AppRoute.eveningRouteDetail,
+                    pathParameters: {'templateId': templateId},
                   ),
                 ),
               ),
@@ -1197,6 +1199,8 @@ class _DatingPreviewCard extends StatelessWidget {
     final area = (person.area ?? 'рядом').trim();
     final title =
         person.age == null ? person.name : '${person.name}, ${person.age}';
+    final avatarUrl = person.avatarUrl?.trim();
+    final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
 
     return SizedBox(
       width: 150,
@@ -1216,82 +1220,94 @@ class _DatingPreviewCard extends StatelessWidget {
             child: Column(
               children: [
                 Expanded(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(18),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: palette,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: palette,
+                        ),
                       ),
-                    ),
-                    child: Stack(
-                      children: [
-                        const Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Color(0x00000000),
-                                  Color(0x59000000),
-                                ],
-                                stops: [0.5, 1],
+                      child: Stack(
+                        children: [
+                          if (hasAvatar)
+                            Positioned.fill(
+                              child: BbProfilePhotoImage(
+                                imageUrl: avatarUrl,
+                                fallbackText: _initial(person.name),
+                                usageProfile: BbImageUsageProfile.card,
+                                fallbackFontSize: 42,
+                              ),
+                            ),
+                          const Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Color(0x00000000),
+                                    Color(0x59000000),
+                                  ],
+                                  stops: [0.5, 1],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        Positioned(
-                          left: 10,
-                          top: 10,
-                          child: _MiniTag(label: tag),
-                        ),
-                        Positioned(
-                          left: 10,
-                          right: 10,
-                          bottom: 10,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.body.copyWith(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  fontFamily: 'Sora',
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    LucideIcons.map_pin,
-                                    size: 11,
-                                    color: Colors.white70,
+                          Positioned(
+                            left: 10,
+                            top: 10,
+                            child: _MiniTag(label: tag),
+                          ),
+                          Positioned(
+                            left: 10,
+                            right: 10,
+                            bottom: 10,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.body.copyWith(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontFamily: 'Sora',
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      area,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: AppTextStyles.caption.copyWith(
-                                        color: Colors.white70,
-                                        fontSize: 10,
-                                        letterSpacing: 0,
+                                ),
+                                const SizedBox(height: 3),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      LucideIcons.map_pin,
+                                      size: 11,
+                                      color: Colors.white70,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        area,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTextStyles.caption.copyWith(
+                                          color: Colors.white70,
+                                          fontSize: 10,
+                                          letterSpacing: 0,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1418,15 +1434,20 @@ class _AffichePreviewCard extends StatelessWidget {
 
 class _TonightRoutesSection extends StatelessWidget {
   const _TonightRoutesSection({
+    required this.routesAsync,
     required this.onOpenAll,
     required this.onOpenRoute,
   });
 
+  final AsyncValue<List<EveningRouteTemplateSummary>> routesAsync;
   final VoidCallback onOpenAll;
   final ValueChanged<String> onOpenRoute;
 
   @override
   Widget build(BuildContext context) {
+    final routes = routesAsync.valueOrNull ?? const [];
+    final visibleRoutes = routes.take(2).toList(growable: false);
+
     return BbV5Section(
       title: 'Маршруты вечера',
       margin: EdgeInsets.zero,
@@ -1437,81 +1458,52 @@ class _TonightRoutesSection extends StatelessWidget {
       ),
       child: Column(
         children: [
-          for (var index = 0; index < _homeRoutePreviews.length; index++) ...[
-            _RouteHomeCard(
-              route: _homeRoutePreviews[index],
-              onTap: () => onOpenRoute(_homeRoutePreviews[index].routeId),
-            ),
-            if (index != _homeRoutePreviews.length - 1)
-              const SizedBox(height: AppSpacing.sm),
-          ],
+          if (routesAsync.isLoading && visibleRoutes.isEmpty)
+            const _RouteHomeLoading()
+          else if (visibleRoutes.isEmpty)
+            const _RouteHomeEmpty()
+          else
+            for (var index = 0; index < visibleRoutes.length; index++) ...[
+              _RouteHomeCard(
+                number: _routeNumber(index),
+                route: visibleRoutes[index],
+                onTap: () => onOpenRoute(visibleRoutes[index].id),
+              ),
+              if (index != visibleRoutes.length - 1)
+                const SizedBox(height: AppSpacing.sm),
+            ],
         ],
       ),
     );
   }
 }
 
-class _HomeRoutePreview {
-  const _HomeRoutePreview({
-    required this.routeId,
-    required this.number,
-    required this.title,
-    required this.summary,
-    required this.vibe,
-    required this.level,
-    required this.going,
-  });
-
-  final String routeId;
-  final String number;
-  final String title;
-  final String summary;
-  final String vibe;
-  final String level;
-  final int going;
-}
-
-const _homeRoutePreviews = [
-  _HomeRoutePreview(
-    routeId: 'r-social-dance',
-    number: '01',
-    title: 'Тверская в огнях',
-    summary: '3 точки · 2.4 км · 2.5 ч',
-    vibe: 'романтика',
-    level: 'лёгкий',
-    going: 6,
-  ),
-  _HomeRoutePreview(
-    routeId: 'r-date-noir',
-    number: '02',
-    title: 'Замоскворечье ночью',
-    summary: '4 точки · 3.1 км · 3 ч',
-    vibe: 'атмосфера',
-    level: 'средне',
-    going: 11,
-  ),
-];
+String _routeNumber(int index) => (index + 1).toString().padLeft(2, '0');
 
 class _RouteHomeCard extends StatelessWidget {
   const _RouteHomeCard({
+    required this.number,
     required this.route,
     required this.onTap,
   });
 
-  final _HomeRoutePreview route;
+  final String number;
+  final EveningRouteTemplateSummary route;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final summary = _routeSummary(route);
+
     return BbV5Card(
-      key: ValueKey('tonight-home-route-${route.routeId}'),
+      key: ValueKey('tonight-home-route-${route.id}'),
       padding: const EdgeInsets.all(16),
       onTap: onTap,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            route.number,
+            number,
             style: bbV5DisplayStyle(
               fontSize: 28,
               height: 1,
@@ -1535,7 +1527,7 @@ class _RouteHomeCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  route.summary,
+                  summary,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.caption.copyWith(
@@ -1549,7 +1541,7 @@ class _RouteHomeCard extends StatelessWidget {
                   children: [
                     _RouteMeta(label: route.vibe),
                     const _RouteDivider(),
-                    _RouteMeta(label: route.level),
+                    _RouteMeta(label: _routeBudgetLabel(route.budget)),
                     const Spacer(),
                     const Icon(
                       LucideIcons.users,
@@ -1558,7 +1550,7 @@ class _RouteHomeCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${route.going}',
+                      '${route.hostsCount}',
                       style: AppTextStyles.caption.copyWith(
                         fontSize: 10,
                         letterSpacing: 0,
@@ -1591,6 +1583,117 @@ class _RouteHomeCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _RouteHomeLoading extends StatelessWidget {
+  const _RouteHomeLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5Card(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 46,
+            height: 46,
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: BbV5Colors.accent,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 160,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: BbV5Colors.hair,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: 220,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: BbV5Colors.hair,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RouteHomeEmpty extends StatelessWidget {
+  const _RouteHomeEmpty();
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5Card(
+      padding: const EdgeInsets.all(16),
+      child: Text(
+        'Маршрутов пока нет',
+        style: AppTextStyles.caption.copyWith(
+          fontSize: 12,
+          letterSpacing: 0,
+          color: BbV5Colors.inkMute,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+String _routeSummary(EveningRouteTemplateSummary route) {
+  final stepsCount = route.stepsPreview.length;
+  final parts = <String>[
+    if (stepsCount > 0) '$stepsCount ${_routePointLabel(stepsCount)}',
+    if ((route.area ?? '').trim().isNotEmpty) route.area!.trim(),
+    if (route.durationLabel.trim().isNotEmpty) route.durationLabel.trim(),
+  ];
+  return parts.join(' · ');
+}
+
+String _routePointLabel(int count) {
+  final mod10 = count % 10;
+  final mod100 = count % 100;
+  if (mod10 == 1 && mod100 != 11) {
+    return 'точка';
+  }
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return 'точки';
+  }
+  return 'точек';
+}
+
+String _routeBudgetLabel(String budget) {
+  switch (budget) {
+    case 'free':
+      return 'бесплатно';
+    case 'low':
+      return 'легко';
+    case 'mid':
+      return 'средне';
+    case 'high':
+      return 'выше';
+    default:
+      return budget.isEmpty ? 'маршрут' : budget;
   }
 }
 

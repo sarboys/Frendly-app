@@ -5,7 +5,6 @@ import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/device/app_permission_preferences.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
-import 'package:big_break_mobile/features/evening_routes/data/evening_route_template_fallbacks.dart';
 import 'package:big_break_mobile/shared/models/match.dart';
 import 'package:big_break_mobile/shared/models/after_party_state.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
@@ -753,64 +752,48 @@ final eveningRouteTemplatesProvider =
         (ref, city) async {
   final authTokens = ref.watch(authTokensProvider);
   if (authTokens == null) {
-    return fallbackEveningRouteTemplateSummaries(city);
+    return const [];
   }
   final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
   await authBootstrap;
-  try {
-    final items = await repository
-        .fetchEveningRouteTemplates(city: city)
-        .then((value) => value.items);
-    if (items.isEmpty) {
-      return fallbackEveningRouteTemplateSummaries(city);
-    }
-    return items;
-  } catch (_) {
-    return fallbackEveningRouteTemplateSummaries(city);
-  }
+  return repository
+      .fetchEveningRouteTemplates(city: city)
+      .then((value) => value.items);
 });
 
 final eveningRouteTemplateProvider = FutureProvider.autoDispose
     .family<EveningRouteTemplateDetail, String>((ref, templateId) async {
   final authTokens = ref.watch(authTokensProvider);
   if (authTokens == null) {
-    return fallbackEveningRouteTemplateDetail(templateId);
+    throw StateError('Evening route template requires auth');
   }
   final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
   final cancelToken = _autoDisposeCancelToken(ref);
   await authBootstrap;
-  try {
-    return await repository.fetchEveningRouteTemplate(
-      templateId,
-      cancelToken: cancelToken,
-    );
-  } catch (_) {
-    return fallbackEveningRouteTemplateDetail(templateId);
-  }
+  return repository.fetchEveningRouteTemplate(
+    templateId,
+    cancelToken: cancelToken,
+  );
 });
 
 final eveningRouteTemplateSessionsProvider = FutureProvider.autoDispose
     .family<List<EveningRouteTemplateSession>, String>((ref, templateId) async {
   final authTokens = ref.watch(authTokensProvider);
   if (authTokens == null) {
-    return fallbackEveningRouteTemplateDetail(templateId).nearestSessions;
+    return const [];
   }
   final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
   final cancelToken = _autoDisposeCancelToken(ref);
   await authBootstrap;
-  try {
-    return await repository
-        .fetchEveningRouteTemplateSessions(
-          templateId,
-          cancelToken: cancelToken,
-        )
-        .then((value) => value.items);
-  } catch (_) {
-    return fallbackEveningRouteTemplateDetail(templateId).nearestSessions;
-  }
+  return repository
+      .fetchEveningRouteTemplateSessions(
+        templateId,
+        cancelToken: cancelToken,
+      )
+      .then((value) => value.items);
 });
 
 final personalChatsLocalStateProvider =

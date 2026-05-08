@@ -308,6 +308,13 @@ GoRouter buildAppRouter({
               child: ProfileScreen(),
             ),
           ),
+          GoRoute(
+            path: AppRoute.eveningRoutes.path,
+            name: AppRoute.eveningRoutes.name,
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: EveningRoutesScreen(),
+            ),
+          ),
         ],
       ),
       GoRoute(
@@ -454,12 +461,6 @@ GoRouter buildAppRouter({
             codeId: state.pathParameters['codeId']!,
           ),
         ),
-      ),
-      GoRoute(
-        path: AppRoute.eveningRoutes.path,
-        name: AppRoute.eveningRoutes.name,
-        pageBuilder: (context, state) =>
-            _slidePage(const EveningRoutesScreen()),
       ),
       GoRoute(
         path: AppRoute.eveningRouteDetail.path,
