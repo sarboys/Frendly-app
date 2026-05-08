@@ -10,15 +10,21 @@ enum BbExternalEventImageUsage {
   hero,
 }
 
-final externalEventImageCacheManager = CacheManager(
-  Config(
-    'externalEventImageCacheV3',
-    stalePeriod: const Duration(days: 7),
-    maxNrOfCacheObjects: 512,
-  ),
-);
+final externalEventImageCacheManager = _ExternalEventImageCacheManager();
 
-const _externalEventImageCacheKeyVersion = 'v3';
+class _ExternalEventImageCacheManager extends CacheManager
+    with ImageCacheManager {
+  _ExternalEventImageCacheManager()
+      : super(
+          Config(
+            'externalEventImageCacheV4',
+            stalePeriod: const Duration(days: 7),
+            maxNrOfCacheObjects: 512,
+          ),
+        );
+}
+
+const _externalEventImageCacheKeyVersion = 'v4';
 
 class BbExternalEventImage extends StatelessWidget {
   const BbExternalEventImage({

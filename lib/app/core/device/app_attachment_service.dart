@@ -371,10 +371,15 @@ class _CachedDownloadUrl {
   final DateTime expiresAt;
 }
 
-final chatAttachmentCacheManager = CacheManager(
-  Config(
-    'chatAttachmentCache',
-    stalePeriod: const Duration(days: 14),
-    maxNrOfCacheObjects: 256,
-  ),
-);
+final chatAttachmentCacheManager = _ChatAttachmentCacheManager();
+
+class _ChatAttachmentCacheManager extends CacheManager with ImageCacheManager {
+  _ChatAttachmentCacheManager()
+      : super(
+          Config(
+            'chatAttachmentCacheV2',
+            stalePeriod: const Duration(days: 14),
+            maxNrOfCacheObjects: 256,
+          ),
+        );
+}

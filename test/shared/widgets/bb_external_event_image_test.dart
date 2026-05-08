@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -25,13 +26,14 @@ void main() {
     expect(image.imageUrl, 'https://cdn.example.com/event.jpg');
     expect(
       image.cacheKey,
-      'external-event-image-v3-card-https://cdn.example.com/event.jpg',
+      'external-event-image-v4-card-https://cdn.example.com/event.jpg',
     );
     expect(image.memCacheWidth, 900);
     expect(image.memCacheHeight, 520);
     expect(image.maxWidthDiskCache, 900);
     expect(image.maxHeightDiskCache, 520);
     expect(image.cacheManager, same(externalEventImageCacheManager));
+    expect(externalEventImageCacheManager, isA<ImageCacheManager>());
   });
 
   testWidgets('external event image shows fallback without url', (

@@ -4,6 +4,7 @@ import 'package:big_break_mobile/shared/models/message.dart';
 import 'package:big_break_mobile/shared/widgets/bb_chat_attachment_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -80,5 +81,6 @@ void main() {
     expect(image.memCacheHeight, 360);
     expect(image.maxWidthDiskCache, 480);
     expect(image.maxHeightDiskCache, 360);
+    expect(image.cacheManager, isA<ImageCacheManager>());
   });
 }
