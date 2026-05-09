@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/features/communities/data/mock_communities.dart';
 import 'package:big_break_mobile/features/communities/domain/community.dart';
 import 'package:big_break_mobile/features/communities/presentation/communities_screen.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_chat_screen.dart';
@@ -23,6 +22,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../fixtures/mock_communities.dart';
 import '../../../test_overrides.dart';
 
 void main() {
@@ -74,9 +74,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Сообщества'), findsOneWidget);
-    expect(find.text('Клубы, чаты и встречи в одном месте'), findsOneWidget);
+    expect(find.textContaining('Сообщества'), findsOneWidget);
+    expect(find.textContaining('Клубы, чаты и встречи'), findsOneWidget);
     expect(find.text('City Rituals'), findsOneWidget);
+    await tester.drag(find.byType(ListView).first, const Offset(0, -500));
+    await tester.pumpAndSettle();
     expect(find.text('Private Table'), findsOneWidget);
   });
 
@@ -150,11 +152,11 @@ void main() {
 
     expect(find.text('Owner Club'), findsWidgets);
 
-    await tester.tap(find.byIcon(LucideIcons.chevron_left).first);
+    await tester.tap(find.byIcon(LucideIcons.arrow_left).first);
     await tester.pumpAndSettle();
 
-    expect(find.text('Сообщества'), findsOneWidget);
-    expect(find.text('Клубы, чаты и встречи в одном месте'), findsOneWidget);
+    expect(find.textContaining('Сообщества'), findsOneWidget);
+    expect(find.textContaining('Клубы, чаты и встречи'), findsOneWidget);
   });
 
   testWidgets('private community detail shows request-only status', (
@@ -169,7 +171,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Private Table'), findsWidgets);
-    expect(find.text('Закрытое'), findsOneWidget);
+    expect(find.text('ЗАКРЫТЫЙ'), findsOneWidget);
     expect(find.text('Вступление по заявке'), findsOneWidget);
     expect(find.text('Вступить в сообщество'), findsNothing);
   });
@@ -227,7 +229,7 @@ void main() {
 
     expect(find.text('Новая публикация'), findsOneWidget);
     expect(find.text('Публикация от имени сообщества'), findsOneWidget);
-    expect(find.text('ТИП'), findsOneWidget);
+    expect(find.text('Тип'), findsOneWidget);
     expect(find.text('Опубликовать в сообществе'), findsOneWidget);
   });
 
@@ -258,7 +260,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Ближайшие встречи'));
+    await tester.tap(find.text('Встречи · 1'));
     await tester.pumpAndSettle();
 
     expect(find.text('Встречи внутри сообщества'.toUpperCase()), findsNothing);
@@ -373,7 +375,7 @@ void main() {
     expect(find.text('Вступить в сообщество'), findsNothing);
     expect(find.text('Ты в сообществе'), findsNothing);
     expect(find.text('Опубликовать'), findsNothing);
-    expect(find.byIcon(LucideIcons.message_circle), findsNothing);
+    expect(find.text('Открыть чат'), findsOneWidget);
   });
 
   testWidgets('community chat sends a local message', (tester) async {
@@ -428,10 +430,9 @@ void main() {
     await tester.tap(find.byIcon(Icons.add_rounded));
     await tester.pumpAndSettle();
 
-    expect(find.text('Что прикрепить'), findsOneWidget);
     expect(find.text('Фото'), findsOneWidget);
     expect(find.text('Файл'), findsOneWidget);
-    expect(find.text('Локацию'), findsOneWidget);
+    expect(find.text('Геолокация'), findsOneWidget);
   });
 }
 
@@ -521,6 +522,12 @@ List<Override> _communityDetailOverrides(Map<String, dynamic> communityJson) {
       ),
     ),
     communitiesProvider.overrideWith((ref) async => [community]),
+    communityProvider.overrideWith((ref, id) async {
+      if (id == community.id) {
+        return community;
+      }
+      return null;
+    }),
   ];
 }
 

@@ -730,7 +730,7 @@ class _EditHeroPhoto extends StatelessWidget {
               )
             else if (photo != null)
               BbProfilePhotoImage(
-                imageUrl: photo!.url,
+                imageUrl: photo!.bestUrlFor(BbImageUsageProfile.hero),
                 fallbackText: displayName,
                 usageProfile: BbImageUsageProfile.hero,
                 fit: BoxFit.cover,
@@ -1050,7 +1050,7 @@ class _PhotoThumbTile extends StatelessWidget {
                     cacheHeight: cacheExtent,
                   )
                 : BbProfilePhotoImage(
-                    imageUrl: photo.url,
+                    imageUrl: photo.bestUrlFor(BbImageUsageProfile.avatar),
                     fallbackText: fallbackText,
                     usageProfile: BbImageUsageProfile.avatar,
                     fit: BoxFit.cover,

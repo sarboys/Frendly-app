@@ -1,6 +1,7 @@
-import 'package:big_break_mobile/shared/data/mock_data.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../fixtures/mock_data.dart';
 
 void main() {
   test('mock events list is not empty', () {

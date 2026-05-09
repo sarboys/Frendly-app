@@ -58,8 +58,15 @@ private let yandexClientIdInfoKey = "YandexClientId"
 
       let args = call.arguments as? [String: Any]
       let apiKey = args?["apiKey"] as? String
-      self.configureMapkit(apiKey: apiKey ?? self.configuredMapkitApiKey())
-      result(nil)
+      if self.configureMapkit(apiKey: apiKey ?? self.configuredMapkitApiKey()) {
+        result(nil)
+      } else {
+        result(FlutterError(
+          code: "mapkit_api_key_missing",
+          message: "BIG_BREAK_MAPKIT_API_KEY is not set",
+          details: nil
+        ))
+      }
     }
     bootstrapChannel = channel
   }
@@ -80,18 +87,20 @@ private let yandexClientIdInfoKey = "YandexClientId"
     return mapkitApiKeyFromDartDefines()
   }
 
-  private func configureMapkit(apiKey: String?) {
+  @discardableResult
+  private func configureMapkit(apiKey: String?) -> Bool {
     guard !isMapkitConfigured else {
-      return
+      return true
     }
 
     guard let key = normalizedMapkitApiKey(apiKey) else {
       NSLog("BIG_BREAK_MAPKIT_API_KEY is not set")
-      return
+      return false
     }
 
     YMKMapKit.setApiKey(key)
     isMapkitConfigured = true
+    return true
   }
 
   private func normalizedMapkitApiKey(_ value: String?) -> String? {

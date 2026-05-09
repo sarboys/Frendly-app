@@ -1,4 +1,5 @@
 import 'package:big_break_mobile/app/core/config/backend_config.dart';
+import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -59,6 +60,31 @@ void main() {
     expect(profile.avatarUrl, '${BackendConfig.apiBaseUrl}/media/avatar-1');
     expect(
         profile.photos.first.url, '${BackendConfig.apiBaseUrl}/media/photo-1');
+  });
+
+  test('profile photo returns image variant for requested usage', () {
+    final photo = ProfilePhoto.fromJson({
+      'id': 'ph1',
+      'url': '/media/photo-1',
+      'order': 0,
+      'variants': {
+        'avatar': {
+          'url': '/media/photo-1/variants/avatar',
+        },
+        'hero': {
+          'url': '/media/photo-1/variants/hero',
+        },
+      },
+    });
+
+    expect(
+      photo.bestUrlFor(BbImageUsageProfile.avatar),
+      '${BackendConfig.apiBaseUrl}/media/photo-1/variants/avatar',
+    );
+    expect(
+      photo.bestUrlFor(BbImageUsageProfile.hero),
+      '${BackendConfig.apiBaseUrl}/media/photo-1/variants/hero',
+    );
   });
 
   test('profile resolves relative avatar fallback used as gallery photo', () {

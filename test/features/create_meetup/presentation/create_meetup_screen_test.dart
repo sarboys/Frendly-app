@@ -1,3 +1,6 @@
+import 'package:big_break_mobile/app/core/device/app_address_geocoding_service.dart';
+import 'package:big_break_mobile/app/core/device/app_location_service.dart';
+import 'package:big_break_mobile/app/core/device/app_reverse_geocoding_service.dart';
 import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
 import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
@@ -14,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart';
 
@@ -41,6 +45,7 @@ class _FakeCreateMeetupRepository extends BackendRepository {
   double? lastDistanceKm;
   double? lastLatitude;
   double? lastLongitude;
+  var createEventCalls = 0;
 
   @override
   Future<EventDetail> createEvent({
@@ -77,6 +82,7 @@ class _FakeCreateMeetupRepository extends BackendRepository {
     List<String>? rules,
     String? idempotencyKey,
   }) async {
+    createEventCalls += 1;
     lastJoinMode = joinMode;
     lastIdempotencyKey = idempotencyKey;
     lastCommunityId = communityId;
@@ -209,6 +215,119 @@ class _FakeYandexMapService extends YandexMapService {
   }
 }
 
+class _HangingYandexMapService extends YandexMapService {
+  _HangingYandexMapService() : super(bootstrap: const _NoopMapkitBootstrap());
+
+  var searchAddressCalls = 0;
+
+  @override
+  Future<ResolvedAddress?> searchAddress(String query, {Point? near}) {
+    searchAddressCalls += 1;
+    return Future<ResolvedAddress?>.delayed(const Duration(minutes: 1));
+  }
+
+  @override
+  Future<List<ResolvedAddress>> searchPlaces(
+    String query, {
+    Point? near,
+    bool geocodeFirst = false,
+  }) async {
+    return const [];
+  }
+}
+
+class _UnavailableYandexMapService extends YandexMapService {
+  _UnavailableYandexMapService()
+      : super(bootstrap: const _NoopMapkitBootstrap());
+
+  @override
+  Future<List<ResolvedAddress>> searchPlaces(
+    String query, {
+    Point? near,
+    bool geocodeFirst = false,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<ResolvedAddress?> reverseGeocode(Point point) async => null;
+}
+
+class _FakeAddressGeocodingService implements AppAddressGeocodingService {
+  const _FakeAddressGeocodingService({
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final double latitude;
+  final double longitude;
+
+  @override
+  Future<ForwardGeocodedLocation?> geocodeAddress(String query) async {
+    return ForwardGeocodedLocation(
+      latitude: latitude,
+      longitude: longitude,
+    );
+  }
+}
+
+class _FakeReverseGeocodingService implements AppReverseGeocodingService {
+  const _FakeReverseGeocodingService({
+    this.city,
+    this.street,
+  });
+
+  final String? city;
+  final String? street;
+
+  @override
+  Future<ReverseGeocodedLocation?> reverseGeocode({
+    required double latitude,
+    required double longitude,
+  }) async {
+    return ReverseGeocodedLocation(
+      city: city,
+      street: street,
+    );
+  }
+}
+
+class _FakeLocationService implements AppLocationService {
+  const _FakeLocationService({
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final double latitude;
+  final double longitude;
+
+  @override
+  Future<Position?> getCurrentPosition() async {
+    return Position(
+      latitude: latitude,
+      longitude: longitude,
+      timestamp: DateTime.utc(2026, 5, 8),
+      accuracy: 12,
+      altitude: 0,
+      altitudeAccuracy: 0,
+      heading: 0,
+      headingAccuracy: 0,
+      speed: 0,
+      speedAccuracy: 0,
+    );
+  }
+
+  @override
+  double distanceBetween({
+    required double startLatitude,
+    required double startLongitude,
+    required double endLatitude,
+    required double endLongitude,
+  }) {
+    return 0;
+  }
+}
+
 Widget _wrap(
   void Function(_FakeCreateMeetupRepository repository) onReady, {
   List<Override> overrides = const [],
@@ -309,6 +428,15 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> selectTverskayaPlace(WidgetTester tester) async {
+    await openPlaceSheet(tester);
+    await tester.enterText(placeSheetSearchField, 'Тверская');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(InkWell, 'Тверская улица').last);
+    await tester.pumpAndSettle();
+  }
+
   Finder attachIconButton(String tooltip) {
     return find
         .byWidgetPredicate(
@@ -398,6 +526,10 @@ void main() {
     expect(find.text('Афиша'), findsOneWidget);
     expect(find.text('Партнёр'), findsOneWidget);
     expect(find.text('Маршрут'), findsOneWidget);
+    expect(
+      find.text('Указать свой адрес или ориентир', skipOffstage: false),
+      findsOneWidget,
+    );
   });
 
   testWidgets('after dark route picker opens in dark style', (tester) async {
@@ -519,6 +651,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await enterTitle(tester, 'Ужин');
+    await selectTverskayaPlace(tester);
     final visibilityOption = find.text('По ссылке');
     await scrollTo(tester, visibilityOption);
     await tester.tap(visibilityOption, warnIfMissed: false);
@@ -538,6 +671,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await enterTitle(tester, 'Ужин');
+    await selectTverskayaPlace(tester);
     await enterDescription(tester, 'Короткое описание');
 
     await tapCreate(tester);
@@ -547,7 +681,8 @@ void main() {
     expect(repository!.lastIdempotencyKey, startsWith('mobile-create-event-'));
   });
 
-  testWidgets('create meetup resolves default place coordinates before publish',
+  testWidgets(
+      'create meetup resolves selected place coordinates before publish',
       (tester) async {
     _FakeCreateMeetupRepository? repository;
 
@@ -555,13 +690,54 @@ void main() {
     await tester.pumpAndSettle();
 
     await enterTitle(tester, 'Ужин');
+    await selectTverskayaPlace(tester);
     await enterDescription(tester, 'Короткое описание');
 
     await tapCreate(tester);
 
     expect(repository, isNotNull);
-    expect(repository!.lastLatitude, 55.7605);
-    expect(repository!.lastLongitude, 37.6442);
+    expect(repository!.lastLatitude, 55.765);
+    expect(repository!.lastLongitude, 37.605);
+  });
+
+  testWidgets('create meetup does not wait for hidden geocoding on publish',
+      (tester) async {
+    _FakeCreateMeetupRepository? repository;
+    final mapService = _HangingYandexMapService();
+
+    await tester.pumpWidget(
+      _wrap(
+        (value) => repository = value,
+        overrides: [
+          yandexMapServiceProvider.overrideWithValue(mapService),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await enterTitle(tester, 'Ужин');
+    await openPlaceSheet(tester);
+    await tester.enterText(placeSheetSearchField, 'Ручной адрес');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Использовать «Ручной адрес»'));
+    await tester.pumpAndSettle();
+    await enterDescription(tester, 'Короткое описание');
+    final publishButton = find.widgetWithText(
+      FilledButton,
+      'Опубликовать встречу',
+    );
+    expect(publishButton, findsOneWidget);
+    await tester.ensureVisible(publishButton);
+    await tester.pumpAndSettle();
+    await tester.tap(publishButton);
+    await tester.pump();
+
+    expect(repository, isNotNull);
+    expect(repository!.createEventCalls, 1);
+    expect(mapService.searchAddressCalls, 0);
+    expect(repository!.lastLatitude, isNull);
+    expect(repository!.lastLongitude, isNull);
   });
 
   testWidgets('create meetup sends community id when opened from community',
@@ -577,6 +753,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await enterTitle(tester, 'Бранч клуба');
+    await selectTverskayaPlace(tester);
     await enterDescription(tester, 'Короткое описание');
 
     await tapCreate(tester);
@@ -705,6 +882,86 @@ void main() {
 
     expect(find.text('Тверская улица'), findsOneWidget);
     expect(find.text('Тверская улица, Москва · Яндекс'), findsOneWidget);
+  });
+
+  testWidgets('create meetup place sheet falls back to platform geocoding',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        (_) {},
+        overrides: [
+          yandexMapServiceProvider.overrideWithValue(
+            _UnavailableYandexMapService(),
+          ),
+          appAddressGeocodingServiceProvider.overrideWithValue(
+            const _FakeAddressGeocodingService(
+              latitude: 12.2388,
+              longitude: 109.1967,
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await openPlaceSheet(tester);
+    await tester.enterText(placeSheetSearchField, 'Нячанг');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(InkWell, 'Нячанг'), findsOneWidget);
+    expect(
+      find.text('Найдено по системному геокодеру · Адрес'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'create meetup place sheet falls back to platform reverse geocoding',
+      (tester) async {
+    _FakeCreateMeetupRepository? repository;
+
+    await tester.pumpWidget(
+      _wrap(
+        (value) => repository = value,
+        overrides: [
+          yandexMapServiceProvider.overrideWithValue(
+            _UnavailableYandexMapService(),
+          ),
+          appLocationServiceProvider.overrideWithValue(
+            const _FakeLocationService(
+              latitude: 12.2388,
+              longitude: 109.1967,
+            ),
+          ),
+          appReverseGeocodingServiceProvider.overrideWithValue(
+            const _FakeReverseGeocodingService(
+              city: 'Нячанг',
+              street: 'Tran Phu',
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await enterTitle(tester, 'Ужин');
+    await openPlaceSheet(tester);
+    await tester.tap(find.widgetWithText(InkWell, 'Моё местоположение'));
+    await tester.pumpAndSettle();
+
+    await scrollTo(tester, find.text('Моё местоположение · Tran Phu, Нячанг'));
+    expect(
+      find.text('Моё местоположение · Tran Phu, Нячанг'),
+      findsOneWidget,
+    );
+
+    await enterDescription(tester, 'Короткое описание');
+    await tapCreate(tester);
+
+    expect(repository, isNotNull);
+    expect(repository!.lastLatitude, 12.2388);
+    expect(repository!.lastLongitude, 109.1967);
   });
 
   testWidgets('create meetup place sheet shows several business results',

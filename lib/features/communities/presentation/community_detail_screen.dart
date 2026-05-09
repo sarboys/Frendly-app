@@ -154,6 +154,14 @@ class _CommunityDetailHeader extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         BbV5IconButton(
+          icon: LucideIcons.crown,
+          onPressed: () => context.pushRoute(
+            AppRoute.editCommunity,
+            pathParameters: {'communityId': community.id},
+          ),
+        ),
+        const SizedBox(width: 8),
+        BbV5IconButton(
           icon: LucideIcons.share_2,
           onPressed: () async {
             await Clipboard.setData(
@@ -598,6 +606,22 @@ class _CommunityOverview extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const BbV5Kicker('Новости'),
+        if (community.isOwner) ...[
+          const SizedBox(height: 8),
+          BbV5PillButton(
+            key: const Key('community-detail-publish-post-button'),
+            label: 'Опубликовать',
+            icon: LucideIcons.send,
+            dark: true,
+            expanded: true,
+            height: 42,
+            fontSize: 12,
+            onPressed: () => context.pushRoute(
+              AppRoute.createCommunityPost,
+              pathParameters: {'communityId': community.id},
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         for (final item in community.news) ...[
           BbV5Card(

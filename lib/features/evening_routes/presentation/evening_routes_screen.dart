@@ -3,7 +3,9 @@ import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/evening_routes/presentation/evening_route_card.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
+import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
+import 'package:big_break_mobile/shared/utils/location_label.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -22,6 +24,8 @@ class _EveningRoutesScreenState extends ConsumerState<EveningRoutesScreen> {
   final _searchController = TextEditingController();
   String _activeMood = 'all';
   String _query = '';
+  final _freshLoadCities = <String>{};
+  final _refreshedCachedCities = <String>{};
 
   @override
   void dispose() {
@@ -33,8 +37,14 @@ class _EveningRoutesScreenState extends ConsumerState<EveningRoutesScreen> {
   Widget build(BuildContext context) {
     final profile = ref.watch(profileProvider).valueOrNull;
     final onboarding = ref.watch(onboardingProvider).valueOrNull;
-    final city = _resolveCity(profile?.city, onboarding?.city);
+    final manualLocation = ref.watch(manualLocationProvider);
+    final city = _resolveCity(
+      manualLocation?.city ?? manualLocation?.label,
+      profile?.city,
+      onboarding?.city,
+    );
     final routesAsync = ref.watch(eveningRouteTemplatesProvider(city));
+    _refreshCachedRoutesOnOpen(city, routesAsync);
 
     return BbV5Scaffold(
       child: BbV5Page(
@@ -138,16 +148,69 @@ class _EveningRoutesScreenState extends ConsumerState<EveningRoutesScreen> {
     context.goRoute(AppRoute.tonight);
   }
 
-  String _resolveCity(String? profileCity, String? onboardingCity) {
-    final fromProfile = profileCity?.trim();
-    if (fromProfile != null && fromProfile.isNotEmpty) {
-      return fromProfile;
+  void _refreshCachedRoutesOnOpen(
+    String city,
+    AsyncValue<List<EveningRouteTemplateSummary>> routesAsync,
+  ) {
+    if (_freshLoadCities.contains(city) ||
+        _refreshedCachedCities.contains(city)) {
+      return;
     }
-    final fromOnboarding = onboardingCity?.trim();
-    if (fromOnboarding != null && fromOnboarding.isNotEmpty) {
-      return fromOnboarding;
+    if (routesAsync.isLoading &&
+        !routesAsync.hasValue &&
+        !routesAsync.hasError) {
+      _freshLoadCities.add(city);
+      return;
+    }
+    if (!routesAsync.hasValue && !routesAsync.hasError) {
+      return;
+    }
+    _refreshedCachedCities.add(city);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(eveningRouteTemplatesProvider(city));
+    });
+  }
+
+  String _resolveCity(
+    String? manualCity,
+    String? profileCity,
+    String? onboardingCity,
+  ) {
+    for (final raw in [manualCity, profileCity, onboardingCity]) {
+      final city = _routeCatalogCity(raw);
+      if (city != null) {
+        return city;
+      }
     }
     return 'Москва';
+  }
+
+  String? _routeCatalogCity(String? raw) {
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+
+    final normalized = trimmed
+        .toLowerCase()
+        .replaceAll('ё', 'е')
+        .replaceAll(RegExp(r'[^a-zа-я0-9]+'), ' ')
+        .trim();
+    if (RegExp(r'(^|\s)(москва|moscow)(\s|$)').hasMatch(normalized)) {
+      return 'Москва';
+    }
+    if (normalized.contains('санкт петербург') ||
+        normalized.contains('saint petersburg') ||
+        normalized.contains('st petersburg') ||
+        RegExp(r'(^|\s)(спб|питер)(\s|$)').hasMatch(normalized)) {
+      return 'Санкт-Петербург';
+    }
+
+    final city = normalizeCityLabel(trimmed);
+    return city.isNotEmpty ? city : trimmed;
   }
 }
 

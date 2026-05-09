@@ -11,7 +11,6 @@ import 'package:big_break_mobile/features/personal_chat/presentation/personal_ch
 import 'package:big_break_mobile/features/user_profile/presentation/user_profile_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
-import 'package:big_break_mobile/shared/data/mock_data.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
 import 'package:big_break_mobile/shared/models/message.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
@@ -25,6 +24,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../fixtures/mock_data.dart';
 import '../../test_overrides.dart';
 
 class _FakeChatBackendRepository extends BackendRepository {

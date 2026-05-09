@@ -174,6 +174,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                                   authorId: message.authorId,
                                   author: message.author,
                                   authorAvatarUrl: message.authorAvatarUrl,
+                                  authorAvatarVariants:
+                                      message.authorAvatarVariants,
                                   text: message.text,
                                   time: message.time,
                                   isMine: message.mine,

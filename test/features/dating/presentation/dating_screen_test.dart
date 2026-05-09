@@ -85,10 +85,16 @@ void main() {
     expect(source, contains('BbProfilePhotoImage'));
   });
 
-  testWidgets('dating locked state shows frendly+ teaser', (tester) async {
+  testWidgets('dating is available without Frendly+ subscription',
+      (tester) async {
     await tester.pumpWidget(
       _wrap(
         overrides: [
+          authBootstrapProvider.overrideWith((ref) async {}),
+          currentUserIdProvider.overrideWith((ref) => 'user-me'),
+          backendRepositoryProvider.overrideWith(
+            (ref) => _MutableDatingRepository(ref: ref, dio: Dio()),
+          ),
           subscriptionStateProvider.overrideWith(
             (ref) async => const SubscriptionStateData(
               plan: null,
@@ -103,79 +109,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Frendly+ Dating'), findsOneWidget);
-    expect(find.text('Открыть Frendly+'), findsOneWidget);
+    expect(find.text('Лента'), findsOneWidget);
+    expect(find.text('Лайки'), findsOneWidget);
+    expect(find.text('Соня, 26'), findsOneWidget);
+    expect(find.text('Открыть Frendly+'), findsNothing);
   });
 
-  testWidgets(
-      'dating locked state scrolls to subscription CTA and opens paywall',
-      (tester) async {
-    tester.view.physicalSize = const Size(390, 520);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-
-    await tester.pumpWidget(
-      _wrap(
-        overrides: [
-          peopleProvider.overrideWith((ref) async => const []),
-          subscriptionStateProvider.overrideWith(
-            (ref) async => const SubscriptionStateData(
-              plan: null,
-              status: 'inactive',
-              startedAt: null,
-              renewsAt: null,
-              trialEndsAt: null,
-            ),
-          ),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final button = find.widgetWithText(FilledButton, 'Открыть Frendly+');
-
-    await tester.scrollUntilVisible(
-      button,
-      200,
-      scrollable: find.byType(Scrollable),
-    );
-    await tester.tap(button);
-    await tester.pumpAndSettle();
-
-    expect(find.text('paywall-opened'), findsOneWidget);
-  });
-
-  testWidgets('dating locked state reserves space above shell navigation',
-      (tester) async {
-    await tester.pumpWidget(
-      _wrap(
-        overrides: [
-          subscriptionStateProvider.overrideWith(
-            (ref) async => const SubscriptionStateData(
-              plan: null,
-              status: 'inactive',
-              startedAt: null,
-              renewsAt: null,
-              trialEndsAt: null,
-            ),
-          ),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final scrollView = tester
-        .widget<SingleChildScrollView>(find.byType(SingleChildScrollView));
-    final padding = scrollView.padding as EdgeInsets;
-
-    expect(padding.bottom, greaterThanOrEqualTo(132));
-  });
-
-  testWidgets('dating premium feed reserves space for bottom actions',
-      (tester) async {
+  testWidgets('dating feed reserves space for bottom actions', (tester) async {
     await tester.pumpWidget(
       _wrap(
         overrides: [
@@ -221,7 +161,7 @@ void main() {
     expect(padding.bottom, greaterThanOrEqualTo(148));
   });
 
-  testWidgets('dating premium state shows discover content', (tester) async {
+  testWidgets('dating state shows discover content', (tester) async {
     await tester.pumpWidget(
       _wrap(
         overrides: [
@@ -263,14 +203,14 @@ void main() {
 
     expect(find.text('Лента'), findsOneWidget);
     expect(find.text('Лайки'), findsOneWidget);
-    expect(find.text('Date'), findsOneWidget);
     expect(find.text('Соня, 26'), findsOneWidget);
-    expect(find.text('Premium'), findsOneWidget);
-    expect(find.text('При мэтче сразу предложить свидание'), findsOneWidget);
+    expect(find.text('Дейтинг'), findsOneWidget);
+    expect(find.text('Frendly+'), findsNothing);
   });
 
-  testWidgets('dating premium date button opens date create flow',
-      (tester) async {
+  testWidgets('dating likes item sends like action', (tester) async {
+    late _FakeDatingRepository fakeRepository;
+
     await tester.pumpWidget(
       _wrap(
         overrides: [
@@ -283,50 +223,10 @@ void main() {
               trialEndsAt: null,
             ),
           ),
-          datingDiscoverProvider.overrideWith(
-            (ref) async => const [
-              DatingProfileData(
-                userId: 'user-sonya',
-                name: 'Соня',
-                age: 26,
-                distance: '1.4 км',
-                about: 'Люблю тихие ужины plus длинные разговоры.',
-                tags: ['ужины', 'джаз'],
-                prompt: 'Лучший first date без спешки.',
-                photoEmoji: '🕯️',
-                avatarUrl: null,
-                likedYou: false,
-                premium: true,
-                vibe: 'Спокойно',
-                area: 'Замоскворечье',
-                verified: true,
-                online: true,
-              ),
-            ],
-          ),
-          datingLikesProvider.overrideWith((ref) async => const []),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Date'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('create-dating'), findsOneWidget);
-  });
-
-  testWidgets('dating likes item opens user profile', (tester) async {
-    await tester.pumpWidget(
-      _wrap(
-        overrides: [
-          subscriptionStateProvider.overrideWith(
-            (ref) async => SubscriptionStateData(
-              plan: 'year',
-              status: 'active',
-              startedAt: DateTime(2026, 4, 18),
-              renewsAt: DateTime(2027, 4, 18),
-              trialEndsAt: null,
+          backendRepositoryProvider.overrideWith(
+            (ref) => fakeRepository = _FakeDatingRepository(
+              ref: ref,
+              dio: Dio(),
             ),
           ),
           datingDiscoverProvider.overrideWith((ref) async => const []),
@@ -361,10 +261,10 @@ void main() {
     await tester.tap(find.text('Соня, 26'));
     await tester.pumpAndSettle();
 
-    expect(find.text('profile-user-sonya'), findsOneWidget);
+    expect(fakeRepository.actionTargets, ['user-sonya']);
   });
 
-  testWidgets('dating premium state can change profile photo', (tester) async {
+  testWidgets('dating state can change profile photo', (tester) async {
     await tester.pumpWidget(
       _wrap(
         overrides: [
@@ -615,11 +515,14 @@ class _FakeDatingRepository extends BackendRepository {
     required super.dio,
   });
 
+  final actionTargets = <String>[];
+
   @override
   Future<DatingActionResult> sendDatingAction({
     required String targetUserId,
     required String action,
   }) async {
+    actionTargets.add(targetUserId);
     return const DatingActionResult(
       ok: true,
       action: 'like',

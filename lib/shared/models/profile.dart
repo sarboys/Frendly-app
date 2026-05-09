@@ -1,23 +1,32 @@
 import 'package:big_break_mobile/shared/models/backend_url.dart';
+import 'package:big_break_mobile/shared/models/media_variant.dart';
 import 'package:big_break_mobile/shared/models/onboarding_data.dart';
+import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 
 class ProfilePhoto {
   const ProfilePhoto({
     required this.id,
     required this.url,
     required this.order,
+    this.variants = const {},
   });
 
   final String id;
   final String url;
   final int order;
+  final Map<String, MediaVariantData> variants;
 
   factory ProfilePhoto.fromJson(Map<String, dynamic> json) {
     return ProfilePhoto(
       id: json['id'] as String,
       url: resolveBackendUrl(json['url'] as String)!,
       order: (json['order'] as num?)?.toInt() ?? 0,
+      variants: parseMediaVariants(json['variants']),
     );
+  }
+
+  String bestUrlFor(BbImageUsageProfile usageProfile) {
+    return variants[usageProfile.name]?.url ?? url;
   }
 }
 

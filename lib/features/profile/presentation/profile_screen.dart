@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
+import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/utils/location_label.dart';
+import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_gallery.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
@@ -25,10 +28,13 @@ class ProfileScreen extends ConsumerWidget {
         error: (_, __) => _ProfileErrorState(
           onRetry: () => ref.invalidate(profileProvider),
         ),
-        data: (profile) => _ProfileContent(
-          profile: profile,
-          photoPreviews: photoPreviews,
-        ),
+        data: (profile) {
+          _prewarmProfilePhotos(ref, profile);
+          return _ProfileContent(
+            profile: profile,
+            photoPreviews: photoPreviews,
+          );
+        },
       ),
     );
   }
@@ -70,6 +76,14 @@ class _ProfileContent extends StatelessWidget {
                       const SizedBox(height: AppSpacing.md),
                       _FrendlyPlusCard(
                         onTap: () => context.pushRoute(AppRoute.paywall),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      _FriendlyTokensCard(
+                        onBalance: () =>
+                            context.pushRoute(AppRoute.tokensBalance),
+                        onFocus: () => context.pushRoute(AppRoute.tokensFocus),
+                        onTopUp: () => context.pushRoute(AppRoute.tokensTopUp),
+                        onBoost: () => context.pushRoute(AppRoute.tokensBoost),
                       ),
                       _ProfileSection(
                         title: 'Зачем здесь',
@@ -258,6 +272,19 @@ List<ProfilePhoto> _heroPhotosFor(ProfileData profile) {
       order: 0,
     ),
   ];
+}
+
+void _prewarmProfilePhotos(WidgetRef ref, ProfileData profile) {
+  unawaited(
+    ref.read(appMediaPrewarmServiceProvider).warmProfileImages(
+          _heroPhotosFor(profile).map(
+            (photo) => photo.bestUrlFor(BbImageUsageProfile.hero),
+          ),
+          usageProfile: BbImageUsageProfile.hero,
+          limit: 3,
+          concurrency: 2,
+        ),
+  );
 }
 
 class _ProfileStatsRow extends StatelessWidget {
@@ -459,6 +486,147 @@ class _FrendlyPlusCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _FriendlyTokensCard extends StatelessWidget {
+  const _FriendlyTokensCard({
+    required this.onBalance,
+    required this.onFocus,
+    required this.onTopUp,
+    required this.onBoost,
+  });
+
+  final VoidCallback onBalance;
+  final VoidCallback onFocus;
+  final VoidCallback onTopUp;
+  final VoidCallback onBoost;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5Card(
+      radius: 24,
+      padding: const EdgeInsets.all(16),
+      tint: BbV5Colors.terraSoft,
+      onTap: onBalance,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: BbV5Colors.accent,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.52),
+                  ),
+                  boxShadow: BbV5Shadows.pill,
+                ),
+                child: const Icon(
+                  LucideIcons.sparkles,
+                  size: 22,
+                  color: BbV5Colors.paperHi,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Frendly Tokens',
+                      style: bbV5DisplayStyle(
+                        fontSize: 15,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Продвигай встречи, маршруты и события',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.meta.copyWith(
+                        fontSize: 11.5,
+                        color: BbV5Colors.inkMute,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                '1 240',
+                style: AppTextStyles.itemTitle.copyWith(
+                  fontSize: 16,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                LucideIcons.chevron_right,
+                size: 17,
+                color: BbV5Colors.inkMute,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _TokenEntryChip(
+                label: 'Баланс',
+                icon: LucideIcons.wallet,
+                onTap: onBalance,
+              ),
+              _TokenEntryChip(
+                label: 'Фокус',
+                icon: LucideIcons.sparkles,
+                onTap: onFocus,
+              ),
+              _TokenEntryChip(
+                label: 'Пополнить',
+                icon: LucideIcons.plus,
+                onTap: onTopUp,
+              ),
+              _TokenEntryChip(
+                label: 'Буст',
+                icon: LucideIcons.target,
+                onTap: onBoost,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TokenEntryChip extends StatelessWidget {
+  const _TokenEntryChip({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5PillButton(
+      label: label,
+      icon: icon,
+      height: 34,
+      fontSize: 11.5,
+      iconSize: 13,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      onPressed: onTap,
     );
   }
 }

@@ -129,7 +129,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
             return;
           }
           context.goRoute(
-            session.isNewUser ? AppRoute.permissions : AppRoute.tonight,
+            session.isNewUser ? AppRoute.onboarding : AppRoute.tonight,
           );
           return;
         } on DioException catch (error) {
@@ -212,7 +212,7 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
         return;
       }
       context.goRoute(
-        session.isNewUser ? AppRoute.permissions : AppRoute.tonight,
+        session.isNewUser ? AppRoute.onboarding : AppRoute.tonight,
       );
     } catch (_) {
       if (mounted && context.mounted) {

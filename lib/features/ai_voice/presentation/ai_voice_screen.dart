@@ -142,8 +142,6 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
                 child: _RoutePlan(onReset: _reset),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
-              const SliverToBoxAdapter(child: _NearbyPeople()),
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
               SliverToBoxAdapter(
                 child: BbV5PillButton(
                   label: 'Превратить в встречу',
@@ -384,24 +382,7 @@ class _RoutePlan extends StatelessWidget {
 
   final VoidCallback onReset;
 
-  static const _stops = [
-    _StopData(
-      time: '19:30',
-      place: 'Brix',
-      subtitle: 'винный бар · оранж и тапас',
-      tag: 'Винчик',
-      icon: LucideIcons.wine,
-      color: BbV5Colors.terra,
-    ),
-    _StopData(
-      time: '21:30',
-      place: 'Powerhouse',
-      subtitle: 'live jazz set, негромко',
-      tag: 'Джаз',
-      icon: LucideIcons.music,
-      color: BbV5Colors.brand,
-    ),
-  ];
+  static const _stops = <_StopData>[];
 
   @override
   Widget build(BuildContext context) {
@@ -423,15 +404,26 @@ class _RoutePlan extends StatelessWidget {
       child: BbV5Card(
         radius: 24,
         padding: const EdgeInsets.all(8),
-        child: Column(
-          children: [
-            for (var index = 0; index < _stops.length; index++)
-              _StopRow(
-                stop: _stops[index],
-                showLine: index < _stops.length - 1,
+        child: _stops.isEmpty
+            ? Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Маршрут появится после ответа сервера.',
+                  style: AppTextStyles.meta.copyWith(
+                    color: BbV5Colors.inkMute,
+                    height: 1.45,
+                  ),
+                ),
+              )
+            : Column(
+                children: [
+                  for (var index = 0; index < _stops.length; index++)
+                    _StopRow(
+                      stop: _stops[index],
+                      showLine: index < _stops.length - 1,
+                    ),
+                ],
               ),
-          ],
-        ),
       ),
     );
   }
@@ -535,118 +527,6 @@ class _StopRow extends StatelessWidget {
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NearbyPeople extends StatelessWidget {
-  const _NearbyPeople();
-
-  static const List<
-      ({
-        String name,
-        String match,
-        String tags,
-        Color colorOne,
-        Color colorTwo,
-      })> _people = [
-    (
-      name: 'Аня',
-      match: '94% совпадение',
-      tags: 'вино · джаз',
-      colorOne: Color(0xFFD8B4A0),
-      colorTwo: Color(0xFFA87966),
-    ),
-    (
-      name: 'Лев',
-      match: '88% совпадение',
-      tags: 'джаз · центр',
-      colorOne: Color(0xFF9CB39F),
-      colorTwo: Color(0xFF5F7C68),
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return BbV5Section(
-      title: 'Можно позвать',
-      margin: EdgeInsets.zero,
-      child: Row(
-        children: [
-          for (final person in _people) ...[
-            Expanded(child: _PersonCard(person: person)),
-            if (person != _people.last) const SizedBox(width: AppSpacing.sm),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _PersonCard extends StatelessWidget {
-  const _PersonCard({required this.person});
-
-  final ({
-    String name,
-    String match,
-    String tags,
-    Color colorOne,
-    Color colorTwo,
-  }) person;
-
-  @override
-  Widget build(BuildContext context) {
-    return BbV5Card(
-      radius: 20,
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AspectRatio(
-            aspectRatio: 4 / 5,
-            child: Container(
-              alignment: Alignment.bottomLeft,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [person.colorOne, person.colorTwo],
-                ),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                person.name,
-                style: AppTextStyles.caption.copyWith(
-                  fontFamily: 'Sora',
-                  fontSize: 12,
-                  color: BbV5Colors.paperHi,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            person.match.toUpperCase(),
-            style: bbV5KickerStyle(
-              color: BbV5Colors.accent,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.4,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            person.tags,
-            style: AppTextStyles.caption.copyWith(
-              fontSize: 10.5,
-              color: BbV5Colors.inkMute,
-              letterSpacing: 0,
             ),
           ),
         ],

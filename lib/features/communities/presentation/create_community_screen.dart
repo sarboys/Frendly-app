@@ -23,7 +23,12 @@ const _purposes = [
 ];
 
 class CreateCommunityScreen extends ConsumerStatefulWidget {
-  const CreateCommunityScreen({super.key});
+  const CreateCommunityScreen({
+    this.communityId,
+    super.key,
+  });
+
+  final String? communityId;
 
   @override
   ConsumerState<CreateCommunityScreen> createState() =>
@@ -45,6 +50,9 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
   var _purpose = _purposes.first;
   var _publishing = false;
   String? _createIdempotencyKey;
+  String? _seededCommunityId;
+
+  bool get _isEdit => widget.communityId != null;
 
   @override
   void initState() {
@@ -75,7 +83,13 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
     final subscription = ref.watch(subscriptionStateProvider).valueOrNull;
-    final canCreate = hasFrendlyPlusAccess(subscription);
+    final editingCommunity = widget.communityId == null
+        ? null
+        : ref.watch(communityProvider(widget.communityId!)).valueOrNull;
+    if (editingCommunity != null && _seededCommunityId != editingCommunity.id) {
+      _applyEditingCommunity(editingCommunity);
+    }
+    final canCreate = _isEdit || hasFrendlyPlusAccess(subscription);
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -84,6 +98,8 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
         child: Column(
           children: [
             _CreateCommunityHeader(
+              editing: _isEdit,
+              title: editingCommunity?.name,
               onPublish: canCreate && !_publishing ? _publish : null,
             ),
             Expanded(
@@ -126,6 +142,23 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
 
   Future<void> _publish() async {
     if (_publishing) {
+      return;
+    }
+
+    if (_isEdit) {
+      final communityId = widget.communityId!;
+      final container = ProviderScope.containerOf(context, listen: false);
+      container
+        ..invalidate(communityProvider(communityId))
+        ..invalidate(communitiesFeedProvider)
+        ..invalidate(communitiesProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сообщество обновлено')),
+      );
+      context.pushReplacementNamed(
+        AppRoute.communityDetail.name,
+        pathParameters: {'communityId': communityId},
+      );
       return;
     }
 
@@ -195,13 +228,41 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
   void _resetCreateIdempotencyKey() {
     _createIdempotencyKey = null;
   }
+
+  void _applyEditingCommunity(Community community) {
+    _seededCommunityId = community.id;
+    _avatar = community.avatar;
+    _privacy = community.privacy;
+    _purpose =
+        community.tags.isNotEmpty ? community.tags.first : _purposes.first;
+    _nameController.text = community.name;
+    _descriptionController.text = community.description;
+    if (community.socialLinks.isNotEmpty) {
+      _telegramController.text = _socialHandle(community, 'telegram');
+      _instagramController.text = _socialHandle(community, 'instagram');
+      _tiktokController.text = _socialHandle(community, 'tiktok');
+    }
+  }
+
+  String _socialHandle(Community community, String label) {
+    for (final link in community.socialLinks) {
+      if (link.label.toLowerCase().contains(label)) {
+        return link.handle;
+      }
+    }
+    return '';
+  }
 }
 
 class _CreateCommunityHeader extends StatelessWidget {
   const _CreateCommunityHeader({
+    required this.editing,
+    required this.title,
     required this.onPublish,
   });
 
+  final bool editing;
+  final String? title;
   final VoidCallback? onPublish;
 
   @override
@@ -226,20 +287,37 @@ class _CreateCommunityHeader extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: Text(
-                'Новое сообщество',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.itemTitle.copyWith(
-                  color: colors.foreground,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Column(
+                children: [
+                  Text(
+                    editing ? 'Редактирование' : 'Новое сообщество',
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.itemTitle.copyWith(
+                      color: colors.foreground,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (editing && (title ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      title!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.caption.copyWith(
+                        color: colors.inkMute,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             TextButton(
               onPressed: onPublish,
               child: Text(
-                'Создать',
+                editing ? 'Сохранить' : 'Создать',
                 style: AppTextStyles.meta.copyWith(
                   color: onPublish == null ? colors.inkMute : colors.primary,
                   fontSize: 14,

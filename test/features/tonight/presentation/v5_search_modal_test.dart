@@ -8,13 +8,12 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('v5 search modal routes meetup results to tonight', (
+  testWidgets('v5 search modal does not render static fake results', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
     final preferences = await SharedPreferences.getInstance();
-    late GoRouter router;
-    router = GoRouter(
+    final router = GoRouter(
       initialLocation: '/',
       routes: [
         GoRoute(
@@ -74,10 +73,11 @@ void main() {
     await tester.tap(find.text('Открыть поиск'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Brix · вино после работы'));
-    await tester.pumpAndSettle();
-
-    expect(router.routerDelegate.currentConfiguration.uri.path, '/tonight');
+    expect(find.text('Brix · вино после работы'), findsNothing);
+    expect(find.text('Аня, 26'), findsNothing);
+    expect(find.text('Тверская в огнях'), findsNothing);
+    expect(find.text('Ничего не нашли'), findsOneWidget);
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/');
   });
 
   testWidgets('v5 search modal clips the horizontal filter rail', (

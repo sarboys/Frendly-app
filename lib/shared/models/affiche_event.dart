@@ -1,4 +1,6 @@
 import 'package:big_break_mobile/shared/models/backend_url.dart';
+import 'package:big_break_mobile/shared/models/media_variant.dart';
+import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 
 enum AffichePriceMode { free, paid, unknown }
 
@@ -21,6 +23,7 @@ class AfficheEvent {
     required this.priceMode,
     required this.currency,
     required this.imageUrl,
+    this.imageVariants = const {},
     required this.provider,
     required this.sourceCode,
     required this.actionUrl,
@@ -46,6 +49,7 @@ class AfficheEvent {
   final AffichePriceMode priceMode;
   final String? currency;
   final String? imageUrl;
+  final Map<String, MediaVariantData> imageVariants;
   final String? provider;
   final String? sourceCode;
   final String? actionUrl;
@@ -105,6 +109,7 @@ class AfficheEvent {
       priceMode: _parsePriceMode(json['priceMode'] as String?),
       currency: json['currency'] as String?,
       imageUrl: resolveBackendUrl(json['imageUrl'] as String?),
+      imageVariants: parseMediaVariants(json['imageVariants']),
       provider: json['provider'] as String?,
       sourceCode: json['sourceCode'] as String?,
       actionUrl: json['actionUrl'] as String?,
@@ -114,6 +119,10 @@ class AfficheEvent {
           .whereType<String>()
           .toList(growable: false),
     );
+  }
+
+  String? imageUrlFor(BbExternalEventImageUsage usage) {
+    return imageVariants[usage.name]?.url ?? imageUrl;
   }
 }
 

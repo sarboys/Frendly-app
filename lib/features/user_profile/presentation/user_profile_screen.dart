@@ -1,12 +1,17 @@
+import 'dart:async';
+
+import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/widgets/async_value_view.dart';
-import 'package:big_break_mobile/shared/widgets/bb_social_actions.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_gallery.dart';
+import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
+import 'package:big_break_mobile/shared/widgets/bb_social_actions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,6 +36,7 @@ class UserProfileScreen extends ConsumerWidget {
       body: AsyncValueView(
         value: profileAsync,
         data: (profile) {
+          _prewarmUserProfilePhotos(ref, profile);
           final commonInterests = currentProfile == null
               ? <String>[]
               : profile.interests
@@ -446,6 +452,19 @@ class UserProfileScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+void _prewarmUserProfilePhotos(WidgetRef ref, ProfileData profile) {
+  unawaited(
+    ref.read(appMediaPrewarmServiceProvider).warmProfileImages(
+          profile.photos.map(
+            (photo) => photo.bestUrlFor(BbImageUsageProfile.hero),
+          ),
+          usageProfile: BbImageUsageProfile.hero,
+          limit: 3,
+          concurrency: 2,
+        ),
+  );
 }
 
 Future<void> _showProfileActions(

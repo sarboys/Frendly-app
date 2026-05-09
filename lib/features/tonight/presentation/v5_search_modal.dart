@@ -67,53 +67,7 @@ const _searchFilters = [
   _V5SearchFilter(_V5SearchKind.affiche, 'Афиша'),
 ];
 
-const _searchItems = [
-  _V5SearchItem(
-    kind: _V5SearchKind.meetup,
-    title: 'Brix · вино после работы',
-    subtitle: 'сегодня · 20:00 · 0.4 км',
-  ),
-  _V5SearchItem(
-    kind: _V5SearchKind.meetup,
-    title: 'Late jazz · Powerhouse',
-    subtitle: 'сегодня · 23:00 · 1.2 км',
-  ),
-  _V5SearchItem(
-    kind: _V5SearchKind.club,
-    title: 'Винный четверг',
-    subtitle: '428 участников · ужины',
-  ),
-  _V5SearchItem(
-    kind: _V5SearchKind.club,
-    title: 'Wellness Mornings',
-    subtitle: '212 участников · спорт',
-  ),
-  _V5SearchItem(
-    kind: _V5SearchKind.person,
-    title: 'Аня, 26',
-    subtitle: '0.4 км · арт',
-  ),
-  _V5SearchItem(
-    kind: _V5SearchKind.person,
-    title: 'Лев, 29',
-    subtitle: '0.8 км · джаз',
-  ),
-  _V5SearchItem(
-    kind: _V5SearchKind.route,
-    title: 'Тверская в огнях',
-    subtitle: '3 точки · 2.4 км · романтика',
-  ),
-  _V5SearchItem(
-    kind: _V5SearchKind.affiche,
-    title: 'Стендап-четверг',
-    subtitle: 'Stand-Up Store · 21:00',
-  ),
-  _V5SearchItem(
-    kind: _V5SearchKind.affiche,
-    title: 'Therr Maitz',
-    subtitle: 'Stadium · 8 мая · 19:00',
-  ),
-];
+const _searchItems = <_V5SearchItem>[];
 
 class _V5SearchOverlay extends ConsumerStatefulWidget {
   const _V5SearchOverlay({required this.originContext});

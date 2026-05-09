@@ -55,7 +55,6 @@ void main() {
     );
 
     expect(find.text('Кто идёт · 6'), findsOneWidget);
-    expect(find.text('Программа вечера'), findsOneWidget);
 
     await tester.dragUntilVisible(
       find.text('Бонус от Brix Wine'),
@@ -126,7 +125,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
+    await tester.dragUntilVisible(
+      find.text('До 8 участников'),
+      find.byType(CustomScrollView),
+      const Offset(0, -240),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Критерии встречи'), findsNothing);
@@ -143,9 +146,9 @@ void main() {
     expect(find.text('По ссылке'), findsNothing);
 
     final lifestyleValue = tester.widget<Text>(find.text('Не ЗОЖ'));
-    expect(lifestyleValue.style?.fontFamily, 'Manrope');
-    expect(lifestyleValue.style?.fontSize, 14);
-    expect(lifestyleValue.style?.fontWeight, FontWeight.w500);
+    expect(lifestyleValue.style?.fontFamily, 'Sora');
+    expect(lifestyleValue.style?.fontSize, 11.5);
+    expect(lifestyleValue.style?.fontWeight, FontWeight.w600);
   });
 
   testWidgets('map filter updates count and selected card', (tester) async {
@@ -194,7 +197,14 @@ void main() {
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Brix Wine, Покровка 12'));
+    await tester.dragUntilVisible(
+      find.text('Brix Wine, Покровка 12'),
+      find.byType(CustomScrollView),
+      const Offset(0, -240),
+    );
+    await tester.ensureVisible(find.text('Brix Wine, Покровка 12'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Маршрут'));
     await tester.pumpAndSettle();
 
     expect(find.text('map-opened-e1'), findsOneWidget);

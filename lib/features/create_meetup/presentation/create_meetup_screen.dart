@@ -1,6 +1,5 @@
 // ignore_for_file: unused_element, unused_element_parameter
 
-import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
@@ -102,7 +101,7 @@ class CreateMeetupScreen extends ConsumerStatefulWidget {
 class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _placeController = TextEditingController(text: 'Brix · Покровка 12');
+  final _placeController = TextEditingController();
   final _priceFromController = TextEditingController();
   final _priceToController = TextEditingController();
   late CreateMeetupMode _mode = widget.initialMode;
@@ -118,11 +117,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
   String dateIdea = _dateIdeas.first.$1;
   bool unlimited = false;
   PlaceSelection placeSelection = const PlaceSelection(
-    name: 'Brix',
-    address: 'Покровка 12',
-    distance: '1.2 км',
-    distanceKm: 1.2,
-    emoji: '🍷',
+    name: '',
+    address: '',
   );
   PartnerVenue? _partnerVenue;
   double capacity = 8;
@@ -615,61 +611,71 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
   Widget _buildV5WhenWhereSection() {
     return BbV5Section(
       title: 'Где и когда',
-      child: BbV5Card(
-        radius: BbV5Radii.md,
-        padding: EdgeInsets.zero,
-        child: Column(
-          children: [
-            _V5FieldRow(
-              icon: LucideIcons.calendar_days,
-              label: 'Когда',
-              value: _formatStartsAt(startsAt),
-              onTap: () async {
-                final next = await showDateTimeSheet(
-                  context,
-                  initialValue: startsAt,
-                );
-                if (next != null && mounted) {
-                  setState(() {
-                    startsAt = next;
-                  });
-                }
-              },
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Divider(height: 1, color: BbV5Colors.hairSoft),
-            ),
-            _V5FieldRow(
-              icon: LucideIcons.map_pin,
-              label: 'Где',
-              value: _placeLabel(),
-              onTap: () async {
-                final next = await showPlaceSheet(
-                  context,
-                  initialValue: placeSelection,
-                  onPickAfficheEvent: () async {
-                    final event = await showAfficheEventPickerSheet(
+      child: Column(
+        children: [
+          BbV5Card(
+            radius: BbV5Radii.md,
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                _V5FieldRow(
+                  icon: LucideIcons.calendar_days,
+                  label: 'Когда',
+                  value: _formatStartsAt(startsAt),
+                  onTap: () async {
+                    final next = await showDateTimeSheet(
                       context,
-                      initialValue: _afficheEvent,
+                      initialValue: startsAt,
                     );
-                    if (event == null || !mounted) {
-                      return;
+                    if (next != null && mounted) {
+                      setState(() {
+                        startsAt = next;
+                      });
                     }
-                    _applyAfficheSelection(event);
                   },
-                );
-                if (next != null && mounted) {
-                  setState(() {
-                    _clearSourceSelection(resetPlace: false);
-                    placeSelection = next;
-                    _placeController.text = _placeLabel();
-                  });
-                }
-              },
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: Divider(height: 1, color: BbV5Colors.hairSoft),
+                ),
+                _V5FieldRow(
+                  icon: LucideIcons.map_pin,
+                  label: 'Где',
+                  value: _placeLabel(),
+                  onTap: () async {
+                    final next = await showPlaceSheet(
+                      context,
+                      initialValue: placeSelection,
+                      onPickAfficheEvent: () async {
+                        final event = await showAfficheEventPickerSheet(
+                          context,
+                          initialValue: _afficheEvent,
+                        );
+                        if (event == null || !mounted) {
+                          return;
+                        }
+                        _applyAfficheSelection(event);
+                      },
+                    );
+                    if (next != null && mounted) {
+                      setState(() {
+                        _clearSourceSelection(resetPlace: false);
+                        placeSelection = next;
+                        _placeController.text = _placeLabel();
+                      });
+                    }
+                  },
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+          _V5SoftActionRow(
+            icon: LucideIcons.plus,
+            label: 'Указать свой адрес или ориентир',
+            onTap: _openCustomAddressSheet,
+          ),
+        ],
       ),
     );
   }
@@ -1534,7 +1540,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
 
     final repository = ref.read(backendRepositoryProvider);
     try {
-      final submitPlace = await _placeSelectionForSubmit();
+      final submitPlace = placeSelection;
       if (!mounted) {
         return;
       }
@@ -1645,35 +1651,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
       return 'Завтра · $hh:$mm';
     }
     return '${local.day}.${local.month} · $hh:$mm';
-  }
-
-  Future<PlaceSelection> _placeSelectionForSubmit() async {
-    final current = placeSelection;
-    if (_routeSelection != null) {
-      return current;
-    }
-    if (current.latitude != null && current.longitude != null) {
-      return current;
-    }
-
-    final mapService = ref.read(yandexMapServiceProvider);
-    final resolved = await mapService.searchAddress(
-      _placeLabel(current),
-    );
-    if (resolved == null) {
-      return current;
-    }
-
-    return PlaceSelection(
-      name: current.name,
-      address: current.address,
-      distance: current.distance,
-      distanceKm: current.distanceKm,
-      category: current.category,
-      emoji: current.emoji,
-      latitude: resolved.point.latitude,
-      longitude: resolved.point.longitude,
-    );
   }
 
   String _placeLabel([PlaceSelection? selection]) {
@@ -1851,6 +1828,23 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     });
   }
 
+  Future<void> _openCustomAddressSheet() async {
+    final next = await showModalBottomSheet<PlaceSelection>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const _CustomAddressSheet(),
+    );
+    if (next == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _clearSourceSelection(resetPlace: false);
+      placeSelection = next;
+      _placeController.text = _placeLabel();
+    });
+  }
+
   void _applyRouteSelection(CreateMeetupRouteSelection route) {
     final firstStep = route.steps.isNotEmpty ? route.steps.first : null;
     final firstEmoji = firstStep?.emoji ?? '🗺️';
@@ -1890,11 +1884,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
 
   PlaceSelection _defaultPlaceSelection() {
     return const PlaceSelection(
-      name: 'Brix',
-      address: 'Покровка 12',
-      distance: '1.2 км',
-      distanceKm: 1.2,
-      emoji: '🍷',
+      name: '',
+      address: '',
     );
   }
 }
@@ -2221,6 +2212,54 @@ class _V5FieldRow extends StatelessWidget {
   }
 }
 
+class _V5SoftActionRow extends StatelessWidget {
+  const _V5SoftActionRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          decoration: BoxDecoration(
+            color: BbV5Colors.paper,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: BbV5Colors.hair),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 15, color: BbV5Colors.inkSoft),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTextStyles.caption.copyWith(
+                    color: BbV5Colors.inkSoft,
+                    fontSize: 12,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _V5IconBubble extends StatelessWidget {
   const _V5IconBubble({
     required this.icon,
@@ -2245,6 +2284,123 @@ class _V5IconBubble extends StatelessWidget {
         border: Border.all(color: borderColor),
       ),
       child: Icon(icon, size: 16, color: color),
+    );
+  }
+}
+
+class _CustomAddressSheet extends StatefulWidget {
+  const _CustomAddressSheet();
+
+  @override
+  State<_CustomAddressSheet> createState() => _CustomAddressSheetState();
+}
+
+class _CustomAddressSheetState extends State<_CustomAddressSheet> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final canSave = _controller.text.trim().isNotEmpty;
+    return SafeArea(
+      top: false,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Container(
+            padding: EdgeInsets.fromLTRB(20, 10, 20, 20 + bottom),
+            decoration: const BoxDecoration(
+              color: BbV5Colors.paper,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x4D000000),
+                  blurRadius: 40,
+                  spreadRadius: -10,
+                  offset: Offset(0, -20),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: BbV5Colors.hair,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const BbV5Kicker('выбрать'),
+                const SizedBox(height: 4),
+                const BbV5HeroTitle(
+                  title: 'Свой адрес или ориентир',
+                  fontSize: 20,
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: BbV5Colors.paperHi,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: BbV5Colors.hair),
+                  ),
+                  child: TextField(
+                    controller: _controller,
+                    autofocus: true,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      hintText: 'Например: Покровка 12, у входа в Brix',
+                      hintStyle: AppTextStyles.body.copyWith(
+                        fontFamily: 'Sora',
+                        color: BbV5Colors.inkMute,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    style: bbV5DisplayStyle(fontSize: 14, height: 1.25),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                BbV5PillButton(
+                  label: 'Сохранить адрес',
+                  icon: LucideIcons.check,
+                  dark: true,
+                  height: 48,
+                  expanded: true,
+                  onPressed: canSave
+                      ? () {
+                          final value = _controller.text.trim();
+                          Navigator.of(context).pop(
+                            PlaceSelection(
+                              name: value,
+                              address: 'Свой адрес',
+                              distance: 'Свой адрес',
+                              emoji: '📍',
+                            ),
+                          );
+                        }
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

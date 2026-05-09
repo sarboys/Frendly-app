@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:big_break_mobile/app/core/device/app_address_geocoding_service.dart';
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
+import 'package:big_break_mobile/app/core/device/app_reverse_geocoding_service.dart';
 import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
@@ -53,63 +55,48 @@ Future<PlaceSelection?> showPlaceSheet(
   );
 }
 
-const _recentPlaces = [
-  PlaceSelection(
-    name: 'Brix Wine',
-    address: 'Покровка 12',
-    distance: '1.2 км',
-    distanceKm: 1.2,
-    emoji: '🍷',
-  ),
-  PlaceSelection(
-    name: 'Кафе Заря',
-    address: 'Хохловский пер. 7',
-    distance: '0.9 км',
-    distanceKm: 0.9,
-    emoji: '☕',
-  ),
-];
+const _recentPlaces = <PlaceSelection>[];
 
-const _nearbyPlaces = [
+const _nearbyPlaces = <PlaceSelection>[
   PlaceSelection(
-    name: 'Brix Wine',
+    name: 'Brix',
     address: 'Покровка 12',
-    distance: '1.2 км',
-    distanceKm: 1.2,
-    category: 'Бар',
-    emoji: '🍷',
-  ),
-  PlaceSelection(
-    name: 'Кафе Заря',
-    address: 'Хохловский пер. 7',
-    distance: '0.9 км',
-    distanceKm: 0.9,
-    category: 'Кафе',
-    emoji: '☕',
-  ),
-  PlaceSelection(
-    name: 'Чистые пруды',
-    address: 'Бульвар',
     distance: '0.4 км',
     distanceKm: 0.4,
-    category: 'Парк',
-    emoji: '🌳',
+    category: 'Винный бар',
+    emoji: '🍷',
+  ),
+  PlaceSelection(
+    name: 'Aglio',
+    address: 'Маросейка 6',
+    distance: '0.7 км',
+    distanceKm: 0.7,
+    category: 'Trattoria',
+    emoji: '🍝',
+  ),
+  PlaceSelection(
+    name: 'Powerhouse',
+    address: 'Казакова 8',
+    distance: '1.2 км',
+    distanceKm: 1.2,
+    category: 'Late jazz',
+    emoji: '🎶',
   ),
   PlaceSelection(
     name: 'Парк Горького',
-    address: 'Крымский Вал 9',
-    distance: '3.4 км',
-    distanceKm: 3.4,
-    category: 'Парк',
-    emoji: '🌳',
+    address: 'Главный вход',
+    distance: '2.4 км',
+    distanceKm: 2.4,
+    category: 'Open air',
+    emoji: '🌿',
   ),
   PlaceSelection(
-    name: 'Garage',
-    address: 'Крымский Вал 9с32',
-    distance: '3.5 км',
-    distanceKm: 3.5,
-    category: 'Музей',
-    emoji: '🎨',
+    name: 'Хохловский переулок',
+    address: 'У арки',
+    distance: '0.9 км',
+    distanceKm: 0.9,
+    category: 'Дворик',
+    emoji: '☕',
   ),
 ];
 
@@ -299,7 +286,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                           ? () {}
                           : _pickCurrentLocation,
                     ),
-                  if (query.isEmpty) ...[
+                  if (query.isEmpty && _recentPlaces.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.md),
                     const _ListTitle(
                       icon: Icons.schedule_rounded,
@@ -336,7 +323,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                           ),
                           const SizedBox(height: AppSpacing.sm),
                           Text(
-                            'Ищем в Яндекс Картах',
+                            'Ищем адрес',
                             textAlign: TextAlign.center,
                             style: AppTextStyles.meta.copyWith(
                               color: colors.inkMute,
@@ -424,28 +411,19 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
     }
 
     final mapService = ref.read(yandexMapServiceProvider);
+    final addressGeocodingService =
+        ref.read(appAddressGeocodingServiceProvider);
     late final Timer searchTimer;
     searchTimer = Timer(const Duration(milliseconds: 300), () async {
       if (!mounted || !identical(_searchDebounce, searchTimer)) {
         return;
       }
 
-      List<ResolvedAddress> resolved;
-      try {
-        resolved = await mapService.searchPlaces(
-          trimmed,
-        );
-      } catch (_) {
-        if (mounted &&
-            identical(_searchDebounce, searchTimer) &&
-            _queryController.text.trim() == trimmed) {
-          setState(() {
-            _searching = false;
-            _remoteResults = const [];
-          });
-        }
-        return;
-      }
+      final places = await _searchPlaceResults(
+        trimmed,
+        mapService,
+        addressGeocodingService,
+      );
 
       if (!mounted ||
           !identical(_searchDebounce, searchTimer) ||
@@ -455,20 +433,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
 
       setState(() {
         _searching = false;
-        _remoteResults = resolved
-            .map(
-              (item) => PlaceSelection(
-                name: item.name.trim().isEmpty
-                    ? _nameFromAddress(item.address)
-                    : item.name,
-                address: item.address,
-                latitude: item.point.latitude,
-                longitude: item.point.longitude,
-                category: item.category ?? 'Яндекс',
-                emoji: _emojiForPlace(item.name, item.address),
-              ),
-            )
-            .toList(growable: false);
+        _remoteResults = places;
       });
     });
     _searchDebounce = searchTimer;
@@ -477,6 +442,8 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
   Future<void> _pickCurrentLocation() async {
     final locationService = ref.read(appLocationServiceProvider);
     final mapService = ref.read(yandexMapServiceProvider);
+    final reverseGeocodingService =
+        ref.read(appReverseGeocodingServiceProvider);
     setState(() {
       _resolvingCurrentLocation = true;
     });
@@ -489,18 +456,16 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
       if (position == null) {
         return;
       }
-      final resolved = await mapService.reverseGeocode(
-        Point(
-          latitude: position.latitude,
-          longitude: position.longitude,
-        ),
+      final address = await _currentLocationAddress(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        mapService: mapService,
+        reverseGeocodingService: reverseGeocodingService,
       );
       if (!mounted) {
         return;
       }
 
-      final address = resolved?.address ??
-          '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
       Navigator.of(context).pop(
         PlaceSelection(
           name: 'Моё местоположение',
@@ -519,6 +484,153 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
         });
       }
     }
+  }
+
+  Future<List<PlaceSelection>> _searchPlaceResults(
+    String query,
+    YandexMapService mapService,
+    AppAddressGeocodingService addressGeocodingService,
+  ) async {
+    final yandexPlaces = await _searchYandexPlaces(query, mapService);
+    if (yandexPlaces.isNotEmpty) {
+      return yandexPlaces;
+    }
+
+    final fallbackPlace = await _geocodeTypedAddress(
+      query,
+      addressGeocodingService,
+    );
+    return fallbackPlace == null ? const [] : [fallbackPlace];
+  }
+
+  Future<List<PlaceSelection>> _searchYandexPlaces(
+    String query,
+    YandexMapService mapService,
+  ) async {
+    try {
+      final resolved = await mapService
+          .searchPlaces(query)
+          .timeout(const Duration(seconds: 6));
+      return resolved
+          .map(
+            (item) => PlaceSelection(
+              name: item.name.trim().isEmpty
+                  ? _nameFromAddress(item.address)
+                  : item.name,
+              address: item.address,
+              latitude: item.point.latitude,
+              longitude: item.point.longitude,
+              category: item.category ?? 'Яндекс',
+              emoji: _emojiForPlace(item.name, item.address),
+            ),
+          )
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<PlaceSelection?> _geocodeTypedAddress(
+    String query,
+    AppAddressGeocodingService addressGeocodingService,
+  ) async {
+    try {
+      final resolved = await addressGeocodingService.geocodeAddress(query);
+      if (resolved == null) {
+        return null;
+      }
+
+      return PlaceSelection(
+        name: query,
+        address: 'Найдено по системному геокодеру',
+        latitude: resolved.latitude,
+        longitude: resolved.longitude,
+        category: 'Адрес',
+        emoji: '📍',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String> _currentLocationAddress({
+    required double latitude,
+    required double longitude,
+    required YandexMapService mapService,
+    required AppReverseGeocodingService reverseGeocodingService,
+  }) async {
+    final yandexAddress = await _reverseGeocodeWithYandex(
+      latitude: latitude,
+      longitude: longitude,
+      mapService: mapService,
+    );
+    if (yandexAddress != null) {
+      return yandexAddress;
+    }
+
+    final platformAddress = await _reverseGeocodeWithPlatform(
+      latitude: latitude,
+      longitude: longitude,
+      reverseGeocodingService: reverseGeocodingService,
+    );
+    return platformAddress ?? _coordinateAddress(latitude, longitude);
+  }
+
+  Future<String?> _reverseGeocodeWithYandex({
+    required double latitude,
+    required double longitude,
+    required YandexMapService mapService,
+  }) async {
+    try {
+      final resolved = await mapService
+          .reverseGeocode(
+            Point(latitude: latitude, longitude: longitude),
+          )
+          .timeout(const Duration(seconds: 6));
+      final address = resolved?.address.trim();
+      return address == null || address.isEmpty ? null : address;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _reverseGeocodeWithPlatform({
+    required double latitude,
+    required double longitude,
+    required AppReverseGeocodingService reverseGeocodingService,
+  }) async {
+    try {
+      final resolved = await reverseGeocodingService.reverseGeocode(
+        latitude: latitude,
+        longitude: longitude,
+      );
+      return _platformAddress(resolved);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _platformAddress(ReverseGeocodedLocation? location) {
+    if (location == null) {
+      return null;
+    }
+
+    final parts = <String>[];
+    void addPart(String? value) {
+      final trimmed = value?.trim();
+      if (trimmed != null && trimmed.isNotEmpty && !parts.contains(trimmed)) {
+        parts.add(trimmed);
+      }
+    }
+
+    addPart(location.street);
+    addPart(location.city);
+
+    return parts.isEmpty ? null : parts.join(', ');
+  }
+
+  String _coordinateAddress(double latitude, double longitude) {
+    return '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
   }
 
   String _nameFromAddress(String address) {

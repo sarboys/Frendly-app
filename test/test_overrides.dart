@@ -1,10 +1,8 @@
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/after_dark/presentation/after_dark_providers.dart';
-import 'package:big_break_mobile/features/communities/data/mock_communities.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
-import 'package:big_break_mobile/shared/data/mock_data.dart';
 import 'package:big_break_mobile/shared/models/event_detail.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
@@ -14,6 +12,9 @@ import 'package:big_break_mobile/shared/models/onboarding_data.dart';
 import 'package:big_break_mobile/shared/models/person_summary.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'fixtures/mock_communities.dart';
+import 'fixtures/mock_data.dart';
 
 List<Override> buildTestOverrides() {
   return [
@@ -161,6 +162,14 @@ List<Override> buildTestOverrides() {
       ),
     ),
     communitiesProvider.overrideWith((ref) async => mockCommunities),
+    communityProvider.overrideWith((ref, communityId) async {
+      for (final community in mockCommunities) {
+        if (community.id == communityId) {
+          return community;
+        }
+      }
+      return null;
+    }),
     meetupChatsProvider.overrideWith((ref) async => mockMeetupChats),
     eveningSessionsProvider.overrideWith(
       (ref) async => mockMeetupChats

@@ -162,10 +162,14 @@ class _AfficheImage extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(color: colors.secondarySoft),
         child: BbExternalEventImage(
-          imageUrl: event.imageUrl,
           usage: compact
               ? BbExternalEventImageUsage.rail
               : BbExternalEventImageUsage.card,
+          imageUrl: event.imageUrlFor(
+            compact
+                ? BbExternalEventImageUsage.rail
+                : BbExternalEventImageUsage.card,
+          ),
           fallbackIconSize: compact ? 32 : 40,
         ),
       ),

@@ -1,10 +1,12 @@
 import 'package:big_break_mobile/features/notifications/presentation/notifications_screen.dart';
 import 'package:big_break_mobile/features/user_profile/presentation/user_profile_screen.dart';
 import 'package:big_break_mobile/features/profile/presentation/profile_screen.dart';
+import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/notification_item.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
+import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,6 +28,41 @@ class _FakeNotificationsRepository extends BackendRepository {
   Future<void> markAllNotificationsRead() async {
     markAllReadCalls += 1;
     onMarkAllRead?.call();
+  }
+}
+
+class _ProfilePrewarmCall {
+  const _ProfilePrewarmCall({
+    required this.urls,
+    required this.usageProfile,
+    required this.limit,
+    required this.concurrency,
+  });
+
+  final List<String?> urls;
+  final BbImageUsageProfile usageProfile;
+  final int limit;
+  final int concurrency;
+}
+
+class _FakeMediaPrewarmService extends AppMediaPrewarmService {
+  final calls = <_ProfilePrewarmCall>[];
+
+  @override
+  Future<void> warmProfileImages(
+    Iterable<String?> urls, {
+    required BbImageUsageProfile usageProfile,
+    int limit = 4,
+    int concurrency = 2,
+  }) async {
+    calls.add(
+      _ProfilePrewarmCall(
+        urls: urls.toList(growable: false),
+        usageProfile: usageProfile,
+        limit: limit,
+        concurrency: concurrency,
+      ),
+    );
   }
 }
 
@@ -99,6 +136,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Аккаунт'), findsOneWidget);
+    expect(find.text('Frendly Tokens'), findsOneWidget);
+    expect(find.text('1 240'), findsOneWidget);
     expect(find.text('Подписчиков'), findsNothing);
     expect(find.text('Лайков'), findsNothing);
     expect(find.text('Рейтинг'), findsNothing);
@@ -236,6 +275,61 @@ void main() {
 
     expect((gaps[0] - gaps[1]).abs(), lessThan(1));
     expect((gaps[1] - gaps[2]).abs(), lessThan(1));
+  });
+
+  testWidgets('profile screen prewarms hero photos before gallery paint',
+      (tester) async {
+    final prewarmService = _FakeMediaPrewarmService();
+
+    await tester.pumpWidget(
+      _wrap(
+        const ProfileScreen(),
+        extraOverrides: [
+          appMediaPrewarmServiceProvider.overrideWithValue(prewarmService),
+          profileProvider.overrideWith(
+            (ref) async => const ProfileData(
+              id: 'user-me',
+              displayName: 'Никита М',
+              verified: true,
+              online: true,
+              age: 28,
+              city: 'Москва',
+              area: 'Чистые пруды',
+              bio: 'bio',
+              vibe: 'Спокойно',
+              rating: 4.8,
+              meetupCount: 12,
+              avatarUrl: 'https://cdn.example.com/profile-1.jpg',
+              photos: [
+                ProfilePhoto(
+                  id: 'photo-1',
+                  url: 'https://cdn.example.com/profile-1.jpg',
+                  order: 0,
+                ),
+                ProfilePhoto(
+                  id: 'photo-2',
+                  url: 'https://cdn.example.com/profile-2.jpg',
+                  order: 1,
+                ),
+              ],
+              interests: ['Кофе'],
+              intent: ['Друзья'],
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(prewarmService.calls, isNotEmpty);
+    final call = prewarmService.calls.first;
+    expect(call.urls, [
+      'https://cdn.example.com/profile-1.jpg',
+      'https://cdn.example.com/profile-2.jpg',
+    ]);
+    expect(call.usageProfile, BbImageUsageProfile.hero);
+    expect(call.limit, 3);
+    expect(call.concurrency, 2);
   });
 
   testWidgets('read all clears unread indicator in notifications', (

@@ -34,12 +34,8 @@ Widget _wrap(
 }
 
 Future<void> _completeFirstOnboardingStep(WidgetTester tester) async {
-  await tester.tap(find.byKey(const Key('onboarding-birth-date-picker')));
-  await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const Key('birth-date-sheet-submit')));
-  await tester.pumpAndSettle();
   await _tapVisible(tester, find.text('Друзья'));
-  await _tapVisible(tester, find.text('Мужчина').first);
+  await _tapVisible(tester, find.byKey(const Key('onboarding-gender-male')));
   await tester.tap(find.text('Дальше'));
   await tester.pumpAndSettle();
 }
@@ -267,8 +263,7 @@ void main() {
     expect(find.text('Дата рождения'), findsNothing);
   });
 
-  testWidgets('onboarding puts birth date picker before intent choices',
-      (tester) async {
+  testWidgets('onboarding birthday step opens date picker', (tester) async {
     await tester.pumpWidget(
       _wrap(
         const OnboardingScreen(),
@@ -288,12 +283,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final birthDateTop = tester
-        .getTopLeft(find.byKey(const Key('onboarding-birth-date-picker')))
-        .dy;
-    final intentTop = tester.getTopLeft(find.text('Свидания')).dy;
-
-    expect(birthDateTop, lessThan(intentTop));
+    await _completeFirstOnboardingStep(tester);
+    await tester.enterText(find.byType(TextField), 'Москва');
+    await tester.pump();
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Кофе'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Кино'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Спокойно'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('onboarding-birth-date-picker')));
     await tester.pumpAndSettle();
@@ -405,7 +409,22 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Спокойно'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Готово'));
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('onboarding-birth-date-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('birth-date-sheet-submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('onboarding-email-field')),
+      'user@example.com',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Войти в Frendly'));
     await tester.pumpAndSettle();
 
     expect(repository.saved, isNotNull);
@@ -516,7 +535,22 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Спокойно'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Готово'));
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('onboarding-birth-date-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('birth-date-sheet-submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('onboarding-email-field')),
+      'user@example.com',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Войти в Frendly'));
     await tester.pumpAndSettle();
 
     expect(repository.saved, isNotNull);
@@ -546,8 +580,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Мужчина'), findsOneWidget);
-    expect(find.text('Женщина'), findsOneWidget);
+    expect(find.byKey(const Key('onboarding-gender-male')), findsOneWidget);
+    expect(find.byKey(const Key('onboarding-gender-female')), findsOneWidget);
+    expect(find.text('М'), findsOneWidget);
+    expect(find.text('Ж'), findsOneWidget);
+    expect(find.text('Мужчина'), findsNothing);
+    expect(find.text('Женщина'), findsNothing);
 
     await _tapVisible(tester, find.text('Друзья'));
     await tester.tap(find.text('Дальше'));
@@ -555,6 +593,41 @@ void main() {
 
     expect(find.text('Зачем ты здесь?'), findsOneWidget);
     expect(find.text('Где ты?'), findsNothing);
+  });
+
+  testWidgets('onboarding first step fits above fixed CTA on phone viewport',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      _wrap(
+        const OnboardingScreen(),
+        extraOverrides: [
+          onboardingProvider.overrideWith(
+            (ref) async => const OnboardingData(
+              intent: null,
+              gender: null,
+              city: null,
+              area: null,
+              interests: [],
+              vibe: null,
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final lastOptionBottom =
+        tester.getBottomLeft(find.text('И то и другое')).dy;
+    final ctaTop = tester.getTopLeft(find.text('Дальше')).dy;
+
+    expect(lastOptionBottom, lessThan(ctaTop - 16));
   });
 
   testWidgets('tonight header uses HomeV5 AI action instead of notification UI',
@@ -1138,6 +1211,13 @@ Widget _wrapOnboardingFlow(
         ),
       ),
       GoRoute(
+        path: AppRoute.addPhoto.path,
+        name: AppRoute.addPhoto.name,
+        builder: (context, state) => const Scaffold(
+          body: Center(child: Text('add-photo-opened')),
+        ),
+      ),
+      GoRoute(
         path: AppRoute.tonight.path,
         name: AppRoute.tonight.name,
         builder: (context, state) => const Scaffold(
@@ -1195,6 +1275,13 @@ class _GuardedOnboardingAppState extends ConsumerState<_GuardedOnboardingApp> {
           path: AppRoute.onboarding.path,
           name: AppRoute.onboarding.name,
           builder: (context, state) => const OnboardingScreen(),
+        ),
+        GoRoute(
+          path: AppRoute.addPhoto.path,
+          name: AppRoute.addPhoto.name,
+          builder: (context, state) => const Scaffold(
+            body: Center(child: Text('add-photo-opened')),
+          ),
         ),
         GoRoute(
           path: AppRoute.tonight.path,

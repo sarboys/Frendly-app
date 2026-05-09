@@ -5,6 +5,7 @@ import 'package:big_break_mobile/app/theme/app_radii.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
+import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -99,6 +100,8 @@ class _BbProfilePhotoGalleryState extends State<BbProfilePhotoGallery> {
                     },
                     itemBuilder: (context, index) {
                       final photo = widget.photos[index];
+                      final photoUrl =
+                          photo.bestUrlFor(BbImageUsageProfile.hero).trim();
                       final previewBytes = widget.photoPreviews[photo.id];
                       return DecoratedBox(
                         decoration: BoxDecoration(color: colors.muted),
@@ -111,9 +114,11 @@ class _BbProfilePhotoGalleryState extends State<BbProfilePhotoGallery> {
                                 cacheHeight: cacheSize.height,
                               )
                             : CachedNetworkImage(
-                                imageUrl: photo.url,
-                                cacheKey: 'profile-gallery-${photo.id}-'
-                                    '${photo.url}',
+                                imageUrl: photoUrl,
+                                cacheKey: BbProfilePhotoImage.cacheKeyFor(
+                                  photoUrl,
+                                  BbImageUsageProfile.hero,
+                                ),
                                 fit: BoxFit.cover,
                                 memCacheWidth: cacheSize.width,
                                 memCacheHeight: cacheSize.height,

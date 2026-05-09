@@ -609,7 +609,7 @@ class _HeroImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BbExternalEventImage(
-      imageUrl: event.imageUrl,
+      imageUrl: event.imageUrlFor(BbExternalEventImageUsage.hero),
       usage: BbExternalEventImageUsage.hero,
       fallbackIconSize: 48,
     );

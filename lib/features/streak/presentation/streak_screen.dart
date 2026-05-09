@@ -336,14 +336,14 @@ class _RewardsList extends StatelessWidget {
     (
       threshold: '3 ВЕЧЕРА',
       title: 'Тёплый круг',
-      subtitle: 'Скрытое место от Brix',
+      subtitle: 'Перк от партнёра',
       unlocked: true,
       icon: LucideIcons.gift,
     ),
     (
       threshold: '5 ВЕЧЕРОВ',
       title: 'Свой человек',
-      subtitle: 'Бесплатный десерт у Powerhouse',
+      subtitle: 'Бонус у партнёра',
       unlocked: false,
       icon: LucideIcons.gift,
     ),

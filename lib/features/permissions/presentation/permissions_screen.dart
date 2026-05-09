@@ -192,7 +192,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
                                   return;
                                 }
                                 container.invalidate(settingsProvider);
-                                context.goRoute(AppRoute.addPhoto);
+                                context.goRoute(AppRoute.tonight);
                               } finally {
                                 if (mounted) {
                                   setState(() {

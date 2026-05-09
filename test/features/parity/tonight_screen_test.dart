@@ -50,7 +50,7 @@ void main() {
     await _dragUntilVisible(tester, find.text('Дейтинг · рядом'), 420);
     await _dragUntilVisible(tester, find.text('Афиша города'), 420);
     await _dragUntilVisible(tester, find.text('Маршруты вечера'), 420);
-    await _dragUntilVisible(tester, find.text('Пульс города'), 420);
+    await _dragUntilVisible(tester, find.text('Сводка'), 420);
     await _dragUntilVisible(tester, find.text('AI compass'), 420);
 
     expect(find.text('Frendly Evening'), findsNothing);
@@ -94,6 +94,20 @@ void main() {
         findsNothing,
       );
     }
+  });
+
+  testWidgets('tonight radar sweep rotates over time', (tester) async {
+    await _pumpTonightDirect(tester);
+
+    final sweep = find.byKey(const ValueKey('tonight-radar-sweep-rotation'));
+
+    expect(sweep, findsOneWidget);
+    final initialScaleX = tester.widget<Transform>(sweep).transform.storage[0];
+
+    await tester.pump(const Duration(milliseconds: 240));
+
+    final movedScaleX = tester.widget<Transform>(sweep).transform.storage[0];
+    expect(movedScaleX, isNot(initialScaleX));
   });
 
   testWidgets('tonight gathering CTA opens the v5 meetups surface', (
@@ -271,7 +285,7 @@ void main() {
     await tester.tap(find.text('Даша, 34'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Frendly+ · свидания'), findsOneWidget);
+    expect(find.text('Дейтинг · свидания'), findsOneWidget);
     expect(find.text('Встреч'), findsNothing);
     expect(find.text('Рейтинг'), findsNothing);
   });

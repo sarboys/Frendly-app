@@ -13,6 +13,7 @@ import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -190,7 +191,7 @@ void main() {
     expect(mediaPickerService.multiGalleryCalls, 1);
   });
 
-  testWidgets('add photo continues to onboarding after avatar upload',
+  testWidgets('add photo continues to tonight after avatar upload',
       (tester) async {
     final mediaPickerService = _FakeMediaPickerService();
 
@@ -213,7 +214,7 @@ void main() {
 
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     final router = app.routerConfig! as GoRouter;
-    expect(router.routeInformationProvider.value.uri.path, '/onboarding');
+    expect(router.routeInformationProvider.value.uri.path, '/tonight');
   });
 
   testWidgets('add photo shows preview right after upload', (tester) async {
@@ -402,7 +403,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.add_rounded).first, warnIfMissed: false);
+    await tester.tap(find.byIcon(LucideIcons.plus).first, warnIfMissed: false);
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Готово'));

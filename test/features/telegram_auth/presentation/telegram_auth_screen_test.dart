@@ -110,10 +110,10 @@ Widget _wrapTelegramAuth({
         ),
       ),
       GoRoute(
-        path: AppRoute.permissions.path,
-        name: AppRoute.permissions.name,
+        path: AppRoute.onboarding.path,
+        name: AppRoute.onboarding.name,
         builder: (context, state) => const Scaffold(
-          body: Center(child: Text('permissions-opened')),
+          body: Center(child: Text('onboarding-opened')),
         ),
       ),
       GoRoute(
@@ -170,7 +170,7 @@ void main() {
   });
 
   testWidgets(
-      'verifies four-digit telegram code and opens permissions for new user',
+      'verifies four-digit telegram code and opens onboarding for new user',
       (tester) async {
     var verifyCalls = 0;
     _FakeTelegramAuthRepository? repository;
@@ -201,7 +201,7 @@ void main() {
     expect(verifyCalls, 1);
     expect(repository?.verifiedCode, '6543');
     expect(repository?.requestedStartTokens, ['local-start-token']);
-    expect(find.text('permissions-opened'), findsOneWidget);
+    expect(find.text('onboarding-opened'), findsOneWidget);
   });
 
   testWidgets('existing user skips setup after telegram auth', (tester) async {

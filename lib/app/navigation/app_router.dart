@@ -58,6 +58,7 @@ import 'package:big_break_mobile/features/streak/presentation/streak_screen.dart
 import 'package:big_break_mobile/features/stories/presentation/stories_screen.dart';
 import 'package:big_break_mobile/features/telegram_auth/presentation/telegram_auth_screen.dart';
 import 'package:big_break_mobile/features/tonight/presentation/tonight_screen.dart';
+import 'package:big_break_mobile/features/tokens/presentation/tokens_screens.dart';
 import 'package:big_break_mobile/features/user_profile/presentation/user_profile_screen.dart';
 import 'package:big_break_mobile/features/verification/presentation/verification_screen.dart';
 import 'package:big_break_mobile/features/welcome/presentation/welcome_screen.dart';
@@ -82,9 +83,11 @@ const _publicRoutePaths = <String>{
   '/telegram-auth',
 };
 const _setupRoutePaths = <String>{
+  '/onboarding',
+};
+const _legacySetupRoutePaths = <String>{
   '/permissions',
   '/add-photo',
-  '/onboarding',
 };
 
 bool isOnboardingComplete(OnboardingData? onboarding) {
@@ -93,6 +96,7 @@ bool isOnboardingComplete(OnboardingData? onboarding) {
   }
 
   return onboarding.intent != null &&
+      (onboarding.gender?.isNotEmpty ?? false) &&
       onboarding.requiredContact == null &&
       (onboarding.birthDate?.isNotEmpty ?? false) &&
       (onboarding.city?.isNotEmpty ?? false) &&
@@ -214,6 +218,10 @@ GoRouter buildAppRouter({
 
       if (!authenticated && !isPublic) {
         return AppRoute.welcome.path;
+      }
+
+      if (authenticated && _legacySetupRoutePaths.contains(path)) {
+        return pendingSetup ?? AppRoute.tonight.path;
       }
 
       if (authenticated && pendingSetup != null) {
@@ -362,6 +370,32 @@ GoRouter buildAppRouter({
         name: AppRoute.afterDarkVerify.name,
         pageBuilder: (context, state) =>
             _slidePage(const AfterDarkVerifyScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.tokensFocus.path,
+        name: AppRoute.tokensFocus.name,
+        pageBuilder: (context, state) => _slidePage(const TokensFocusScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.tokensBalance.path,
+        name: AppRoute.tokensBalance.name,
+        pageBuilder: (context, state) =>
+            _slidePage(const TokensBalanceScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.tokensTopUp.path,
+        name: AppRoute.tokensTopUp.name,
+        pageBuilder: (context, state) => _slidePage(const TokensTopUpScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.tokensBoost.path,
+        name: AppRoute.tokensBoost.name,
+        pageBuilder: (context, state) => _slidePage(const TokensBoostScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.wallet.path,
+        name: AppRoute.wallet.name,
+        pageBuilder: (context, state) => _slidePage(const WalletScreen()),
       ),
       GoRoute(
         path: AppRoute.aiCreate.path,
@@ -626,6 +660,15 @@ GoRouter buildAppRouter({
         name: AppRoute.createCommunity.name,
         pageBuilder: (context, state) =>
             _slidePage(const CreateCommunityScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.editCommunity.path,
+        name: AppRoute.editCommunity.name,
+        pageBuilder: (context, state) => _slidePage(
+          CreateCommunityScreen(
+            communityId: state.pathParameters['communityId']!,
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoute.createCommunityPost.path,

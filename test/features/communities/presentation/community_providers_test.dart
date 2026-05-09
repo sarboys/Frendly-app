@@ -1,4 +1,3 @@
-import 'package:big_break_mobile/features/communities/data/mock_communities.dart';
 import 'package:big_break_mobile/features/communities/domain/community.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
@@ -6,6 +5,8 @@ import 'package:big_break_mobile/shared/models/paginated_response.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../fixtures/mock_communities.dart';
 
 class _FakeCommunityRepository extends BackendRepository {
   _FakeCommunityRepository({

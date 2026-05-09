@@ -166,7 +166,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool get canContinue {
     switch (_currentStep) {
       case _OnboardingStep.profile:
-        return intent != null;
+        return intent != null && gender != null;
       case _OnboardingStep.location:
         return _locationController.text.trim().isNotEmpty ||
             (city.trim().isNotEmpty && area?.trim().isNotEmpty == true);
@@ -377,85 +377,89 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       behavior: HitTestBehavior.translucent,
       onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
       child: BbV5Scaffold(
-        child: Column(
-          children: [
-            BbV5Page(
-              padding: const EdgeInsets.fromLTRB(24, 32, 24, 20),
-              child: Row(
-                children: [
-                  if (step > 0) ...[
-                    BbV5IconButton(
-                      key: const Key('onboarding-back-button'),
-                      icon: Icons.arrow_back_rounded,
-                      onPressed: previous,
-                      size: 40,
-                      iconSize: 18,
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Expanded(
-                    child: Row(
-                      children: List.generate(
-                        steps.length,
-                        (index) => Expanded(
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 240),
-                            height: 4,
-                            margin: EdgeInsets.only(
-                              right: index == steps.length - 1 ? 0 : 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: index <= step
-                                  ? BbV5Colors.ink
-                                  : BbV5Colors.ink.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(999),
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              _OnboardingFrame(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 18),
+                child: Row(
+                  children: [
+                    if (step > 0) ...[
+                      BbV5IconButton(
+                        key: const Key('onboarding-back-button'),
+                        icon: Icons.arrow_back_rounded,
+                        onPressed: previous,
+                        size: 40,
+                        iconSize: 18,
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: Row(
+                        children: List.generate(
+                          steps.length,
+                          (index) => Expanded(
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 240),
+                              height: 4,
+                              margin: EdgeInsets.only(
+                                right: index == steps.length - 1 ? 0 : 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: index <= step
+                                    ? BbV5Colors.ink
+                                    : BbV5Colors.ink.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: BbV5Page(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: SingleChildScrollView(
-                  child: _buildStep(context),
-                ),
-              ),
-            ),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    BbV5Colors.paper.withValues(alpha: 0),
-                    BbV5Colors.paper.withValues(alpha: 0.95),
                   ],
                 ),
               ),
-              child: SafeArea(
-                top: false,
-                child: BbV5Page(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-                  child: BbV5PillButton(
-                    label: _actionButtonLabel(steps.length),
-                    icon: _saving || _checkingContact
-                        ? Icons.hourglass_top_rounded
-                        : Icons.arrow_forward_rounded,
-                    dark: true,
-                    height: 56,
-                    expanded: true,
-                    fontSize: 14,
-                    onPressed: canContinue && !_saving ? next : null,
+              Expanded(
+                child: _OnboardingFrame(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: _buildStep(context),
                   ),
                 ),
               ),
-            ),
-          ],
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      BbV5Colors.paper.withValues(alpha: 0),
+                      BbV5Colors.paper.withValues(alpha: 0.95),
+                    ],
+                  ),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: _OnboardingFrame(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+                    child: BbV5PillButton(
+                      label: _actionButtonLabel(steps.length),
+                      icon: _saving || _checkingContact
+                          ? Icons.hourglass_top_rounded
+                          : Icons.arrow_forward_rounded,
+                      dark: true,
+                      height: 56,
+                      expanded: true,
+                      fontSize: 14,
+                      onPressed: canContinue && !_saving ? next : null,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -500,6 +504,38 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               'Это можно поменять позже.',
             ),
             const SizedBox(height: 24),
+            const BbV5Kicker('Пол'),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _GenderChoice(
+                    key: const Key('onboarding-gender-male'),
+                    active: gender == 'male',
+                    label: 'М',
+                    onTap: () => setState(() {
+                      _didTouchForm = true;
+                      gender = 'male';
+                    }),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _GenderChoice(
+                    key: const Key('onboarding-gender-female'),
+                    active: gender == 'female',
+                    label: 'Ж',
+                    onTap: () => setState(() {
+                      _didTouchForm = true;
+                      gender = 'female';
+                    }),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            const BbV5Kicker('Цель'),
+            const SizedBox(height: 8),
             _ChoiceCard(
               active: intent == 'dating',
               icon: Icons.favorite_border_rounded,
@@ -891,6 +927,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         ),
         const SizedBox(height: 12),
         TextButton(
+          key: const Key('onboarding-birth-date-picker'),
           onPressed: _showBirthDatePicker,
           child: Text(
             'Выбрать в календаре',
@@ -1531,6 +1568,32 @@ enum _PermissionType {
   contacts,
 }
 
+class _OnboardingFrame extends StatelessWidget {
+  const _OnboardingFrame({
+    required this.child,
+    required this.padding,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: Padding(
+          padding: padding,
+          child: DefaultTextStyle.merge(
+            style: AppTextStyles.body.copyWith(color: BbV5Colors.ink),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _OnboardingTitle extends StatelessWidget {
   const _OnboardingTitle({
     required this.title,
@@ -1845,6 +1908,58 @@ class _BirthDateSheetState extends State<_BirthDateSheet> {
     final day = date.day.toString().padLeft(2, '0');
     final month = date.month.toString().padLeft(2, '0');
     return '$day.$month.${date.year}';
+  }
+}
+
+class _GenderChoice extends StatelessWidget {
+  const _GenderChoice({
+    required this.active,
+    required this.label,
+    required this.onTap,
+    super.key,
+  });
+
+  final bool active;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          height: 64,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [BbV5Colors.paperHi, BbV5Colors.paper],
+            ),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: active ? BbV5Colors.ink : BbV5Colors.hair,
+              width: active ? 2 : 1,
+            ),
+            boxShadow: BbV5Shadows.card,
+          ),
+          child: Text(
+            label,
+            style: bbV5DisplayStyle(
+              fontSize: 24,
+              height: 1,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0,
+              color: BbV5Colors.ink,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

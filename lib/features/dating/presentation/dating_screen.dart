@@ -59,16 +59,13 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final subscription = ref.watch(subscriptionStateProvider).valueOrNull;
-    final premium = hasPremiumDatingAccess(subscription);
-    final discoverAsync = premium ? ref.watch(datingDiscoverProvider) : null;
-    final likesAsync =
-        premium && _tab == 'likes' ? ref.watch(datingLikesProvider) : null;
+    final discoverAsync = ref.watch(datingDiscoverProvider);
+    final likesAsync = _tab == 'likes' ? ref.watch(datingLikesProvider) : null;
     final likes = likesAsync?.valueOrNull ?? const <DatingProfileData>[];
-    final discover = discoverAsync?.valueOrNull ?? const <DatingProfileData>[];
+    final discover = discoverAsync.valueOrNull ?? const <DatingProfileData>[];
     final filteredDiscover = _filterProfiles(discover);
     final current = _currentProfile(filteredDiscover);
-    if (premium && _tab == 'discover' && filteredDiscover.isNotEmpty) {
+    if (_tab == 'discover' && filteredDiscover.isNotEmpty) {
       unawaited(
         ref.read(appMediaPrewarmServiceProvider).warmProfileImages(
               _prewarmPhotoUrls(filteredDiscover),
@@ -78,8 +75,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
             ),
       );
     }
-    final hasWidePhotoTapZone = premium &&
-        _tab == 'discover' &&
+    final hasWidePhotoTapZone = _tab == 'discover' &&
         current != null &&
         _photosFor(current).length > 1 &&
         MediaQuery.sizeOf(context).width > 520;
@@ -92,35 +88,30 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
             child: Column(
               children: [
                 _DatingHeader(
-                  premium: premium,
                   filtersActive: _filtersActive,
                   onBack: () => _handleBack(context),
-                  onFilter: premium ? () => _openFilters(context) : null,
+                  onFilter: () => _openFilters(context),
                 ),
-                if (premium) ...[
-                  const SizedBox(height: 20),
-                  _DatingTabs(
-                    activeTab: _tab,
-                    likesCount: likes.length,
-                    onTabChanged: (tab) {
-                      setState(() {
-                        _tab = tab;
-                      });
-                    },
-                  ),
-                ],
+                const SizedBox(height: 20),
+                _DatingTabs(
+                  activeTab: _tab,
+                  likesCount: likes.length,
+                  onTabChanged: (tab) {
+                    setState(() {
+                      _tab = tab;
+                    });
+                  },
+                ),
                 const SizedBox(height: 14),
                 Expanded(
-                  child: premium
-                      ? (_tab == 'discover'
-                          ? _buildDiscover(
-                              context,
-                              current,
-                              discoverAsync,
-                              filteredDiscover,
-                            )
-                          : _buildLikes(context, likesAsync, likes))
-                      : _buildLocked(context),
+                  child: _tab == 'discover'
+                      ? _buildDiscover(
+                          context,
+                          current,
+                          discoverAsync,
+                          filteredDiscover,
+                        )
+                      : _buildLikes(context, likesAsync, likes),
                 ),
               ],
             ),
@@ -149,168 +140,13 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
     }
   }
 
-  Widget _buildLocked(BuildContext context) {
-    final bottomPadding = _datingBottomScrollPadding(context);
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(0, 10, 0, bottomPadding),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: (constraints.maxHeight - 10 - bottomPadding)
-                  .clamp(0, double.infinity),
-            ),
-            child: IntrinsicHeight(
-              child: Column(
-                children: [
-                  BbV5Card(
-                    padding: const EdgeInsets.all(20),
-                    tint: BbV5Colors.rose,
-                    child: Column(
-                      children: [
-                        AspectRatio(
-                          aspectRatio: 0.82,
-                          child: Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  BbV5Colors.terraSoft,
-                                  BbV5Colors.brandSoft,
-                                  BbV5Colors.paperDeep,
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  width: 96,
-                                  height: 96,
-                                  decoration: BoxDecoration(
-                                    color: BbV5Colors.paperHi,
-                                    borderRadius: BorderRadius.circular(29),
-                                    border: Border.all(color: BbV5Colors.hair),
-                                    boxShadow: BbV5Shadows.pill,
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: const Text(
-                                    '💘',
-                                    style: TextStyle(fontSize: 42),
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                                Text(
-                                  'Свидания внутри Frendly+',
-                                  style: bbV5DisplayStyle(
-                                    fontSize: 26,
-                                    height: 1.08,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Свайпы, входящие лайки и быстрый переход к свиданию, только для подписки.',
-                                  style: AppTextStyles.bodySoft.copyWith(
-                                    color: BbV5Colors.inkMute,
-                                    fontSize: 14,
-                                    height: 1.45,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        const Row(
-                          children: [
-                            Expanded(
-                              child: _DatingMiniStat(
-                                label: 'Свайпы',
-                                value: '∞',
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: _DatingMiniStat(
-                                label: 'Лайки',
-                                value: '2',
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: _DatingMiniStat(
-                                label: 'Инвайт',
-                                value: '1 тап',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const BbV5Card(
-                    padding: EdgeInsets.all(16),
-                    radius: 24,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _LockedFeatureRow(
-                          title: 'Свайп-вправо / влево',
-                          subtitle:
-                              'Как в Tinder, но внутри текущего профиля Frendly',
-                        ),
-                        SizedBox(height: 12),
-                        _LockedFeatureRow(
-                          title: 'Кто лайкнул',
-                          subtitle: 'Отдельная вкладка для подписчиков',
-                        ),
-                        SizedBox(height: 12),
-                        _LockedFeatureRow(
-                          title: 'Перевести в свидание',
-                          subtitle: 'Сразу открыть сценарий с идеями места',
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Spacer(),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: BbV5PillButton(
-                      label: 'Открыть Frendly+',
-                      onPressed: () => context.pushRoute(AppRoute.paywall),
-                      dark: true,
-                      height: 56,
-                      expanded: true,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildDiscover(
     BuildContext context,
     DatingProfileData? current,
-    AsyncValue<List<DatingProfileData>>? discoverAsync,
+    AsyncValue<List<DatingProfileData>> discoverAsync,
     List<DatingProfileData> visibleProfiles,
   ) {
-    return discoverAsync!.when(
+    return discoverAsync.when(
       data: (profiles) {
         if (profiles.isEmpty) {
           return const _DatingEmptyState(
@@ -852,7 +688,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         continue;
       }
       for (final photo in _photosFor(profile).take(2)) {
-        yield photo.url;
+        yield photo.bestUrlFor(BbImageUsageProfile.hero);
       }
       emittedProfiles += 1;
       if (emittedProfiles >= 3) {
@@ -905,16 +741,14 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
 
 class _DatingHeader extends StatelessWidget {
   const _DatingHeader({
-    required this.premium,
     required this.filtersActive,
     required this.onBack,
     required this.onFilter,
   });
 
-  final bool premium;
   final bool filtersActive;
   final VoidCallback onBack;
-  final VoidCallback? onFilter;
+  final VoidCallback onFilter;
 
   @override
   Widget build(BuildContext context) {
@@ -925,53 +759,42 @@ class _DatingHeader extends StatelessWidget {
           onPressed: onBack,
         ),
         const SizedBox(width: 8),
-        Expanded(
+        const Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const BbV5Kicker('Frendly+ · свидания'),
-              const SizedBox(height: 3),
-              if (premium)
-                const BbV5HeroTitle(
-                  title: 'Свидания',
-                  accent: 'рядом',
-                  fontSize: 22,
-                )
-              else
-                Text(
-                  'Свидания рядом',
-                  style: bbV5DisplayStyle(
-                    color: BbV5Colors.ink,
-                    fontSize: 15,
-                  ),
-                ),
+              BbV5Kicker('Дейтинг · свидания'),
+              SizedBox(height: 3),
+              BbV5HeroTitle(
+                title: 'Свидания',
+                accent: 'рядом',
+                fontSize: 22,
+              ),
             ],
           ),
         ),
-        if (premium) ...[
-          const SizedBox(width: 8),
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              BbV5IconButton(
-                icon: LucideIcons.list_filter,
-                onPressed: onFilter,
-              ),
-              if (filtersActive)
-                const Positioned(
-                  top: 7,
-                  right: 7,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: BbV5Colors.terra,
-                      shape: BoxShape.circle,
-                    ),
-                    child: SizedBox(width: 8, height: 8),
+        const SizedBox(width: 8),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            BbV5IconButton(
+              icon: LucideIcons.list_filter,
+              onPressed: onFilter,
+            ),
+            if (filtersActive)
+              const Positioned(
+                top: 7,
+                right: 7,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: BbV5Colors.terra,
+                    shape: BoxShape.circle,
                   ),
+                  child: SizedBox(width: 8, height: 8),
                 ),
-            ],
-          ),
-        ],
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -1082,83 +905,6 @@ class _DatingTabButton extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _DatingMiniStat extends StatelessWidget {
-  const _DatingMiniStat({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 72,
-      decoration: BoxDecoration(
-        color: BbV5Colors.paperHi,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: BbV5Colors.hair),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            value,
-            style: bbV5DisplayStyle(fontSize: 19).copyWith(
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: AppTextStyles.caption.copyWith(
-              color: BbV5Colors.inkMute,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LockedFeatureRow extends StatelessWidget {
-  const _LockedFeatureRow({
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: AppTextStyles.body.copyWith(
-            color: BbV5Colors.ink,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: AppTextStyles.meta.copyWith(
-            color: BbV5Colors.inkMute,
-            height: 1.35,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1416,8 +1162,10 @@ class _DatingProfileCard extends StatelessWidget {
               children: [
                 Positioned.fill(
                   child: BbProfilePhotoImage(
-                    imageUrl:
-                        photos.isEmpty ? null : photos[clampedPhotoIndex].url,
+                    imageUrl: photos.isEmpty
+                        ? null
+                        : photos[clampedPhotoIndex]
+                            .bestUrlFor(BbImageUsageProfile.hero),
                     fallbackText: profile.photoEmoji,
                     usageProfile: BbImageUsageProfile.hero,
                     fallbackFontSize: 80,
@@ -1499,7 +1247,7 @@ class _DatingProfileCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              'Frendly+',
+                              'Дейтинг',
                               style: AppTextStyles.caption.copyWith(
                                 color: BbV5Colors.ink,
                                 fontSize: 10.5,
@@ -2066,8 +1814,9 @@ class _DatingThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = profile.primaryPhoto?.url ??
-        profile.photos.firstOrNull?.url ??
+    final imageUrl = profile.primaryPhoto
+            ?.bestUrlFor(BbImageUsageProfile.avatar) ??
+        profile.photos.firstOrNull?.bestUrlFor(BbImageUsageProfile.avatar) ??
         profile.avatarUrl;
 
     return BbProfilePhotoImage(

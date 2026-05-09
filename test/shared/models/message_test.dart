@@ -12,6 +12,14 @@ void main() {
         'senderId': 'user-anya',
         'senderName': 'Аня К',
         'senderAvatarUrl': '/media/avatar-1',
+        'senderAvatarVariants': {
+          'avatar': {
+            'url': '/media/avatar-1/avatar.webp',
+            'downloadUrl': '/media/avatar-1/avatar.webp',
+            'mimeType': 'image/webp',
+            'byteSize': 1200,
+          },
+        },
         'text': 'Привет',
         'createdAt': '2026-04-24T12:33:00.000Z',
         'attachments': [],
@@ -22,6 +30,10 @@ void main() {
     expect(
       message.authorAvatarUrl,
       '${BackendConfig.apiBaseUrl}/media/avatar-1',
+    );
+    expect(
+      message.authorAvatarVariants['avatar']?.url,
+      '${BackendConfig.apiBaseUrl}/media/avatar-1/avatar.webp',
     );
   });
 

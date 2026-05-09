@@ -1,39 +1,17 @@
-import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/person_summary.dart';
-import 'package:big_break_mobile/shared/models/subscription.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-bool hasPremiumDatingAccess(SubscriptionStateData? state) {
-  if (state == null) {
-    return false;
-  }
-
-  return state.status == 'trial' || state.status == 'active';
-}
 
 final datingDiscoverProvider =
     FutureProvider.autoDispose<List<DatingProfileData>>((ref) async {
   final repository = ref.read(backendRepositoryProvider);
   final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final subscriptionFuture = ref.watch(subscriptionStateProvider.future);
   final cancelToken = _autoDisposeCancelToken(ref);
   try {
     await authBootstrap;
   } catch (_) {
-    return const [];
-  }
-
-  SubscriptionStateData? subscription;
-  try {
-    subscription = await subscriptionFuture;
-  } catch (_) {
-    return const [];
-  }
-
-  if (!hasPremiumDatingAccess(subscription)) {
     return const [];
   }
 
@@ -58,22 +36,10 @@ final datingLikesProvider =
     FutureProvider.autoDispose<List<DatingProfileData>>((ref) async {
   final repository = ref.read(backendRepositoryProvider);
   final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final subscriptionFuture = ref.watch(subscriptionStateProvider.future);
   final cancelToken = _autoDisposeCancelToken(ref);
   try {
     await authBootstrap;
   } catch (_) {
-    return const [];
-  }
-
-  SubscriptionStateData? subscription;
-  try {
-    subscription = await subscriptionFuture;
-  } catch (_) {
-    return const [];
-  }
-
-  if (!hasPremiumDatingAccess(subscription)) {
     return const [];
   }
 

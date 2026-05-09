@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/shared/models/media_variant.dart';
 import 'package:big_break_mobile/shared/models/message.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
 import 'package:big_break_mobile/shared/widgets/bb_chat_attachment_image.dart';
@@ -18,6 +19,7 @@ class BbChatBubble extends StatelessWidget {
     super.key,
     this.authorId = '',
     this.authorAvatarUrl,
+    this.authorAvatarVariants = const {},
     this.chatId = '',
     this.messageClientId = '',
     this.isMine = false,
@@ -39,6 +41,7 @@ class BbChatBubble extends StatelessWidget {
   final String authorId;
   final String author;
   final String? authorAvatarUrl;
+  final Map<String, MediaVariantData> authorAvatarVariants;
   final String text;
   final String time;
   final String chatId;
@@ -177,7 +180,8 @@ class BbChatBubble extends StatelessWidget {
               ? _AuthorAvatar(
                   authorId: authorId,
                   author: author,
-                  imageUrl: authorAvatarUrl,
+                  imageUrl:
+                      authorAvatarVariants['avatar']?.url ?? authorAvatarUrl,
                   onTap: onAuthorAvatarTap,
                 )
               : null,

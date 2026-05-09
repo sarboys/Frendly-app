@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:big_break_mobile/shared/models/backend_url.dart';
+import 'package:big_break_mobile/shared/models/media_variant.dart';
 
 class Message {
   const Message({
@@ -14,6 +15,7 @@ class Message {
     required this.time,
     required this.attachments,
     this.authorAvatarUrl,
+    this.authorAvatarVariants = const {},
     this.replyTo,
     this.createdAt,
     this.mine = false,
@@ -29,6 +31,7 @@ class Message {
   final String authorId;
   final String author;
   final String? authorAvatarUrl;
+  final Map<String, MediaVariantData> authorAvatarVariants;
   final String text;
   final String time;
   final DateTime? createdAt;
@@ -69,6 +72,7 @@ class Message {
       authorId: authorId,
       author: json['senderName'] as String,
       authorAvatarUrl: resolveBackendUrl(json['senderAvatarUrl'] as String?),
+      authorAvatarVariants: parseMediaVariants(json['senderAvatarVariants']),
       text: text,
       time: _formatTime(json['createdAt'] as String),
       createdAt: DateTime.parse(json['createdAt'] as String).toLocal(),
@@ -95,6 +99,7 @@ class Message {
     String? text,
     String? time,
     String? authorAvatarUrl,
+    Map<String, MediaVariantData>? authorAvatarVariants,
     DateTime? createdAt,
     bool? mine,
     List<MessageAttachment>? attachments,
@@ -111,6 +116,7 @@ class Message {
       authorId: authorId,
       author: author,
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
+      authorAvatarVariants: authorAvatarVariants ?? this.authorAvatarVariants,
       text: text ?? this.text,
       time: time ?? this.time,
       createdAt: createdAt ?? this.createdAt,

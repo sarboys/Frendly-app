@@ -103,7 +103,9 @@ class _AfficheEventsScreenState extends ConsumerState<AfficheEventsScreen> {
         _lastPageState = page;
         unawaited(
           ref.read(appMediaPrewarmServiceProvider).warmExternalEventImages(
-                page.items.map((event) => event.imageUrl),
+                page.items.map(
+                  (event) => event.imageUrlFor(BbExternalEventImageUsage.card),
+                ),
                 usage: BbExternalEventImageUsage.card,
                 limit: 8,
                 concurrency: 2,
@@ -484,7 +486,8 @@ class _AfficheGridCardV5 extends StatelessWidget {
                     children: [
                       Positioned.fill(
                         child: BbExternalEventImage(
-                          imageUrl: event.imageUrl,
+                          imageUrl:
+                              event.imageUrlFor(BbExternalEventImageUsage.card),
                           usage: BbExternalEventImageUsage.card,
                           fallbackIconSize: 44,
                         ),

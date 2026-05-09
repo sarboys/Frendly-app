@@ -210,7 +210,7 @@ class _TelegramAuthScreenState extends ConsumerState<TelegramAuthScreen> {
         return;
       }
       context
-          .goRoute(session.isNewUser ? AppRoute.permissions : AppRoute.tonight);
+          .goRoute(session.isNewUser ? AppRoute.onboarding : AppRoute.tonight);
     } catch (_) {
       if (mounted && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

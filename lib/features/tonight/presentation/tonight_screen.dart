@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
@@ -8,6 +9,7 @@ import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
@@ -280,6 +282,7 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider('nearby'));
     final events = eventsAsync.valueOrNull ?? const [];
+    final wallet = ref.watch(tokenWalletProvider);
     final routeTemplatesAsync =
         ref.watch(eveningRouteTemplatesProvider(_tonightAfficheCity(ref)));
 
@@ -312,6 +315,10 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
             SliverToBoxAdapter(
               child: _TonightGatheringNowSection(
                 events: events,
+                promotedIds: events
+                    .where((event) => wallet.isPromoted(event.id))
+                    .map((event) => event.id)
+                    .toSet(),
                 loading: eventsAsync.isLoading,
                 onOpenAll: () => context.pushRoute(AppRoute.meetups),
                 onOpenEvent: (eventId) => context.pushRoute(
@@ -350,12 +357,6 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
                     pathParameters: {'templateId': templateId},
                   ),
                 ),
-              ),
-            ),
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(20, 0, 20, 28),
-                child: _TonightPulseSection(),
               ),
             ),
             SliverToBoxAdapter(
@@ -641,23 +642,80 @@ class _RadarMapButton extends StatelessWidget {
   }
 }
 
-class _RadarSweep extends StatelessWidget {
+const _radarSweepFrame = Duration(milliseconds: 40);
+const _radarSweepPeriod = Duration(seconds: 5);
+
+class _RadarSweep extends StatefulWidget {
   const _RadarSweep();
 
   @override
+  State<_RadarSweep> createState() => _RadarSweepState();
+}
+
+class _RadarSweepState extends State<_RadarSweep> {
+  Timer? _timer;
+  int _elapsedMilliseconds = 0;
+  bool _tickerModeEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(_radarSweepFrame, (_) {
+      if (!mounted || !_tickerModeEnabled) {
+        return;
+      }
+
+      setState(() {
+        _elapsedMilliseconds =
+            (_elapsedMilliseconds + _radarSweepFrame.inMilliseconds) %
+                _radarSweepPeriod.inMilliseconds;
+      });
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _tickerModeEnabled = TickerMode.valuesOf(context).enabled;
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 168,
-      height: 168,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: SweepGradient(
-          colors: [
-            Colors.transparent,
-            BbV5Colors.terra.withValues(alpha: 0.18),
-            Colors.transparent,
-          ],
-          stops: const [0, 0.09, 0.18],
+    final turn = _elapsedMilliseconds / _radarSweepPeriod.inMilliseconds;
+
+    return Transform.rotate(
+      key: const ValueKey('tonight-radar-sweep-rotation'),
+      angle: turn * math.pi * 2,
+      child: const _RadarSweepGradient(),
+    );
+  }
+}
+
+class _RadarSweepGradient extends StatelessWidget {
+  const _RadarSweepGradient();
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: Container(
+        width: 168,
+        height: 168,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: SweepGradient(
+            colors: [
+              Colors.transparent,
+              BbV5Colors.terra.withValues(alpha: 0.18),
+              Colors.transparent,
+            ],
+            stops: const [0, 0.09, 0.18],
+          ),
         ),
       ),
     );
@@ -744,12 +802,14 @@ class _RadarLegend extends StatelessWidget {
 class _TonightGatheringNowSection extends StatefulWidget {
   const _TonightGatheringNowSection({
     required this.events,
+    required this.promotedIds,
     required this.loading,
     required this.onOpenAll,
     required this.onOpenEvent,
   });
 
   final List<Event> events;
+  final Set<String> promotedIds;
   final bool loading;
   final VoidCallback onOpenAll;
   final ValueChanged<String> onOpenEvent;
@@ -817,6 +877,7 @@ class _TonightGatheringNowSectionState
                     ),
                     child: _GatheringCard(
                       event: visible[index],
+                      promoted: widget.promotedIds.contains(visible[index].id),
                       onTap: () => widget.onOpenEvent(visible[index].id),
                     ),
                   );
@@ -890,10 +951,12 @@ class _GatheringSkeletonGrid extends StatelessWidget {
 class _GatheringCard extends StatelessWidget {
   const _GatheringCard({
     required this.event,
+    required this.promoted,
     required this.onTap,
   });
 
   final Event event;
+  final bool promoted;
   final VoidCallback onTap;
 
   @override
@@ -952,6 +1015,43 @@ class _GatheringCard extends StatelessWidget {
                             stops: [0.4, 1],
                           ),
                         ),
+                      ),
+                      Positioned(
+                        left: 8,
+                        top: 8,
+                        child: promoted
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: BbV5Colors.terra,
+                                  borderRadius: BorderRadius.circular(999),
+                                  boxShadow: BbV5Shadows.pill,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      LucideIcons.flame,
+                                      size: 11,
+                                      color: BbV5Colors.paperHi,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'ТОП',
+                                      style: AppTextStyles.caption.copyWith(
+                                        color: BbV5Colors.paperHi,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 1,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : const SizedBox.shrink(),
                       ),
                       Positioned(
                         right: 8,
@@ -1361,7 +1461,9 @@ class _TonightAfficheSection extends ConsumerWidget {
     if (affiche.isNotEmpty) {
       unawaited(
         ref.read(appMediaPrewarmServiceProvider).warmExternalEventImages(
-              affiche.map((event) => event.imageUrl),
+              affiche.map(
+                (event) => event.imageUrlFor(BbExternalEventImageUsage.rail),
+              ),
               usage: BbExternalEventImageUsage.rail,
               limit: 2,
             ),
@@ -1422,7 +1524,7 @@ class _AffichePreviewCard extends StatelessWidget {
       subtitle: sub.isEmpty ? event.placeLabel : sub,
       tag: event.category,
       image: BbExternalEventImage(
-        imageUrl: event.imageUrl,
+        imageUrl: event.imageUrlFor(BbExternalEventImageUsage.rail),
         usage: BbExternalEventImageUsage.rail,
       ),
       going: event.priceLabel,
@@ -3086,218 +3188,6 @@ String _tonightAfficheCity(WidgetRef ref) {
     return 'Санкт-Петербург';
   }
   return 'Москва';
-}
-
-class _TonightPulseSection extends StatelessWidget {
-  const _TonightPulseSection();
-
-  @override
-  Widget build(BuildContext context) {
-    const items = [
-      (
-        time: '20:00',
-        title: 'Brix · открытие винного вечера',
-        sub: '8 идут',
-        tag: 'встреча',
-        status: 'идёт',
-        color: BbV5Colors.terra,
-      ),
-      (
-        time: '21:00',
-        title: 'Маршрут «Тверская в огнях»',
-        sub: 'старт у Маяковской',
-        tag: 'маршрут',
-        status: 'сейчас',
-        color: BbV5Colors.brand,
-      ),
-      (
-        time: '22:00',
-        title: 'Стендап-четверг · Stand-Up Store',
-        sub: '14 идут · 2 друга',
-        tag: 'афиша',
-        status: 'скоро',
-        color: BbV5Colors.gold,
-      ),
-      (
-        time: '23:00',
-        title: 'Late jazz · Powerhouse',
-        sub: '11 идут',
-        tag: 'встреча',
-        status: 'позже',
-        color: BbV5Colors.terra,
-      ),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            children: [
-              const Expanded(child: BbV5Kicker('Пульс города')),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: const BoxDecoration(
-                      color: BbV5Colors.brand,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'live',
-                    style: AppTextStyles.caption.copyWith(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0,
-                      color: BbV5Colors.brandDeep,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        BbV5Card(
-          padding: EdgeInsets.zero,
-          radius: 24,
-          child: Column(
-            children: [
-              for (var index = 0; index < items.length; index++) ...[
-                _PulseRow(item: items[index]),
-                if (index != items.length - 1)
-                  const Divider(height: 1, color: BbV5Colors.hairSoft),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PulseRow extends StatelessWidget {
-  const _PulseRow({required this.item});
-
-  final ({
-    String time,
-    String title,
-    String sub,
-    String tag,
-    String status,
-    Color color,
-  }) item;
-
-  @override
-  Widget build(BuildContext context) {
-    final active = item.status == 'сейчас';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 48,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.time,
-                  style: bbV5DisplayStyle(
-                    fontSize: 16,
-                    height: 1,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.32,
-                  ).copyWith(
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  item.status,
-                  style: AppTextStyles.caption.copyWith(
-                    fontSize: 9,
-                    letterSpacing: 1.44,
-                    color: active ? item.color : BbV5Colors.inkMute,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          Container(
-            width: 1,
-            height: 40,
-            color: active ? item.color : BbV5Colors.hair,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 4,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: item.color,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      item.tag,
-                      style: AppTextStyles.caption.copyWith(
-                        fontSize: 9.5,
-                        letterSpacing: 1.33,
-                        color: item.color,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.body.copyWith(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.2,
-                    color: BbV5Colors.ink,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  item.sub,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.caption.copyWith(
-                    fontSize: 10.5,
-                    letterSpacing: 0,
-                    color: BbV5Colors.inkMute,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Icon(
-            LucideIcons.arrow_up_right,
-            size: 15,
-            color: BbV5Colors.inkMute,
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _TonightMetricsSection extends StatelessWidget {

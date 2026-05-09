@@ -17,52 +17,7 @@ class _PerksScreenState extends State<PerksScreen> {
   final _redeemed = <String>{};
   String _filter = 'all';
 
-  static const _perks = [
-    _PerkData(
-      id: 'brix-glass',
-      venue: 'Brix',
-      type: 'Винный бар',
-      perk: 'Бокал оранжа на компанию',
-      condition: 'от 3 человек, check-in вместе',
-      expires: 'до 2 июня',
-      icon: LucideIcons.wine,
-      color: BbV5Colors.terra,
-      available: true,
-    ),
-    _PerkData(
-      id: 'ph-dessert',
-      venue: 'Powerhouse',
-      type: 'Джаз-кафе',
-      perk: 'Десерт от шефа',
-      condition: 'после live-сета, от 4 человек',
-      expires: 'до 28 мая',
-      icon: LucideIcons.music,
-      color: BbV5Colors.brand,
-      available: true,
-    ),
-    _PerkData(
-      id: 'kfm-coffee',
-      venue: 'Кофемания',
-      type: 'Кофе',
-      perk: '−30% на завтраки утром',
-      condition: 'до 11:00, от 2 человек',
-      expires: 'ежедневно',
-      icon: LucideIcons.coffee,
-      color: BbV5Colors.gold,
-      available: true,
-    ),
-    _PerkData(
-      id: 'hidden-1',
-      venue: 'Скрытое место',
-      type: 'Откроется на 5-й вечер',
-      perk: '???',
-      condition: 'Frendly Streak ≥ 5',
-      expires: 'скоро',
-      icon: LucideIcons.sparkles,
-      color: BbV5Colors.rose,
-      available: false,
-    ),
-  ];
+  static const _perks = <_PerkData>[];
 
   List<_PerkData> get _filtered {
     return _perks.where((perk) {
@@ -127,30 +82,44 @@ class _PerksScreenState extends State<PerksScreen> {
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            SliverList.separated(
-              itemCount: _filtered.length,
-              separatorBuilder: (context, index) =>
-                  const SizedBox(height: AppSpacing.sm),
-              itemBuilder: (context, index) {
-                final perk = _filtered[index];
-                return _PerkTicket(
-                  perk: perk,
-                  redeemed: _redeemed.contains(perk.id),
-                  onRedeem: !perk.available || _redeemed.contains(perk.id)
-                      ? null
-                      : () {
-                          setState(() {
-                            _redeemed.add(perk.id);
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('${perk.perk} активирован'),
-                            ),
-                          );
-                        },
-                );
-              },
-            ),
+            if (_filtered.isEmpty)
+              SliverToBoxAdapter(
+                child: BbV5Card(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Перков пока нет.',
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.meta.copyWith(
+                      color: BbV5Colors.inkMute,
+                    ),
+                  ),
+                ),
+              )
+            else
+              SliverList.separated(
+                itemCount: _filtered.length,
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: AppSpacing.sm),
+                itemBuilder: (context, index) {
+                  final perk = _filtered[index];
+                  return _PerkTicket(
+                    perk: perk,
+                    redeemed: _redeemed.contains(perk.id),
+                    onRedeem: !perk.available || _redeemed.contains(perk.id)
+                        ? null
+                        : () {
+                            setState(() {
+                              _redeemed.add(perk.id);
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('${perk.perk} активирован'),
+                              ),
+                            );
+                          },
+                  );
+                },
+              ),
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
             SliverToBoxAdapter(
               child: BbV5PillButton(

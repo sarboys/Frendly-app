@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/app/core/config/backend_config.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
 import 'package:big_break_mobile/shared/models/backend_url.dart';
+import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -104,6 +105,36 @@ void main() {
     expect(
       event.imageUrl,
       '${BackendConfig.apiBaseUrl}/affiche/images?key=external-content%2Fitem.jpg',
+    );
+  });
+
+  test('affiche event returns image variant for requested usage', () {
+    final event = AfficheEvent.fromJson({
+      'id': 'event-variants',
+      'title': 'Событие',
+      'city': 'Москва',
+      'category': 'culture',
+      'priceMode': 'paid',
+      'isAffiliate': true,
+      'imageUrl': '/affiche/images?key=external-content%2Fitem.jpg',
+      'imageVariants': {
+        'rail': {
+          'url': '/affiche/images?key=external-content%2Fitem-rail.webp',
+        },
+        'hero': {
+          'url': '/affiche/images?key=external-content%2Fitem-hero.webp',
+        },
+      },
+      'tags': [],
+    });
+
+    expect(
+      event.imageUrlFor(BbExternalEventImageUsage.rail),
+      '${BackendConfig.apiBaseUrl}/affiche/images?key=external-content%2Fitem-rail.webp',
+    );
+    expect(
+      event.imageUrlFor(BbExternalEventImageUsage.hero),
+      '${BackendConfig.apiBaseUrl}/affiche/images?key=external-content%2Fitem-hero.webp',
     );
   });
 

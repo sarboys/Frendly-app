@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
@@ -57,6 +58,7 @@ class _HostDashboardScreenState extends ConsumerState<HostDashboardScreen> {
   }
 
   Widget _buildDashboard(HostDashboardData dashboard) {
+    final wallet = ref.watch(tokenWalletProvider);
     final heroNames = <String>{
       ...dashboard.requests.map((request) => request.userName),
       ...dashboard.events.expand((event) => event.attendees),
@@ -77,13 +79,9 @@ class _HostDashboardScreenState extends ConsumerState<HostDashboardScreen> {
             kicker: 'Хост-панель',
             title: 'Твои',
             accent: 'вечера',
-            right: BbV5IconButton(
-              icon: LucideIcons.bell,
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Уведомления скоро появятся')),
-                );
-              },
+            right: _HostWalletBadge(
+              balance: wallet.balance,
+              onTap: () => context.pushRoute(AppRoute.wallet),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -149,14 +147,53 @@ class _HostDashboardScreenState extends ConsumerState<HostDashboardScreen> {
                 padding: const EdgeInsets.only(bottom: AppSpacing.xs),
                 child: _HostedEventTile(
                   event: event,
+                  promoted: wallet.isPromoted(event.id),
                   onTap: () => context.pushRoute(
                     AppRoute.eventDetail,
                     pathParameters: {'eventId': event.id},
+                  ),
+                  onPromote: () => _openPromoteSheet(event),
+                  onOpenChat: () => context.pushRoute(
+                    AppRoute.meetupChat,
+                    pathParameters: {'chatId': event.id},
                   ),
                 ),
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _openPromoteSheet(Event event) async {
+    final wallet = ref.read(tokenWalletProvider);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: BbV5Colors.ink.withValues(alpha: 0.55),
+      builder: (sheetContext) => _PromoteSheet(
+        event: event,
+        wallet: wallet,
+        onPick: (option) async {
+          final ok = await ref
+              .read(tokenWalletProvider.notifier)
+              .promote(event.id, option);
+          if (!mounted || !sheetContext.mounted) {
+            return;
+          }
+          Navigator.of(sheetContext).pop();
+          if (!ok) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Недостаточно токенов')),
+            );
+            context.pushRoute(AppRoute.wallet);
+            return;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Встреча продвигается · ${option.title}')),
+          );
+        },
       ),
     );
   }
@@ -243,6 +280,53 @@ class _HostDashboardScreenState extends ConsumerState<HostDashboardScreen> {
         });
       }
     }
+  }
+}
+
+class _HostWalletBadge extends StatelessWidget {
+  const _HostWalletBadge({
+    required this.balance,
+    required this.onTap,
+  });
+
+  final int balance;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: BbV5Colors.paperHi,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: BbV5Colors.hair),
+          boxShadow: BbV5Shadows.pill,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              LucideIcons.coins,
+              size: 15,
+              color: BbV5Colors.terra,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '$balance',
+              style: AppTextStyles.caption.copyWith(
+                fontFamily: 'Sora',
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: BbV5Colors.ink,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -741,11 +825,17 @@ class _HostedTabButton extends StatelessWidget {
 class _HostedEventTile extends StatelessWidget {
   const _HostedEventTile({
     required this.event,
+    required this.promoted,
     required this.onTap,
+    required this.onPromote,
+    required this.onOpenChat,
   });
 
   final Event event;
+  final bool promoted;
   final VoidCallback onTap;
+  final VoidCallback onPromote;
+  final VoidCallback onOpenChat;
 
   @override
   Widget build(BuildContext context) {
@@ -754,77 +844,343 @@ class _HostedEventTile extends StatelessWidget {
     return BbV5Card(
       padding: const EdgeInsets.all(12),
       radius: 20,
-      onTap: onTap,
-      child: Row(
+      child: Column(
         children: [
-          SizedBox(
-            width: 56,
-            height: 56,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: imageUrl != null && imageUrl.isNotEmpty
-                  ? BbExternalEventImage(
-                      imageUrl: imageUrl,
-                      usage: BbExternalEventImageUsage.rail,
-                    )
-                  : DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: _eventGradient(event.tone),
-                      ),
-                      child: Center(
-                        child: Text(
-                          event.emoji,
-                          style: const TextStyle(fontSize: 24, height: 1),
-                        ),
-                      ),
-                    ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: Row(
               children: [
-                Text(
-                  event.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.itemTitle.copyWith(fontSize: 13),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '${_statusLabel(event)} · ${event.time} · ${event.place}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.caption.copyWith(
-                    fontSize: 10.5,
-                    color: BbV5Colors.inkMute,
+                SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: imageUrl != null && imageUrl.isNotEmpty
+                        ? BbExternalEventImage(
+                            imageUrl: imageUrl,
+                            usage: BbExternalEventImageUsage.rail,
+                          )
+                        : DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: _eventGradient(event.tone),
+                            ),
+                            child: Center(
+                              child: Text(
+                                event.emoji,
+                                style: const TextStyle(fontSize: 24, height: 1),
+                              ),
+                            ),
+                          ),
                   ),
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    _MiniMetric(
-                      icon: LucideIcons.users,
-                      label: '${event.going}/${event.capacity}',
-                    ),
-                    const SizedBox(width: 12),
-                    _MiniMetric(
-                      icon: LucideIcons.eye,
-                      label: event.isHost ? 'хост' : 'карточка',
-                    ),
-                  ],
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              event.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.itemTitle
+                                  .copyWith(fontSize: 13),
+                            ),
+                          ),
+                          if (promoted)
+                            Container(
+                              margin: const EdgeInsets.only(left: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: BbV5Colors.terra,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    LucideIcons.flame,
+                                    size: 10,
+                                    color: BbV5Colors.paperHi,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    'ПРОДВИГАЕТСЯ',
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: BbV5Colors.paperHi,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${_statusLabel(event)} · ${event.time} · ${event.place}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.caption.copyWith(
+                          fontSize: 10.5,
+                          color: BbV5Colors.inkMute,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          _MiniMetric(
+                            icon: LucideIcons.users,
+                            label: '${event.going}/${event.capacity}',
+                          ),
+                          const SizedBox(width: 12),
+                          const _MiniMetric(
+                            icon: LucideIcons.eye,
+                            label: '142',
+                          ),
+                          const SizedBox(width: 12),
+                          const _MiniMetric(
+                            icon: LucideIcons.heart,
+                            label: '18',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                const Icon(
+                  LucideIcons.chevron_right,
+                  size: 17,
+                  color: BbV5Colors.inkMute,
                 ),
               ],
             ),
           ),
-          const SizedBox(width: AppSpacing.xs),
-          const Icon(
-            LucideIcons.chevron_right,
-            size: 17,
-            color: BbV5Colors.inkMute,
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: BbV5PillButton(
+                  label: promoted ? 'Усилить ещё' : 'Продвигать',
+                  icon: LucideIcons.zap,
+                  dark: !promoted,
+                  expanded: true,
+                  onPressed: onPromote,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              BbV5PillButton(
+                label: 'Чат',
+                icon: LucideIcons.message_circle,
+                onPressed: onOpenChat,
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PromoteSheet extends StatelessWidget {
+  const _PromoteSheet({
+    required this.event,
+    required this.wallet,
+    required this.onPick,
+  });
+
+  final Event event;
+  final TokenWalletState wallet;
+  final ValueChanged<PromoOption> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+            decoration: const BoxDecoration(
+              color: BbV5Colors.paper,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x4D000000),
+                  blurRadius: 40,
+                  spreadRadius: -10,
+                  offset: Offset(0, -20),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: BbV5Colors.hair,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const BbV5Kicker('Продвижение'),
+                          const SizedBox(height: 4),
+                          const BbV5HeroTitle(
+                            title: 'Усилить',
+                            accent: 'встречу',
+                            fontSize: 20,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            event.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.caption.copyWith(
+                              color: BbV5Colors.inkMute,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    _HostWalletBadge(
+                      balance: wallet.balance,
+                      onTap: () => context.pushRoute(AppRoute.wallet),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                for (final option in promoOptions) ...[
+                  _PromoOptionButton(
+                    option: option,
+                    enough: wallet.balance >= option.cost,
+                    onTap: () => onPick(option),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      'Отмена',
+                      style: AppTextStyles.button.copyWith(
+                        color: BbV5Colors.inkMute,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PromoOptionButton extends StatelessWidget {
+  const _PromoOptionButton({
+    required this.option,
+    required this.enough,
+    required this.onTap,
+  });
+
+  final PromoOption option;
+  final bool enough;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enough ? 1 : 0.5,
+      child: BbV5Card(
+        radius: 20,
+        padding: const EdgeInsets.all(16),
+        onTap: onTap,
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                color: BbV5Colors.terraSoft,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                LucideIcons.zap,
+                size: 17,
+                color: BbV5Colors.accentDeep,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    option.title,
+                    style: AppTextStyles.itemTitle.copyWith(fontSize: 13.5),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    option.subtitle,
+                    style: AppTextStyles.caption.copyWith(
+                      color: BbV5Colors.inkMute,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  LucideIcons.coins,
+                  size: 15,
+                  color: enough ? BbV5Colors.terra : BbV5Colors.inkMute,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${option.cost}',
+                  style: AppTextStyles.caption.copyWith(
+                    fontFamily: 'Sora',
+                    color: enough ? BbV5Colors.terra : BbV5Colors.inkMute,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

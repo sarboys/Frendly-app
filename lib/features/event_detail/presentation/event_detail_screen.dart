@@ -257,12 +257,6 @@ class _EventDetailBody extends StatelessWidget {
                     child: _V5HostQuote(note: event.hostNote!),
                   ),
                 ),
-              const SliverPadding(
-                padding: EdgeInsets.fromLTRB(20, 18, 20, 0),
-                sliver: SliverToBoxAdapter(
-                  child: _V5ProgramCard(),
-                ),
-              ),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 0, 0),
                 sliver: SliverToBoxAdapter(
@@ -293,12 +287,13 @@ class _EventDetailBody extends StatelessWidget {
                     ),
                   ),
                 ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-                sliver: SliverToBoxAdapter(
-                  child: _V5PerkCard(event: event),
+              if (event.partnerName != null || event.partnerOffer != null)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: _V5PerkCard(event: event),
+                  ),
                 ),
-              ),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                 sliver: SliverToBoxAdapter(
@@ -827,145 +822,6 @@ class _V5HostQuote extends StatelessWidget {
   }
 }
 
-class _V5ProgramCard extends StatelessWidget {
-  const _V5ProgramCard();
-
-  static const _steps = [
-    (
-      LucideIcons.wine,
-      'Brix Wine',
-      '20:00 · бокал на старт',
-      'Стартуем у барной стойки, знакомимся',
-    ),
-    (
-      LucideIcons.coffee,
-      'Прогулка по Покровке',
-      '21:30 · 15 минут пешком',
-      '',
-    ),
-    (
-      LucideIcons.music,
-      'Late jazz в Aglio',
-      '22:00 · вечер закрываем под джаз',
-      'Опционально, кто захочет',
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return BbV5Section(
-      title: 'Программа вечера',
-      right: Text(
-        '3 шага',
-        style: bbV5KickerStyle(letterSpacing: 1.8).copyWith(
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
-      ),
-      margin: EdgeInsets.zero,
-      child: BbV5Card(
-        radius: 24,
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            for (var index = 0; index < _steps.length; index++)
-              _V5ProgramStep(
-                icon: _steps[index].$1,
-                title: _steps[index].$2,
-                subtitle: _steps[index].$3,
-                note: _steps[index].$4,
-                showLine: index != _steps.length - 1,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _V5ProgramStep extends StatelessWidget {
-  const _V5ProgramStep({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.note,
-    required this.showLine,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String note;
-  final bool showLine;
-
-  @override
-  Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Column(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: BbV5Colors.paperHi,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: BbV5Colors.hair),
-                ),
-                child: Icon(icon, size: 16, color: BbV5Colors.terra),
-              ),
-              if (showLine)
-                Expanded(
-                  child: Container(
-                    width: 1,
-                    margin: const EdgeInsets.symmetric(vertical: 6),
-                    color: BbV5Colors.hair,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(bottom: showLine ? 18 : 0, top: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: bbV5DisplayStyle(fontSize: 13.5, height: 1.25),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: AppTextStyles.caption.copyWith(
-                      color: BbV5Colors.inkMute,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  if (note.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      note,
-                      style: AppTextStyles.caption.copyWith(
-                        color: BbV5Colors.inkSoft,
-                        fontSize: 11.5,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _V5AttendeesRail extends StatelessWidget {
   const _V5AttendeesRail({required this.event});
 
@@ -1252,7 +1108,7 @@ class _V5PerkCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final partner = event.partnerName ?? 'Brix';
+    final partner = event.partnerName ?? 'партнёра';
     return BbV5Card(
       radius: 24,
       padding: const EdgeInsets.all(16),
@@ -1284,8 +1140,7 @@ class _V5PerkCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  event.partnerOffer ??
-                      'Бокал игристого на компанию 3+ при чек-ине',
+                  event.partnerOffer ?? 'Перк появится после проверки места',
                   style: AppTextStyles.caption.copyWith(
                     color: BbV5Colors.inkMute,
                     letterSpacing: 0,

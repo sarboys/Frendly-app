@@ -10,10 +10,7 @@ List<EveningRouteTemplateSummary> fallbackEveningRouteTemplateSummaries(
 }
 
 EveningRouteTemplateDetail fallbackEveningRouteTemplateDetail(String id) {
-  final route = eveningRoutes.firstWhere(
-    (item) => item.id == id,
-    orElse: () => eveningRoutes.first,
-  );
+  final route = findEveningRoute(id);
   return route.toTemplateDetail('Москва');
 }
 

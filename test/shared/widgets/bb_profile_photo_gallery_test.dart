@@ -1,5 +1,6 @@
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_gallery.dart';
+import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -44,7 +45,10 @@ void main() {
     );
     expect(
       image.cacheKey,
-      'profile-gallery-ph1-https://cdn.example.com/ph1.jpg',
+      BbProfilePhotoImage.cacheKeyFor(
+        'https://cdn.example.com/ph1.jpg',
+        BbImageUsageProfile.hero,
+      ),
     );
     expect(image.memCacheWidth, 800);
     expect(image.memCacheHeight, 480);

@@ -15,53 +15,7 @@ class _MemoryMapScreenState extends State<MemoryMapScreen> {
   String _filter = 'all';
   int? _activePin;
 
-  static const _pins = [
-    _MapPinData(
-      x: 0.28,
-      y: 0.32,
-      icon: LucideIcons.wine,
-      title: 'Brix',
-      subtitle: 'винный · 12 мая',
-      people: ['А', 'Л', 'М'],
-      color: BbV5Colors.terra,
-    ),
-    _MapPinData(
-      x: 0.62,
-      y: 0.24,
-      icon: LucideIcons.music,
-      title: 'Powerhouse',
-      subtitle: 'джаз · 18 мая',
-      people: ['С', 'К'],
-      color: BbV5Colors.brand,
-    ),
-    _MapPinData(
-      x: 0.45,
-      y: 0.58,
-      icon: LucideIcons.coffee,
-      title: 'Кофемания',
-      subtitle: 'утро · 06 мая',
-      people: ['И'],
-      color: BbV5Colors.gold,
-    ),
-    _MapPinData(
-      x: 0.72,
-      y: 0.64,
-      icon: LucideIcons.footprints,
-      title: 'Чистые пруды',
-      subtitle: 'прогулка · 19 мая',
-      people: ['А', 'С', 'Л'],
-      color: BbV5Colors.brandDeep,
-    ),
-    _MapPinData(
-      x: 0.18,
-      y: 0.72,
-      icon: LucideIcons.heart,
-      title: 'Свидание · Аня',
-      subtitle: '20 мая',
-      people: ['А'],
-      color: BbV5Colors.rose,
-    ),
-  ];
+  static const _pins = <_MapPinData>[];
 
   @override
   Widget build(BuildContext context) {
@@ -103,12 +57,12 @@ class _MemoryMapScreenState extends State<MemoryMapScreen> {
                     onTap: () => setState(() => _filter = 'all'),
                   ),
                   BbV5Chip(
-                    label: 'Места · 12',
+                    label: 'Места · 0',
                     active: _filter == 'places',
                     onTap: () => setState(() => _filter = 'places'),
                   ),
                   BbV5Chip(
-                    label: 'Люди · 8',
+                    label: 'Люди · 0',
                     active: _filter == 'people',
                     onTap: () => setState(() => _filter = 'people'),
                   ),
@@ -465,9 +419,9 @@ class _MapStats extends StatelessWidget {
   const _MapStats();
 
   static const List<({String value, String label, IconData icon})> _items = [
-    (value: '12', label: 'мест', icon: LucideIcons.map_pin),
-    (value: '8', label: 'людей', icon: LucideIcons.users),
-    (value: '23', label: 'вечеров', icon: LucideIcons.calendar),
+    (value: '0', label: 'мест', icon: LucideIcons.map_pin),
+    (value: '0', label: 'людей', icon: LucideIcons.users),
+    (value: '0', label: 'вечеров', icon: LucideIcons.calendar),
   ];
 
   @override

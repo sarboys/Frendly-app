@@ -109,6 +109,39 @@ void main() {
     );
 
     expect(
+      appRouter.namedLocation('tokensFocus'),
+      '/tokens/focus',
+    );
+
+    expect(
+      appRouter.namedLocation('tokensBalance'),
+      '/tokens/balance',
+    );
+
+    expect(
+      appRouter.namedLocation('tokensTopUp'),
+      '/tokens/top-up',
+    );
+
+    expect(
+      appRouter.namedLocation('tokensBoost'),
+      '/tokens/boost',
+    );
+
+    expect(
+      appRouter.namedLocation(AppRoute.wallet.name),
+      '/wallet',
+    );
+
+    expect(
+      appRouter.namedLocation(
+        AppRoute.editCommunity.name,
+        pathParameters: const {'communityId': 'c1'},
+      ),
+      '/community/c1/edit',
+    );
+
+    expect(
       appRouter.namedLocation(
         AppRoute.afterDarkPaywall.name,
       ),
@@ -247,6 +280,62 @@ void main() {
       ),
       AppRoute.onboarding.path,
     );
+  });
+
+  testWidgets('router redirects legacy setup screens to onboarding', (
+    tester,
+  ) async {
+    final router = buildAppRouter(
+      authenticated: true,
+      isAuthenticated: () => true,
+      pendingSetupPath: () => AppRoute.onboarding.path,
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: buildTestOverrides(),
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+
+    router.go(AppRoute.addPhoto.path);
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path,
+        AppRoute.onboarding.path);
+
+    router.go(AppRoute.permissions.path);
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path,
+        AppRoute.onboarding.path);
+  });
+
+  testWidgets('router redirects legacy setup screens to tonight after setup', (
+    tester,
+  ) async {
+    final router = buildAppRouter(
+      authenticated: true,
+      isAuthenticated: () => true,
+      pendingSetupPath: () => null,
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: buildTestOverrides(),
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+
+    router.go(AppRoute.addPhoto.path);
+    await tester.pumpAndSettle();
+    expect(
+        router.routeInformationProvider.value.uri.path, AppRoute.tonight.path);
+
+    router.go(AppRoute.permissions.path);
+    await tester.pumpAndSettle();
+    expect(
+        router.routeInformationProvider.value.uri.path, AppRoute.tonight.path);
   });
 
   testWidgets('router keeps route catalog inside the shell', (tester) async {

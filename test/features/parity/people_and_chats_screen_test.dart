@@ -23,13 +23,7 @@ Widget _wrapWithRouter({
     routes: [
       GoRoute(
         path: '/',
-        builder: (context, state) => ProviderScope(
-          overrides: [
-            ...buildTestOverrides(),
-            ...extraOverrides,
-          ],
-          child: child,
-        ),
+        builder: (context, state) => child,
       ),
       GoRoute(
         path: '/search',
@@ -66,11 +60,17 @@ Widget _wrapWithRouter({
     ],
   );
 
-  return MaterialApp.router(routerConfig: router);
+  return ProviderScope(
+    overrides: [
+      ...buildTestOverrides(),
+      ...extraOverrides,
+    ],
+    child: MaterialApp.router(routerConfig: router),
+  );
 }
 
 void main() {
-  testWidgets('chats search button opens search screen', (tester) async {
+  testWidgets('chats search button opens v5 search modal', (tester) async {
     await tester.pumpWidget(
       _wrapWithRouter(
         child: const ChatsScreen(),
@@ -82,7 +82,7 @@ void main() {
     await tester.tap(find.byIcon(LucideIcons.search).first);
     await tester.pumpAndSettle();
 
-    expect(find.text('search-opened'), findsOneWidget);
+    expect(find.text('Найти людей, клубы, места...'), findsOneWidget);
   });
 
   testWidgets('chats active rail uses v5 live label and search icons',
@@ -98,6 +98,30 @@ void main() {
     expect(find.text('LIVE'), findsOneWidget);
     expect(find.text('Live'), findsNothing);
     expect(find.byIcon(LucideIcons.search), findsNWidgets(2));
+  });
+
+  testWidgets('empty chats do not render fallback people or meetup data',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        child: const ChatsScreen(),
+        targetText: 'unused',
+        extraOverrides: [
+          meetupChatsProvider.overrideWith((ref) async => const []),
+          personalChatsProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Brix · вино после работы'), findsNothing);
+    expect(find.text('Аня, 26'), findsNothing);
+    expect(find.text('Тверская в огнях'), findsNothing);
+    expect(find.text('LIVE'), findsNothing);
+    expect(
+      find.text('Пока нет чатов. Они появятся после встреч и мэтчей.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('all chats render real data as compact mixed v5 rows',

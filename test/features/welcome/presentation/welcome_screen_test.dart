@@ -165,10 +165,10 @@ void main() {
           builder: (context, state) => const WelcomeScreen(),
         ),
         GoRoute(
-          path: AppRoute.permissions.path,
-          name: AppRoute.permissions.name,
+          path: AppRoute.onboarding.path,
+          name: AppRoute.onboarding.name,
           builder: (context, state) => const Scaffold(
-            body: Center(child: Text('permissions-opened')),
+            body: Center(child: Text('onboarding-opened')),
           ),
         ),
         GoRoute(
@@ -194,7 +194,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fakeAuth.googleCalls, 1);
-    expect(find.text('permissions-opened'), findsOneWidget);
+    expect(find.text('onboarding-opened'), findsOneWidget);
   });
 
   testWidgets('yandex auth stores session and opens tonight for existing user',
@@ -210,10 +210,10 @@ void main() {
           builder: (context, state) => const WelcomeScreen(),
         ),
         GoRoute(
-          path: AppRoute.permissions.path,
-          name: AppRoute.permissions.name,
+          path: AppRoute.onboarding.path,
+          name: AppRoute.onboarding.name,
           builder: (context, state) => const Scaffold(
-            body: Center(child: Text('permissions-opened')),
+            body: Center(child: Text('onboarding-opened')),
           ),
         ),
         GoRoute(

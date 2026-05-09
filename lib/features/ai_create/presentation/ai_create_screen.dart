@@ -28,29 +28,7 @@ const _aiTimes = ['Сейчас', 'Вечером', 'Завтра', 'На вых
 const _aiSizes = ['2', '3–4', '5–8', '9+'];
 const _aiBudgets = ['Бесплатно', 'до 1500', '1500–3500', '3500+'];
 
-const _aiPlanTemplate = [
-  _AiPlanStep(
-    time: '19:30',
-    place: 'Brix · винный бар',
-    subtitle: 'стартуем с бокала оранжа',
-    tag: 'вино',
-    color: BbV5Colors.terra,
-  ),
-  _AiPlanStep(
-    time: '21:00',
-    place: 'Powerhouse · late jazz',
-    subtitle: 'живая музыка, негромко',
-    tag: 'музыка',
-    color: BbV5Colors.brand,
-  ),
-  _AiPlanStep(
-    time: '23:00',
-    place: 'Чистые пруды',
-    subtitle: 'ночная прогулка',
-    tag: 'прогулка',
-    color: BbV5Colors.gold,
-  ),
-];
+const _aiPlanTemplate = <_AiPlanStep>[];
 
 class AiCreateScreen extends StatefulWidget {
   const AiCreateScreen({super.key});
@@ -110,7 +88,7 @@ class _AiCreateScreenState extends State<AiCreateScreen> {
         _plan = _aiPlanTemplate;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Готово · 3 шага собраны')),
+        const SnackBar(content: Text('План пока не собран')),
       );
     });
   }
@@ -489,6 +467,8 @@ class _GeneratedPlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasPlan = plan.isNotEmpty;
+
     return BbV5Card(
       padding: EdgeInsets.zero,
       child: Column(
@@ -504,7 +484,9 @@ class _GeneratedPlanCard extends StatelessWidget {
                       const BbV5Kicker('AI · план вечера'),
                       const SizedBox(height: 6),
                       Text(
-                        '3 шага · ${time.toLowerCase()}',
+                        hasPlan
+                            ? '${plan.length} шага · ${time.toLowerCase()}'
+                            : 'План пока не собран',
                         style: bbV5DisplayStyle(fontSize: 20),
                       ),
                     ],
@@ -519,7 +501,19 @@ class _GeneratedPlanCard extends StatelessWidget {
               ],
             ),
           ),
-          for (final step in plan) _PlanStepRow(step: step),
+          if (!hasPlan)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+              child: Text(
+                'План появится после ответа AI.',
+                style: AppTextStyles.meta.copyWith(
+                  color: BbV5Colors.inkMute,
+                  height: 1.45,
+                ),
+              ),
+            )
+          else
+            for (final step in plan) _PlanStepRow(step: step),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -530,7 +524,7 @@ class _GeneratedPlanCard extends StatelessWidget {
                     height: 48,
                     fontSize: 12.5,
                     expanded: true,
-                    onPressed: onEdit,
+                    onPressed: hasPlan ? onEdit : null,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.xs),
@@ -542,7 +536,7 @@ class _GeneratedPlanCard extends StatelessWidget {
                     height: 48,
                     fontSize: 12.5,
                     expanded: true,
-                    onPressed: onCreate,
+                    onPressed: hasPlan ? onCreate : null,
                   ),
                 ),
               ],

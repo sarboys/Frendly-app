@@ -2,12 +2,12 @@ import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/features/evening_routes/presentation/evening_routes_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
+import 'package:big_break_mobile/shared/models/onboarding_data.dart';
+import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-
-import '../../test_overrides.dart';
 
 void main() {
   testWidgets('routes screen mirrors the front catalog structure', (
@@ -41,6 +41,59 @@ void main() {
 
     expect(find.text('Тёплый круг на Покровке'), findsOneWidget);
     expect(find.text('Свидание Noir'), findsOneWidget);
+  });
+
+  testWidgets('routes screen normalizes stored Moscow labels before loading', (
+    tester,
+  ) async {
+    _setMobileViewport(tester);
+    final requestedCities = <String>[];
+
+    await tester.pumpWidget(
+      _routesApp(
+        profileCity: 'г. Москва, Чистые пруды',
+        onRequestedCity: requestedCities.add,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requestedCities.first, 'Москва');
+    expect(find.text('2 маршрутов · Москва'), findsOneWidget);
+  });
+
+  testWidgets('routes screen refreshes a cached catalog when opened', (
+    tester,
+  ) async {
+    _setMobileViewport(tester);
+    var calls = 0;
+    final container = ProviderContainer(
+      overrides: _routesOverrides(
+        loadRoutes: (_) async {
+          calls += 1;
+          return calls == 1
+              ? const <EveningRouteTemplateSummary>[]
+              : _routeSummaries;
+        },
+      ),
+    );
+    addTearDown(container.dispose);
+
+    final cached = await container.read(
+      eveningRouteTemplatesProvider('Москва').future,
+    );
+    expect(cached, isEmpty);
+    expect(calls, 1);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(routerConfig: _routesRouter()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(calls, 2);
+    expect(find.text('Тёплый круг на Покровке'), findsOneWidget);
   });
 
   testWidgets('route card actions open detail and launch entry', (
@@ -79,9 +132,23 @@ void main() {
   });
 }
 
-Widget _routesApp({List<EveningRouteTemplateSummary>? routes}) {
-  final routeItems = routes ?? _routeSummaries;
-  final router = GoRouter(
+Widget _routesApp({
+  List<EveningRouteTemplateSummary>? routes,
+  String profileCity = 'Москва',
+  void Function(String city)? onRequestedCity,
+}) {
+  return ProviderScope(
+    overrides: _routesOverrides(
+      routes: routes,
+      profileCity: profileCity,
+      onRequestedCity: onRequestedCity,
+    ),
+    child: MaterialApp.router(routerConfig: _routesRouter()),
+  );
+}
+
+GoRouter _routesRouter() {
+  return GoRouter(
     initialLocation: AppRoute.eveningRoutes.path,
     routes: [
       GoRoute(
@@ -110,15 +177,53 @@ Widget _routesApp({List<EveningRouteTemplateSummary>? routes}) {
       ),
     ],
   );
+}
 
-  return ProviderScope(
-    overrides: [
-      ...buildTestOverrides(),
-      eveningRouteTemplatesProvider.overrideWith(
-        (ref, city) async => routeItems,
+List<Override> _routesOverrides({
+  List<EveningRouteTemplateSummary>? routes,
+  String profileCity = 'Москва',
+  void Function(String city)? onRequestedCity,
+  Future<List<EveningRouteTemplateSummary>> Function(String city)? loadRoutes,
+}) {
+  final routeItems = routes ?? _routeSummaries;
+  return [
+    profileProvider.overrideWith(
+      (ref) async => _profile(city: profileCity),
+    ),
+    onboardingProvider.overrideWith(
+      (ref) async => const OnboardingData(
+        intent: 'both',
+        gender: 'male',
+        birthDate: '2000-04-24',
+        city: 'Москва',
+        area: 'Чистые пруды',
+        interests: ['Кофе', 'Бары', 'Настолки'],
+        vibe: 'calm',
       ),
-    ],
-    child: MaterialApp.router(routerConfig: router),
+    ),
+    eveningRouteTemplatesProvider.overrideWith((ref, city) async {
+      onRequestedCity?.call(city);
+      return loadRoutes?.call(city) ?? routeItems;
+    }),
+  ];
+}
+
+ProfileData _profile({required String city}) {
+  return ProfileData(
+    id: 'user-me',
+    displayName: 'Никита М',
+    verified: true,
+    online: true,
+    age: 28,
+    city: city,
+    area: 'Чистые пруды',
+    bio: 'Люблю долгие прогулки и тихие бары.',
+    vibe: 'Спокойно',
+    rating: 4.8,
+    meetupCount: 12,
+    avatarUrl: null,
+    interests: const ['Кофе', 'Бары', 'Настолки'],
+    intent: const ['Свидания', 'Друзья'],
   );
 }
 

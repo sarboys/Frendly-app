@@ -49,7 +49,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
         return;
       }
       context.goRoute(
-        session.isNewUser ? AppRoute.permissions : AppRoute.tonight,
+        session.isNewUser ? AppRoute.onboarding : AppRoute.tonight,
       );
     } catch (_) {
       if (mounted && context.mounted) {

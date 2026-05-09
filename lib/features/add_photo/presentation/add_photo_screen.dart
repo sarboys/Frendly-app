@@ -576,7 +576,7 @@ class _AddPhotoScreenState extends ConsumerState<AddPhotoScreen> {
       return;
     }
     container.invalidate(profileProvider);
-    context.goRoute(AppRoute.onboarding);
+    context.goRoute(AppRoute.tonight);
   }
 
   Future<void> _skip() async {
@@ -595,7 +595,7 @@ class _AddPhotoScreenState extends ConsumerState<AddPhotoScreen> {
     if (!mounted) {
       return;
     }
-    context.goRoute(AppRoute.onboarding);
+    context.goRoute(AppRoute.tonight);
   }
 }
 

@@ -252,7 +252,7 @@ class _V5ActiveChatsRail extends StatelessWidget {
         personalChats.where((chat) => chat.online).take(3).toList();
 
     if (activeMeetups.isEmpty && activePersonal.isEmpty) {
-      return const _V5FallbackActiveChatsRail();
+      return const SizedBox.shrink();
     }
 
     return Column(
@@ -357,68 +357,6 @@ class _V5ActiveBubble extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _V5FallbackActiveChatsRail extends StatelessWidget {
-  const _V5FallbackActiveChatsRail();
-
-  static const _items = [
-    ('Brix', 'BR', BbV5Colors.terra),
-    ('Тверская', 'ТВ', BbV5Colors.brand),
-    ('Стендап', 'СТ', BbV5Colors.gold),
-    ('Late jazz', 'LJ', BbV5Colors.terra),
-    ('Coffee', 'CF', BbV5Colors.brandDeep),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            children: [
-              const Expanded(child: BbV5Kicker('Сейчас идут')),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const _PulseDot(color: BbV5Colors.terra, size: 7),
-                  const SizedBox(width: 6),
-                  Text(
-                    'LIVE',
-                    style: bbV5KickerStyle(
-                      color: BbV5Colors.inkSoft,
-                      letterSpacing: 1.6,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 78,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            itemCount: _items.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final item = _items[index];
-              return _V5ActiveBubble(
-                label: item.$1,
-                initials: item.$2,
-                color: item.$3,
-                onTap: () {},
-              );
-            },
-          ),
-        ),
-      ],
     );
   }
 }
@@ -565,7 +503,9 @@ class _V5AllChatList extends StatelessWidget {
     }
 
     if (meetupChats.isEmpty && personalChats.isEmpty) {
-      return const _V5FallbackChatList();
+      return const _V5ChatState(
+        text: 'Пока нет чатов. Они появятся после встреч и мэтчей.',
+      );
     }
 
     final entries = [
@@ -613,8 +553,8 @@ class _V5AllChatEntry {
   }) {
     final meetupChat = meetup;
     if (meetupChat != null) {
-      return _V5FallbackChatRow(
-        item: _V5FallbackChatItem(
+      return _V5ChatRow(
+        item: _V5ChatRowItem(
           title: meetupChat.title,
           initials: _initials(meetupChat.title),
           color: _meetupToneColor(meetupChat),
@@ -630,8 +570,8 @@ class _V5AllChatEntry {
     }
 
     final personalChat = personal!;
-    return _V5FallbackChatRow(
-      item: _V5FallbackChatItem(
+    return _V5ChatRow(
+      item: _V5ChatRowItem(
         title: personalChat.name,
         initials: _initials(personalChat.name),
         color: personalChat.online ? BbV5Colors.brand : BbV5Colors.rose,
@@ -726,87 +666,8 @@ int? _meetupMembersCount(MeetupChat chat) {
   return count > 0 ? count : null;
 }
 
-class _V5FallbackChatList extends StatelessWidget {
-  const _V5FallbackChatList();
-
-  static const _items = [
-    _V5FallbackChatItem(
-      title: 'Brix · вино после работы',
-      initials: 'BR',
-      color: BbV5Colors.terra,
-      last: 'Аня: я в 19:50 буду',
-      time: 'сейчас',
-      unread: 3,
-      kind: 'встреча',
-      members: 8,
-    ),
-    _V5FallbackChatItem(
-      title: 'Тверская в огнях',
-      initials: 'ТВ',
-      color: BbV5Colors.brand,
-      last: 'Лев: стартуем у Маяковской',
-      time: '12 мин',
-      kind: 'маршрут',
-      members: 6,
-    ),
-    _V5FallbackChatItem(
-      title: 'Аня, 26',
-      initials: 'А',
-      color: BbV5Colors.rose,
-      last: 'Ха, согласна) кофе?',
-      time: '1 ч',
-      unread: 1,
-      kind: 'дейтинг',
-    ),
-    _V5FallbackChatItem(
-      title: 'Стендап-четверг',
-      initials: 'СТ',
-      color: BbV5Colors.gold,
-      last: 'Мира: беру 2 билета',
-      time: '2 ч',
-      kind: 'афиша',
-      members: 14,
-    ),
-    _V5FallbackChatItem(
-      title: 'Late jazz · Powerhouse',
-      initials: 'LJ',
-      color: BbV5Colors.terra,
-      last: 'ты: огонь',
-      time: 'вчера',
-      kind: 'встреча',
-      members: 11,
-    ),
-    _V5FallbackChatItem(
-      title: 'Coffee club',
-      initials: 'CF',
-      color: BbV5Colors.brandDeep,
-      last: '12 новых сообщений',
-      time: 'вчера',
-      unread: 12,
-      kind: 'сообщество',
-      members: 32,
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return BbV5Card(
-      radius: BbV5Radii.lg,
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          for (var index = 0; index < _items.length; index++) ...[
-            _V5FallbackChatRow(item: _items[index]),
-            if (index < _items.length - 1) const _V5RowDivider(),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _V5FallbackChatItem {
-  const _V5FallbackChatItem({
+class _V5ChatRowItem {
+  const _V5ChatRowItem({
     required this.title,
     required this.initials,
     required this.color,
@@ -829,13 +690,13 @@ class _V5FallbackChatItem {
   final bool dot;
 }
 
-class _V5FallbackChatRow extends StatelessWidget {
-  const _V5FallbackChatRow({
+class _V5ChatRow extends StatelessWidget {
+  const _V5ChatRow({
     required this.item,
     this.onTap,
   });
 
-  final _V5FallbackChatItem item;
+  final _V5ChatRowItem item;
   final VoidCallback? onTap;
 
   @override
