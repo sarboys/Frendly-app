@@ -1,28 +1,26 @@
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/app/theme/app_colors.dart';
-import 'package:big_break_mobile/app/theme/app_radii.dart';
-import 'package:big_break_mobile/app/theme/app_shadows.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/communities/domain/community.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_widgets.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 enum _PostCategory {
-  news('Новость', '📣'),
-  event('Анонс', '🗓️'),
-  rules('Правила', '📌'),
-  media('Медиа', '🖼️');
+  news('Новость', LucideIcons.megaphone),
+  event('Анонс', LucideIcons.calendar_days),
+  rules('Правила', LucideIcons.pin),
+  media('Медиа', LucideIcons.image);
 
-  const _PostCategory(this.label, this.emoji);
+  const _PostCategory(this.label, this.icon);
 
   final String label;
-  final String emoji;
+  final IconData icon;
 }
 
 enum _PostAudience {
@@ -81,14 +79,15 @@ class _CreateCommunityPostScreenState
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     final communityAsync = ref.watch(communityProvider(widget.communityId));
 
     return communityAsync.when(
-      loading: () => Scaffold(
-        backgroundColor: colors.background,
-        body: Center(
-          child: CircularProgressIndicator(color: colors.primary),
+      loading: () => const BbV5Scaffold(
+        child: Center(
+          child: CircularProgressIndicator(
+            color: BbV5Colors.ink,
+            strokeWidth: 2.4,
+          ),
         ),
       ),
       error: (_, __) => const CommunityMissingState(),
@@ -97,10 +96,9 @@ class _CreateCommunityPostScreenState
           return const CommunityMissingState();
         }
 
-        return Scaffold(
-          backgroundColor: colors.background,
-          body: SafeArea(
-            bottom: false,
+        return BbV5Scaffold(
+          child: BbV5Page(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
             child: Column(
               children: [
                 _CreatePostHeader(
@@ -108,9 +106,10 @@ class _CreateCommunityPostScreenState
                   canPublish: _canPublish,
                   onPublish: _publish,
                 ),
+                const SizedBox(height: 20),
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                    padding: const EdgeInsets.fromLTRB(0, 0, 0, 24),
                     children: [
                       _AuthorCard(community: community),
                       const SizedBox(height: 20),
@@ -260,59 +259,34 @@ class _CreatePostHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: colors.border.withValues(alpha: 0.6)),
+    return Row(
+      children: [
+        BbV5IconButton(
+          icon: LucideIcons.arrow_left,
+          onPressed: () => context.pop(),
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(4, 3, 16, 12),
-        child: Row(
-          children: [
-            IconButton(
-              onPressed: () => context.pop(),
-              icon: Icon(
-                LucideIcons.chevron_left,
-                size: 28,
-                color: colors.foreground,
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              BbV5Kicker(communityName, maxLines: 1),
+              const SizedBox(height: 3),
+              Text(
+                'Новая публикация',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: bbV5DisplayStyle(fontSize: 20),
               ),
-            ),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    communityName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.meta.copyWith(
-                      color: colors.inkMute,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Новая публикация',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.itemTitle.copyWith(
-                      color: colors.foreground,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _HeaderPublishButton(
-              enabled: canPublish,
-              onTap: onPublish,
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
+        const SizedBox(width: AppSpacing.xs),
+        _HeaderPublishButton(
+          enabled: canPublish,
+          onTap: onPublish,
+        ),
+      ],
     );
   }
 }
@@ -328,29 +302,13 @@ class _HeaderPublishButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    final background = enabled ? colors.foreground : colors.muted;
-    final foreground = enabled ? colors.background : colors.inkMute;
-    return Material(
-      color: background,
-      borderRadius: AppRadii.pillBorder,
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: AppRadii.pillBorder,
-        child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          alignment: Alignment.center,
-          child: Text(
-            'Опубликовать',
-            style: AppTextStyles.itemTitle.copyWith(
-              color: foreground,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
+    return BbV5PillButton(
+      label: 'Опубликовать',
+      icon: LucideIcons.send,
+      dark: true,
+      height: 40,
+      fontSize: 12,
+      onPressed: enabled ? onTap : null,
     );
   }
 }
@@ -364,15 +322,10 @@ class _AuthorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return Container(
+    return BbV5Card(
+      radius: 20,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colors.card,
-        border: Border.all(color: colors.border),
-        borderRadius: AppRadii.cardBorder,
-        boxShadow: AppShadows.soft,
-      ),
+      tint: BbV5Colors.terraSoft,
       child: Row(
         children: [
           CommunityAvatarBox(
@@ -390,19 +343,15 @@ class _AuthorCard extends StatelessWidget {
                   community.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.itemTitle.copyWith(
-                    color: colors.foreground,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: bbV5DisplayStyle(fontSize: 15, height: 1.25),
                 ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(
+                    const Icon(
                       LucideIcons.megaphone,
                       size: 14,
-                      color: colors.inkMute,
+                      color: BbV5Colors.inkMute,
                     ),
                     const SizedBox(width: 6),
                     Expanded(
@@ -411,7 +360,7 @@ class _AuthorCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.meta.copyWith(
-                          color: colors.inkMute,
+                          color: BbV5Colors.inkMute,
                           fontSize: 12,
                         ),
                       ),
@@ -438,22 +387,13 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     return Row(
       children: [
         if (icon != null) ...[
-          Icon(icon, size: 14, color: colors.inkMute),
+          Icon(icon, size: 14, color: BbV5Colors.inkMute),
           const SizedBox(width: 6),
         ],
-        Text(
-          label,
-          style: AppTextStyles.caption.copyWith(
-            color: colors.inkMute,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0,
-          ),
-        ),
+        BbV5Kicker(label),
       ],
     );
   }
@@ -503,42 +443,11 @@ class _CategoryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return Material(
-      color: active ? colors.foreground : colors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: active ? colors.foreground : colors.border,
-        ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          alignment: Alignment.center,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                category.emoji,
-                style: const TextStyle(fontSize: 14, height: 1),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                category.label,
-                style: AppTextStyles.itemTitle.copyWith(
-                  color: active ? colors.background : colors.foreground,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return BbV5Chip(
+      label: category.label,
+      icon: category.icon,
+      active: active,
+      onTap: onTap,
     );
   }
 }
@@ -558,22 +467,15 @@ class _PostTextCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return Container(
+    return BbV5Card(
+      radius: 20,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colors.card,
-        border: Border.all(color: colors.border),
-        borderRadius: AppRadii.cardBorder,
-        boxShadow: AppShadows.soft,
-      ),
       child: Column(
         children: [
           TextField(
             controller: titleController,
             textInputAction: TextInputAction.next,
-            style: AppTextStyles.cardTitle.copyWith(
-              color: colors.foreground,
+            style: bbV5DisplayStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
             ),
@@ -581,18 +483,18 @@ class _PostTextCard extends StatelessWidget {
               border: InputBorder.none,
               isCollapsed: true,
               hintText: 'Заголовок новости',
-              hintStyle: AppTextStyles.cardTitle.copyWith(
-                color: colors.inkMute.withValues(alpha: 0.7),
+              hintStyle: bbV5DisplayStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
+                color: BbV5Colors.inkMute.withValues(alpha: 0.7),
               ),
             ),
           ),
           const SizedBox(height: 14),
-          Divider(
+          const Divider(
             height: 1,
             thickness: 1,
-            color: colors.border.withValues(alpha: 0.7),
+            color: BbV5Colors.hair,
           ),
           const SizedBox(height: 14),
           TextField(
@@ -601,7 +503,7 @@ class _PostTextCard extends StatelessWidget {
             maxLines: 6,
             keyboardType: TextInputType.multiline,
             style: AppTextStyles.bodySoft.copyWith(
-              color: colors.foreground,
+              color: BbV5Colors.ink,
               fontSize: 14,
               height: 1.45,
             ),
@@ -611,7 +513,7 @@ class _PostTextCard extends StatelessWidget {
               hintText:
                   'Расскажите участникам, что произошло, или что вы планируете...',
               hintStyle: AppTextStyles.bodySoft.copyWith(
-                color: colors.inkMute.withValues(alpha: 0.7),
+                color: BbV5Colors.inkMute.withValues(alpha: 0.7),
                 fontSize: 14,
                 height: 1.45,
               ),
@@ -628,7 +530,7 @@ class _PostTextCard extends StatelessWidget {
               Text(
                 '${bodyController.text.length}',
                 style: AppTextStyles.caption.copyWith(
-                  color: colors.inkMute,
+                  color: BbV5Colors.inkMute,
                   fontSize: 11,
                 ),
               ),
@@ -651,20 +553,18 @@ class _CoverButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    final background = active ? colors.secondarySoft : colors.background;
-    final foreground = active ? colors.secondary : colors.inkSoft;
-    final borderColor =
-        active ? colors.secondary.withValues(alpha: 0.3) : colors.border;
+    final background = active ? BbV5Colors.terraSoft : BbV5Colors.paperHi;
+    final foreground = active ? BbV5Colors.accentDeep : BbV5Colors.inkSoft;
+    final borderColor = active ? BbV5Colors.accent : BbV5Colors.hair;
     return Material(
       color: background,
       shape: RoundedRectangleBorder(
-        borderRadius: AppRadii.pillBorder,
+        borderRadius: BorderRadius.circular(BbV5Radii.pill),
         side: BorderSide(color: borderColor),
       ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: AppRadii.pillBorder,
+        borderRadius: BorderRadius.circular(BbV5Radii.pill),
         child: Container(
           height: 30,
           padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -705,32 +605,25 @@ class _AudienceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return ClipRRect(
-      borderRadius: AppRadii.cardBorder,
-      child: Container(
-        decoration: BoxDecoration(
-          color: colors.card,
-          border: Border.all(color: colors.border),
-          borderRadius: AppRadii.cardBorder,
-        ),
-        child: Column(
-          children: [
-            for (var i = 0; i < _PostAudience.values.length; i++) ...[
-              if (i != 0)
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: colors.border.withValues(alpha: 0.6),
-                ),
-              _AudienceRow(
-                audience: _PostAudience.values[i],
-                active: selected == _PostAudience.values[i],
-                onTap: () => onChanged(_PostAudience.values[i]),
+    return BbV5Card(
+      radius: 20,
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          for (var i = 0; i < _PostAudience.values.length; i++) ...[
+            if (i != 0)
+              const Divider(
+                height: 1,
+                thickness: 1,
+                color: BbV5Colors.hairSoft,
               ),
-            ],
+            _AudienceRow(
+              audience: _PostAudience.values[i],
+              active: selected == _PostAudience.values[i],
+              onTap: () => onChanged(_PostAudience.values[i]),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -749,7 +642,6 @@ class _AudienceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -772,7 +664,7 @@ class _AudienceRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.itemTitle.copyWith(
-                        color: colors.foreground,
+                        color: BbV5Colors.ink,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
@@ -783,7 +675,7 @@ class _AudienceRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.meta.copyWith(
-                        color: colors.inkMute,
+                        color: BbV5Colors.inkMute,
                         fontSize: 12,
                       ),
                     ),
@@ -815,38 +707,31 @@ class _OptionsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return ClipRRect(
-      borderRadius: AppRadii.cardBorder,
-      child: Container(
-        decoration: BoxDecoration(
-          color: colors.card,
-          border: Border.all(color: colors.border),
-          borderRadius: AppRadii.cardBorder,
-        ),
-        child: Column(
-          children: [
-            _ToggleRow(
-              icon: LucideIcons.pin,
-              title: 'Закрепить в новостях',
-              hint: 'Будет первой в ленте сообщества',
-              active: pin,
-              onTap: onTogglePin,
-            ),
-            Divider(
-              height: 1,
-              thickness: 1,
-              color: colors.border.withValues(alpha: 0.6),
-            ),
-            _ToggleRow(
-              icon: LucideIcons.bell,
-              title: 'Отправить пуш-уведомление',
-              hint: 'Все из выбранной аудитории получат сигнал',
-              active: push,
-              onTap: onTogglePush,
-            ),
-          ],
-        ),
+    return BbV5Card(
+      radius: 20,
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          _ToggleRow(
+            icon: LucideIcons.pin,
+            title: 'Закрепить в новостях',
+            hint: 'Будет первой в ленте сообщества',
+            active: pin,
+            onTap: onTogglePin,
+          ),
+          const Divider(
+            height: 1,
+            thickness: 1,
+            color: BbV5Colors.hairSoft,
+          ),
+          _ToggleRow(
+            icon: LucideIcons.bell,
+            title: 'Отправить пуш-уведомление',
+            hint: 'Все из выбранной аудитории получат сигнал',
+            active: push,
+            onTap: onTogglePush,
+          ),
+        ],
       ),
     );
   }
@@ -869,7 +754,6 @@ class _ToggleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -889,7 +773,7 @@ class _ToggleRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.itemTitle.copyWith(
-                        color: colors.foreground,
+                        color: BbV5Colors.ink,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
@@ -900,7 +784,7 @@ class _ToggleRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.meta.copyWith(
-                        color: colors.inkMute,
+                        color: BbV5Colors.inkMute,
                         fontSize: 12,
                       ),
                     ),
@@ -928,19 +812,18 @@ class _LeadingIconBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     return Container(
       width: 36,
       height: 36,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: active ? colors.foreground : colors.muted,
+        color: active ? BbV5Colors.ink : BbV5Colors.paperDeep,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Icon(
         icon,
         size: 16,
-        color: active ? colors.background : colors.inkSoft,
+        color: active ? BbV5Colors.paperHi : BbV5Colors.inkSoft,
       ),
     );
   }
@@ -955,7 +838,6 @@ class _RadioDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     return Container(
       width: 20,
       height: 20,
@@ -963,7 +845,7 @@ class _RadioDot extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: active ? colors.foreground : colors.border,
+          color: active ? BbV5Colors.ink : BbV5Colors.hair,
           width: 2,
         ),
       ),
@@ -971,8 +853,8 @@ class _RadioDot extends StatelessWidget {
           ? Container(
               width: 8,
               height: 8,
-              decoration: BoxDecoration(
-                color: colors.foreground,
+              decoration: const BoxDecoration(
+                color: BbV5Colors.ink,
                 shape: BoxShape.circle,
               ),
             )
@@ -990,15 +872,14 @@ class _ToggleSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 150),
       width: 44,
       height: 24,
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        color: active ? colors.foreground : colors.muted,
-        borderRadius: AppRadii.pillBorder,
+        color: active ? BbV5Colors.ink : BbV5Colors.paperDeep,
+        borderRadius: BorderRadius.circular(BbV5Radii.pill),
       ),
       child: AnimatedAlign(
         duration: const Duration(milliseconds: 150),
@@ -1007,10 +888,10 @@ class _ToggleSwitch extends StatelessWidget {
         child: Container(
           width: 20,
           height: 20,
-          decoration: BoxDecoration(
-            color: colors.background,
+          decoration: const BoxDecoration(
+            color: BbV5Colors.paperHi,
             shape: BoxShape.circle,
-            boxShadow: AppShadows.soft,
+            boxShadow: BbV5Shadows.pill,
           ),
         ),
       ),
@@ -1033,7 +914,6 @@ class _PreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1042,13 +922,9 @@ class _PreviewCard extends StatelessWidget {
           icon: LucideIcons.sparkles,
         ),
         const SizedBox(height: 8),
-        Container(
+        BbV5Card(
+          radius: 18,
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: colors.card,
-            border: Border.all(color: colors.border),
-            borderRadius: BorderRadius.circular(16),
-          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1060,7 +936,7 @@ class _PreviewCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodySoft.copyWith(
-                        color: colors.foreground,
+                        color: BbV5Colors.ink,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
@@ -1070,7 +946,7 @@ class _PreviewCard extends StatelessWidget {
                   Text(
                     'сейчас',
                     style: AppTextStyles.caption.copyWith(
-                      color: colors.inkMute,
+                      color: BbV5Colors.inkMute,
                       fontSize: 11,
                     ),
                   ),
@@ -1084,7 +960,7 @@ class _PreviewCard extends StatelessWidget {
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.meta.copyWith(
-                  color: colors.inkMute,
+                  color: BbV5Colors.inkMute,
                   fontSize: 12,
                   height: 1.45,
                 ),
@@ -1096,18 +972,18 @@ class _PreviewCard extends StatelessWidget {
                   runSpacing: 6,
                   children: [
                     if (pin)
-                      _PreviewBadge(
+                      const _PreviewBadge(
                         icon: LucideIcons.pin,
                         label: 'Закреплено',
-                        background: colors.muted,
-                        foreground: colors.inkSoft,
+                        background: BbV5Colors.paperDeep,
+                        foreground: BbV5Colors.inkSoft,
                       ),
                     if (push)
-                      _PreviewBadge(
+                      const _PreviewBadge(
                         icon: LucideIcons.bell,
                         label: 'Push',
-                        background: colors.secondarySoft,
-                        foreground: colors.secondary,
+                        background: BbV5Colors.terraSoft,
+                        foreground: BbV5Colors.accentDeep,
                       ),
                   ],
                 ),
@@ -1139,7 +1015,7 @@ class _PreviewBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: AppRadii.pillBorder,
+        borderRadius: BorderRadius.circular(BbV5Radii.pill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1172,51 +1048,24 @@ class _BottomPublishBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    final background = canPublish ? colors.foreground : colors.muted;
-    final foreground = canPublish ? colors.background : colors.inkMute;
-
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.background,
         border: Border(
-          top: BorderSide(color: colors.border.withValues(alpha: 0.6)),
+          top: BorderSide(color: BbV5Colors.hair.withValues(alpha: 0.6)),
         ),
       ),
       child: SafeArea(
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-          child: Material(
-            color: background,
-            borderRadius: BorderRadius.circular(16),
-            child: InkWell(
-              onTap: canPublish ? onPublish : null,
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                height: 48,
-                alignment: Alignment.center,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      LucideIcons.send,
-                      size: 16,
-                      color: foreground,
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Text(
-                      'Опубликовать в сообществе',
-                      style: AppTextStyles.bodySoft.copyWith(
-                        color: foreground,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          child: BbV5PillButton(
+            label: 'Опубликовать в сообществе',
+            icon: LucideIcons.send,
+            dark: true,
+            expanded: true,
+            height: 48,
+            fontSize: 14,
+            onPressed: canPublish ? onPublish : null,
           ),
         ),
       ),

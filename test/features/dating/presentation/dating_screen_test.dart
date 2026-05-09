@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
@@ -21,6 +22,7 @@ import '../../../test_overrides.dart';
 
 Widget _wrap({
   required List<Override> overrides,
+  String? initialProfileId,
 }) {
   final router = GoRouter(
     initialLocation: '/',
@@ -32,7 +34,7 @@ Widget _wrap({
             ...buildTestOverrides(),
             ...overrides,
           ],
-          child: const DatingScreen(),
+          child: DatingScreen(initialProfileId: initialProfileId),
         ),
       ),
       GoRoute(
@@ -113,6 +115,43 @@ void main() {
     expect(find.text('Лайки'), findsOneWidget);
     expect(find.text('Соня, 26'), findsOneWidget);
     expect(find.text('Открыть Frendly+'), findsNothing);
+  });
+
+  testWidgets('dating likes are locked without Frendly+', (tester) async {
+    var likesReads = 0;
+
+    await tester.pumpWidget(
+      _wrap(
+        overrides: [
+          authBootstrapProvider.overrideWith((ref) async {}),
+          currentUserIdProvider.overrideWith((ref) => 'user-me'),
+          backendRepositoryProvider.overrideWith(
+            (ref) => _MutableDatingRepository(ref: ref, dio: Dio()),
+          ),
+          subscriptionStateProvider.overrideWith(
+            (ref) async => const SubscriptionStateData(
+              plan: null,
+              status: 'inactive',
+              startedAt: null,
+              renewsAt: null,
+              trialEndsAt: null,
+            ),
+          ),
+          datingLikesProvider.overrideWith((ref) async {
+            likesReads += 1;
+            return const <DatingProfileData>[];
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Лайки'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Лайки доступны с Frendly+'), findsOneWidget);
+    expect(find.text('Открыть Frendly+'), findsOneWidget);
+    expect(likesReads, 0);
   });
 
   testWidgets('dating feed reserves space for bottom actions', (tester) async {
@@ -208,6 +247,105 @@ void main() {
     expect(find.text('Frendly+'), findsNothing);
   });
 
+  testWidgets('dating discover card hides social follow row', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        overrides: [
+          subscriptionStateProvider.overrideWith(
+            (ref) async => SubscriptionStateData(
+              plan: 'year',
+              status: 'active',
+              startedAt: DateTime(2026, 4, 18),
+              renewsAt: DateTime(2027, 4, 18),
+              trialEndsAt: null,
+            ),
+          ),
+          datingDiscoverProvider.overrideWith(
+            (ref) async => const [
+              DatingProfileData(
+                userId: 'user-sonya',
+                name: 'Соня',
+                age: 26,
+                distance: '1.4 км',
+                about: 'Люблю тихие ужины plus длинные разговоры.',
+                tags: ['ужины', 'джаз'],
+                prompt: 'Лучший first date без спешки.',
+                photoEmoji: '🕯️',
+                avatarUrl: null,
+                likedYou: false,
+                premium: true,
+                vibe: 'Спокойно',
+                area: 'Замоскворечье',
+                verified: true,
+                online: true,
+              ),
+            ],
+          ),
+          datingLikesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Подпис'), findsNothing);
+    expect(find.text('Пропустить'), findsOneWidget);
+    expect(find.text('Супер'), findsOneWidget);
+    expect(find.text('Лайк'), findsOneWidget);
+  });
+
+  testWidgets('dating can start on the requested profile', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        initialProfileId: 'user-dasha',
+        overrides: [
+          datingDiscoverProvider.overrideWith(
+            (ref) async => const [
+              DatingProfileData(
+                userId: 'user-sonya',
+                name: 'Соня',
+                age: 26,
+                distance: '1.4 км',
+                about: 'Люблю тихие ужины.',
+                tags: ['ужины'],
+                prompt: 'Лучший first date без спешки.',
+                photoEmoji: '🕯️',
+                avatarUrl: null,
+                likedYou: false,
+                premium: false,
+                vibe: 'Спокойно',
+                area: 'Замоскворечье',
+                verified: true,
+                online: true,
+              ),
+              DatingProfileData(
+                userId: 'user-dasha',
+                name: 'Даша',
+                age: 34,
+                distance: '2 км',
+                about: 'Кофе и прогулки.',
+                tags: ['кофе'],
+                prompt: 'Идеальный вечер в центре.',
+                photoEmoji: '☕',
+                avatarUrl: null,
+                likedYou: false,
+                premium: false,
+                vibe: 'Вечер',
+                area: 'Патрики',
+                verified: true,
+                online: true,
+              ),
+            ],
+          ),
+          datingLikesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Даша, 34'), findsOneWidget);
+    expect(find.text('Соня, 26'), findsNothing);
+  });
+
   testWidgets('dating likes item sends like action', (tester) async {
     late _FakeDatingRepository fakeRepository;
 
@@ -262,6 +400,281 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fakeRepository.actionTargets, ['user-sonya']);
+    expect(fakeRepository.actionKinds, ['like']);
+  });
+
+  testWidgets('dating action advances before backend response', (
+    tester,
+  ) async {
+    late _PendingDatingRepository repository;
+    final action = Completer<DatingActionResult>();
+
+    await tester.pumpWidget(
+      _wrap(
+        overrides: [
+          backendRepositoryProvider.overrideWith(
+            (ref) => repository = _PendingDatingRepository(
+              ref: ref,
+              dio: Dio(),
+              action: action.future,
+            ),
+          ),
+          subscriptionStateProvider.overrideWith(
+            (ref) async => SubscriptionStateData(
+              plan: 'year',
+              status: 'active',
+              startedAt: DateTime(2026, 4, 18),
+              renewsAt: DateTime(2027, 4, 18),
+              trialEndsAt: null,
+            ),
+          ),
+          datingDiscoverProvider.overrideWith(
+            (ref) async => const [_sonyaProfile, _lizaProfile],
+          ),
+          datingLikesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Соня, 26'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Лайк'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Лайк'));
+    await tester.pump();
+
+    expect(repository.actionTargets, ['user-sonya']);
+    expect(find.text('Лиза, 27'), findsOneWidget);
+    expect(find.text('Соня, 26'), findsNothing);
+
+    action.complete(
+      const DatingActionResult(
+        ok: true,
+        action: 'like',
+        matched: false,
+        chatId: null,
+        peer: null,
+      ),
+    );
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('dating action rolls back profile on backend error', (
+    tester,
+  ) async {
+    final action = Completer<DatingActionResult>();
+
+    await tester.pumpWidget(
+      _wrap(
+        overrides: [
+          backendRepositoryProvider.overrideWith(
+            (ref) => _PendingDatingRepository(
+              ref: ref,
+              dio: Dio(),
+              action: action.future,
+            ),
+          ),
+          subscriptionStateProvider.overrideWith(
+            (ref) async => SubscriptionStateData(
+              plan: 'year',
+              status: 'active',
+              startedAt: DateTime(2026, 4, 18),
+              renewsAt: DateTime(2027, 4, 18),
+              trialEndsAt: null,
+            ),
+          ),
+          datingDiscoverProvider.overrideWith(
+            (ref) async => const [_sonyaProfile, _lizaProfile],
+          ),
+          datingLikesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Лайк'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Лайк'));
+    await tester.pump();
+
+    expect(find.text('Лиза, 27'), findsOneWidget);
+
+    action.completeError(
+      DioException(requestOptions: RequestOptions(path: '/dating/actions')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Соня, 26'), findsOneWidget);
+    expect(find.text('Лиза, 27'), findsNothing);
+    expect(find.text('Не получилось сохранить действие'), findsOneWidget);
+  });
+
+  testWidgets('dating likes shows match pill before opening chat', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        overrides: [
+          backendRepositoryProvider.overrideWith(
+            (ref) => _MatchDatingRepository(ref: ref, dio: Dio()),
+          ),
+          subscriptionStateProvider.overrideWith(
+            (ref) async => SubscriptionStateData(
+              plan: 'year',
+              status: 'active',
+              startedAt: DateTime(2026, 4, 18),
+              renewsAt: DateTime(2027, 4, 18),
+              trialEndsAt: null,
+            ),
+          ),
+          datingDiscoverProvider.overrideWith((ref) async => const []),
+          datingLikesProvider.overrideWith(
+            (ref) async => const [
+              DatingProfileData(
+                userId: 'user-sonya',
+                name: 'Соня',
+                age: 26,
+                distance: '1.4 км',
+                about: 'Люблю тихие ужины plus длинные разговоры.',
+                tags: ['ужины', 'джаз'],
+                prompt: 'Лучший first date без спешки.',
+                photoEmoji: '🕯️',
+                avatarUrl: null,
+                likedYou: true,
+                premium: true,
+                vibe: 'Спокойно',
+                area: 'Замоскворечье',
+                verified: true,
+                online: true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Лайки'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Соня, 26'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('MATCH · ОТКРЫТЬ ЧАТ'), findsOneWidget);
+    expect(find.text('chat-chat-sonya'), findsNothing);
+
+    await tester.tap(find.text('MATCH · ОТКРЫТЬ ЧАТ'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('chat-chat-sonya'), findsOneWidget);
+  });
+
+  testWidgets('dating super button sends super like action', (tester) async {
+    late _FakeDatingRepository fakeRepository;
+
+    await tester.pumpWidget(
+      _wrap(
+        overrides: [
+          backendRepositoryProvider.overrideWith(
+            (ref) => fakeRepository = _FakeDatingRepository(
+              ref: ref,
+              dio: Dio(),
+            ),
+          ),
+          subscriptionStateProvider.overrideWith(
+            (ref) async => SubscriptionStateData(
+              plan: 'year',
+              status: 'active',
+              startedAt: DateTime(2026, 4, 18),
+              renewsAt: DateTime(2027, 4, 18),
+              trialEndsAt: null,
+            ),
+          ),
+          datingDiscoverProvider.overrideWith(
+            (ref) async => const [
+              DatingProfileData(
+                userId: 'user-sonya',
+                name: 'Соня',
+                age: 26,
+                distance: '1.4 км',
+                about: 'Люблю тихие ужины plus длинные разговоры.',
+                tags: ['ужины', 'джаз'],
+                prompt: 'Лучший first date без спешки.',
+                photoEmoji: '🕯️',
+                avatarUrl: null,
+                likedYou: false,
+                premium: true,
+                vibe: 'Спокойно',
+                area: 'Замоскворечье',
+                verified: true,
+                online: true,
+              ),
+            ],
+          ),
+          datingLikesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Супер'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Супер'));
+    await tester.pumpAndSettle();
+
+    expect(fakeRepository.actionTargets, ['user-sonya']);
+    expect(fakeRepository.actionKinds, ['super_like']);
+  });
+
+  testWidgets('dating opens paywall on super like limit', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        overrides: [
+          backendRepositoryProvider.overrideWith(
+            (ref) => _PaywallDatingRepository(ref: ref, dio: Dio()),
+          ),
+          subscriptionStateProvider.overrideWith(
+            (ref) async => const SubscriptionStateData(
+              plan: null,
+              status: 'inactive',
+              startedAt: null,
+              renewsAt: null,
+              trialEndsAt: null,
+            ),
+          ),
+          datingDiscoverProvider.overrideWith(
+            (ref) async => const [
+              DatingProfileData(
+                userId: 'user-sonya',
+                name: 'Соня',
+                age: 26,
+                distance: '1.4 км',
+                about: 'Люблю тихие ужины plus длинные разговоры.',
+                tags: ['ужины', 'джаз'],
+                prompt: 'Лучший first date без спешки.',
+                photoEmoji: '🕯️',
+                avatarUrl: null,
+                likedYou: false,
+                premium: true,
+                vibe: 'Спокойно',
+                area: 'Замоскворечье',
+                verified: true,
+                online: true,
+              ),
+            ],
+          ),
+          datingLikesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Супер'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Супер'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('paywall-opened'), findsOneWidget);
   });
 
   testWidgets('dating state can change profile photo', (tester) async {
@@ -509,12 +922,50 @@ void main() {
   });
 }
 
-class _FakeDatingRepository extends BackendRepository {
-  _FakeDatingRepository({
+const _sonyaProfile = DatingProfileData(
+  userId: 'user-sonya',
+  name: 'Соня',
+  age: 26,
+  distance: '1.4 км',
+  about: 'Люблю тихие ужины plus длинные разговоры.',
+  tags: ['ужины', 'джаз'],
+  prompt: 'Лучший first date без спешки.',
+  photoEmoji: '🕯️',
+  avatarUrl: null,
+  likedYou: false,
+  premium: true,
+  vibe: 'Спокойно',
+  area: 'Замоскворечье',
+  verified: true,
+  online: true,
+);
+
+const _lizaProfile = DatingProfileData(
+  userId: 'user-liza',
+  name: 'Лиза',
+  age: 27,
+  distance: '2.0 км',
+  about: 'Люблю концерты и спонтанные планы.',
+  tags: ['концерты', 'вечер'],
+  prompt: 'Лучший вечер начинается без долгой переписки.',
+  photoEmoji: '🌆',
+  avatarUrl: null,
+  likedYou: false,
+  premium: true,
+  vibe: 'Активно',
+  area: 'Центр',
+  verified: true,
+  online: true,
+);
+
+class _PendingDatingRepository extends BackendRepository {
+  _PendingDatingRepository({
     required super.ref,
     required super.dio,
+    required this.action,
   });
 
+  final Future<DatingActionResult> action;
   final actionTargets = <String>[];
 
   @override
@@ -523,9 +974,50 @@ class _FakeDatingRepository extends BackendRepository {
     required String action,
   }) async {
     actionTargets.add(targetUserId);
-    return const DatingActionResult(
+    return this.action;
+  }
+}
+
+class _MatchDatingRepository extends BackendRepository {
+  _MatchDatingRepository({
+    required super.ref,
+    required super.dio,
+  });
+
+  @override
+  Future<DatingActionResult> sendDatingAction({
+    required String targetUserId,
+    required String action,
+  }) async {
+    return DatingActionResult(
       ok: true,
-      action: 'like',
+      action: action,
+      matched: true,
+      chatId: 'chat-sonya',
+      peer: null,
+    );
+  }
+}
+
+class _FakeDatingRepository extends BackendRepository {
+  _FakeDatingRepository({
+    required super.ref,
+    required super.dio,
+  });
+
+  final actionTargets = <String>[];
+  final actionKinds = <String>[];
+
+  @override
+  Future<DatingActionResult> sendDatingAction({
+    required String targetUserId,
+    required String action,
+  }) async {
+    actionTargets.add(targetUserId);
+    actionKinds.add(action);
+    return DatingActionResult(
+      ok: true,
+      action: action,
       matched: false,
       chatId: null,
       peer: null,
@@ -621,6 +1113,29 @@ class _MutableDatingRepository extends BackendRepository {
       matched: false,
       chatId: null,
       peer: null,
+    );
+  }
+}
+
+class _PaywallDatingRepository extends BackendRepository {
+  _PaywallDatingRepository({
+    required super.ref,
+    required super.dio,
+  });
+
+  @override
+  Future<DatingActionResult> sendDatingAction({
+    required String targetUserId,
+    required String action,
+  }) async {
+    final requestOptions = RequestOptions(path: '/dating/actions');
+    throw DioException(
+      requestOptions: requestOptions,
+      response: Response<Map<String, dynamic>>(
+        requestOptions: requestOptions,
+        statusCode: 402,
+        data: const {'code': 'super_like_limit_reached'},
+      ),
     );
   }
 }

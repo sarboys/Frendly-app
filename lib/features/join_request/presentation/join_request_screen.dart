@@ -9,6 +9,7 @@ import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/event_detail.dart';
 import 'package:big_break_mobile/shared/widgets/async_value_view.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,9 +42,8 @@ class _JoinRequestScreenState extends ConsumerState<JoinRequestScreen> {
     final colors = AppColors.of(context);
     final eventAsync = ref.watch(eventDetailProvider(widget.eventId));
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
+    return BbV5Scaffold(
+      child: SafeArea(
         bottom: false,
         child: AsyncValueView<EventDetail>(
           value: eventAsync,

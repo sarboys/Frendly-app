@@ -11,6 +11,7 @@ import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,7 +41,12 @@ const _datingTimeFilters = [
 ];
 
 class DatingScreen extends ConsumerStatefulWidget {
-  const DatingScreen({super.key});
+  const DatingScreen({
+    this.initialProfileId,
+    super.key,
+  });
+
+  final String? initialProfileId;
 
   @override
   ConsumerState<DatingScreen> createState() => _DatingScreenState();
@@ -51,6 +57,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
   bool _submitting = false;
   final Map<String, int> _photoIndexes = <String, int>{};
   final Set<String> _handledProfileIds = <String>{};
+  final Map<String, String> _matchedChatIds = <String, String>{};
   final Set<String> _savedProfileIds = <String>{};
   final Set<String> _filterInterests = <String>{};
   String _filterArea = 'Все';
@@ -60,7 +67,17 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
   @override
   Widget build(BuildContext context) {
     final discoverAsync = ref.watch(datingDiscoverProvider);
-    final likesAsync = _tab == 'likes' ? ref.watch(datingLikesProvider) : null;
+    final subscriptionAsync =
+        _tab == 'likes' ? ref.watch(subscriptionStateProvider) : null;
+    final subscription = subscriptionAsync?.valueOrNull;
+    final hasFrendlyPlus =
+        subscription?.status == 'trial' || subscription?.status == 'active';
+    final subscriptionLoading = subscriptionAsync != null &&
+        subscriptionAsync.isLoading &&
+        !subscriptionAsync.hasValue;
+    final likesAsync = _tab == 'likes' && hasFrendlyPlus
+        ? ref.watch(datingLikesProvider)
+        : null;
     final likes = likesAsync?.valueOrNull ?? const <DatingProfileData>[];
     final discover = discoverAsync.valueOrNull ?? const <DatingProfileData>[];
     final filteredDiscover = _filterProfiles(discover);
@@ -111,7 +128,14 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                           discoverAsync,
                           filteredDiscover,
                         )
-                      : _buildLikes(context, likesAsync, likes),
+                      : !hasFrendlyPlus
+                          ? subscriptionLoading
+                              ? const _DatingLoadingState()
+                              : _DatingPlusLockedState(
+                                  onOpenPaywall: () =>
+                                      context.pushRoute(AppRoute.paywall),
+                                )
+                          : _buildLikes(context, likesAsync, likes),
                 ),
               ],
             ),
@@ -262,14 +286,28 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
           separatorBuilder: (context, index) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final profile = likes[index];
+            final chatId = _matchedChatIds[profile.userId];
+            final isMatch = chatId != null;
             return BbV5Card(
               radius: 24,
               padding: const EdgeInsets.all(14),
-              onTap: () => _handleAction(
-                context,
-                profile,
-                action: 'like',
-              ),
+              onTap: _submitting
+                  ? null
+                  : () {
+                      if (chatId != null) {
+                        context.pushRoute(
+                          AppRoute.personalChat,
+                          pathParameters: {'chatId': chatId},
+                        );
+                        return;
+                      }
+                      _handleAction(
+                        context,
+                        profile,
+                        action: 'like',
+                        fromLikes: true,
+                      );
+                    },
               child: Row(
                 children: [
                   Container(
@@ -324,16 +362,21 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
-                              LucideIcons.eye,
+                            Icon(
+                              isMatch ? LucideIcons.check : LucideIcons.eye,
                               size: 12,
-                              color: BbV5Colors.terra,
+                              color:
+                                  isMatch ? BbV5Colors.brand : BbV5Colors.terra,
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'Лайкнул(а) тебя',
+                              isMatch
+                                  ? 'MATCH · ОТКРЫТЬ ЧАТ'
+                                  : 'Лайкнул(а) тебя',
                               style: AppTextStyles.caption.copyWith(
-                                color: BbV5Colors.terra,
+                                color: isMatch
+                                    ? BbV5Colors.brand
+                                    : BbV5Colors.terra,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: 0.6,
@@ -380,6 +423,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
     BuildContext context,
     DatingProfileData profile, {
     required String action,
+    bool fromLikes = false,
   }) async {
     if (_submitting) {
       return;
@@ -388,8 +432,14 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
     final repository = ref.read(backendRepositoryProvider);
     final container = ProviderScope.containerOf(context, listen: false);
     final targetUserId = profile.userId;
+    final previousPhotoIndex = _photoIndexes[targetUserId];
+    final shouldAdvanceOptimistically = !fromLikes;
     setState(() {
       _submitting = true;
+      if (shouldAdvanceOptimistically) {
+        _handledProfileIds.add(targetUserId);
+        _photoIndexes.remove(targetUserId);
+      }
     });
 
     try {
@@ -402,21 +452,50 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         return;
       }
 
+      final matchedChatId = result.matched ? result.chatId : null;
       setState(() {
-        _handledProfileIds.add(targetUserId);
-        _photoIndexes.remove(targetUserId);
+        if (matchedChatId != null) {
+          _matchedChatIds[targetUserId] = matchedChatId;
+        }
       });
 
       container.invalidate(datingDiscoverProvider);
-      container.invalidate(datingLikesProvider);
+      if (!(fromLikes && matchedChatId != null)) {
+        container.invalidate(datingLikesProvider);
+      }
 
-      if (result.matched && result.chatId != null) {
-        await context.pushRoute(
-          AppRoute.personalChat,
-          pathParameters: {'chatId': result.chatId!},
+      final remaining = result.superLikeQuota?.remaining;
+      if (action == 'super_like' && remaining != null && !result.matched) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Суперлайков осталось: $remaining')),
         );
       }
+
+      if (matchedChatId != null && !fromLikes) {
+        _showMatchSnackBar(context, profile.name, matchedChatId);
+      }
+    } on DioException catch (error) {
+      _rollbackOptimisticAction(
+        targetUserId,
+        shouldAdvanceOptimistically,
+        previousPhotoIndex,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      if (_isDatingPaywallError(error)) {
+        await context.pushRoute(AppRoute.paywall);
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не получилось сохранить действие')),
+      );
     } catch (_) {
+      _rollbackOptimisticAction(
+        targetUserId,
+        shouldAdvanceOptimistically,
+        previousPhotoIndex,
+      );
       if (!context.mounted) {
         return;
       }
@@ -430,6 +509,55 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         });
       }
     }
+  }
+
+  void _rollbackOptimisticAction(
+    String targetUserId,
+    bool shouldRollback,
+    int? previousPhotoIndex,
+  ) {
+    if (!shouldRollback || !mounted) {
+      return;
+    }
+    setState(() {
+      _handledProfileIds.remove(targetUserId);
+      if (previousPhotoIndex == null) {
+        _photoIndexes.remove(targetUserId);
+      } else {
+        _photoIndexes[targetUserId] = previousPhotoIndex;
+      }
+    });
+  }
+
+  void _showMatchSnackBar(
+    BuildContext context,
+    String profileName,
+    String chatId,
+  ) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Это match с $profileName'),
+        action: SnackBarAction(
+          label: 'В чат',
+          onPressed: () {
+            if (!context.mounted) {
+              return;
+            }
+            context.pushRoute(
+              AppRoute.personalChat,
+              pathParameters: {'chatId': chatId},
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  bool _isDatingPaywallError(DioException error) {
+    final data = error.response?.data;
+    final code = data is Map ? data['code'] : null;
+    return code == 'super_like_limit_reached' ||
+        code == 'frendly_plus_required';
   }
 
   List<DatingProfileData> _filterProfiles(List<DatingProfileData> profiles) {
@@ -654,6 +782,17 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
   DatingProfileData? _currentProfile(List<DatingProfileData> profiles) {
     if (profiles.isEmpty) {
       return null;
+    }
+
+    final initialProfileId = widget.initialProfileId;
+    if (initialProfileId != null &&
+        initialProfileId.isNotEmpty &&
+        !_handledProfileIds.contains(initialProfileId)) {
+      for (final profile in profiles) {
+        if (profile.userId == initialProfileId) {
+          return profile;
+        }
+      }
     }
 
     for (final profile in profiles) {
@@ -902,6 +1041,58 @@ class _DatingTabButton extends StatelessWidget {
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DatingPlusLockedState extends StatelessWidget {
+  const _DatingPlusLockedState({
+    required this.onOpenPaywall,
+  });
+
+  final VoidCallback onOpenPaywall;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: BbV5Card(
+        padding: const EdgeInsets.all(28),
+        radius: 24,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              LucideIcons.lock,
+              size: 32,
+              color: BbV5Colors.terra,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Лайки доступны с Frendly+',
+              textAlign: TextAlign.center,
+              style: bbV5DisplayStyle(fontSize: 15),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Открой входящие лайки и отвечай тем, кто уже выбрал тебя',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodySoft.copyWith(
+                color: BbV5Colors.inkMute,
+                fontSize: 12.5,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 16),
+            BbV5PillButton(
+              label: 'Открыть Frendly+',
+              onPressed: onOpenPaywall,
+              dark: true,
+              height: 46,
+              fontSize: 13,
+            ),
           ],
         ),
       ),
@@ -1322,12 +1513,6 @@ class _DatingProfileCard extends StatelessWidget {
                         .toList(growable: false),
                   ),
                 ],
-                const SizedBox(height: 14),
-                _DatingFollowRow(
-                  userId: profile.userId,
-                  name: profile.name,
-                  enabled: actionsEnabled,
-                ),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -1365,147 +1550,6 @@ class _DatingProfileCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _DatingFollowRow extends ConsumerWidget {
-  const _DatingFollowRow({
-    required this.userId,
-    required this.name,
-    required this.enabled,
-  });
-
-  final String userId;
-  final String name;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final socialAsync = ref.watch(profileSocialProvider(userId));
-    final social = socialAsync.valueOrNull ?? _fallbackSocialFor(userId);
-    final actionsEnabled = enabled && socialAsync.valueOrNull != null;
-    final controller = ref.read(profileSocialProvider(userId).notifier);
-
-    return Container(
-      padding: const EdgeInsets.only(top: 12),
-      decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: BbV5Colors.hairSoft),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: actionsEnabled ? controller.toggleFollow : null,
-              child: Container(
-                height: 36,
-                decoration: BoxDecoration(
-                  color:
-                      social.iFollow ? BbV5Colors.paperHi : BbV5Colors.accent,
-                  borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                  border: Border.all(
-                    color: social.iFollow ? BbV5Colors.hair : BbV5Colors.accent,
-                  ),
-                  boxShadow:
-                      social.iFollow ? BbV5Shadows.pill : BbV5Shadows.ink,
-                ),
-                alignment: Alignment.center,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      social.iFollow
-                          ? LucideIcons.user_check
-                          : LucideIcons.user_plus,
-                      size: 14,
-                      color:
-                          social.iFollow ? BbV5Colors.ink : BbV5Colors.paperHi,
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        social.iFollow
-                            ? 'Подписан · ${_formatDatingSocial(social.followers)}'
-                            : 'Подписаться · ${_formatDatingSocial(social.followers)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.caption.copyWith(
-                          color: social.iFollow
-                              ? BbV5Colors.ink
-                              : BbV5Colors.paperHi,
-                          fontFamily: 'Sora',
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: actionsEnabled ? controller.toggleLike : null,
-            child: Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 13),
-              decoration: BoxDecoration(
-                color: BbV5Colors.paperHi,
-                borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                border: Border.all(color: BbV5Colors.hair),
-                boxShadow: BbV5Shadows.pill,
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    LucideIcons.heart,
-                    size: 14,
-                    color: social.iLike ? BbV5Colors.terra : BbV5Colors.inkSoft,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _formatDatingSocial(social.likes),
-                    style: AppTextStyles.caption.copyWith(
-                      color: social.iLike ? BbV5Colors.terra : BbV5Colors.ink,
-                      fontFamily: 'Sora',
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-ProfileSocialData _fallbackSocialFor(String userId) {
-  final seed = userId.codeUnits.fold<int>(0, (sum, unit) => sum + unit);
-  return ProfileSocialData(
-    followers: 60 + seed % 480,
-    likes: 140 + seed % 1200,
-    superLikes: 8 + seed % 60,
-    iFollow: false,
-    iLike: false,
-    iSuper: false,
-  );
-}
-
-String _formatDatingSocial(int value) {
-  if (value >= 1000) {
-    final short = value / 1000;
-    return '${short.toStringAsFixed(short >= 10 ? 0 : 1)}к';
-  }
-  return value.toString();
 }
 
 class _DatingPhotoInfoOverlay extends StatelessWidget {

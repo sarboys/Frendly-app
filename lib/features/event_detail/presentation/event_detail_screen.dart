@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class EventDetailScreen extends ConsumerStatefulWidget {
   const EventDetailScreen({
@@ -35,133 +36,138 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     return BbV5Scaffold(
       child: AsyncValueView<EventDetail>(
         value: eventAsync,
-        data: (event) => _EventDetailBody(
-          event: event,
-          actionBusy: _actionBusy,
-          onJoinOrOpen: _actionBusy
-              ? null
-              : () async {
-                  final requiresRequest =
-                      event.joinMode == EventJoinMode.request ||
-                          event.accessMode == 'request' ||
-                          event.visibilityMode == 'friends';
+        data: (event) {
+          final hasPendingJoinRequest = !event.joined &&
+              event.joinRequestStatus == EventJoinRequestStatus.pending;
+          return _EventDetailBody(
+            event: event,
+            actionBusy: _actionBusy,
+            onJoinOrOpen: _actionBusy || hasPendingJoinRequest
+                ? null
+                : () async {
+                    final requiresRequest =
+                        event.joinMode == EventJoinMode.request ||
+                            event.accessMode == 'request' ||
+                            event.visibilityMode == 'friends';
 
-                  if (event.isHost) {
-                    if (context.mounted) {
-                      context.pushRoute(
-                        AppRoute.hostEvent,
-                        pathParameters: {'eventId': event.id},
-                      );
-                    }
-                    return;
-                  }
-
-                  if (!event.joined && requiresRequest) {
-                    if (context.mounted) {
-                      context.pushRoute(
-                        AppRoute.joinRequest,
-                        pathParameters: {'eventId': event.id},
-                      );
-                    }
-                    return;
-                  }
-
-                  final repository = ref.read(backendRepositoryProvider);
-                  final container = ProviderScope.containerOf(
-                    context,
-                    listen: false,
-                  );
-                  setState(() {
-                    _actionBusy = true;
-                  });
-                  try {
-                    final detail = event.joined
-                        ? event
-                        : await repository.joinEvent(event.id);
-                    if (!mounted) {
+                    if (event.isHost) {
+                      if (context.mounted) {
+                        context.pushRoute(
+                          AppRoute.hostEvent,
+                          pathParameters: {'eventId': event.id},
+                        );
+                      }
                       return;
                     }
-                    container.invalidate(eventDetailProvider(event.id));
-                    container.invalidate(eventsProvider('nearby'));
-                    container.invalidate(mapEventsProvider);
-                    container.invalidate(eventsProvider('now'));
-                    container.invalidate(eventsProvider('calm'));
-                    container.invalidate(eventsProvider('newcomers'));
-                    container.invalidate(eventsProvider('date'));
-                    container.invalidate(meetupChatsProvider);
-                    if (context.mounted && detail.chatId != null) {
-                      context.pushRoute(
-                        AppRoute.meetupChat,
-                        pathParameters: {'chatId': detail.chatId!},
-                      );
-                    }
-                  } catch (_) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Не получилось обновить участие')),
-                      );
-                    }
-                  } finally {
-                    if (mounted) {
-                      setState(() {
-                        _actionBusy = false;
-                      });
-                    }
-                  }
-                },
-          onSecondaryAction: _actionBusy
-              ? null
-              : (!event.joined &&
-                          event.joinRequestStatus ==
-                              EventJoinRequestStatus.pending) ||
-                      (event.joined && !event.isHost)
-                  ? () async {
-                      final repository = ref.read(backendRepositoryProvider);
-                      final container = ProviderScope.containerOf(
-                        context,
-                        listen: false,
-                      );
-                      setState(() {
-                        _actionBusy = true;
-                      });
-                      try {
-                        if (!event.joined &&
-                            event.joinRequestStatus ==
-                                EventJoinRequestStatus.pending) {
-                          await repository.cancelJoinRequest(event.id);
-                        } else if (event.joined && !event.isHost) {
-                          await repository.leaveEvent(event.id);
-                        }
 
-                        if (!mounted) {
-                          return;
-                        }
-                        container.invalidate(eventDetailProvider(event.id));
-                        container.invalidate(eventsProvider('nearby'));
-                        container.invalidate(mapEventsProvider);
-                        container.invalidate(eventsProvider('now'));
-                        container.invalidate(eventsProvider('calm'));
-                        container.invalidate(eventsProvider('newcomers'));
-                        container.invalidate(eventsProvider('date'));
-                        container.invalidate(meetupChatsProvider);
-                      } catch (_) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Не получилось обновить заявку')),
-                          );
-                        }
-                      } finally {
-                        if (mounted) {
-                          setState(() {
-                            _actionBusy = false;
-                          });
-                        }
+                    if (!event.joined && requiresRequest) {
+                      if (context.mounted) {
+                        context.pushRoute(
+                          AppRoute.joinRequest,
+                          pathParameters: {'eventId': event.id},
+                        );
+                      }
+                      return;
+                    }
+
+                    final repository = ref.read(backendRepositoryProvider);
+                    final container = ProviderScope.containerOf(
+                      context,
+                      listen: false,
+                    );
+                    setState(() {
+                      _actionBusy = true;
+                    });
+                    try {
+                      final detail = event.joined
+                          ? event
+                          : await repository.joinEvent(event.id);
+                      if (!mounted) {
+                        return;
+                      }
+                      container.invalidate(eventDetailProvider(event.id));
+                      container.invalidate(eventsProvider('nearby'));
+                      container.invalidate(mapEventsProvider);
+                      container.invalidate(eventsProvider('now'));
+                      container.invalidate(eventsProvider('calm'));
+                      container.invalidate(eventsProvider('newcomers'));
+                      container.invalidate(eventsProvider('date'));
+                      container.invalidate(meetupChatsProvider);
+                      if (context.mounted && detail.chatId != null) {
+                        context.pushRoute(
+                          AppRoute.meetupChat,
+                          pathParameters: {'chatId': detail.chatId!},
+                        );
+                      }
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Не получилось обновить участие')),
+                        );
+                      }
+                    } finally {
+                      if (mounted) {
+                        setState(() {
+                          _actionBusy = false;
+                        });
                       }
                     }
-                  : null,
-        ),
+                  },
+            onSecondaryAction: _actionBusy
+                ? null
+                : (!event.joined &&
+                            event.joinRequestStatus ==
+                                EventJoinRequestStatus.pending) ||
+                        (event.joined && !event.isHost)
+                    ? () async {
+                        final repository = ref.read(backendRepositoryProvider);
+                        final container = ProviderScope.containerOf(
+                          context,
+                          listen: false,
+                        );
+                        setState(() {
+                          _actionBusy = true;
+                        });
+                        try {
+                          if (!event.joined &&
+                              event.joinRequestStatus ==
+                                  EventJoinRequestStatus.pending) {
+                            await repository.cancelJoinRequest(event.id);
+                          } else if (event.joined && !event.isHost) {
+                            await repository.leaveEvent(event.id);
+                          }
+
+                          if (!mounted) {
+                            return;
+                          }
+                          container.invalidate(eventDetailProvider(event.id));
+                          container.invalidate(eventsProvider('nearby'));
+                          container.invalidate(mapEventsProvider);
+                          container.invalidate(eventsProvider('now'));
+                          container.invalidate(eventsProvider('calm'));
+                          container.invalidate(eventsProvider('newcomers'));
+                          container.invalidate(eventsProvider('date'));
+                          container.invalidate(meetupChatsProvider);
+                        } catch (_) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content:
+                                      Text('Не получилось обновить заявку')),
+                            );
+                          }
+                        } finally {
+                          if (mounted) {
+                            setState(() {
+                              _actionBusy = false;
+                            });
+                          }
+                        }
+                      }
+                    : null,
+          );
+        },
       ),
     );
   }
@@ -185,6 +191,8 @@ class _EventDetailBody extends StatelessWidget {
     final requiresRequest = event.joinMode == EventJoinMode.request ||
         event.accessMode == 'request' ||
         event.visibilityMode == 'friends';
+    final hasPendingJoinRequest = !event.joined &&
+        event.joinRequestStatus == EventJoinRequestStatus.pending;
     final criteria = _buildCriteria(event);
     return Stack(
       children: [
@@ -391,7 +399,13 @@ class _EventDetailBody extends StatelessWidget {
                               style: FilledButton.styleFrom(
                                 backgroundColor: event.joined
                                     ? BbV5Colors.ink
-                                    : BbV5Colors.accent,
+                                    : hasPendingJoinRequest
+                                        ? BbV5Colors.inkSoft
+                                        : BbV5Colors.accent,
+                                disabledBackgroundColor: hasPendingJoinRequest
+                                    ? BbV5Colors.inkSoft
+                                    : null,
+                                disabledForegroundColor: BbV5Colors.paperHi,
                                 foregroundColor: BbV5Colors.paperHi,
                                 shape: const StadiumBorder(),
                               ),
@@ -403,9 +417,11 @@ class _EventDetailBody extends StatelessWidget {
                                         ? 'Открыть хост-панель'
                                         : event.joined
                                             ? 'Открыть чат встречи'
-                                            : requiresRequest
-                                                ? 'Отправить заявку'
-                                                : 'Присоединиться',
+                                            : hasPendingJoinRequest
+                                                ? 'Заявка отправлена'
+                                                : requiresRequest
+                                                    ? 'Отправить заявку'
+                                                    : 'Присоединиться',
                                 style: AppTextStyles.button.copyWith(
                                   color: BbV5Colors.paperHi,
                                   fontSize: 14,
@@ -829,22 +845,30 @@ class _V5AttendeesRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cards = [
+    final seenUserIds = <String>{event.host.id};
+    final cards = <_V5AttendeeData>[
       _V5AttendeeData(
+        id: event.host.id,
         name: event.host.displayName,
         role: 'Хост',
         avatarUrl: event.host.avatarUrl,
         verified: event.host.verified,
       ),
-      ...event.attendees.map(
-        (attendee) => _V5AttendeeData(
+    ];
+    for (final attendee in event.attendees) {
+      if (!seenUserIds.add(attendee.id)) {
+        continue;
+      }
+      cards.add(
+        _V5AttendeeData(
+          id: attendee.id,
           name: attendee.displayName,
           role: 'идёт',
           avatarUrl: attendee.avatarUrl,
           verified: false,
         ),
-      ),
-    ];
+      );
+    }
     final count = event.going > 0 ? event.going : cards.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -888,12 +912,14 @@ class _V5AttendeesRail extends StatelessWidget {
 
 class _V5AttendeeData {
   const _V5AttendeeData({
+    required this.id,
     required this.name,
     required this.role,
     required this.avatarUrl,
     required this.verified,
   });
 
+  final String id;
   final String name;
   final String role;
   final String? avatarUrl;
@@ -1033,24 +1059,28 @@ class _V5MiniMapCard extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        event.place,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: bbV5DisplayStyle(fontSize: 13.5),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${event.distance} · в 15 минутах от тебя',
-                        style: AppTextStyles.caption.copyWith(
-                          color: BbV5Colors.inkMute,
-                          letterSpacing: 0,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _showEventMapOptions(context, event),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          event.place,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: bbV5DisplayStyle(fontSize: 13.5),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 2),
+                        Text(
+                          '${event.distance} · в 15 минутах от тебя',
+                          style: AppTextStyles.caption.copyWith(
+                            color: BbV5Colors.inkMute,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 BbV5PillButton(
@@ -1067,6 +1097,141 @@ class _V5MiniMapCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+Future<void> _showEventMapOptions(
+  BuildContext context,
+  EventDetail event,
+) async {
+  final query = event.place.trim();
+  if (query.isEmpty) {
+    return;
+  }
+
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Открыть адрес',
+                style: bbV5DisplayStyle(fontSize: 15),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _EventMapOption(
+                icon: LucideIcons.map,
+                title: 'Google Карты',
+                subtitle: query,
+                onTap: () => _openEventMapUrl(
+                  context,
+                  sheetContext,
+                  Uri.https('www.google.com', '/maps/search/', {
+                    'api': '1',
+                    'query': query,
+                  }),
+                ),
+              ),
+              _EventMapOption(
+                icon: LucideIcons.navigation,
+                title: 'Яндекс Карты',
+                subtitle: query,
+                onTap: () => _openEventMapUrl(
+                  context,
+                  sheetContext,
+                  Uri.https('yandex.ru', '/maps/', {'text': query}),
+                ),
+              ),
+              Text(
+                'Откроется внешнее приложение или браузер.',
+                style: AppTextStyles.meta.copyWith(
+                  color: BbV5Colors.inkMute,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Future<void> _openEventMapUrl(
+  BuildContext rootContext,
+  BuildContext sheetContext,
+  Uri uri,
+) async {
+  sheetContext.pop();
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (opened || !rootContext.mounted) {
+    return;
+  }
+  ScaffoldMessenger.of(rootContext).showSnackBar(
+    const SnackBar(content: Text('Не получилось открыть карты.')),
+  );
+}
+
+class _EventMapOption extends StatelessWidget {
+  const _EventMapOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: BbV5Colors.paperHi,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: BbV5Colors.hair),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: BbV5Colors.ink, size: 18),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: bbV5DisplayStyle(fontSize: 13)),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.caption.copyWith(
+                        color: BbV5Colors.inkMute,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

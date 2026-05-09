@@ -22,6 +22,42 @@ class _CapturedRequest {
 }
 
 void main() {
+  test('set chat pinned sends pin endpoint payload', () async {
+    RequestOptions? captured;
+    final apiDio = Dio(
+      BaseOptions(baseUrl: 'http://api.example.com'),
+    )..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            captured = options;
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'id': 'chat-1',
+                  'isPinned': true,
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final repository = container.read(
+      Provider(
+        (ref) => BackendRepository(ref: ref, dio: apiDio),
+      ),
+    );
+
+    await repository.setChatPinned('chat-1', isPinned: true);
+
+    expect(captured?.method, 'POST');
+    expect(captured?.path, '/chats/chat-1/pin');
+    expect(captured?.data, {'isPinned': true});
+  });
+
   test('fetch affiche events sends filters and parses items', () async {
     RequestOptions? captured;
     final apiDio = Dio(
@@ -771,6 +807,101 @@ void main() {
     expect(queryParameters, containsPair('southWestLongitude', 37.50));
     expect(queryParameters, containsPair('northEastLatitude', 55.80));
     expect(queryParameters, containsPair('northEastLongitude', 37.70));
+  });
+
+  test('grouped search sends bounded limits and parses mobile result groups',
+      () async {
+    Map<String, dynamic>? queryParameters;
+    final apiDio = Dio(
+      BaseOptions(baseUrl: 'http://api.example.com'),
+    )..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            queryParameters = Map<String, dynamic>.from(
+              options.queryParameters,
+            );
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 200,
+                data: const {
+                  'meetups': [
+                    {
+                      'id': 'event-1',
+                      'title': 'Кофе сегодня',
+                      'emoji': '☕',
+                      'time': 'Сегодня · 18:00',
+                      'startsAtIso': '2026-05-09T15:00:00.000Z',
+                      'place': 'Brix',
+                      'distance': '1 км',
+                      'attendees': [],
+                      'going': 2,
+                      'capacity': 6,
+                      'vibe': 'Спокойно',
+                      'tone': 'warm',
+                      'joined': false,
+                    },
+                  ],
+                  'routes': [
+                    {
+                      'id': 'template-1',
+                      'routeId': 'route-1',
+                      'title': 'Вечер с кофе',
+                      'blurb': 'Короткий маршрут',
+                      'city': 'Москва',
+                      'vibe': 'Спокойно',
+                      'budget': 'low',
+                      'durationLabel': '2 часа',
+                      'totalPriceFrom': 0,
+                      'stepsPreview': [],
+                      'partnerOffersPreview': [],
+                      'nearestSessions': [],
+                    },
+                  ],
+                  'affiche': [
+                    {
+                      'id': 'affiche-1',
+                      'title': 'Джаз',
+                      'city': 'Москва',
+                      'venue': 'Клуб',
+                      'category': 'music',
+                      'priceMode': 'paid',
+                      'isAffiliate': false,
+                      'tags': [],
+                    },
+                  ],
+                  'posters': [
+                    {'id': 'legacy-poster'},
+                  ],
+                  'nextCursors': {},
+                },
+              ),
+            );
+          },
+        ),
+      );
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final repository = container.read(
+      Provider(
+        (ref) => BackendRepository(ref: ref, dio: apiDio),
+      ),
+    );
+
+    final result = await repository.fetchGroupedSearch(
+      q: 'кофе',
+      city: 'Москва',
+    );
+
+    expect(queryParameters, containsPair('q', 'кофе'));
+    expect(queryParameters, containsPair('city', 'Москва'));
+    expect(queryParameters, containsPair('meetupsLimit', 5));
+    expect(queryParameters, containsPair('routesLimit', 5));
+    expect(queryParameters, containsPair('afficheLimit', 5));
+    expect(result.meetups.single.id, 'event-1');
+    expect(result.routes.single.id, 'template-1');
+    expect(result.affiche.single.id, 'affiche-1');
   });
 
   test('voice upload uses presigned upload flow instead of api file upload',

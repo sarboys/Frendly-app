@@ -342,6 +342,49 @@ void main() {
     expect(result.first.unread, 0);
   });
 
+  test('upsertMeetupChatSummary keeps pinned meetup chats above updates', () {
+    const chats = [
+      MeetupChat(
+        id: 'mc-pinned',
+        eventId: 'e1',
+        title: 'Закрепленный',
+        emoji: '📌',
+        time: '20:00',
+        lastMessage: 'Старое сообщение',
+        lastAuthor: 'Аня',
+        lastTime: '1 ч',
+        unread: 0,
+        members: ['Аня', 'Ты'],
+        status: 'Сегодня',
+        isPinned: true,
+      ),
+      MeetupChat(
+        id: 'mc-new',
+        eventId: 'e2',
+        title: 'Новый',
+        emoji: '☕',
+        time: '19:00',
+        lastMessage: 'Привет',
+        lastAuthor: 'Паша',
+        lastTime: '5 мин',
+        unread: 1,
+        members: ['Паша', 'Ты'],
+        status: 'Сегодня',
+      ),
+    ];
+
+    final result = upsertMeetupChatSummary(
+      chats,
+      chatId: 'mc-new',
+      lastMessage: 'Новое сообщение',
+      lastAuthor: 'Ты',
+      lastTime: 'сейчас',
+      unread: 0,
+    );
+
+    expect(result.map((chat) => chat.id), ['mc-pinned', 'mc-new']);
+  });
+
   test('upsertMeetupChat inserts new chat and keeps existing chats', () {
     const chats = [
       MeetupChat(
@@ -460,6 +503,39 @@ void main() {
     expect(result.first.unread, 0);
   });
 
+  test('upsertPersonalChatSummary keeps pinned personal chats above updates',
+      () {
+    const chats = [
+      PersonalChat(
+        id: 'p-pinned',
+        name: 'Аня',
+        lastMessage: 'Старое',
+        lastTime: 'вчера',
+        unread: 0,
+        online: true,
+        isPinned: true,
+      ),
+      PersonalChat(
+        id: 'p-new',
+        name: 'Соня',
+        lastMessage: 'Привет',
+        lastTime: '5 мин',
+        unread: 1,
+        online: false,
+      ),
+    ];
+
+    final result = upsertPersonalChatSummary(
+      chats,
+      chatId: 'p-new',
+      lastMessage: 'Голосовое сообщение',
+      lastTime: 'сейчас',
+      unread: 0,
+    );
+
+    expect(result.map((chat) => chat.id), ['p-pinned', 'p-new']);
+  });
+
   test('mapEventsProvider requests a bounded map page', () async {
     _MapEventsRepository? repository;
     final container = ProviderContainer(
@@ -521,6 +597,7 @@ void main() {
     expect(repository!.lastFilter, 'nearby');
     expect(repository!.lastLatitude, 55.75);
     expect(repository!.lastLongitude, 37.61);
+    expect(repository!.lastRadiusKm, 50);
   });
 
   test('eventsProvider prefers manual location for nearby feed', () async {
@@ -553,6 +630,42 @@ void main() {
     expect(repository!.lastFilter, 'nearby');
     expect(repository!.lastLatitude, 55.757);
     expect(repository!.lastLongitude, 37.648);
+    expect(repository!.lastRadiusKm, 50);
+  });
+
+  test('eventsProvider uses Saint Petersburg manual location coordinates',
+      () async {
+    _MapEventsRepository? repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        appLocationServiceProvider.overrideWith(
+          (ref) => const _StaticLocationService(),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _MapEventsRepository(ref: ref, dio: Dio());
+          return repository!;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(manualLocationProvider.notifier).setLocation(
+          const ManualLocation(
+            label: 'Санкт-Петербург',
+            city: 'Санкт-Петербург',
+            latitude: 59.9386,
+            longitude: 30.3141,
+          ),
+        );
+
+    await container.read(eventsProvider('nearby').future);
+
+    expect(repository, isNotNull);
+    expect(repository!.lastFilter, 'nearby');
+    expect(repository!.lastLatitude, 59.9386);
+    expect(repository!.lastLongitude, 30.3141);
+    expect(repository!.lastRadiusKm, 50);
   });
 
   test(

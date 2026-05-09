@@ -84,7 +84,7 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
   List<String> _vibes = const [];
   List<String> _timeOfDay = const [];
   List<String> _access = const [];
-  double _radiusKm = 5;
+  double _radiusKm = nearbyEventsDefaultRadiusKm;
 
   @override
   void dispose() {
@@ -271,7 +271,7 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
         _vibes.isEmpty &&
         _timeOfDay.isEmpty &&
         _access.isEmpty &&
-        _radiusKm.round() == 5;
+        _radiusKm.round() == nearbyEventsDefaultRadiusKm.round();
   }
 
   int get _activeFilterCount {
@@ -280,7 +280,7 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
         _timeOfDay.length +
         _access.length +
         (_when == _whenOptions.first ? 0 : 1) +
-        (_radiusKm.round() == 5 ? 0 : 1);
+        (_radiusKm.round() == nearbyEventsDefaultRadiusKm.round() ? 0 : 1);
   }
 
   void _onSearchChanged(String value) {
@@ -310,8 +310,11 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
       _vibes = const [];
       _timeOfDay = const [];
       _access = const [];
-      _radiusKm = 5;
+      _radiusKm = nearbyEventsDefaultRadiusKm;
     });
+    ref
+        .read(nearbyEventsRadiusKmProvider.notifier)
+        .setRadiusKm(nearbyEventsDefaultRadiusKm);
   }
 
   List<Event> _visibleEvents(List<Event> source) {
@@ -449,7 +452,8 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
                                               timeOfDay = [];
                                               access = [];
                                               when = _whenOptions.first;
-                                              radius = 5;
+                                              radius =
+                                                  nearbyEventsDefaultRadiusKm;
                                             });
                                           },
                                           child: Text(
@@ -527,8 +531,10 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
                                           ),
                                           Slider(
                                             min: 1,
-                                            max: 30,
-                                            divisions: 29,
+                                            max: nearbyEventsMaxRadiusKm,
+                                            divisions: nearbyEventsMaxRadiusKm
+                                                    .round() -
+                                                1,
                                             value: radius,
                                             activeColor: BbV5Colors.accent,
                                             inactiveColor: BbV5Colors.hair,
@@ -571,8 +577,14 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
                                       _timeOfDay = List.unmodifiable(timeOfDay);
                                       _access = List.unmodifiable(access);
                                       _when = when;
-                                      _radiusKm = radius;
+                                      _radiusKm =
+                                          clampNearbyEventsRadiusKm(radius);
                                     });
+                                    ref
+                                        .read(
+                                          nearbyEventsRadiusKmProvider.notifier,
+                                        )
+                                        .setRadiusKm(radius);
                                     Navigator.of(context).pop();
                                   },
                                 ),
@@ -1110,9 +1122,21 @@ Future<({double latitude, double longitude})?> _meetupsLocation(
 }
 
 bool _matchesWhen(Event event, String when) {
+  return _matchesWhenAt(event, when, DateTime.now());
+}
+
+@visibleForTesting
+bool meetupMatchesWhenForTest(
+  Event event,
+  String when, {
+  required DateTime now,
+}) {
+  return _matchesWhenAt(event, when, now);
+}
+
+bool _matchesWhenAt(Event event, String when, DateTime now) {
   final date = _eventDate(event);
   final day = DateTime(date.year, date.month, date.day);
-  final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
 
   switch (when) {
@@ -1121,11 +1145,13 @@ bool _matchesWhen(Event event, String when) {
     case 'Завтра':
       return day == today.add(const Duration(days: 1));
     case 'Выходные':
-      final weekend = _nextWeekend(today);
+      final weekend = _weekendWindow(today);
       return !day.isBefore(weekend.start) && day.isBefore(weekend.end);
     case 'На неделе':
-      return !day.isBefore(today) &&
-          day.isBefore(today.add(const Duration(days: 7)));
+      final end = today.add(
+        Duration(days: DateTime.daysPerWeek - today.weekday + 1),
+      );
+      return !day.isBefore(today) && day.isBefore(end);
     default:
       return true;
   }
@@ -1157,7 +1183,11 @@ DateTime _eventDate(Event event) {
   return DateTime.tryParse(event.startsAtIso ?? '') ?? DateTime.now();
 }
 
-({DateTime start, DateTime end}) _nextWeekend(DateTime today) {
+({DateTime start, DateTime end}) _weekendWindow(DateTime today) {
+  if (today.weekday == DateTime.sunday) {
+    final saturday = today.subtract(const Duration(days: 1));
+    return (start: saturday, end: today.add(const Duration(days: 1)));
+  }
   final daysUntilSaturday = (DateTime.saturday - today.weekday) % 7;
   final start = today.add(Duration(days: daysUntilSaturday));
   return (start: start, end: start.add(const Duration(days: 2)));

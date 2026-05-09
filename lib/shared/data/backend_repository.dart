@@ -26,6 +26,7 @@ import 'package:big_break_mobile/shared/models/personal_chat.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/models/public_share.dart';
 import 'package:big_break_mobile/shared/models/safety_hub.dart';
+import 'package:big_break_mobile/shared/models/search_results.dart';
 import 'package:big_break_mobile/shared/models/story.dart';
 import 'package:big_break_mobile/shared/models/subscription.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
@@ -390,6 +391,28 @@ class BackendRepository {
     );
   }
 
+  Future<GroupedSearchResults> fetchGroupedSearch({
+    required String q,
+    String city = 'Москва',
+    int limit = 5,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await dio.get<Map<String, dynamic>>(
+      '/search',
+      queryParameters: {
+        if (q.trim().isNotEmpty) 'q': q.trim(),
+        if (city.trim().isNotEmpty) 'city': city.trim(),
+        'meetupsLimit': limit,
+        'routesLimit': limit,
+        'afficheLimit': limit,
+        'postersLimit': 1,
+        'eveningsLimit': 1,
+      },
+      cancelToken: cancelToken,
+    );
+    return GroupedSearchResults.fromJson(response.data!);
+  }
+
   Future<EventDetail> fetchEventDetail(
     String eventId, {
     CancelToken? cancelToken,
@@ -615,6 +638,16 @@ class BackendRepository {
     );
   }
 
+  Future<void> setChatPinned(
+    String chatId, {
+    required bool isPinned,
+  }) async {
+    await dio.post<Map<String, dynamic>>(
+      '/chats/$chatId/pin',
+      data: {'isPinned': isPinned},
+    );
+  }
+
   Future<PaginatedResponse<Community>> fetchCommunities({
     String? cursor,
     int limit = 20,
@@ -641,6 +674,20 @@ class BackendRepository {
     final response = await dio.get<Map<String, dynamic>>(
       '/communities/$communityId',
       cancelToken: cancelToken,
+    );
+    return Community.fromJson(response.data!);
+  }
+
+  Future<Community> joinCommunity(String communityId) async {
+    final response = await dio.post<Map<String, dynamic>>(
+      '/communities/$communityId/join',
+    );
+    return Community.fromJson(response.data!);
+  }
+
+  Future<Community> leaveCommunity(String communityId) async {
+    final response = await dio.delete<Map<String, dynamic>>(
+      '/communities/$communityId/join',
     );
     return Community.fromJson(response.data!);
   }

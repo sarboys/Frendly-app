@@ -77,4 +77,23 @@ void main() {
     expect(chat.memberProfiles.last.social.superLikes, 1);
     expect(chat.memberProfiles.last.social.iFollow, isTrue);
   });
+
+  test('meetup chat maps pinned state from backend payload', () {
+    final chat = MeetupChat.fromJson({
+      'id': 'chat-pinned',
+      'eventId': 'event-pinned',
+      'title': 'Кофе',
+      'emoji': '☕',
+      'time': '12:00',
+      'lastMessage': '',
+      'lastAuthor': '',
+      'lastTime': '',
+      'unread': 0,
+      'members': ['Ты'],
+      'isPinned': true,
+    });
+
+    expect(chat.isPinned, isTrue);
+    expect(chat.copyWith(isPinned: false).isPinned, isFalse);
+  });
 }

@@ -158,6 +158,9 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     String chatId,
   ) async {
     switch (action) {
+      case BbComposerAttachmentAction.camera:
+        await _takePhoto(chatId);
+        return;
       case BbComposerAttachmentAction.photo:
         await _pickPhoto(chatId);
         return;
@@ -168,6 +171,35 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
         await _shareCurrentLocation(chatId);
         return;
     }
+  }
+
+  Future<void> _takePhoto(String chatId) async {
+    final permissionService = ref.read(appPermissionServiceProvider);
+    final mediaPicker = ref.read(appMediaPickerServiceProvider);
+    final chatController = ref.read(chatThreadProvider(chatId).notifier);
+    final replyTo = _replyTo;
+    final permitted = await permissionService.requestCamera();
+    if (!mounted) {
+      return;
+    }
+    if (!permitted) {
+      _showSnackBar('Нет доступа к камере');
+      return;
+    }
+
+    final file = await mediaPicker.pickFromCamera();
+    if (!mounted || file == null) {
+      return;
+    }
+
+    await chatController.sendAttachment(
+      file,
+      replyTo: replyTo,
+    );
+    if (!mounted) {
+      return;
+    }
+    _clearReplyIfUnchanged(replyTo);
   }
 
   Future<void> _pickPhoto(String chatId) async {
@@ -533,16 +565,6 @@ class _CommunityChatIntro extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Общий поток сообщества',
-                    style: AppTextStyles.caption.copyWith(
-                      color: colors.inkMute,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
                   Text(
                     'Сообщения и контекст ближайших встреч',
                     style: AppTextStyles.cardTitle.copyWith(

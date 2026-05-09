@@ -3,6 +3,7 @@ import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -48,9 +49,8 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
       ('other', 'Другое', 'Опишу подробнее ниже'),
     ];
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
+    return BbV5Scaffold(
+      child: SafeArea(
         bottom: false,
         child: profileAsync.when(
           data: (profile) => Column(

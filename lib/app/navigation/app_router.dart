@@ -305,8 +305,10 @@ GoRouter buildAppRouter({
           GoRoute(
             path: AppRoute.dating.path,
             name: AppRoute.dating.name,
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: DatingScreen(),
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: DatingScreen(
+                initialProfileId: state.uri.queryParameters['profileId'],
+              ),
             ),
           ),
           GoRoute(

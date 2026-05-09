@@ -8,6 +8,7 @@ class PersonalChat {
     required this.online,
     this.peerUserId,
     this.fromMeetup,
+    this.isPinned = false,
   });
 
   final String id;
@@ -18,6 +19,7 @@ class PersonalChat {
   final int unread;
   final bool online;
   final String? fromMeetup;
+  final bool isPinned;
 
   factory PersonalChat.fromJson(Map<String, dynamic> json) {
     return PersonalChat(
@@ -29,6 +31,7 @@ class PersonalChat {
       unread: (json['unread'] as num?)?.toInt() ?? 0,
       online: (json['online'] as bool?) ?? false,
       fromMeetup: json['fromMeetup'] as String?,
+      isPinned: (json['isPinned'] as bool?) ?? false,
     );
   }
 
@@ -41,6 +44,7 @@ class PersonalChat {
     int? unread,
     bool? online,
     String? fromMeetup,
+    bool? isPinned,
   }) {
     return PersonalChat(
       id: id ?? this.id,
@@ -51,6 +55,7 @@ class PersonalChat {
       unread: unread ?? this.unread,
       online: online ?? this.online,
       fromMeetup: fromMeetup ?? this.fromMeetup,
+      isPinned: isPinned ?? this.isPinned,
     );
   }
 }

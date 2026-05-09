@@ -12,6 +12,7 @@ import 'package:big_break_mobile/shared/models/create_event_route.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/event_detail.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
+import 'package:big_break_mobile/shared/models/host_dashboard.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -335,7 +336,35 @@ Widget _wrap(
   String? editEventId,
   CreateMeetupMode initialMode = CreateMeetupMode.meetup,
   String? afficheEventId,
+  bool watchHostDashboard = false,
 }) {
+  Widget buildScreen() {
+    final screen = CreateMeetupScreen(
+      communityId: communityId,
+      editEventId: editEventId,
+      initialMode: initialMode,
+      afficheEventId: afficheEventId,
+    );
+
+    if (!watchHostDashboard) {
+      return screen;
+    }
+
+    return Stack(
+      children: [
+        screen,
+        Offstage(
+          child: Consumer(
+            builder: (context, ref, _) {
+              ref.watch(hostDashboardProvider);
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   final router = GoRouter(
     initialLocation: '/',
     routes: [
@@ -355,12 +384,7 @@ Widget _wrap(
             yandexMapServiceProvider.overrideWithValue(_FakeYandexMapService()),
             ...overrides,
           ],
-          child: CreateMeetupScreen(
-            communityId: communityId,
-            editEventId: editEventId,
-            initialMode: initialMode,
-            afficheEventId: afficheEventId,
-          ),
+          child: buildScreen(),
         ),
         routes: [
           GoRoute(
@@ -698,6 +722,48 @@ void main() {
     expect(repository, isNotNull);
     expect(repository!.lastLatitude, 55.765);
     expect(repository!.lastLongitude, 37.605);
+  });
+
+  testWidgets('create meetup refreshes host dashboard after publish',
+      (tester) async {
+    _FakeCreateMeetupRepository? repository;
+    var dashboardLoads = 0;
+
+    await tester.pumpWidget(
+      _wrap(
+        (value) => repository = value,
+        watchHostDashboard: true,
+        overrides: [
+          hostDashboardProvider.overrideWith((ref) async {
+            dashboardLoads += 1;
+            return const HostDashboardData(
+              stats: HostDashboardStats(
+                meetupsCount: 0,
+                rating: 0,
+                fillRate: 0,
+              ),
+              pendingRequestsCount: 0,
+              requests: [],
+              events: [],
+            );
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(dashboardLoads, 1);
+
+    await enterTitle(tester, 'Ужин');
+    await selectTverskayaPlace(tester);
+    await enterDescription(tester, 'Короткое описание');
+
+    await tapCreate(tester);
+    await tester.pumpAndSettle();
+
+    expect(repository, isNotNull);
+    expect(repository!.createEventCalls, 1);
+    expect(dashboardLoads, 2);
   });
 
   testWidgets('create meetup does not wait for hidden geocoding on publish',

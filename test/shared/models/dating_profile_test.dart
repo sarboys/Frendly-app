@@ -76,4 +76,25 @@ void main() {
     expect(profile.languages.first.label, 'Русский');
     expect(profile.nationality?.label, 'Россия');
   });
+
+  test('dating action result parses super like quota', () {
+    final result = DatingActionResult.fromJson({
+      'ok': true,
+      'action': 'super_like',
+      'matched': false,
+      'chatId': null,
+      'peer': null,
+      'superLikeQuota': {
+        'limit': 15,
+        'remaining': 7,
+        'premium': true,
+        'resetAt': '2026-05-10T00:00:00.000Z',
+      },
+    });
+
+    expect(result.superLikeQuota?.limit, 15);
+    expect(result.superLikeQuota?.remaining, 7);
+    expect(result.superLikeQuota?.premium, true);
+    expect(result.superLikeQuota?.resetAt?.toUtc().year, 2026);
+  });
 }

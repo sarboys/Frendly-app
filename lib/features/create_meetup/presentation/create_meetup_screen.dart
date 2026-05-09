@@ -1598,6 +1598,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
       ref.invalidate(datingDiscoverProvider);
       ref.invalidate(datingLikesProvider);
       ref.invalidate(meetupChatsProvider);
+      ref.invalidate(hostDashboardProvider);
       if (widget.communityId case final communityId?) {
         ref.invalidate(communityProvider(communityId));
         ref.invalidate(communitiesFeedProvider);

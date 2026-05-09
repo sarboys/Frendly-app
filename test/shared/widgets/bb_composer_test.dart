@@ -201,7 +201,7 @@ void main() {
     expect(sentVoice!.waveform, isNotEmpty);
   });
 
-  testWidgets('v5 composer keeps mic outside and shows send inside input', (
+  testWidgets('v5 composer keeps idle mic and text send inside input', (
     tester,
   ) async {
     final recorder = _FakeVoiceRecorderService();
@@ -225,18 +225,16 @@ void main() {
     final micFinder = find.byKey(const Key('bb-composer-mic-button'));
     expect(micFinder, findsOneWidget);
     expect(find.byIcon(Icons.send), findsNothing);
-    final micCenter = tester.getCenter(micFinder);
     final inputRect =
         tester.getRect(find.byKey(const Key('bb-composer-input-shell')));
+    expect(inputRect.contains(tester.getCenter(micFinder)), isTrue);
 
     await tester.enterText(find.byType(TextField), 'Привет');
     await tester.pumpAndSettle();
 
-    expect(micFinder, findsOneWidget);
+    expect(micFinder, findsNothing);
     final sendFinder = find.byKey(const Key('bb-composer-send-button'));
     expect(sendFinder, findsOneWidget);
-    expect(tester.getCenter(micFinder).dx, closeTo(micCenter.dx, 0.1));
-    expect(tester.getCenter(micFinder).dy, closeTo(micCenter.dy, 0.1));
     expect(inputRect.contains(tester.getCenter(sendFinder)), isTrue);
   });
 
@@ -412,6 +410,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.add_rounded));
     await tester.pumpAndSettle();
 
+    expect(find.text('Камера'), findsOneWidget);
     expect(find.text('Фото'), findsOneWidget);
     expect(find.text('Файл'), findsOneWidget);
     expect(find.text('Геолокация'), findsOneWidget);

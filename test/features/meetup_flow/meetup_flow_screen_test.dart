@@ -6,6 +6,7 @@ import 'package:big_break_mobile/features/live_meetup/presentation/live_meetup_s
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -70,6 +71,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Отправить заявку'), findsOneWidget);
+    expect(find.byType(BbV5Scaffold), findsOneWidget);
     await tester.scrollUntilVisible(
       find.textContaining('Обычно отвечают'),
       200,
