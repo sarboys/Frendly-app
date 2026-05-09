@@ -7,6 +7,7 @@ import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/notification_item.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -400,5 +401,14 @@ void main() {
 
     expect(find.text('Пожаловаться'), findsOneWidget);
     expect(find.text('Заблокировать'), findsOneWidget);
+  });
+
+  testWidgets('public user profile uses v5 surface', (tester) async {
+    await tester
+        .pumpWidget(_wrap(const UserProfileScreen(userId: 'user-anya')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(BbV5Scaffold), findsOneWidget);
+    expect(find.text('Профиль'), findsWidgets);
   });
 }

@@ -69,8 +69,7 @@ void main() {
       step: 220,
     );
     await _tapFilterChip(tester, 'Платные');
-    await tester.tap(find.widgetWithText(FilledButton, 'Показать события'));
-    await tester.pump();
+    await _tapShowEvents(tester);
 
     expect(find.text('Афиша 0'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
@@ -121,7 +120,7 @@ void main() {
     await tester.tap(find.byTooltip('Фильтры'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Завтра'));
-    await tester.tap(find.text('Показать события'));
+    await _tapShowEvents(tester);
     await tester.pumpAndSettle();
 
     expect(repository.calls.last.date, tomorrowIso);
@@ -129,7 +128,7 @@ void main() {
     await tester.tap(find.byTooltip('Фильтры'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Концерты'));
-    await tester.tap(find.text('Показать события'));
+    await _tapShowEvents(tester);
     await tester.pumpAndSettle();
 
     expect(repository.calls.last.date, tomorrowIso);
@@ -163,6 +162,29 @@ void main() {
       step: 220,
     );
     expect(find.text('Бесплатные'), findsOneWidget);
+  });
+
+  testWidgets('affiche filter sheet uses v5 chrome and active count', (
+    tester,
+  ) async {
+    _setMobileViewport(tester);
+    final repository = _PagedAfficheRepositoryState();
+
+    await tester.pumpWidget(_afficheApp(repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Фильтры'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('affiche-v5-filter-sheet')), findsOneWidget);
+    expect(find.text('Когда'), findsOneWidget);
+    expect(find.text('Показать события · 18'), findsOneWidget);
+
+    await tester.tap(find.text('Завтра'));
+    await tester.tap(find.text('Показать события · 18'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1'), findsOneWidget);
   });
 
   testWidgets('affiche filter sheet exposes range, time, category and radius', (
@@ -202,6 +224,20 @@ Future<void> _tapFilterChip(WidgetTester tester, String label) async {
         .ancestor(
           of: labelFinder,
           matching: find.byType(InkWell),
+        )
+        .last,
+  );
+  await tester.pump();
+}
+
+Future<void> _tapShowEvents(WidgetTester tester) async {
+  final labelFinder = find.textContaining('Показать события');
+  await tester.ensureVisible(labelFinder);
+  await tester.tap(
+    find
+        .ancestor(
+          of: labelFinder,
+          matching: find.byType(FilledButton),
         )
         .last,
   );

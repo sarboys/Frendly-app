@@ -119,6 +119,30 @@ class DatingLanguageData {
   }
 }
 
+class DatingSuperLikeQuotaData {
+  const DatingSuperLikeQuotaData({
+    required this.limit,
+    required this.remaining,
+    required this.premium,
+    required this.resetAt,
+  });
+
+  final int limit;
+  final int remaining;
+  final bool premium;
+  final DateTime? resetAt;
+
+  factory DatingSuperLikeQuotaData.fromJson(Map<String, dynamic> json) {
+    final resetAtRaw = json['resetAt'];
+    return DatingSuperLikeQuotaData(
+      limit: (json['limit'] as num?)?.toInt() ?? 0,
+      remaining: (json['remaining'] as num?)?.toInt() ?? 0,
+      premium: json['premium'] as bool? ?? false,
+      resetAt: resetAtRaw is String ? DateTime.tryParse(resetAtRaw) : null,
+    );
+  }
+}
+
 class DatingActionResult {
   const DatingActionResult({
     required this.ok,
@@ -126,6 +150,7 @@ class DatingActionResult {
     required this.matched,
     required this.chatId,
     required this.peer,
+    this.superLikeQuota,
   });
 
   final bool ok;
@@ -133,13 +158,22 @@ class DatingActionResult {
   final bool matched;
   final String? chatId;
   final DatingProfileData? peer;
+  final DatingSuperLikeQuotaData? superLikeQuota;
 
   factory DatingActionResult.fromJson(Map<String, dynamic> json) {
+    final superLikeQuota = json['superLikeQuota'];
     return DatingActionResult(
       ok: (json['ok'] as bool?) ?? false,
       action: json['action'] as String? ?? '',
       matched: (json['matched'] as bool?) ?? false,
       chatId: json['chatId'] as String?,
+      superLikeQuota: superLikeQuota is Map<String, dynamic>
+          ? DatingSuperLikeQuotaData.fromJson(superLikeQuota)
+          : superLikeQuota is Map
+              ? DatingSuperLikeQuotaData.fromJson(
+                  Map<String, dynamic>.from(superLikeQuota),
+                )
+              : null,
       peer: json['peer'] is Map<String, dynamic>
           ? DatingProfileData.fromJson(json['peer'] as Map<String, dynamic>)
           : json['peer'] is Map

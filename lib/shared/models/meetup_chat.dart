@@ -60,6 +60,7 @@ class MeetupChat {
     required this.members,
     this.memberProfiles = const [],
     this.status,
+    this.isPinned = false,
     this.typing = false,
     this.isAfterDark = false,
     this.afterDarkGlow,
@@ -101,6 +102,7 @@ class MeetupChat {
   final List<String> members;
   final List<MeetupMember> memberProfiles;
   final String? status;
+  final bool isPinned;
   final bool typing;
   final bool isAfterDark;
   final String? afterDarkGlow;
@@ -162,6 +164,7 @@ class MeetupChat {
                 growable: false,
               ),
       status: json['status'] as String?,
+      isPinned: (json['isPinned'] as bool?) ?? false,
       typing: (json['typing'] as bool?) ?? false,
       isAfterDark: (json['isAfterDark'] as bool?) ?? false,
       afterDarkGlow: json['afterDarkGlow'] as String?,
@@ -208,6 +211,7 @@ class MeetupChat {
     List<String>? members,
     List<MeetupMember>? memberProfiles,
     String? status,
+    bool? isPinned,
     bool? typing,
     bool? isAfterDark,
     String? afterDarkGlow,
@@ -250,6 +254,7 @@ class MeetupChat {
       members: members ?? this.members,
       memberProfiles: memberProfiles ?? this.memberProfiles,
       status: status ?? this.status,
+      isPinned: isPinned ?? this.isPinned,
       typing: typing ?? this.typing,
       isAfterDark: isAfterDark ?? this.isAfterDark,
       afterDarkGlow: afterDarkGlow ?? this.afterDarkGlow,

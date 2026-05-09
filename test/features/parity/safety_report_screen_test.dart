@@ -1,5 +1,6 @@
 import 'package:big_break_mobile/features/report/presentation/report_screen.dart';
 import 'package:big_break_mobile/features/safety/presentation/safety_hub_screen.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -52,6 +53,7 @@ void main() {
     await tester.pumpWidget(_wrap(const ReportScreen(userId: 'user-anya')));
     await tester.pumpAndSettle();
 
+    expect(find.byType(BbV5Scaffold), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Подробности (по желанию)'),
       300,

@@ -33,6 +33,43 @@ import 'package:big_break_mobile/shared/models/user_settings.dart';
 import 'package:big_break_mobile/shared/models/verification_state.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+const nearbyEventsDefaultRadiusKm = 50.0;
+const nearbyEventsMaxRadiusKm = 150.0;
+const _nearbyEventsRadiusStorageKey = 'events.nearby.radius.v1';
+
+final nearbyEventsRadiusKmProvider =
+    StateNotifierProvider<NearbyEventsRadiusController, double>(
+  (ref) => NearbyEventsRadiusController(
+    ref.read(sharedPreferencesProvider),
+  ),
+);
+
+class NearbyEventsRadiusController extends StateNotifier<double> {
+  NearbyEventsRadiusController(this._preferences)
+      : super(
+          clampNearbyEventsRadiusKm(
+            _preferences?.getDouble(_nearbyEventsRadiusStorageKey) ??
+                nearbyEventsDefaultRadiusKm,
+          ),
+        );
+
+  final SharedPreferences? _preferences;
+
+  void setRadiusKm(double value) {
+    final next = clampNearbyEventsRadiusKm(value);
+    if (state == next) {
+      return;
+    }
+    state = next;
+    unawaited(_preferences?.setDouble(_nearbyEventsRadiusStorageKey, next));
+  }
+}
+
+double clampNearbyEventsRadiusKm(double value) {
+  return value.clamp(1, nearbyEventsMaxRadiusKm).toDouble();
+}
 
 final profilePhotoDraftProvider =
     StateProvider<List<ProfilePhoto>>((ref) => const []);
@@ -80,6 +117,8 @@ final eventsProvider =
     FutureProvider.family<List<Event>, String>((ref, filter) async {
   final authBootstrap = ref.watch(authBootstrapProvider.future);
   final manualLocation = ref.watch(manualLocationProvider);
+  final radiusKm =
+      filter == 'nearby' ? ref.watch(nearbyEventsRadiusKmProvider) : null;
   final repository = ref.read(backendRepositoryProvider);
   final locationService = filter == 'nearby' && manualLocation == null
       ? ref.read(appLocationServiceProvider)
@@ -95,6 +134,7 @@ final eventsProvider =
         filter: filter,
         latitude: location?.latitude,
         longitude: location?.longitude,
+        radiusKm: location == null ? null : radiusKm,
       )
       .then((value) => value.items);
 });
@@ -977,24 +1017,24 @@ List<MeetupChat> upsertMeetupChatSummary(
 
   final index = updated.indexWhere((chat) => chat.id == chatId);
   if (index <= 0) {
-    return updated;
+    return sortMeetupChatsByPinned(updated);
   }
 
-  return [
+  return sortMeetupChatsByPinned([
     updated[index],
     ...updated.take(index),
     ...updated.skip(index + 1),
-  ];
+  ]);
 }
 
 List<MeetupChat> upsertMeetupChat(
   List<MeetupChat> chats,
   MeetupChat nextChat,
 ) {
-  return [
+  return sortMeetupChatsByPinned([
     nextChat,
     ...chats.where((chat) => chat.id != nextChat.id),
-  ];
+  ]);
 }
 
 void clearChatListLocalStateForRefetch(Ref ref) {
@@ -1023,13 +1063,27 @@ List<PersonalChat> upsertPersonalChatSummary(
 
   final index = updated.indexWhere((chat) => chat.id == chatId);
   if (index <= 0) {
-    return updated;
+    return sortPersonalChatsByPinned(updated);
   }
 
-  return [
+  return sortPersonalChatsByPinned([
     updated[index],
     ...updated.take(index),
     ...updated.skip(index + 1),
+  ]);
+}
+
+List<MeetupChat> sortMeetupChatsByPinned(List<MeetupChat> chats) {
+  return [
+    ...chats.where((chat) => chat.isPinned),
+    ...chats.where((chat) => !chat.isPinned),
+  ];
+}
+
+List<PersonalChat> sortPersonalChatsByPinned(List<PersonalChat> chats) {
+  return [
+    ...chats.where((chat) => chat.isPinned),
+    ...chats.where((chat) => !chat.isPinned),
   ];
 }
 
@@ -1099,6 +1153,7 @@ List<MeetupChat> updateMeetupChatFromRealtime(
                 members: chat.members,
                 memberProfiles: chat.memberProfiles,
                 status: chat.status,
+                isPinned: chat.isPinned,
                 typing: chat.typing,
                 isAfterDark: chat.isAfterDark,
                 afterDarkGlow: chat.afterDarkGlow,

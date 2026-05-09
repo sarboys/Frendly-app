@@ -28,10 +28,10 @@ import 'package:yandex_mapkit/yandex_mapkit.dart' as ym;
 @visibleForTesting
 const mapAutoNativeUserLayerEnabled = false;
 
-const _initialNearbyRadiusKm = 25.0;
 const _mapZoomStep = 1.0;
 const _minMapZoom = 2.0;
 const _maxMapZoom = 19.0;
+const _radarCarouselInitialPage = 0;
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({
@@ -73,7 +73,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   void initState() {
     super.initState();
-    _eventPageController = PageController(viewportFraction: 0.52);
+    _eventPageController = PageController(
+      initialPage: _radarCarouselInitialPage,
+      viewportFraction: 0.74,
+    );
     final initialEventId = widget.initialEventId;
     if (initialEventId != null && initialEventId.isNotEmpty) {
       selected = initialEventId;
@@ -99,6 +102,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final nearbyRadiusKm = ref.watch(nearbyEventsRadiusKmProvider);
     final rawEvents =
         ref.watch(mapEventsProvider(_mapQuery)).valueOrNull ?? const <Event>[];
     final events = rawEvents;
@@ -155,11 +159,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               child: _RadarTopControls(
                 events: events,
                 filter: filter,
+                radiusKm: nearbyRadiusKm,
                 onBack: _handleBack,
                 onSelectFilter: (nextFilter) => _selectFilter(
                   nextFilter,
                   events,
                 ),
+                onRadiusChanged: _changeNearbyRadius,
               ),
             ),
             Positioned(
@@ -206,13 +212,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 child: _RadarBottomSheet(
                   count: filteredEvents.length,
                   events: filteredEvents,
+                  radiusKm: nearbyRadiusKm,
                   pageController: _eventPageController,
                   onPageChanged: (index) {
-                    if (index < 0 || index >= filteredEvents.length) {
+                    final eventIndex = radarCarouselEventIndex(
+                      index,
+                      filteredEvents.length,
+                    );
+                    if (eventIndex < 0 || eventIndex >= filteredEvents.length) {
                       return;
                     }
                     _selectEvent(
-                      filteredEvents[index],
+                      filteredEvents[eventIndex],
                       filteredEvents,
                       animatePager: false,
                     );
@@ -545,6 +556,32 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
+  void _changeNearbyRadius(double value) {
+    final radiusKm = clampNearbyEventsRadiusKm(value);
+    ref.read(nearbyEventsRadiusKmProvider.notifier).setRadiusKm(radiusKm);
+    final currentCenter =
+        _mapQuery.centerLatitude == null || _mapQuery.centerLongitude == null
+            ? _userPoint
+            : ym.Point(
+                latitude: _mapQuery.centerLatitude!,
+                longitude: _mapQuery.centerLongitude!,
+              );
+
+    setState(() {
+      _autoFitPending = true;
+      _lastViewportFitKey = '';
+      if (currentCenter == null) {
+        _mapQuery = MapEventsQuery(radiusKm: radiusKm);
+      } else {
+        _mapQuery = MapEventsQuery(
+          centerLatitude: _roundGeo(currentCenter.latitude),
+          centerLongitude: _roundGeo(currentCenter.longitude),
+          radiusKm: radiusKm,
+        );
+      }
+    });
+  }
+
   Future<ym.Point?> _resolvePreferredMapPoint() async {
     final manualLocation = ref.read(manualLocationProvider);
     if (manualLocation != null) {
@@ -757,9 +794,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     if (animatePager) {
       final index = events.indexWhere((item) => item.id == event.id);
       if (index >= 0 && _eventPageController.hasClients) {
+        final currentPage =
+            _eventPageController.page?.round() ?? _radarCarouselInitialPage;
         unawaited(
           _eventPageController.animateToPage(
-            index,
+            nearestRadarCarouselPage(
+              currentPage,
+              targetIndex: index,
+              eventCount: events.length,
+            ),
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOut,
           ),
@@ -781,11 +824,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       if (!mounted || !_eventPageController.hasClients) {
         return;
       }
-      final currentPage = _eventPageController.page?.round() ?? 0;
-      if (currentPage == index) {
+      final currentPage =
+          _eventPageController.page?.round() ?? _radarCarouselInitialPage;
+      if (radarCarouselEventIndex(currentPage, events.length) == index) {
         return;
       }
-      _eventPageController.jumpToPage(index);
+      _eventPageController.jumpToPage(
+        nearestRadarCarouselPage(
+          currentPage,
+          targetIndex: index,
+          eventCount: events.length,
+        ),
+      );
     });
   }
 
@@ -838,9 +888,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           filtered.first;
       final index = filtered.indexWhere((item) => item.id == activeEvent.id);
       if (index >= 0 && _eventPageController.hasClients) {
+        final currentPage =
+            _eventPageController.page?.round() ?? _radarCarouselInitialPage;
         unawaited(
           _eventPageController.animateToPage(
-            index,
+            nearestRadarCarouselPage(
+              currentPage,
+              targetIndex: index,
+              eventCount: filtered.length,
+            ),
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOut,
           ),
@@ -1059,14 +1115,18 @@ class _RadarTopControls extends StatelessWidget {
   const _RadarTopControls({
     required this.events,
     required this.filter,
+    required this.radiusKm,
     required this.onBack,
     required this.onSelectFilter,
+    required this.onRadiusChanged,
   });
 
   final List<Event> events;
   final String filter;
+  final double radiusKm;
   final VoidCallback onBack;
   final ValueChanged<String> onSelectFilter;
+  final ValueChanged<double> onRadiusChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1149,10 +1209,20 @@ class _RadarTopControls extends StatelessWidget {
                 height: 39,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: _radarFilters.length,
+                  itemCount: _radarFilters.length + 1,
                   separatorBuilder: (_, __) => const SizedBox(width: 6),
                   itemBuilder: (context, index) {
-                    final item = _radarFilters[index];
+                    if (index == 0) {
+                      return _RadarRadiusChip(
+                        radiusKm: radiusKm,
+                        onTap: () => _showRadarRadiusSheet(
+                          context,
+                          radiusKm,
+                          onRadiusChanged,
+                        ),
+                      );
+                    }
+                    final item = _radarFilters[index - 1];
                     return _RadarFilterChip(
                       label: item.title,
                       active: filter == item.key,
@@ -1167,6 +1237,114 @@ class _RadarTopControls extends StatelessWidget {
       ),
     );
   }
+}
+
+class _RadarRadiusChip extends StatelessWidget {
+  const _RadarRadiusChip({
+    required this.radiusKm,
+    required this.onTap,
+  });
+
+  final double radiusKm;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RadarFilterChip(
+      label: '${radiusKm.round()} км',
+      active: true,
+      onTap: onTap,
+    );
+  }
+}
+
+void _showRadarRadiusSheet(
+  BuildContext context,
+  double currentRadiusKm,
+  ValueChanged<double> onChanged,
+) {
+  var radiusKm = currentRadiusKm;
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    barrierColor: const Color(0x8014100C),
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setSheetState) {
+          return Align(
+            alignment: Alignment.bottomCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+                child: Material(
+                  color: BbV5Colors.paper,
+                  child: SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 48,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: BbV5Colors.hair,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          Text(
+                            'Радиус радара',
+                            style: bbV5DisplayStyle(
+                              fontSize: 20,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          BbV5Kicker('РАДИУС · ${radiusKm.round()} КМ'),
+                          Slider(
+                            min: 1,
+                            max: nearbyEventsMaxRadiusKm,
+                            divisions: nearbyEventsMaxRadiusKm.round() - 1,
+                            value: radiusKm,
+                            activeColor: BbV5Colors.accent,
+                            inactiveColor: BbV5Colors.hair,
+                            onChanged: (value) {
+                              setSheetState(() {
+                                radiusKm = value;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          BbV5PillButton(
+                            label: 'Применить',
+                            dark: true,
+                            height: 52,
+                            expanded: true,
+                            onPressed: () {
+                              onChanged(radiusKm);
+                              Navigator.of(context).pop();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
 }
 
 class _RadarFilterChip extends StatelessWidget {
@@ -1352,6 +1530,31 @@ double clampMapZoom(double zoom) {
 }
 
 @visibleForTesting
+int radarCarouselEventIndex(int pageIndex, int eventCount) {
+  if (eventCount <= 0) {
+    return 0;
+  }
+  return pageIndex % eventCount;
+}
+
+@visibleForTesting
+int nearestRadarCarouselPage(
+  int currentPage, {
+  required int targetIndex,
+  required int eventCount,
+}) {
+  if (eventCount <= 1) {
+    return 0;
+  }
+
+  final currentEventIndex = radarCarouselEventIndex(currentPage, eventCount);
+  final forward = (targetIndex - currentEventIndex) % eventCount;
+  final backward = forward - eventCount;
+  final delta = forward.abs() <= backward.abs() ? forward : backward;
+  return currentPage + delta;
+}
+
+@visibleForTesting
 String buildMapViewportFitKey(List<Event> events, String filter) {
   final parts = events
       .where((event) => event.latitude != null && event.longitude != null)
@@ -1506,7 +1709,9 @@ MapEventsQuery buildMapEventsQuery({
   return MapEventsQuery(
     centerLatitude: _roundGeo(center.latitude),
     centerLongitude: _roundGeo(center.longitude),
-    radiusKm: _roundDistanceKm(radiusKm.clamp(0.5, 100).toDouble()),
+    radiusKm: _roundDistanceKm(
+      radiusKm.clamp(0.5, nearbyEventsMaxRadiusKm).toDouble(),
+    ),
     southWestLatitude: _roundGeo(bounds.southWest.latitude),
     southWestLongitude: _roundGeo(bounds.southWest.longitude),
     northEastLatitude: _roundGeo(bounds.northEast.latitude),
@@ -1553,7 +1758,7 @@ MapEventsQuery buildInitialMapEventsQuery(ym.Point point) {
   return MapEventsQuery(
     centerLatitude: _roundGeo(point.latitude),
     centerLongitude: _roundGeo(point.longitude),
-    radiusKm: _initialNearbyRadiusKm,
+    radiusKm: nearbyEventsDefaultRadiusKm,
   );
 }
 
@@ -1617,6 +1822,7 @@ class _RadarBottomSheet extends StatelessWidget {
   const _RadarBottomSheet({
     required this.count,
     required this.events,
+    required this.radiusKm,
     required this.pageController,
     required this.onPageChanged,
     required this.onEventTap,
@@ -1624,6 +1830,7 @@ class _RadarBottomSheet extends StatelessWidget {
 
   final int count;
   final List<Event> events;
+  final double radiusKm;
   final PageController pageController;
   final ValueChanged<int> onPageChanged;
   final ValueChanged<Event> onEventTap;
@@ -1674,7 +1881,7 @@ class _RadarBottomSheet extends StatelessWidget {
                         const BbV5Kicker('Рядом сегодня'),
                         const SizedBox(height: 6),
                         Text(
-                          '$count точек · ${_initialNearbyRadiusKm.toStringAsFixed(0)} км',
+                          '$count точек · ${radiusKm.toStringAsFixed(0)} км',
                           style: bbV5DisplayStyle(fontSize: 18),
                         ),
                       ],
@@ -1695,15 +1902,16 @@ class _RadarBottomSheet extends StatelessWidget {
                 height: 148,
                 child: PageView.builder(
                   controller: pageController,
-                  padEnds: false,
+                  padEnds: true,
                   onPageChanged: onPageChanged,
-                  itemCount: events.length,
+                  itemCount: events.length <= 2 ? events.length : null,
                   itemBuilder: (context, index) {
-                    final event = events[index];
+                    final event = events[radarCarouselEventIndex(
+                      index,
+                      events.length,
+                    )];
                     return Padding(
-                      padding: EdgeInsets.only(
-                        right: index == events.length - 1 ? 0 : 12,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
                       child: _RadarEventCard(
                         event: event,
                         onTap: () => onEventTap(event),

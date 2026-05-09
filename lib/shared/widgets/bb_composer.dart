@@ -14,6 +14,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 
 enum BbComposerAttachmentAction {
+  camera,
   photo,
   file,
   location,
@@ -89,6 +90,7 @@ class _BbComposerState extends State<BbComposer> {
   void initState() {
     super.initState();
     _controller.addListener(_handleTextChanged);
+    _inputFocusNode.addListener(_handleFocusChanged);
     if (widget.editingMessage != null) {
       _replaceInputText(widget.editingMessage!.text);
     }
@@ -117,6 +119,7 @@ class _BbComposerState extends State<BbComposer> {
   @override
   void dispose() {
     _controller.removeListener(_handleTextChanged);
+    _inputFocusNode.removeListener(_handleFocusChanged);
     _recordingTimer?.cancel();
     _recordingLevelSubscription?.cancel();
     _ownedVoiceRecorderService?.dispose();
@@ -126,6 +129,12 @@ class _BbComposerState extends State<BbComposer> {
   }
 
   void _handleTextChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _handleFocusChanged() {
     if (mounted) {
       setState(() {});
     }
@@ -353,60 +362,11 @@ class _BbComposerState extends State<BbComposer> {
 
     final colors = AppColors.of(context);
     final useV5 = colors.background == AppColors.lightTheme.background;
-    final buttonBox =
-        _attachmentButtonKey.currentContext?.findRenderObject() as RenderBox?;
-    final overlayBox = Overlay.of(context).context.findRenderObject();
-    if (buttonBox == null || overlayBox is! RenderBox) {
-      return;
-    }
-    final offset = buttonBox.localToGlobal(Offset.zero, ancestor: overlayBox);
-    final position = RelativeRect.fromLTRB(
-      offset.dx,
-      offset.dy - 156,
-      overlayBox.size.width - offset.dx - buttonBox.size.width,
-      overlayBox.size.height - offset.dy,
-    );
-
-    final menuItemHeight = useV5 ? 40.0 : kMinInteractiveDimension;
-    final action = await showMenu<BbComposerAttachmentAction>(
+    final action = await showModalBottomSheet<BbComposerAttachmentAction>(
       context: context,
-      position: position,
-      color: useV5 ? BbV5Colors.paperHi : colors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: useV5 ? BbV5Colors.hair : colors.border,
-        ),
-      ),
-      items: [
-        PopupMenuItem(
-          value: BbComposerAttachmentAction.photo,
-          height: menuItemHeight,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: const _AttachmentMenuItem(
-            icon: Icons.image_outlined,
-            label: 'Фото',
-          ),
-        ),
-        PopupMenuItem(
-          value: BbComposerAttachmentAction.file,
-          height: menuItemHeight,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: const _AttachmentMenuItem(
-            icon: Icons.attach_file_rounded,
-            label: 'Файл',
-          ),
-        ),
-        PopupMenuItem(
-          value: BbComposerAttachmentAction.location,
-          height: menuItemHeight,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: const _AttachmentMenuItem(
-            icon: Icons.place_outlined,
-            label: 'Геолокация',
-          ),
-        ),
-      ],
+      backgroundColor: Colors.transparent,
+      barrierColor: useV5 ? const Color(0x5214100C) : null,
+      builder: (context) => const _AttachmentActionsSheet(),
     );
     if (action == null) {
       return;
@@ -596,6 +556,10 @@ class _BbComposerState extends State<BbComposer> {
   }
 
   Widget _buildV5ComposerRow() {
+    final showSendButton = _hasText || !_canRecordVoice;
+    final showVoiceButton =
+        _canRecordVoice && !_hasText && !_inputFocusNode.hasFocus;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -615,21 +579,21 @@ class _BbComposerState extends State<BbComposer> {
         Expanded(
           child: Container(
             key: const Key('bb-composer-input-shell'),
-            constraints: const BoxConstraints(minHeight: 44),
+            constraints: const BoxConstraints(minHeight: 40),
             decoration: BoxDecoration(
               color: BbV5Colors.paperHi,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(22),
               border: Border.all(color: BbV5Colors.hair),
               boxShadow: BbV5Shadows.pill,
             ),
-            padding: const EdgeInsets.only(left: 16, right: 6),
+            padding: const EdgeInsets.only(left: 12, right: 4),
             alignment: Alignment.center,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 7),
+                    padding: const EdgeInsets.symmetric(vertical: 5),
                     child: TextField(
                       controller: _controller,
                       focusNode: _inputFocusNode,
@@ -657,40 +621,42 @@ class _BbComposerState extends State<BbComposer> {
                     ),
                   ),
                 ),
-                if (_hasText || !_canRecordVoice)
+                if (showSendButton)
                   Padding(
-                    padding: const EdgeInsets.only(left: 6, bottom: 4),
+                    padding: const EdgeInsets.only(left: 4, bottom: 3),
                     child: _CircleButton(
                       key: const Key('bb-composer-send-button'),
                       icon: _sending
                           ? Icons.more_horiz_rounded
                           : Icons.send_rounded,
-                      size: 34,
+                      size: 32,
                       iconSize: 16,
                       foreground: BbV5Colors.paperHi,
                       background: BbV5Colors.accent,
                       shadows: BbV5Shadows.ink,
                       onTap: widget.enabled ? _submit : null,
                     ),
+                  )
+                else if (showVoiceButton)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 3),
+                    child: _CircleButton(
+                      key: const Key('bb-composer-mic-button'),
+                      icon: Icons.mic_none_rounded,
+                      size: 32,
+                      iconSize: 17,
+                      foreground: BbV5Colors.ink,
+                      background: BbV5Colors.paper,
+                      borderColor: BbV5Colors.hair,
+                      onTap: widget.enabled && !_sending
+                          ? _startVoiceRecording
+                          : null,
+                    ),
                   ),
               ],
             ),
           ),
         ),
-        if (_canRecordVoice) ...[
-          const SizedBox(width: AppSpacing.xs),
-          _CircleButton(
-            key: const Key('bb-composer-mic-button'),
-            icon: Icons.mic_none_rounded,
-            size: 44,
-            iconSize: 18,
-            foreground: BbV5Colors.ink,
-            background: BbV5Colors.paperHi,
-            borderColor: BbV5Colors.hair,
-            shadows: BbV5Shadows.pill,
-            onTap: widget.enabled && !_sending ? _startVoiceRecording : null,
-          ),
-        ],
       ],
     );
   }
@@ -1046,6 +1012,126 @@ class _AttachmentMenuItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AttachmentActionsSheet extends StatelessWidget {
+  const _AttachmentActionsSheet();
+
+  static const _items = [
+    _AttachmentActionItem(
+      action: BbComposerAttachmentAction.camera,
+      icon: Icons.photo_camera_outlined,
+      label: 'Камера',
+    ),
+    _AttachmentActionItem(
+      action: BbComposerAttachmentAction.photo,
+      icon: Icons.image_outlined,
+      label: 'Фото',
+    ),
+    _AttachmentActionItem(
+      action: BbComposerAttachmentAction.file,
+      icon: Icons.attach_file_rounded,
+      label: 'Файл',
+    ),
+    _AttachmentActionItem(
+      action: BbComposerAttachmentAction.location,
+      icon: Icons.place_outlined,
+      label: 'Геолокация',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    final useV5 = colors.background == AppColors.lightTheme.background;
+    final surface = useV5 ? BbV5Colors.paperHi : colors.card;
+    final border = useV5 ? BbV5Colors.hair : colors.border;
+
+    return SafeArea(
+      top: false,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Material(
+            color: surface,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(24),
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+                border: Border.all(color: border),
+                boxShadow: useV5 ? BbV5Shadows.card : null,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: border,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    for (final item in _items)
+                      _AttachmentActionTile(item: item),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AttachmentActionItem {
+  const _AttachmentActionItem({
+    required this.action,
+    required this.icon,
+    required this.label,
+  });
+
+  final BbComposerAttachmentAction action;
+  final IconData icon;
+  final String label;
+}
+
+class _AttachmentActionTile extends StatelessWidget {
+  const _AttachmentActionTile({
+    required this.item,
+  });
+
+  final _AttachmentActionItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.of(context).pop(item.action),
+        child: SizedBox(
+          height: 44,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: _AttachmentMenuItem(
+              icon: item.icon,
+              label: item.label,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

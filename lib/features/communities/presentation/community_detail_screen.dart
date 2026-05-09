@@ -3,6 +3,7 @@ import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/communities/domain/community.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_widgets.dart';
+import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -27,12 +28,16 @@ class CommunityDetailScreen extends ConsumerStatefulWidget {
 class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
   _CommunityTab _tab = _CommunityTab.overview;
   bool? _joinedOverride;
+  Community? _localCommunity;
+  bool _membershipBusy = false;
 
   @override
   void didUpdateWidget(covariant CommunityDetailScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.communityId != widget.communityId) {
       _joinedOverride = null;
+      _localCommunity = null;
+      _membershipBusy = false;
     }
   }
 
@@ -61,33 +66,45 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
         if (community == null) {
           return const CommunityMissingState();
         }
-        final joined = _joinedOverride ?? community.joined;
+        final effectiveCommunity =
+            _localCommunity?.id == community.id ? _localCommunity! : community;
+        final joined = _joinedOverride ?? effectiveCommunity.joined;
 
         return BbV5Scaffold(
           child: BbV5Page(
             padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
             child: Column(
               children: [
-                _CommunityDetailHeader(community: community),
+                _CommunityDetailHeader(community: effectiveCommunity),
                 const SizedBox(height: 20),
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
                     children: [
                       _CommunityHeroCard(
-                        community: community,
+                        community: effectiveCommunity,
                         joined: joined,
-                        onToggleJoin: () => setState(() {
-                          _joinedOverride = !joined;
-                        }),
+                        isBusy: _membershipBusy,
+                        onToggleJoin: () => _setCommunityMembership(
+                          effectiveCommunity,
+                          !joined,
+                        ),
+                        onCreateMeetup: () => context.pushRoute(
+                          AppRoute.createMeetup,
+                          queryParameters: {
+                            'communityId': effectiveCommunity.id,
+                          },
+                        ),
                         onOpenChat: () => context.pushRoute(
                           AppRoute.communityChat,
-                          pathParameters: {'communityId': community.id},
+                          pathParameters: {
+                            'communityId': effectiveCommunity.id
+                          },
                         ),
                       ),
                       const SizedBox(height: 20),
                       _CommunityTabs(
-                        meetupCount: community.meetups.length,
+                        meetupCount: effectiveCommunity.meetups.length,
                         selected: _tab,
                         onChanged: (value) {
                           setState(() {
@@ -98,11 +115,11 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
                       const SizedBox(height: 20),
                       switch (_tab) {
                         _CommunityTab.overview =>
-                          _CommunityOverview(community: community),
+                          _CommunityOverview(community: effectiveCommunity),
                         _CommunityTab.meetups =>
-                          _CommunityMeetups(community: community),
+                          _CommunityMeetups(community: effectiveCommunity),
                         _CommunityTab.members =>
-                          _CommunityMembers(community: community),
+                          _CommunityMembers(community: effectiveCommunity),
                       },
                     ],
                   ),
@@ -113,6 +130,54 @@ class _CommunityDetailScreenState extends ConsumerState<CommunityDetailScreen> {
         );
       },
     );
+  }
+
+  Future<void> _setCommunityMembership(
+    Community community,
+    bool shouldJoin,
+  ) async {
+    if (_membershipBusy || community.isOwner) {
+      return;
+    }
+
+    final repository = ref.read(backendRepositoryProvider);
+    setState(() {
+      _membershipBusy = true;
+    });
+
+    try {
+      final updated = shouldJoin
+          ? await repository.joinCommunity(community.id)
+          : await repository.leaveCommunity(community.id);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _localCommunity = updated;
+        _joinedOverride = null;
+      });
+      ref.invalidate(communityProvider(community.id));
+      ref.invalidate(communitiesProvider);
+      ref.invalidate(communitiesFeedProvider);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              shouldJoin
+                  ? 'Не получилось вступить в клуб'
+                  : 'Не получилось выйти из клуба',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _membershipBusy = false;
+        });
+      }
+    }
   }
 }
 
@@ -153,14 +218,17 @@ class _CommunityDetailHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        BbV5IconButton(
-          icon: LucideIcons.crown,
-          onPressed: () => context.pushRoute(
-            AppRoute.editCommunity,
-            pathParameters: {'communityId': community.id},
+        if (community.isOwner) ...[
+          BbV5IconButton(
+            key: const Key('community-detail-manage-button'),
+            icon: LucideIcons.crown,
+            onPressed: () => context.pushRoute(
+              AppRoute.editCommunity,
+              pathParameters: {'communityId': community.id},
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
+          const SizedBox(width: 8),
+        ],
         BbV5IconButton(
           icon: LucideIcons.share_2,
           onPressed: () async {
@@ -184,19 +252,40 @@ class _CommunityHeroCard extends StatelessWidget {
   const _CommunityHeroCard({
     required this.community,
     required this.joined,
+    required this.isBusy,
     required this.onToggleJoin,
+    required this.onCreateMeetup,
     required this.onOpenChat,
   });
 
   final Community community;
   final bool joined;
+  final bool isBusy;
   final VoidCallback onToggleJoin;
+  final VoidCallback onCreateMeetup;
   final VoidCallback onOpenChat;
 
   @override
   Widget build(BuildContext context) {
     final private = community.privacy == CommunityPrivacy.private;
     final tone = _communityDetailTone(community);
+    final primaryLabel = community.isOwner
+        ? 'Создать встречу'
+        : isBusy
+            ? 'Подождите'
+            : joined
+                ? 'Выйти'
+                : 'Вступить';
+    final primaryIcon = community.isOwner
+        ? LucideIcons.calendar_plus
+        : joined
+            ? LucideIcons.log_out
+            : LucideIcons.plus;
+    final primaryAction = community.isOwner
+        ? onCreateMeetup
+        : private && !joined || isBusy
+            ? null
+            : onToggleJoin;
 
     return BbV5Card(
       tint: tone,
@@ -290,13 +379,13 @@ class _CommunityHeroCard extends StatelessWidget {
             children: [
               Expanded(
                 child: BbV5PillButton(
-                  label: joined ? 'Выйти' : 'Вступить',
-                  icon: joined ? LucideIcons.log_out : LucideIcons.plus,
+                  label: primaryLabel,
+                  icon: primaryIcon,
                   height: 48,
                   fontSize: 13,
                   expanded: true,
-                  dark: !joined,
-                  onPressed: private && !joined ? null : onToggleJoin,
+                  dark: community.isOwner || !joined,
+                  onPressed: primaryAction,
                 ),
               ),
               const SizedBox(width: 8),
@@ -704,13 +793,14 @@ class _CommunityMembers extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tone = _communityDetailTone(community);
-    final names = community.memberNames.isEmpty
-        ? const <String>['Участник клуба']
-        : List<String>.generate(
-            community.members > 30 ? 30 : community.memberNames.length * 2,
-            (index) =>
-                community.memberNames[index % community.memberNames.length],
-          );
+    final seenNames = <String>{};
+    final previewNames = community.memberNames
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty && seenNames.add(name))
+        .take(30)
+        .toList(growable: false);
+    final names =
+        previewNames.isEmpty ? const <String>['Участник клуба'] : previewNames;
 
     return Column(
       children: [

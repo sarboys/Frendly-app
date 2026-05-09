@@ -209,6 +209,25 @@ void main() {
     expect(find.text('Опубликовать'), findsOneWidget);
   });
 
+  testWidgets('owned community detail opens owner management', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _routerApp(
+        overrides: _communityDetailOverrides(
+          _communityJson(joined: true, isOwner: true),
+        ),
+        initialLocation: '/community/c-owned',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('community-detail-manage-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('edit-community-c-owned'), findsOneWidget);
+  });
+
   testWidgets('owned community publish action opens the post composer', (
     tester,
   ) async {
@@ -231,6 +250,25 @@ void main() {
     expect(find.text('Публикация от имени сообщества'), findsOneWidget);
     expect(find.text('Тип'), findsOneWidget);
     expect(find.text('Опубликовать в сообществе'), findsOneWidget);
+  });
+
+  testWidgets('owned community opens create meetup with community id', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _routerApp(
+        overrides: _communityDetailOverrides(
+          _communityJson(joined: true, isOwner: true),
+        ),
+        initialLocation: '/community/c-owned',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Создать встречу'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('create-meetup-community-c-owned'), findsOneWidget);
   });
 
   testWidgets('community meetups tab is a plain clickable event list', (
@@ -376,6 +414,81 @@ void main() {
     expect(find.text('Ты в сообществе'), findsNothing);
     expect(find.text('Опубликовать'), findsNothing);
     expect(find.text('Открыть чат'), findsOneWidget);
+    expect(
+        find.byKey(const Key('community-detail-manage-button')), findsNothing);
+  });
+
+  testWidgets('community members tab does not duplicate preview names', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _routerApp(
+        overrides: _communityDetailOverrides(
+          _communityJson(joined: true, isOwner: false),
+        ),
+        initialLocation: '/community/c-owned',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Участники'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Никита'), findsOneWidget);
+    expect(find.text('Аня'), findsOneWidget);
+    expect(find.text('Марк'), findsOneWidget);
+  });
+
+  testWidgets('community join calls backend and updates local membership', (
+    tester,
+  ) async {
+    _FakeCommunityJoinRepository? repository;
+    final initial = Community.fromJson(
+      _communityJson(joined: false, isOwner: false),
+    );
+    final joined = Community.fromJson(
+      _communityJson(joined: true, isOwner: false),
+    );
+
+    await tester.pumpWidget(
+      _routerApp(
+        overrides: [
+          ...buildTestOverrides(),
+          backendRepositoryProvider.overrideWith((ref) {
+            repository = _FakeCommunityJoinRepository(
+              ref: ref,
+              dio: Dio(),
+              joinedCommunity: joined,
+            );
+            return repository!;
+          }),
+          communityProvider.overrideWith((ref, id) async {
+            if (id == initial.id) {
+              return initial;
+            }
+            return null;
+          }),
+          communitiesProvider.overrideWith((ref) async => [initial]),
+          communitiesFeedProvider.overrideWith(
+            (ref) => CommunitiesFeedController(
+              ref,
+              initialState: CommunitiesFeedState(
+                items: [initial],
+                nextCursor: null,
+              ),
+            ),
+          ),
+        ],
+        initialLocation: '/community/c-owned',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Вступить'));
+    await tester.pumpAndSettle();
+
+    expect(repository?.joinCalls, ['c-owned']);
+    expect(find.text('Выйти'), findsOneWidget);
   });
 
   testWidgets('community chat sends a local message', (tester) async {
@@ -403,6 +516,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Буду к 12'), findsOneWidget);
+  });
+
+  testWidgets('community chat does not show old community stream label',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...buildTestOverrides(),
+          backendRepositoryProvider.overrideWith(
+            (ref) => _FakeCommunityChatRepository(ref: ref, dio: Dio()),
+          ),
+          chatSocketClientProvider.overrideWith(
+            (ref) => _FakeCommunityChatSocketClient(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: CommunityChatScreen(communityId: 'c1'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Общий поток сообщества'), findsNothing);
   });
 
   testWidgets('community chat exposes the shared attachment and voice controls',
@@ -452,6 +588,28 @@ Widget _routerApp({
         path: AppRoute.createCommunity.path,
         name: AppRoute.createCommunity.name,
         builder: (context, state) => const CreateCommunityScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.createMeetup.path,
+        name: AppRoute.createMeetup.name,
+        builder: (context, state) => Scaffold(
+          body: Center(
+            child: Text(
+              'create-meetup-community-${state.uri.queryParameters['communityId']}',
+            ),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.editCommunity.path,
+        name: AppRoute.editCommunity.name,
+        builder: (context, state) => Scaffold(
+          body: Center(
+            child: Text(
+              'edit-community-${state.pathParameters['communityId']}',
+            ),
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoute.paywall.path,
@@ -655,6 +813,23 @@ class _FakeCommunityPostRepository extends BackendRepository {
       items: mockCommunities,
       nextCursor: null,
     );
+  }
+}
+
+class _FakeCommunityJoinRepository extends BackendRepository {
+  _FakeCommunityJoinRepository({
+    required super.ref,
+    required super.dio,
+    required this.joinedCommunity,
+  });
+
+  final Community joinedCommunity;
+  final joinCalls = <String>[];
+
+  @override
+  Future<Community> joinCommunity(String communityId) async {
+    joinCalls.add(communityId);
+    return joinedCommunity;
   }
 }
 

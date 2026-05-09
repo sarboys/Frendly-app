@@ -330,7 +330,10 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
             SliverToBoxAdapter(
               child: _TonightDatingSection(
                 onOpenAll: () => context.goRoute(AppRoute.dating),
-                onOpenPerson: (_) => context.goRoute(AppRoute.dating),
+                onOpenPerson: (personId) => context.goRoute(
+                  AppRoute.dating,
+                  queryParameters: {'profileId': personId},
+                ),
               ),
             ),
             const SliverToBoxAdapter(
@@ -362,7 +365,7 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-                child: _TonightMetricsSection(eventsCount: events.length),
+                child: _TonightMetricsSection(events: events),
               ),
             ),
             SliverToBoxAdapter(
@@ -962,6 +965,7 @@ class _GatheringCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imageUrl = event.imageUrl?.trim();
+    final timeLabel = _gatheringTimeLabel(event.time);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1072,6 +1076,32 @@ class _GatheringCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (timeLabel.isNotEmpty)
+                        Positioned(
+                          left: 8,
+                          bottom: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: BbV5Colors.ink.withValues(alpha: 0.74),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              timeLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.caption.copyWith(
+                                color: BbV5Colors.paperHi,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1163,6 +1193,15 @@ class _GatheringCard extends StatelessWidget {
         ),
     };
   }
+}
+
+String _gatheringTimeLabel(String value) {
+  final trimmed = value.trim();
+  const todayPrefix = 'Сегодня · ';
+  if (trimmed.startsWith(todayPrefix)) {
+    return trimmed.substring(todayPrefix.length).trim();
+  }
+  return trimmed;
 }
 
 class _AttendeeInitials extends StatelessWidget {
@@ -1474,6 +1513,7 @@ class _TonightAfficheSection extends ConsumerWidget {
       title: 'Афиша города',
       margin: EdgeInsets.zero,
       right: _SectionAction(
+        key: const ValueKey('tonight-affiche-all'),
         label: 'Смотреть все',
         color: BbV5Colors.gold,
         onTap: () => context.pushRoute(AppRoute.affiche),
@@ -3192,14 +3232,15 @@ String _tonightAfficheCity(WidgetRef ref) {
 
 class _TonightMetricsSection extends StatelessWidget {
   const _TonightMetricsSection({
-    required this.eventsCount,
+    required this.events,
   });
 
-  final int eventsCount;
+  final List<Event> events;
 
   @override
   Widget build(BuildContext context) {
     const pulseValue = '+38';
+    final pulseEvents = _pulseEventsFor(events);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3226,7 +3267,7 @@ class _TonightMetricsSection extends StatelessWidget {
             ),
             _MetricCard(
               title: 'Tonight',
-              value: eventsCount == 0 ? '46' : '$eventsCount',
+              value: events.isEmpty ? '46' : '${events.length}',
               unit: '',
               sub: 'встреч в городе',
               tint: BbV5Colors.brandSoft,
@@ -3245,7 +3286,117 @@ class _TonightMetricsSection extends StatelessWidget {
             ),
           ],
         ),
+        if (pulseEvents.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.md),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 4),
+            child: BbV5Kicker('Пульс города'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          BbV5Card(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                for (var index = 0; index < pulseEvents.length; index++) ...[
+                  _PulseEventRow(event: pulseEvents[index]),
+                  if (index != pulseEvents.length - 1)
+                    const Divider(height: 14, color: BbV5Colors.hairSoft),
+                ],
+              ],
+            ),
+          ),
+        ],
       ],
+    );
+  }
+}
+
+List<Event> _pulseEventsFor(List<Event> events) {
+  final openEvents = events.where((event) {
+    if (event.capacity <= 0) {
+      return true;
+    }
+    return event.going < event.capacity;
+  }).toList(growable: false);
+
+  openEvents.sort((a, b) {
+    final goingCompare = b.going.compareTo(a.going);
+    if (goingCompare != 0) {
+      return goingCompare;
+    }
+    return a.title.compareTo(b.title);
+  });
+
+  return openEvents.take(5).toList(growable: false);
+}
+
+class _PulseEventRow extends StatelessWidget {
+  const _PulseEventRow({required this.event});
+
+  final Event event;
+
+  @override
+  Widget build(BuildContext context) {
+    final placesLeft =
+        event.capacity <= 0 ? null : math.max(0, event.capacity - event.going);
+    return Container(
+      key: ValueKey('tonight-pulse-event-${event.id}'),
+      constraints: const BoxConstraints(minHeight: 54),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: BbV5Colors.paperHi,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: BbV5Colors.hair),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              event.emoji,
+              style: const TextStyle(fontSize: 18),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  event.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.itemTitle.copyWith(
+                    color: BbV5Colors.ink,
+                    fontSize: 13.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  placesLeft == null
+                      ? '${event.going} идут · места открыты'
+                      : '${event.going}/${event.capacity} идут · $placesLeft свободно',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption.copyWith(
+                    color: BbV5Colors.inkMute,
+                    fontSize: 10.5,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(
+            LucideIcons.activity,
+            size: 16,
+            color: BbV5Colors.terra,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,22 +1,27 @@
 import 'dart:async';
 
+import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/evening_plan/presentation/evening_plan_data.dart';
+import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 enum _VoicePhase { idle, listening, thinking, ready }
 
-class AiVoiceScreen extends StatefulWidget {
+class AiVoiceScreen extends ConsumerStatefulWidget {
   const AiVoiceScreen({super.key});
 
   @override
-  State<AiVoiceScreen> createState() => _AiVoiceScreenState();
+  ConsumerState<AiVoiceScreen> createState() => _AiVoiceScreenState();
 }
 
-class _AiVoiceScreenState extends State<AiVoiceScreen>
+class _AiVoiceScreenState extends ConsumerState<AiVoiceScreen>
     with SingleTickerProviderStateMixin {
   static const _promptExamples = [
     'Хочу винчик и джаз на двоих в районе центра до 23',
@@ -26,10 +31,12 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
 
   late final AnimationController _pulseController;
   Timer? _typingTimer;
-  Timer? _thinkingTimer;
+  CancelToken? _resolveCancelToken;
   int _voiceGeneration = 0;
   _VoicePhase _phase = _VoicePhase.idle;
   String _transcript = '';
+  String? _errorText;
+  EveningRouteData? _route;
 
   @override
   void initState() {
@@ -44,7 +51,7 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
   void dispose() {
     _voiceGeneration += 1;
     _typingTimer?.cancel();
-    _thinkingTimer?.cancel();
+    _cancelResolveRequest('ai_voice_disposed');
     _pulseController.dispose();
     super.dispose();
   }
@@ -139,7 +146,7 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
             if (_phase == _VoicePhase.ready) ...[
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
               SliverToBoxAdapter(
-                child: _RoutePlan(onReset: _reset),
+                child: _RoutePlan(route: _route, onReset: _reset),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
               SliverToBoxAdapter(
@@ -150,11 +157,22 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
                   height: 56,
                   fontSize: 14,
                   expanded: true,
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Встреча создана')),
-                    );
-                  },
+                  onPressed: _route == null ? null : _openRoute,
+                ),
+              ),
+            ],
+            if (_errorText != null) ...[
+              const SliverToBoxAdapter(child: SizedBox(height: 20)),
+              SliverToBoxAdapter(
+                child: BbV5Card(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    _errorText!,
+                    style: AppTextStyles.meta.copyWith(
+                      color: BbV5Colors.inkMute,
+                      height: 1.45,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -176,10 +194,12 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
   void _startListening() {
     final generation = ++_voiceGeneration;
     _typingTimer?.cancel();
-    _thinkingTimer?.cancel();
+    _cancelResolveRequest('ai_voice_replaced');
     setState(() {
       _phase = _VoicePhase.listening;
       _transcript = '';
+      _route = null;
+      _errorText = null;
     });
 
     final text = _promptExamples[0];
@@ -195,7 +215,7 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
       });
       if (index >= text.length) {
         timer.cancel();
-        _completeThinking(generation);
+        _resolveVoicePrompt(text, generation);
       }
     });
   }
@@ -203,7 +223,7 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
   void _stopListening() {
     _voiceGeneration += 1;
     _typingTimer?.cancel();
-    _thinkingTimer?.cancel();
+    _cancelResolveRequest('ai_voice_stopped');
     setState(() {
       _phase = _VoicePhase.idle;
     });
@@ -212,54 +232,160 @@ class _AiVoiceScreenState extends State<AiVoiceScreen>
   void _usePreset(String text) {
     final generation = ++_voiceGeneration;
     _typingTimer?.cancel();
-    _thinkingTimer?.cancel();
+    _cancelResolveRequest('ai_voice_replaced');
     setState(() {
       _transcript = text;
       _phase = _VoicePhase.thinking;
+      _route = null;
+      _errorText = null;
     });
-    _thinkingTimer = Timer(
-      const Duration(milliseconds: 1200),
-      () => _showReady(generation),
-    );
+    unawaited(_resolveVoicePrompt(text, generation));
   }
 
-  void _completeThinking(int generation) {
-    _thinkingTimer?.cancel();
-    _thinkingTimer = Timer(const Duration(milliseconds: 350), () {
-      if (!mounted || generation != _voiceGeneration) {
-        return;
-      }
+  Future<void> _resolveVoicePrompt(String text, int generation) async {
+    _cancelResolveRequest('ai_voice_resolve_replaced');
+    final cancelToken = CancelToken();
+    _resolveCancelToken = cancelToken;
+    if (mounted) {
       setState(() {
         _phase = _VoicePhase.thinking;
       });
-      _thinkingTimer = Timer(
-        const Duration(milliseconds: 1500),
-        () => _showReady(generation),
-      );
-    });
-  }
-
-  void _showReady(int generation) {
-    if (!mounted || !context.mounted || generation != _voiceGeneration) {
-      return;
     }
-    setState(() {
-      _phase = _VoicePhase.ready;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Маршрут готов')),
-    );
+    try {
+      final json =
+          await ref.read(backendRepositoryProvider).resolveEveningRoute(
+                goal: _goalKeyForPrompt(text),
+                mood: _moodKeyForPrompt(text),
+                budget: _budgetKeyForPrompt(text),
+                format: _formatKeyForPrompt(text),
+                prompt: text,
+                cancelToken: cancelToken,
+              );
+      if (!mounted ||
+          generation != _voiceGeneration ||
+          cancelToken.isCancelled ||
+          !identical(_resolveCancelToken, cancelToken)) {
+        return;
+      }
+      final route = eveningRouteFromJson(json);
+      if (route.steps.isEmpty) {
+        setState(() {
+          _phase = _VoicePhase.idle;
+          _errorText = 'Маршрут не собрался. Попробуй сказать чуть подробнее.';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Маршрут не собран')),
+        );
+        return;
+      }
+      setState(() {
+        _route = route;
+        _phase = _VoicePhase.ready;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Маршрут готов')),
+      );
+    } catch (_) {
+      if (!mounted ||
+          generation != _voiceGeneration ||
+          cancelToken.isCancelled ||
+          !identical(_resolveCancelToken, cancelToken)) {
+        return;
+      }
+      setState(() {
+        _phase = _VoicePhase.idle;
+        _errorText = 'Сервер не ответил. Попробуй еще раз.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось собрать маршрут')),
+      );
+    } finally {
+      if (identical(_resolveCancelToken, cancelToken)) {
+        _resolveCancelToken = null;
+      }
+    }
   }
 
   void _reset() {
     _voiceGeneration += 1;
     _typingTimer?.cancel();
-    _thinkingTimer?.cancel();
+    _cancelResolveRequest('ai_voice_reset');
     setState(() {
       _phase = _VoicePhase.idle;
       _transcript = '';
+      _route = null;
+      _errorText = null;
     });
   }
+
+  void _cancelResolveRequest(String reason) {
+    final cancelToken = _resolveCancelToken;
+    if (cancelToken != null && !cancelToken.isCancelled) {
+      cancelToken.cancel(reason);
+    }
+  }
+
+  void _openRoute() {
+    final route = _route;
+    if (route == null || route.id.isEmpty) {
+      return;
+    }
+    context.pushRoute(
+      AppRoute.eveningPlan,
+      pathParameters: {'routeId': route.id},
+      queryParameters: const {'launch': '1'},
+    );
+  }
+}
+
+String _goalKeyForPrompt(String prompt) {
+  final text = prompt.toLowerCase();
+  if (text.contains('дво') || text.contains('свид')) {
+    return 'date';
+  }
+  if (text.contains('компан') || text.contains('4') || text.contains('5')) {
+    return 'company';
+  }
+  return 'newfriends';
+}
+
+String _moodKeyForPrompt(String prompt) {
+  final text = prompt.toLowerCase();
+  if (text.contains('тих') || text.contains('спокой')) {
+    return 'chill';
+  }
+  if (text.contains('свид') || text.contains('роман')) {
+    return 'date';
+  }
+  return 'social';
+}
+
+String _budgetKeyForPrompt(String prompt) {
+  final text = prompt.toLowerCase();
+  if (text.contains('бесплат')) {
+    return 'free';
+  }
+  if (text.contains('1500') || text.contains('2000')) {
+    return 'low';
+  }
+  if (text.contains('3500')) {
+    return 'mid';
+  }
+  return 'mid';
+}
+
+String _formatKeyForPrompt(String prompt) {
+  final text = prompt.toLowerCase();
+  if (text.contains('бар') || text.contains('вин')) {
+    return 'bar';
+  }
+  if (text.contains('джаз') || text.contains('концерт')) {
+    return 'show';
+  }
+  if (text.contains('прогул') || text.contains('спорт')) {
+    return 'active';
+  }
+  return 'mixed';
 }
 
 class _MicButton extends StatelessWidget {
@@ -378,14 +504,17 @@ class _PromptPreset extends StatelessWidget {
 }
 
 class _RoutePlan extends StatelessWidget {
-  const _RoutePlan({required this.onReset});
+  const _RoutePlan({
+    required this.route,
+    required this.onReset,
+  });
 
+  final EveningRouteData? route;
   final VoidCallback onReset;
-
-  static const _stops = <_StopData>[];
 
   @override
   Widget build(BuildContext context) {
+    final steps = route?.steps ?? const <EveningRouteStep>[];
     return BbV5Section(
       title: 'Маршрут',
       right: TextButton.icon(
@@ -404,7 +533,7 @@ class _RoutePlan extends StatelessWidget {
       child: BbV5Card(
         radius: 24,
         padding: const EdgeInsets.all(8),
-        child: _stops.isEmpty
+        child: steps.isEmpty
             ? Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
@@ -417,10 +546,10 @@ class _RoutePlan extends StatelessWidget {
               )
             : Column(
                 children: [
-                  for (var index = 0; index < _stops.length; index++)
+                  for (var index = 0; index < steps.length; index++)
                     _StopRow(
-                      stop: _stops[index],
-                      showLine: index < _stops.length - 1,
+                      stop: steps[index],
+                      showLine: index < steps.length - 1,
                     ),
                 ],
               ),
@@ -429,35 +558,25 @@ class _RoutePlan extends StatelessWidget {
   }
 }
 
-class _StopData {
-  const _StopData({
-    required this.time,
-    required this.place,
-    required this.subtitle,
-    required this.tag,
-    required this.icon,
-    required this.color,
-  });
-
-  final String time;
-  final String place;
-  final String subtitle;
-  final String tag;
-  final IconData icon;
-  final Color color;
-}
-
 class _StopRow extends StatelessWidget {
   const _StopRow({
     required this.stop,
     required this.showLine,
   });
 
-  final _StopData stop;
+  final EveningRouteStep stop;
   final bool showLine;
 
   @override
   Widget build(BuildContext context) {
+    final color = _stopColor(stop.kind);
+    final place = stop.venue.trim().isNotEmpty ? stop.venue : stop.title;
+    final subtitle = stop.description?.trim().isNotEmpty == true
+        ? stop.description!.trim()
+        : stop.address.trim().isNotEmpty
+            ? stop.address
+            : stop.distance;
+
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Row(
@@ -470,10 +589,14 @@ class _StopRow extends StatelessWidget {
                 height: 44,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: stop.color,
+                  color: color,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(stop.icon, size: 20, color: BbV5Colors.paperHi),
+                child: Icon(
+                  _stopIcon(stop.kind),
+                  size: 20,
+                  color: BbV5Colors.paperHi,
+                ),
               ),
               if (showLine)
                 Container(
@@ -495,7 +618,7 @@ class _StopRow extends StatelessWidget {
                       stop.time,
                       style: AppTextStyles.caption.copyWith(
                         fontFamily: 'Sora',
-                        color: stop.color,
+                        color: color,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.1,
                         fontFeatures: const [FontFeature.tabularFigures()],
@@ -503,7 +626,7 @@ class _StopRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      '· ${stop.tag}',
+                      '· ${eveningKindLabel(stop.kind)}',
                       style: AppTextStyles.caption.copyWith(
                         fontSize: 10,
                         color: BbV5Colors.inkMute,
@@ -514,12 +637,12 @@ class _StopRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  stop.place,
+                  place,
                   style: bbV5DisplayStyle(fontSize: 15, height: 1.25),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  stop.subtitle,
+                  subtitle,
                   style: AppTextStyles.caption.copyWith(
                     fontSize: 11.5,
                     color: BbV5Colors.inkMute,
@@ -533,4 +656,28 @@ class _StopRow extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _stopColor(EveningStepKind kind) {
+  return switch (kind) {
+    EveningStepKind.bar => BbV5Colors.terra,
+    EveningStepKind.show => BbV5Colors.brandDeep,
+    EveningStepKind.active => BbV5Colors.gold,
+    EveningStepKind.dinner => BbV5Colors.accent,
+    EveningStepKind.wellness => BbV5Colors.rose,
+    EveningStepKind.afterparty => BbV5Colors.ink,
+    EveningStepKind.followup => BbV5Colors.inkSoft,
+  };
+}
+
+IconData _stopIcon(EveningStepKind kind) {
+  return switch (kind) {
+    EveningStepKind.bar => LucideIcons.wine,
+    EveningStepKind.show => LucideIcons.music,
+    EveningStepKind.active => LucideIcons.footprints,
+    EveningStepKind.dinner => LucideIcons.utensils,
+    EveningStepKind.wellness => LucideIcons.sparkles,
+    EveningStepKind.afterparty => LucideIcons.moon,
+    EveningStepKind.followup => LucideIcons.sun,
+  };
 }

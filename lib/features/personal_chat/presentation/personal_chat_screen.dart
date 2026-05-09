@@ -167,6 +167,9 @@ class _PersonalChatScreenState extends ConsumerState<PersonalChatScreen> {
   Future<void> _handleAttachmentAction(
       BbComposerAttachmentAction action) async {
     switch (action) {
+      case BbComposerAttachmentAction.camera:
+        await _takePhoto();
+        return;
       case BbComposerAttachmentAction.photo:
         await _pickPhoto();
         return;
@@ -177,6 +180,35 @@ class _PersonalChatScreenState extends ConsumerState<PersonalChatScreen> {
         await _shareCurrentLocation();
         return;
     }
+  }
+
+  Future<void> _takePhoto() async {
+    final permissionService = ref.read(appPermissionServiceProvider);
+    final mediaPicker = ref.read(appMediaPickerServiceProvider);
+    final chatController = ref.read(chatThreadProvider(widget.chatId).notifier);
+    final replyTo = _replyTo;
+    final permitted = await permissionService.requestCamera();
+    if (!mounted) {
+      return;
+    }
+    if (!permitted) {
+      _showSnackBar('Нет доступа к камере');
+      return;
+    }
+
+    final file = await mediaPicker.pickFromCamera();
+    if (!mounted || file == null) {
+      return;
+    }
+
+    await chatController.sendAttachment(
+      file,
+      replyTo: replyTo,
+    );
+    if (!mounted) {
+      return;
+    }
+    _clearReplyIfUnchanged(replyTo);
   }
 
   Future<void> _pickPhoto() async {

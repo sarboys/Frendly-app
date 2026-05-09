@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
-import 'package:big_break_mobile/app/theme/app_radii.dart';
-import 'package:big_break_mobile/app/theme/app_shadows.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/affiche/presentation/affiche_filters.dart';
@@ -299,6 +297,7 @@ class _AfficheEventsScreenState extends ConsumerState<AfficheEventsScreen> {
         timeOfDay: _timeOfDay,
         categories: _categories,
         radiusKm: _radiusKm,
+        resultsCount: _lastPageState?.items.length ?? 0,
       ),
     );
     if (!mounted || result == null) {
@@ -723,6 +722,7 @@ class _AfficheFilterSheet extends StatefulWidget {
     required this.timeOfDay,
     required this.categories,
     required this.radiusKm,
+    required this.resultsCount,
   });
 
   final String? date;
@@ -730,6 +730,7 @@ class _AfficheFilterSheet extends StatefulWidget {
   final String timeOfDay;
   final Set<String> categories;
   final double radiusKm;
+  final int resultsCount;
 
   @override
   State<_AfficheFilterSheet> createState() => _AfficheFilterSheetState();
@@ -744,17 +745,18 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     return DraggableScrollableSheet(
       initialChildSize: 0.64,
       minChildSize: 0.42,
       maxChildSize: 0.9,
       builder: (context, controller) {
         return Container(
+          key: const Key('affiche-v5-filter-sheet'),
           decoration: BoxDecoration(
-            color: colors.background,
+            color: BbV5Colors.paper,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            boxShadow: AppShadows.nav,
+            border: Border.all(color: BbV5Colors.hair),
+            boxShadow: BbV5Shadows.card,
           ),
           child: Column(
             children: [
@@ -765,7 +767,7 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
                     width: 42,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: colors.border,
+                      color: BbV5Colors.hair,
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
@@ -778,10 +780,8 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
                     Expanded(
                       child: Text(
                         'Фильтры афиши',
-                        style: AppTextStyles.sectionTitle.copyWith(
+                        style: bbV5DisplayStyle(
                           fontSize: 22,
-                          height: 1.2,
-                          letterSpacing: 0,
                         ),
                       ),
                     ),
@@ -798,7 +798,7 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
                       child: Text(
                         'Сбросить',
                         style: AppTextStyles.meta.copyWith(
-                          color: colors.primary,
+                          color: BbV5Colors.accent,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           height: 1.2,
@@ -814,7 +814,7 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                   children: [
                     _FilterGroup(
-                      title: 'Диапазон дат',
+                      title: 'Когда',
                       options: _rangeDateOptions(),
                       activeValue: _date,
                       onChanged: (value) => setState(() => _date = value),
@@ -848,7 +848,7 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
                     Text(
                       'Радиус · ${_radiusKm.round()} км',
                       style: AppTextStyles.meta.copyWith(
-                        color: colors.inkSoft,
+                        color: BbV5Colors.inkSoft,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         height: 1.2,
@@ -894,17 +894,15 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
                     ),
                   ),
                   style: FilledButton.styleFrom(
-                    backgroundColor: colors.foreground,
-                    foregroundColor: colors.background,
+                    backgroundColor: BbV5Colors.ink,
+                    foregroundColor: BbV5Colors.paperHi,
                     minimumSize: const Size.fromHeight(48),
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: AppRadii.inputBorder,
-                    ),
+                    shape: const StadiumBorder(),
                   ),
                   child: Text(
-                    'Показать события',
+                    'Показать события · ${widget.resultsCount}',
                     style: AppTextStyles.button.copyWith(
-                      color: colors.background,
+                      color: BbV5Colors.paperHi,
                       fontSize: 14,
                     ),
                   ),

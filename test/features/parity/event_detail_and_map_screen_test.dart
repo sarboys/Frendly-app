@@ -2,6 +2,7 @@ import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/features/event_detail/presentation/event_detail_screen.dart';
 import 'package:big_break_mobile/features/map/presentation/map_screen.dart';
+import 'package:big_break_mobile/features/user_profile/presentation/user_profile_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/event_detail.dart';
@@ -151,6 +152,65 @@ void main() {
     expect(lifestyleValue.style?.fontWeight, FontWeight.w600);
   });
 
+  testWidgets('event detail shows pending join request state', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...buildTestOverrides(),
+          eventDetailProvider.overrideWith((ref, eventId) async {
+            return const EventDetail(
+              id: 'e-pending',
+              title: 'Камерный ужин по заявкам',
+              emoji: '🍝',
+              time: 'Сегодня · 18:30',
+              place: 'Солянка 5',
+              distance: '0.7 км',
+              vibe: 'Уютно',
+              description: 'Ужин в маленькой компании.',
+              hostNote: null,
+              joined: false,
+              partnerName: null,
+              partnerOffer: null,
+              capacity: 6,
+              going: 1,
+              chatId: null,
+              accessMode: 'request',
+              visibilityMode: 'friends',
+              joinMode: EventJoinMode.request,
+              joinRequestStatus: EventJoinRequestStatus.pending,
+              host: EventHost(
+                id: 'user-anya',
+                displayName: 'Аня К',
+                verified: true,
+                rating: 4.8,
+                meetupCount: 12,
+                avatarUrl: null,
+              ),
+              attendees: [
+                EventAttendee(
+                  id: 'user-anya',
+                  displayName: 'Аня К',
+                  avatarUrl: null,
+                ),
+              ],
+            );
+          }),
+        ],
+        child: const MaterialApp(
+          home: EventDetailScreen(eventId: 'e-pending'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Заявка отправлена'), findsOneWidget);
+    expect(find.text('Отменить заявку'), findsOneWidget);
+    final pendingButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Заявка отправлена'),
+    );
+    expect(pendingButton.onPressed, isNull);
+  });
+
   testWidgets('map filter updates count and selected card', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() {
@@ -160,13 +220,13 @@ void main() {
     await tester.pumpWidget(_wrap(const MapScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.text('5 точек · 25 км'), findsOneWidget);
+    expect(find.text('5 точек · 50 км'), findsOneWidget);
     expect(find.text('Винный вечер на крыше'), findsOneWidget);
 
     await tester.tap(find.text('Популярные'));
     await tester.pumpAndSettle();
 
-    expect(find.text('2 точек · 25 км'), findsOneWidget);
+    expect(find.text('2 точек · 50 км'), findsOneWidget);
     expect(find.text('Настолки и кофе'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;
@@ -208,6 +268,42 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('map-opened-e1'), findsOneWidget);
+  });
+
+  testWidgets('event detail place text opens external map options',
+      (tester) async {
+    await tester.pumpWidget(_wrap(const EventDetailScreen(eventId: 'e1')));
+    await tester.pumpAndSettle();
+
+    await tester.dragUntilVisible(
+      find.text('Brix Wine, Покровка 12'),
+      find.byType(CustomScrollView),
+      const Offset(0, -240),
+    );
+    await tester.ensureVisible(find.text('Brix Wine, Покровка 12'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Brix Wine, Покровка 12'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Открыть адрес'), findsOneWidget);
+    expect(find.text('Google Карты'), findsOneWidget);
+    expect(find.text('Яндекс Карты'), findsOneWidget);
+  });
+
+  testWidgets('event detail attendee rail does not duplicate host or users',
+      (tester) async {
+    await tester.pumpWidget(_wrap(const EventDetailScreen(eventId: 'e1')));
+    await tester.pumpAndSettle();
+
+    await tester.dragUntilVisible(
+      find.text('Кто идёт · 6'),
+      find.byType(CustomScrollView),
+      const Offset(0, -240),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Аня К, 26'), findsNothing);
+    expect(find.text('Никита М, 27'), findsNothing);
   });
 
   testWidgets('event host can open create meetup in edit mode', (tester) async {
@@ -369,5 +465,90 @@ void main() {
 
     expect(find.text('own-v5-profile'), findsOneWidget);
     expect(find.text('old-public-profile-user-me'), findsNothing);
+  });
+
+  testWidgets('event guest opens host public profile on v5 surface', (
+    tester,
+  ) async {
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => ProviderScope(
+            overrides: [
+              ...buildTestOverrides(),
+              eventDetailProvider.overrideWith((ref, eventId) async {
+                return const EventDetail(
+                  id: 'e-guest',
+                  title: 'Вечер в баре',
+                  emoji: '🍷',
+                  time: 'Сегодня · 19:00',
+                  place: 'Brix',
+                  distance: '1.0 км',
+                  vibe: 'Спокойно',
+                  description: 'Вино и разговоры.',
+                  hostNote: null,
+                  joined: false,
+                  partnerName: null,
+                  partnerOffer: null,
+                  capacity: 8,
+                  going: 2,
+                  chatId: 'mc-guest',
+                  startsAtIso: '2026-05-04T16:00:00.000Z',
+                  lifestyle: 'calm',
+                  priceMode: 'free',
+                  accessMode: 'open',
+                  genderMode: 'all',
+                  visibilityMode: 'public',
+                  joinMode: EventJoinMode.open,
+                  isHost: false,
+                  host: EventHost(
+                    id: 'user-anya',
+                    displayName: 'Аня К',
+                    verified: true,
+                    rating: 4.8,
+                    meetupCount: 12,
+                    avatarUrl: null,
+                  ),
+                  attendees: [
+                    EventAttendee(
+                      id: 'user-anya',
+                      displayName: 'Аня К',
+                      avatarUrl: null,
+                    ),
+                  ],
+                );
+              }),
+            ],
+            child: const EventDetailScreen(eventId: 'e-guest'),
+          ),
+        ),
+        GoRoute(
+          path: AppRoute.userProfile.path,
+          name: AppRoute.userProfile.name,
+          builder: (context, state) => ProviderScope(
+            overrides: buildTestOverrides(),
+            child: UserProfileScreen(
+              userId: state.pathParameters['userId']!,
+            ),
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    await tester.dragUntilVisible(
+      find.text('Профиль'),
+      find.byType(CustomScrollView),
+      const Offset(0, -240),
+    );
+    await tester.tap(find.text('Профиль'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Написать'), findsOneWidget);
+    expect(find.text('Аня К'), findsWidgets);
   });
 }

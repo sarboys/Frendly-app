@@ -4,6 +4,9 @@ import 'dart:ui';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/data/location_override_provider.dart';
+import 'package:big_break_mobile/shared/models/search_results.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -51,11 +54,13 @@ class _V5SearchItem {
     required this.kind,
     required this.title,
     required this.subtitle,
+    this.id,
   });
 
   final _V5SearchKind kind;
   final String title;
   final String subtitle;
+  final String? id;
 }
 
 const _searchFilters = [
@@ -66,8 +71,6 @@ const _searchFilters = [
   _V5SearchFilter(_V5SearchKind.route, 'Маршруты'),
   _V5SearchFilter(_V5SearchKind.affiche, 'Афиша'),
 ];
-
-const _searchItems = <_V5SearchItem>[];
 
 class _V5SearchOverlay extends ConsumerStatefulWidget {
   const _V5SearchOverlay({required this.originContext});
@@ -81,9 +84,14 @@ class _V5SearchOverlay extends ConsumerStatefulWidget {
 class _V5SearchOverlayState extends ConsumerState<_V5SearchOverlay> {
   late final TextEditingController _controller;
   late final Future<SharedPreferences> _preferencesFuture;
+  Timer? _searchDebounce;
+  var _searchGeneration = 0;
   var _query = '';
   var _filter = _V5SearchKind.all;
   var _recent = const <String>[];
+  var _remoteItems = const <_V5SearchItem>[];
+  var _searching = false;
+  var _searchFailed = false;
 
   @override
   void initState() {
@@ -98,6 +106,8 @@ class _V5SearchOverlayState extends ConsumerState<_V5SearchOverlay> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _searchGeneration += 1;
     _controller.dispose();
     super.dispose();
   }
@@ -135,7 +145,7 @@ class _V5SearchOverlayState extends ConsumerState<_V5SearchOverlay> {
 
   List<_V5SearchItem> get _results {
     final normalized = _query.trim().toLowerCase();
-    return _searchItems.where((item) {
+    return _remoteItems.where((item) {
       if (_filter != _V5SearchKind.all && item.kind != _filter) {
         return false;
       }
@@ -145,6 +155,63 @@ class _V5SearchOverlayState extends ConsumerState<_V5SearchOverlay> {
       final source = '${item.title} ${item.subtitle}'.toLowerCase();
       return source.contains(normalized);
     }).toList(growable: false);
+  }
+
+  void _onQueryChanged(String value) {
+    setState(() {
+      _query = value;
+      _searchFailed = false;
+    });
+    _searchDebounce?.cancel();
+    final clean = value.trim();
+    if (clean.isEmpty) {
+      _searchGeneration += 1;
+      setState(() {
+        _remoteItems = const [];
+        _searching = false;
+      });
+      return;
+    }
+
+    final generation = ++_searchGeneration;
+    _searchDebounce = Timer(const Duration(milliseconds: 260), () {
+      unawaited(_loadRemoteResults(clean, generation));
+    });
+  }
+
+  Future<void> _loadRemoteResults(String query, int generation) async {
+    final repository = ref.read(backendRepositoryProvider);
+    final city = _searchCity(ref.read(manualLocationProvider));
+    if (mounted) {
+      setState(() {
+        _searching = true;
+        _searchFailed = false;
+      });
+    }
+
+    try {
+      final results = await repository.fetchGroupedSearch(
+        q: query,
+        city: city,
+      );
+      if (!mounted || generation != _searchGeneration) {
+        return;
+      }
+      setState(() {
+        _remoteItems = _itemsFromGroupedResults(results);
+        _searching = false;
+        _searchFailed = false;
+      });
+    } catch (_) {
+      if (!mounted || generation != _searchGeneration) {
+        return;
+      }
+      setState(() {
+        _remoteItems = const [];
+        _searching = false;
+        _searchFailed = true;
+      });
+    }
   }
 
   void _close() {
@@ -164,15 +231,39 @@ class _V5SearchOverlayState extends ConsumerState<_V5SearchOverlay> {
       switch (item.kind) {
         case _V5SearchKind.all:
         case _V5SearchKind.meetup:
-          origin.goRoute(AppRoute.tonight);
+          final eventId = item.id;
+          if (eventId == null || eventId.isEmpty) {
+            origin.goRoute(AppRoute.tonight);
+          } else {
+            origin.pushRoute(
+              AppRoute.eventDetail,
+              pathParameters: {'eventId': eventId},
+            );
+          }
         case _V5SearchKind.club:
           origin.goRoute(AppRoute.communities);
         case _V5SearchKind.person:
           origin.goRoute(AppRoute.dating);
         case _V5SearchKind.route:
-          origin.pushRoute(AppRoute.eveningRoutes);
+          final templateId = item.id;
+          if (templateId == null || templateId.isEmpty) {
+            origin.pushRoute(AppRoute.eveningRoutes);
+          } else {
+            origin.pushRoute(
+              AppRoute.eveningRouteDetail,
+              pathParameters: {'templateId': templateId},
+            );
+          }
         case _V5SearchKind.affiche:
-          origin.pushRoute(AppRoute.affiche);
+          final eventId = item.id;
+          if (eventId == null || eventId.isEmpty) {
+            origin.pushRoute(AppRoute.affiche);
+          } else {
+            origin.pushRoute(
+              AppRoute.afficheEvent,
+              pathParameters: {'eventId': eventId},
+            );
+          }
       }
     });
   }
@@ -239,9 +330,7 @@ class _V5SearchOverlayState extends ConsumerState<_V5SearchOverlay> {
                               Expanded(
                                 child: _V5SearchInput(
                                   controller: _controller,
-                                  onChanged: (value) {
-                                    setState(() => _query = value);
-                                  },
+                                  onChanged: _onQueryChanged,
                                   onSubmitted: (value) {
                                     unawaited(_rememberRecent(value));
                                   },
@@ -318,7 +407,14 @@ class _V5SearchOverlayState extends ConsumerState<_V5SearchOverlay> {
                                   if (index != results.length - 1)
                                     const SizedBox(height: 6),
                                 ],
-                                if (results.isEmpty)
+                                if (_searching)
+                                  const _V5SearchLoadingState()
+                                else if (_searchFailed)
+                                  const _V5SearchEmptyState(
+                                    title: 'Поиск не загрузился',
+                                    subtitle: 'Проверь соединение',
+                                  )
+                                else if (results.isEmpty)
                                   const _V5SearchEmptyState(),
                               ],
                             ),
@@ -652,7 +748,13 @@ class _V5SearchRecentRow extends StatelessWidget {
 }
 
 class _V5SearchEmptyState extends StatelessWidget {
-  const _V5SearchEmptyState();
+  const _V5SearchEmptyState({
+    this.title = 'Ничего не нашли',
+    this.subtitle = 'Попробуй другой запрос',
+  });
+
+  final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -661,13 +763,13 @@ class _V5SearchEmptyState extends StatelessWidget {
       child: Column(
         children: [
           Text(
-            'Ничего не нашли',
+            title,
             textAlign: TextAlign.center,
             style: bbV5DisplayStyle(fontSize: 14),
           ),
           const SizedBox(height: 6),
           Text(
-            'Попробуй другой запрос',
+            subtitle,
             textAlign: TextAlign.center,
             style: AppTextStyles.caption.copyWith(
               fontSize: 12,
@@ -679,6 +781,65 @@ class _V5SearchEmptyState extends StatelessWidget {
       ),
     );
   }
+}
+
+class _V5SearchLoadingState extends StatelessWidget {
+  const _V5SearchLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 36),
+      child: SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: BbV5Colors.accent,
+        ),
+      ),
+    );
+  }
+}
+
+List<_V5SearchItem> _itemsFromGroupedResults(GroupedSearchResults results) {
+  return [
+    for (final event in results.meetups)
+      _V5SearchItem(
+        id: event.id,
+        kind: _V5SearchKind.meetup,
+        title: event.title,
+        subtitle: event.place,
+      ),
+    for (final route in results.routes)
+      _V5SearchItem(
+        id: route.id,
+        kind: _V5SearchKind.route,
+        title: route.title,
+        subtitle: route.area == null || route.area!.trim().isEmpty
+            ? route.city
+            : '${route.city} · ${route.area}',
+      ),
+    for (final event in results.affiche)
+      _V5SearchItem(
+        id: event.id,
+        kind: _V5SearchKind.affiche,
+        title: event.title,
+        subtitle: event.placeLabel,
+      ),
+  ];
+}
+
+String _searchCity(ManualLocation? manualLocation) {
+  final city = manualLocation?.city?.trim();
+  if (city != null && city.isNotEmpty) {
+    return city;
+  }
+  final label = manualLocation?.label.trim();
+  if (label != null && label.isNotEmpty) {
+    return label;
+  }
+  return 'Москва';
 }
 
 IconData _searchIcon(_V5SearchKind kind) {

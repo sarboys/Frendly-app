@@ -2,21 +2,27 @@ import 'package:big_break_mobile/app/app.dart';
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
+import 'package:big_break_mobile/app/navigation/app_routes.dart';
+import 'package:big_break_mobile/features/affiche/presentation/affiche_events_screen.dart';
 import 'package:big_break_mobile/features/meetups/presentation/meetups_screen.dart';
 import 'package:big_break_mobile/features/tonight/presentation/tonight_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
+import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
+import 'package:big_break_mobile/shared/models/paginated_response.dart';
 import 'package:big_break_mobile/shared/models/person_summary.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../test_overrides.dart';
@@ -286,6 +292,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Дейтинг · свидания'), findsOneWidget);
+    final datingContext = tester.element(find.text('Дейтинг · свидания'));
+    final datingUri =
+        GoRouter.of(datingContext).routerDelegate.currentConfiguration.uri;
+    expect(datingUri.path, AppRoute.dating.path);
+    expect(datingUri.queryParameters['profileId'], 'user-dasha');
     expect(find.text('Встреч'), findsNothing);
     expect(find.text('Рейтинг'), findsNothing);
   });
@@ -313,6 +324,34 @@ void main() {
     expect(find.text('Афиша рядом'), findsNothing);
   });
 
+  testWidgets('tonight affiche action opens v5 affiche filter', (
+    tester,
+  ) async {
+    await _pumpTonightApp(
+      tester,
+      extraOverrides: [
+        backendRepositoryProvider.overrideWith(
+          (ref) => _TonightAfficheRepository(ref: ref),
+        ),
+      ],
+    );
+
+    await _dragUntilVisible(
+      tester,
+      find.byKey(const ValueKey('tonight-affiche-all')),
+      420,
+    );
+    await tester.tap(find.byKey(const ValueKey('tonight-affiche-all')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AfficheEventsScreen), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Фильтры'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('affiche-v5-filter-sheet')), findsOneWidget);
+  });
+
   testWidgets('tonight gathering cards render event source images', (
     tester,
   ) async {
@@ -333,6 +372,23 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('tonight gathering card shows date when event is not today', (
+    tester,
+  ) async {
+    await _pumpTonightDirect(
+      tester,
+      extraOverrides: [
+        eventsProvider.overrideWith(
+          (ref, filter) async => [_tomorrowGatheringFixture],
+        ),
+      ],
+    );
+
+    await _dragUntilVisible(tester, find.text('Завтра · 20:00'), 420);
+
+    expect(find.text('Завтра · 20:00'), findsOneWidget);
   });
 
   testWidgets('tonight metrics does not start chat or session providers', (
@@ -359,6 +415,36 @@ void main() {
 
     expect(meetupChatReads, 0);
     expect(sessionReads, 0);
+  });
+
+  testWidgets('tonight pulse shows top five active non-full events', (
+    tester,
+  ) async {
+    await _pumpTonightDirect(
+      tester,
+      extraOverrides: [
+        eventsProvider.overrideWith(
+          (ref, filter) async => [
+            _pulseEvent('full', 'Полная встреча', going: 10, capacity: 10),
+            _pulseEvent('top-1', 'Девять гостей', going: 9, capacity: 12),
+            _pulseEvent('top-2', 'Восемь гостей', going: 8, capacity: 10),
+            _pulseEvent('top-3', 'Семь гостей', going: 7, capacity: 8),
+            _pulseEvent('top-4', 'Шесть гостей', going: 6, capacity: 9),
+            _pulseEvent('top-5', 'Пять гостей', going: 5, capacity: 8),
+            _pulseEvent('low', 'Один гость', going: 1, capacity: 8),
+          ],
+        ),
+      ],
+    );
+
+    await _dragUntilVisible(tester, find.text('Пульс города'), 420);
+
+    for (final id in ['top-1', 'top-2', 'top-3', 'top-4', 'top-5']) {
+      expect(find.byKey(ValueKey('tonight-pulse-event-$id')), findsOneWidget);
+    }
+    expect(
+        find.byKey(const ValueKey('tonight-pulse-event-full')), findsNothing);
+    expect(find.byKey(const ValueKey('tonight-pulse-event-low')), findsNothing);
   });
 }
 
@@ -454,6 +540,29 @@ class _ImmediateMapkitBootstrap implements MapkitBootstrap {
 
   @override
   Future<void> ensureInitialized() async {}
+}
+
+class _TonightAfficheRepository extends BackendRepository {
+  _TonightAfficheRepository({required super.ref}) : super(dio: Dio());
+
+  @override
+  Future<PaginatedResponse<AfficheEvent>> fetchAfficheEvents({
+    String? city,
+    String? q,
+    String? date,
+    String? priceMode,
+    String? source,
+    String? category,
+    bool? featured,
+    String? cursor,
+    int limit = 24,
+    CancelToken? cancelToken,
+  }) async {
+    return const PaginatedResponse<AfficheEvent>(
+      items: _afficheFixtures,
+      nextCursor: null,
+    );
+  }
 }
 
 class _NoLocationService implements AppLocationService {
@@ -575,3 +684,44 @@ final _eventFromAfficheFixture = Event.fromJson({
   'joined': false,
   'imageUrl': 'https://cdn.example.com/affiche-meetup.jpg',
 });
+
+final _tomorrowGatheringFixture = Event.fromJson({
+  'id': 'event-tomorrow',
+  'title': 'Кофе после работы',
+  'emoji': '☕',
+  'time': 'Завтра · 20:00',
+  'startsAtIso': '2026-05-10T17:00:00.000Z',
+  'place': 'Кофейня',
+  'distance': '1.2 км',
+  'attendees': ['Аня'],
+  'going': 2,
+  'capacity': 8,
+  'vibe': 'Спокойно',
+  'tone': 'warm',
+  'joined': false,
+  'imageUrl': null,
+});
+
+Event _pulseEvent(
+  String id,
+  String title, {
+  required int going,
+  required int capacity,
+}) {
+  return Event.fromJson({
+    'id': id,
+    'title': title,
+    'emoji': '✨',
+    'time': 'Сегодня · 19:00',
+    'startsAtIso': '2026-05-09T16:00:00.000Z',
+    'place': 'Город',
+    'distance': '1.0 км',
+    'attendees': const ['Аня'],
+    'going': going,
+    'capacity': capacity,
+    'vibe': 'Спокойно',
+    'tone': 'warm',
+    'joined': false,
+    'imageUrl': null,
+  });
+}

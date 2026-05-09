@@ -1,11 +1,13 @@
-import 'dart:async';
-
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/evening_plan/presentation/evening_plan_data.dart';
+import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 const _aiPromptTemplates = [
   'Винный бар, потом джаз и тихое место для разговора',
@@ -28,29 +30,28 @@ const _aiTimes = ['Сейчас', 'Вечером', 'Завтра', 'На вых
 const _aiSizes = ['2', '3–4', '5–8', '9+'];
 const _aiBudgets = ['Бесплатно', 'до 1500', '1500–3500', '3500+'];
 
-const _aiPlanTemplate = <_AiPlanStep>[];
-
-class AiCreateScreen extends StatefulWidget {
+class AiCreateScreen extends ConsumerStatefulWidget {
   const AiCreateScreen({super.key});
 
   @override
-  State<AiCreateScreen> createState() => _AiCreateScreenState();
+  ConsumerState<AiCreateScreen> createState() => _AiCreateScreenState();
 }
 
-class _AiCreateScreenState extends State<AiCreateScreen> {
+class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
   final _promptController = TextEditingController();
   final _selectedVibes = <String>{};
-  Timer? _timer;
+  CancelToken? _resolveCancelToken;
 
   var _budget = 'до 1500';
   var _time = 'Вечером';
   var _size = '3–4';
   var _loading = false;
-  List<_AiPlanStep>? _plan;
+  String? _errorText;
+  EveningRouteData? _route;
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _cancelResolveRequest('ai_create_disposed');
     _promptController.dispose();
     super.dispose();
   }
@@ -65,7 +66,7 @@ class _AiCreateScreenState extends State<AiCreateScreen> {
     });
   }
 
-  void _generatePlan() {
+  Future<void> _generatePlan() async {
     if (_promptController.text.trim().isEmpty && _selectedVibes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Опиши вечер или выбери настроение')),
@@ -73,29 +74,144 @@ class _AiCreateScreenState extends State<AiCreateScreen> {
       return;
     }
 
-    _timer?.cancel();
+    _cancelResolveRequest('ai_create_replaced');
+    final cancelToken = CancelToken();
+    _resolveCancelToken = cancelToken;
+
     setState(() {
       _loading = true;
-      _plan = null;
+      _route = null;
+      _errorText = null;
     });
 
-    _timer = Timer(const Duration(milliseconds: 900), () {
-      if (!mounted || !context.mounted) {
+    try {
+      final json =
+          await ref.read(backendRepositoryProvider).resolveEveningRoute(
+                goal: _goalKey,
+                mood: _moodKey,
+                budget: _budgetKey,
+                format: _formatKey,
+                prompt: _resolvePrompt,
+                cancelToken: cancelToken,
+              );
+      if (!mounted ||
+          cancelToken.isCancelled ||
+          !identical(_resolveCancelToken, cancelToken)) {
+        return;
+      }
+      final route = eveningRouteFromJson(json);
+      if (route.steps.isEmpty) {
+        setState(() {
+          _loading = false;
+          _errorText = 'Не удалось собрать маршрут. Попробуй уточнить запрос.';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Маршрут не собран')),
+        );
         return;
       }
       setState(() {
         _loading = false;
-        _plan = _aiPlanTemplate;
+        _route = route;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('План пока не собран')),
+        SnackBar(content: Text('Готово · ${route.steps.length} шага собраны')),
       );
-    });
+    } catch (_) {
+      if (!mounted ||
+          cancelToken.isCancelled ||
+          !identical(_resolveCancelToken, cancelToken)) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _errorText = 'Сервер не ответил. Попробуй еще раз.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось собрать маршрут')),
+      );
+    } finally {
+      if (identical(_resolveCancelToken, cancelToken)) {
+        _resolveCancelToken = null;
+      }
+    }
+  }
+
+  String get _resolvePrompt {
+    final parts = <String>[
+      _promptController.text.trim(),
+      if (_selectedVibes.isNotEmpty) 'Настроение: ${_selectedVibes.join(', ')}',
+      'Когда: $_time',
+      'Сколько людей: $_size',
+      'Бюджет: $_budget',
+    ].where((part) => part.trim().isNotEmpty).toList(growable: false);
+    return parts.join('. ');
+  }
+
+  String get _goalKey {
+    if (_selectedVibes.contains('Свидание') || _size == '2') {
+      return 'date';
+    }
+    if (_size == '5–8' || _size == '9+') {
+      return 'company';
+    }
+    return 'newfriends';
+  }
+
+  String get _moodKey {
+    if (_selectedVibes.contains('Свидание')) {
+      return 'date';
+    }
+    if (_selectedVibes.contains('Музыка') || _selectedVibes.contains('Вино')) {
+      return 'social';
+    }
+    return 'chill';
+  }
+
+  String get _formatKey {
+    if (_selectedVibes.contains('Вино')) {
+      return 'bar';
+    }
+    if (_selectedVibes.contains('Музыка') || _selectedVibes.contains('Кино')) {
+      return 'show';
+    }
+    if (_selectedVibes.contains('Прогулка')) {
+      return 'active';
+    }
+    return 'mixed';
+  }
+
+  String get _budgetKey {
+    return switch (_budget) {
+      'Бесплатно' => 'free',
+      'до 1500' => 'low',
+      '1500–3500' => 'mid',
+      _ => 'high',
+    };
+  }
+
+  void _cancelResolveRequest(String reason) {
+    final cancelToken = _resolveCancelToken;
+    if (cancelToken != null && !cancelToken.isCancelled) {
+      cancelToken.cancel(reason);
+    }
+  }
+
+  void _openRoute(EveningRouteData route, {required bool launch}) {
+    if (route.id.isEmpty) {
+      context.pushRoute(AppRoute.createMeetup);
+      return;
+    }
+    context.pushRoute(
+      AppRoute.eveningPlan,
+      pathParameters: {'routeId': route.id},
+      queryParameters: launch ? {'launch': '1'} : const {},
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final plan = _plan;
+    final route = _route;
     final bottomPadding = 120 + MediaQuery.paddingOf(context).bottom;
 
     return BbV5Scaffold(
@@ -125,7 +241,36 @@ class _AiCreateScreenState extends State<AiCreateScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const BbV5Kicker('твой запрос'),
+                    Row(
+                      children: [
+                        const Expanded(child: BbV5Kicker('твой запрос')),
+                        SizedBox(
+                          width: 34,
+                          height: 34,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: BbV5Colors.paperHi,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: BbV5Colors.hair),
+                              boxShadow: BbV5Shadows.pill,
+                            ),
+                            child: IconButton(
+                              tooltip: 'Сказать вслух',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => context.pushRoute(
+                                AppRoute.aiVoice,
+                              ),
+                              icon: const Icon(
+                                LucideIcons.mic,
+                                size: 15,
+                                color: BbV5Colors.ink,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _promptController,
@@ -240,7 +385,7 @@ class _AiCreateScreenState extends State<AiCreateScreen> {
                 ),
               ),
             ),
-            if (plan == null && !_loading)
+            if (route == null && !_loading)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.only(top: 18),
@@ -253,28 +398,47 @@ class _AiCreateScreenState extends State<AiCreateScreen> {
                         color: BbV5Colors.inkMute,
                       ),
                       const SizedBox(width: 5),
-                      Text(
-                        'AI учитывает погоду, твой круг, афишу города',
-                        style: AppTextStyles.caption.copyWith(
-                          fontSize: 11.5,
-                          color: BbV5Colors.inkMute,
-                          letterSpacing: 0,
+                      Flexible(
+                        child: Text(
+                          'AI учитывает погоду, твой круг, афишу города',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.caption.copyWith(
+                            fontSize: 11.5,
+                            color: BbV5Colors.inkMute,
+                            letterSpacing: 0,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-            if (plan != null)
+            if (_errorText != null)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 18),
+                  child: BbV5Card(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      _errorText!,
+                      style: AppTextStyles.meta.copyWith(
+                        color: BbV5Colors.inkMute,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (route != null)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.only(top: 20),
                   child: _GeneratedPlanCard(
                     time: _time,
-                    plan: plan,
+                    route: route,
                     onRefresh: _generatePlan,
-                    onEdit: () => context.pushRoute(AppRoute.createMeetup),
-                    onCreate: () => context.pushRoute(AppRoute.createMeetup),
+                    onEdit: () => _openRoute(route, launch: false),
+                    onCreate: () => _openRoute(route, launch: true),
                   ),
                 ),
               ),
@@ -294,22 +458,6 @@ class _AiVibe {
 
   final IconData icon;
   final String label;
-}
-
-class _AiPlanStep {
-  const _AiPlanStep({
-    required this.time,
-    required this.place,
-    required this.subtitle,
-    required this.tag,
-    required this.color,
-  });
-
-  final String time;
-  final String place;
-  final String subtitle;
-  final String tag;
-  final Color color;
 }
 
 class _PromptTemplateChip extends StatelessWidget {
@@ -453,21 +601,22 @@ class _ParamDivider extends StatelessWidget {
 class _GeneratedPlanCard extends StatelessWidget {
   const _GeneratedPlanCard({
     required this.time,
-    required this.plan,
+    required this.route,
     required this.onRefresh,
     required this.onEdit,
     required this.onCreate,
   });
 
   final String time;
-  final List<_AiPlanStep> plan;
+  final EveningRouteData route;
   final VoidCallback onRefresh;
   final VoidCallback onEdit;
   final VoidCallback onCreate;
 
   @override
   Widget build(BuildContext context) {
-    final hasPlan = plan.isNotEmpty;
+    final steps = route.steps;
+    final hasPlan = steps.isNotEmpty;
 
     return BbV5Card(
       padding: EdgeInsets.zero,
@@ -485,7 +634,7 @@ class _GeneratedPlanCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         hasPlan
-                            ? '${plan.length} шага · ${time.toLowerCase()}'
+                            ? '${steps.length} шага · ${time.toLowerCase()}'
                             : 'План пока не собран',
                         style: bbV5DisplayStyle(fontSize: 20),
                       ),
@@ -513,7 +662,7 @@ class _GeneratedPlanCard extends StatelessWidget {
               ),
             )
           else
-            for (final step in plan) _PlanStepRow(step: step),
+            for (final step in steps) _PlanStepRow(step: step),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -551,10 +700,18 @@ class _GeneratedPlanCard extends StatelessWidget {
 class _PlanStepRow extends StatelessWidget {
   const _PlanStepRow({required this.step});
 
-  final _AiPlanStep step;
+  final EveningRouteStep step;
 
   @override
   Widget build(BuildContext context) {
+    final color = _stepColor(step.kind);
+    final place = step.venue.trim().isNotEmpty ? step.venue : step.title;
+    final subtitle = step.description?.trim().isNotEmpty == true
+        ? step.description!.trim()
+        : step.address.trim().isNotEmpty
+            ? step.address
+            : step.distance;
+
     return DecoratedBox(
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: BbV5Colors.hairSoft)),
@@ -581,9 +738,9 @@ class _PlanStepRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    step.tag,
+                    eveningKindLabel(step.kind).toUpperCase(),
                     style: AppTextStyles.caption.copyWith(
-                      color: step.color,
+                      color: color,
                       fontSize: 9,
                       letterSpacing: 1.44,
                       fontWeight: FontWeight.w600,
@@ -596,14 +753,14 @@ class _PlanStepRow extends StatelessWidget {
               width: 1,
               height: 40,
               margin: const EdgeInsets.symmetric(horizontal: 16),
-              color: step.color,
+              color: color,
             ),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    step.place,
+                    place,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.body.copyWith(
@@ -616,7 +773,7 @@ class _PlanStepRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    step.subtitle,
+                    subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.caption.copyWith(
@@ -638,4 +795,16 @@ class _PlanStepRow extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _stepColor(EveningStepKind kind) {
+  return switch (kind) {
+    EveningStepKind.bar => BbV5Colors.terra,
+    EveningStepKind.show => BbV5Colors.brandDeep,
+    EveningStepKind.active => BbV5Colors.gold,
+    EveningStepKind.dinner => BbV5Colors.accent,
+    EveningStepKind.wellness => BbV5Colors.rose,
+    EveningStepKind.afterparty => BbV5Colors.ink,
+    EveningStepKind.followup => BbV5Colors.inkSoft,
+  };
 }

@@ -1,5 +1,7 @@
 // ignore_for_file: unused_element, unused_element_parameter
 
+import 'dart:async';
+
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
@@ -102,10 +104,16 @@ class ChatsScreen extends ConsumerWidget {
                     error: meetupChatsAsync.hasError ||
                         personalChatsAsync.hasError,
                     onMeetupOpen: (chat) => _openMeetupChat(context, chat),
+                    onMeetupPinToggle: (chat) {
+                      unawaited(_toggleMeetupChatPinned(ref, chat));
+                    },
                     onPersonalOpen: (chat) => context.pushRoute(
                       AppRoute.personalChat,
                       pathParameters: {'chatId': chat.id},
                     ),
+                    onPersonalPinToggle: (chat) {
+                      unawaited(_togglePersonalChatPinned(ref, chat));
+                    },
                   )
                 else if (segment == ChatSegment.meetup)
                   meetupChatsAsync.when(
@@ -113,6 +121,9 @@ class ChatsScreen extends ConsumerWidget {
                       entries: meetupEntries,
                       currentUserId: currentUserId,
                       onOpen: (chat) => _openMeetupChat(context, chat),
+                      onPinToggle: (chat) {
+                        unawaited(_toggleMeetupChatPinned(ref, chat));
+                      },
                       onLaunch: (chat) => _startEveningFromChatList(
                         context,
                         chat,
@@ -134,6 +145,9 @@ class ChatsScreen extends ConsumerWidget {
                         AppRoute.personalChat,
                         pathParameters: {'chatId': chat.id},
                       ),
+                      onPinToggle: (chat) {
+                        unawaited(_togglePersonalChatPinned(ref, chat));
+                      },
                     ),
                     loading: () => const _V5ChatState(
                       text: 'Загружаем личные чаты',
@@ -151,6 +165,60 @@ class ChatsScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+Future<void> _toggleMeetupChatPinned(WidgetRef ref, MeetupChat chat) async {
+  final previous = ref.read(meetupChatsProvider).valueOrNull;
+  if (previous == null) {
+    return;
+  }
+
+  final nextPinned = !chat.isPinned;
+  ref.read(meetupChatsLocalStateProvider.notifier).state =
+      sortMeetupChatsByPinned(
+    previous
+        .map(
+          (item) =>
+              item.id == chat.id ? item.copyWith(isPinned: nextPinned) : item,
+        )
+        .toList(growable: false),
+  );
+
+  try {
+    await ref
+        .read(backendRepositoryProvider)
+        .setChatPinned(chat.id, isPinned: nextPinned);
+    ref.invalidate(meetupChatsProvider);
+  } catch (_) {
+    ref.read(meetupChatsLocalStateProvider.notifier).state = previous;
+  }
+}
+
+Future<void> _togglePersonalChatPinned(WidgetRef ref, PersonalChat chat) async {
+  final previous = ref.read(personalChatsProvider).valueOrNull;
+  if (previous == null) {
+    return;
+  }
+
+  final nextPinned = !chat.isPinned;
+  ref.read(personalChatsLocalStateProvider.notifier).state =
+      sortPersonalChatsByPinned(
+    previous
+        .map(
+          (item) =>
+              item.id == chat.id ? item.copyWith(isPinned: nextPinned) : item,
+        )
+        .toList(growable: false),
+  );
+
+  try {
+    await ref
+        .read(backendRepositoryProvider)
+        .setChatPinned(chat.id, isPinned: nextPinned);
+    ref.invalidate(personalChatsProvider);
+  } catch (_) {
+    ref.read(personalChatsLocalStateProvider.notifier).state = previous;
   }
 }
 
@@ -480,7 +548,9 @@ class _V5AllChatList extends StatelessWidget {
     required this.loading,
     required this.error,
     required this.onMeetupOpen,
+    required this.onMeetupPinToggle,
     required this.onPersonalOpen,
+    required this.onPersonalPinToggle,
   });
 
   final List<MeetupChat> meetupChats;
@@ -488,7 +558,9 @@ class _V5AllChatList extends StatelessWidget {
   final bool loading;
   final bool error;
   final ValueChanged<MeetupChat> onMeetupOpen;
+  final ValueChanged<MeetupChat> onMeetupPinToggle;
   final ValueChanged<PersonalChat> onPersonalOpen;
+  final ValueChanged<PersonalChat> onPersonalPinToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -526,7 +598,9 @@ class _V5AllChatList extends StatelessWidget {
           for (var index = 0; index < visibleEntries.length; index++) ...[
             visibleEntries[index].buildRow(
               onMeetupOpen: onMeetupOpen,
+              onMeetupPinToggle: onMeetupPinToggle,
               onPersonalOpen: onPersonalOpen,
+              onPersonalPinToggle: onPersonalPinToggle,
             ),
             if (index < visibleEntries.length - 1) const _V5RowDivider(),
           ],
@@ -549,44 +623,59 @@ class _V5AllChatEntry {
 
   Widget buildRow({
     required ValueChanged<MeetupChat> onMeetupOpen,
+    required ValueChanged<MeetupChat> onMeetupPinToggle,
     required ValueChanged<PersonalChat> onPersonalOpen,
+    required ValueChanged<PersonalChat> onPersonalPinToggle,
   }) {
     final meetupChat = meetup;
     if (meetupChat != null) {
       return _V5ChatRow(
         item: _V5ChatRowItem(
+          id: meetupChat.id,
           title: meetupChat.title,
           initials: _initials(meetupChat.title),
           color: _meetupToneColor(meetupChat),
           last: _meetupPreview(meetupChat),
           time: meetupChat.lastTime,
           unread: meetupChat.unread,
+          pinned: meetupChat.isPinned,
           kind: _meetupKind(meetupChat),
           members: _meetupMembersCount(meetupChat),
           dot: meetupChat.phase == MeetupPhase.live || meetupChat.unread > 0,
         ),
         onTap: () => onMeetupOpen(meetupChat),
+        onPinToggle: () => onMeetupPinToggle(meetupChat),
       );
     }
 
     final personalChat = personal!;
     return _V5ChatRow(
       item: _V5ChatRowItem(
+        id: personalChat.id,
         title: personalChat.name,
         initials: _initials(personalChat.name),
         color: personalChat.online ? BbV5Colors.brand : BbV5Colors.rose,
         last: personalChat.lastMessage,
         time: personalChat.lastTime,
         unread: personalChat.unread,
+        pinned: personalChat.isPinned,
         kind: personalChat.fromMeetup == null ? 'дейтинг' : 'личные',
         dot: personalChat.online || personalChat.unread > 0,
       ),
       onTap: () => onPersonalOpen(personalChat),
+      onPinToggle: () => onPersonalPinToggle(personalChat),
     );
   }
 }
 
 int _compareAllChatEntries(_V5AllChatEntry left, _V5AllChatEntry right) {
+  final leftPinned = left.meetup?.isPinned ?? left.personal?.isPinned ?? false;
+  final rightPinned =
+      right.meetup?.isPinned ?? right.personal?.isPinned ?? false;
+  if (leftPinned != rightPinned) {
+    return leftPinned ? -1 : 1;
+  }
+
   final leftRank = _chatRecencyRank(left.time);
   final rightRank = _chatRecencyRank(right.time);
   if (leftRank != rightRank) {
@@ -668,6 +757,7 @@ int? _meetupMembersCount(MeetupChat chat) {
 
 class _V5ChatRowItem {
   const _V5ChatRowItem({
+    required this.id,
     required this.title,
     required this.initials,
     required this.color,
@@ -675,10 +765,12 @@ class _V5ChatRowItem {
     required this.time,
     required this.kind,
     this.unread = 0,
+    this.pinned = false,
     this.members,
     this.dot = true,
   });
 
+  final String id;
   final String title;
   final String initials;
   final Color color;
@@ -686,6 +778,7 @@ class _V5ChatRowItem {
   final String time;
   final String kind;
   final int unread;
+  final bool pinned;
   final int? members;
   final bool dot;
 }
@@ -694,10 +787,12 @@ class _V5ChatRow extends StatelessWidget {
   const _V5ChatRow({
     required this.item,
     this.onTap,
+    this.onPinToggle,
   });
 
   final _V5ChatRowItem item;
   final VoidCallback? onTap;
+  final VoidCallback? onPinToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -726,6 +821,13 @@ class _V5ChatRow extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
+                    if (onPinToggle != null)
+                      _V5ChatPinButton(
+                        key: Key('chat-pin-${item.id}'),
+                        pinned: item.pinned,
+                        onTap: onPinToggle!,
+                      ),
+                    if (onPinToggle != null) const SizedBox(width: 4),
                     Text(
                       item.time,
                       style: AppTextStyles.caption.copyWith(
@@ -826,17 +928,51 @@ class _V5RowDivider extends StatelessWidget {
   }
 }
 
+class _V5ChatPinButton extends StatelessWidget {
+  const _V5ChatPinButton({
+    required this.pinned,
+    required this.onTap,
+    super.key,
+  });
+
+  final bool pinned;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: pinned ? 'Открепить чат' : 'Закрепить чат',
+      child: SizedBox(
+        width: 28,
+        height: 28,
+        child: IconButton(
+          padding: EdgeInsets.zero,
+          visualDensity: VisualDensity.compact,
+          onPressed: onTap,
+          icon: Icon(
+            pinned ? Icons.push_pin : Icons.push_pin_outlined,
+            size: 15,
+            color: pinned ? BbV5Colors.accent : BbV5Colors.inkMute,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _V5MeetupChatList extends StatelessWidget {
   const _V5MeetupChatList({
     required this.entries,
     required this.currentUserId,
     required this.onOpen,
+    required this.onPinToggle,
     required this.onLaunch,
   });
 
   final List<_MeetupChatEntry> entries;
   final String? currentUserId;
   final ValueChanged<MeetupChat> onOpen;
+  final ValueChanged<MeetupChat> onPinToggle;
   final ValueChanged<MeetupChat> onLaunch;
 
   @override
@@ -875,6 +1011,7 @@ class _V5MeetupChatList extends StatelessWidget {
       chat: chat,
       type: entry.type,
       onTap: () => onOpen(chat),
+      onPinToggle: () => onPinToggle(chat),
       onLaunch: canLaunch ? () => onLaunch(chat) : null,
     );
   }
@@ -884,10 +1021,12 @@ class _V5PersonalChatList extends StatelessWidget {
   const _V5PersonalChatList({
     required this.chats,
     required this.onOpen,
+    required this.onPinToggle,
   });
 
   final List<PersonalChat> chats;
   final ValueChanged<PersonalChat> onOpen;
+  final ValueChanged<PersonalChat> onPinToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -905,6 +1044,7 @@ class _V5PersonalChatList extends StatelessWidget {
             _V5PersonalChatRow(
               chat: chat,
               onTap: () => onOpen(chat),
+              onPinToggle: () => onPinToggle(chat),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
@@ -927,12 +1067,14 @@ class _V5MeetupChatRow extends StatelessWidget {
     required this.chat,
     required this.type,
     required this.onTap,
+    required this.onPinToggle,
     this.onLaunch,
   });
 
   final MeetupChat chat;
   final _MeetupChatEntryType type;
   final VoidCallback onTap;
+  final VoidCallback onPinToggle;
   final VoidCallback? onLaunch;
 
   @override
@@ -984,6 +1126,12 @@ class _V5MeetupChatRow extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 8),
+                            _V5ChatPinButton(
+                              key: Key('chat-pin-${chat.id}'),
+                              pinned: chat.isPinned,
+                              onTap: onPinToggle,
+                            ),
+                            const SizedBox(width: 4),
                             Text(
                               chat.lastTime,
                               style: AppTextStyles.caption.copyWith(
@@ -1109,10 +1257,12 @@ class _V5PersonalChatRow extends StatelessWidget {
   const _V5PersonalChatRow({
     required this.chat,
     required this.onTap,
+    required this.onPinToggle,
   });
 
   final PersonalChat chat;
   final VoidCallback onTap;
+  final VoidCallback onPinToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -1144,6 +1294,13 @@ class _V5PersonalChatRow extends StatelessWidget {
                             style: bbV5DisplayStyle(fontSize: 14),
                           ),
                         ),
+                        const SizedBox(width: 8),
+                        _V5ChatPinButton(
+                          key: Key('chat-pin-${chat.id}'),
+                          pinned: chat.isPinned,
+                          onTap: onPinToggle,
+                        ),
+                        const SizedBox(width: 4),
                         Text(
                           chat.lastTime,
                           style: AppTextStyles.caption.copyWith(

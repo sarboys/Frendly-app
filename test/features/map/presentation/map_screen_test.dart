@@ -336,6 +336,18 @@ void main() {
     expect(query.radiusKm, greaterThan(0));
   });
 
+  test('map viewport query can request the shared maximum radius', () {
+    final query = buildMapEventsQuery(
+      bounds: const ym.BoundingBox(
+        southWest: ym.Point(latitude: 54.40, longitude: 35.70),
+        northEast: ym.Point(latitude: 57.10, longitude: 39.90),
+      ),
+      center: const ym.Point(latitude: 55.75, longitude: 37.61),
+    );
+
+    expect(query.radiusKm, 150);
+  });
+
   test('initial map query centers on user location with nearby radius', () {
     final query = buildInitialMapEventsQuery(
       const ym.Point(latitude: 55.75399, longitude: 37.62001),
@@ -343,7 +355,20 @@ void main() {
 
     expect(query.centerLatitude, 55.75399);
     expect(query.centerLongitude, 37.62001);
-    expect(query.radiusKm, 25);
+    expect(query.radiusKm, 50);
+  });
+
+  test('radar carousel maps infinite pages to event indexes', () {
+    expect(radarCarouselEventIndex(1000, 2), 0);
+    expect(radarCarouselEventIndex(1001, 2), 1);
+    expect(radarCarouselEventIndex(1002, 2), 0);
+    expect(radarCarouselEventIndex(0, 0), 0);
+  });
+
+  test('radar carousel selects nearest physical page for event', () {
+    expect(nearestRadarCarouselPage(1000, targetIndex: 1, eventCount: 2), 1001);
+    expect(nearestRadarCarouselPage(1001, targetIndex: 0, eventCount: 2), 1002);
+    expect(nearestRadarCarouselPage(1000, targetIndex: 0, eventCount: 1), 0);
   });
 
   testWidgets('map bottom sheet renders v5 event cards', (tester) async {
@@ -398,11 +423,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Рядом сегодня'), findsOneWidget);
-      expect(find.text('2 точек · 25 км'), findsOneWidget);
+      expect(find.text('2 точек · 50 км'), findsOneWidget);
       expect(find.text('Первая точка'), findsOneWidget);
       expect(find.text('Вторая точка'), findsOneWidget);
       expect(find.text('Открыть →'), findsNothing);
       expect(find.text('1 из 4'), findsNothing);
+
+      final pageView = tester.widget<PageView>(find.byType(PageView));
+      expect(pageView.padEnds, isTrue);
+      expect(pageView.controller?.viewportFraction, greaterThan(0.70));
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
@@ -477,7 +506,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('2 точек · 25 км'), findsOneWidget);
+      expect(find.text('2 точек · 50 км'), findsOneWidget);
       expect(find.text('Рядом'), findsOneWidget);
       expect(find.text('Далеко'), findsOneWidget);
     } finally {
