@@ -5,7 +5,6 @@ import 'package:big_break_mobile/app/core/device/app_attachment_service.dart';
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/features/meetup_chat/presentation/meetup_chat_screen.dart';
 import 'package:big_break_mobile/features/personal_chat/presentation/personal_chat_screen.dart';
 import 'package:big_break_mobile/features/user_profile/presentation/user_profile_screen.dart';
@@ -16,6 +15,8 @@ import 'package:big_break_mobile/shared/models/message.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
+import 'package:big_break_mobile/shared/widgets/bb_social_actions.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -785,9 +786,27 @@ void main() {
     expect(find.text('Подписчики'), findsOneWidget);
     expect(find.text('Лайков'), findsOneWidget);
     expect(find.text('Супер'), findsOneWidget);
-    expect(find.text('248'), findsOneWidget);
-    expect(find.text('1.3k'), findsOneWidget);
-    expect(find.text('32'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(BbSocialActions),
+        matching: find.text('248'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(BbSocialActions),
+        matching: find.text('1.3k'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(BbSocialActions),
+        matching: find.text('32'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Подписаться'), findsOneWidget);
   });
 
@@ -798,26 +817,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final colors = AppColors.of(tester.element(find.byType(UserProfileScreen)));
     const states = <WidgetState>{};
 
-    final inviteButton = tester.widget<OutlinedButton>(
+    final inviteButton = tester.widget<FilledButton>(
       find.ancestor(
         of: find.text('Позвать на встречу'),
-        matching: find.byType(OutlinedButton),
+        matching: find.byType(FilledButton),
       ),
     );
     expect(
       inviteButton.style?.backgroundColor?.resolve(states),
-      colors.card,
+      BbV5Colors.paperHi,
     );
     expect(
       inviteButton.style?.foregroundColor?.resolve(states),
-      colors.foreground,
+      BbV5Colors.ink,
     );
     expect(
-      inviteButton.style?.side?.resolve(states),
-      BorderSide(color: colors.border),
+      inviteButton.style?.shape?.resolve(states),
+      isA<StadiumBorder>(),
     );
 
     final messageButtonFinder = find.ancestor(
@@ -829,11 +847,11 @@ void main() {
     final messageButton = tester.widget<FilledButton>(messageButtonFinder);
     expect(
       messageButton.style?.backgroundColor?.resolve(states),
-      colors.foreground,
+      BbV5Colors.accent,
     );
     expect(
       messageButton.style?.foregroundColor?.resolve(states),
-      colors.background,
+      BbV5Colors.paperHi,
     );
   });
 

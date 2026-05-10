@@ -436,4 +436,20 @@ void main() {
     expect(find.byType(BbV5Scaffold), findsOneWidget);
     expect(find.text('Профиль'), findsWidgets);
   });
+
+  testWidgets('public user profile uses main profile sections', (tester) async {
+    await tester
+        .pumpWidget(_wrap(const UserProfileScreen(userId: 'user-anya')));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('История'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.text('История'), findsOneWidget);
+    expect(find.text('Позвать на встречу'), findsOneWidget);
+    expect(find.text('Написать'), findsOneWidget);
+  });
 }

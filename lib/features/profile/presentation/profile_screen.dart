@@ -30,7 +30,7 @@ class ProfileScreen extends ConsumerWidget {
         ),
         data: (profile) {
           _prewarmProfilePhotos(ref, profile);
-          return _ProfileContent(
+          return ProfileV5Content(
             profile: profile,
             photoPreviews: photoPreviews,
           );
@@ -40,39 +40,66 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
-class _ProfileContent extends StatelessWidget {
-  const _ProfileContent({
+class ProfileV5Content extends StatelessWidget {
+  const ProfileV5Content({
     required this.profile,
-    required this.photoPreviews,
+    this.photoPreviews = const {},
+    this.header,
+    this.showOwnerCards = true,
+    this.heroAction,
+    this.heroSignalRow,
+    this.interestHighlights = const {},
+    this.interestFooter,
+    this.bottomOverlay,
+    this.bottomPadding = 132,
+    this.locationFallback = 'Москва · Чистые пруды',
+    super.key,
   });
 
   final ProfileData profile;
   final Map<String, Uint8List> photoPreviews;
+  final Widget? header;
+  final bool showOwnerCards;
+  final Widget? heroAction;
+  final Widget? heroSignalRow;
+  final Set<String> interestHighlights;
+  final Widget? interestFooter;
+  final Widget? bottomOverlay;
+  final double bottomPadding;
+  final String? locationFallback;
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 32, 20, 132),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _ProfileHeader(
-                        onBack: () => context.goRoute(AppRoute.tonight),
-                        onSettings: () => context.pushRoute(AppRoute.settings),
-                      ),
-                      const SizedBox(height: 20),
-                      _ProfileHeroCard(
-                        profile: profile,
-                        photoPreviews: photoPreviews,
-                      ),
+    final content = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(20, 32, 20, bottomPadding),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    header ??
+                        _ProfileHeader(
+                          onBack: () => context.goRoute(AppRoute.tonight),
+                          onSettings: () =>
+                              context.pushRoute(AppRoute.settings),
+                        ),
+                    const SizedBox(height: 20),
+                    _ProfileHeroCard(
+                      profile: profile,
+                      photoPreviews: photoPreviews,
+                      locationFallback: locationFallback,
+                      action: heroAction ??
+                          (showOwnerCards ? _ownerHeroAction(context) : null),
+                      signalRow: heroSignalRow ??
+                          (showOwnerCards
+                              ? _ProfileSignalRow(profile: profile)
+                              : null),
+                    ),
+                    if (showOwnerCards) ...[
                       const SizedBox(height: AppSpacing.md),
                       _FrendlyPlusCard(
                         onTap: () => context.pushRoute(AppRoute.paywall),
@@ -93,43 +120,82 @@ class _ProfileContent extends StatelessWidget {
                         onNotifications: () =>
                             context.pushRoute(AppRoute.notifications),
                       ),
-                      _ProfileSection(
-                        title: 'Зачем здесь',
-                        child: _ProfileTags(
-                          values: profile.intent,
-                          emptyLabel: 'Пока не выбрано',
-                          iconFor: (value) => value == 'Свидания'
-                              ? LucideIcons.heart
-                              : LucideIcons.users,
-                        ),
-                      ),
-                      _ProfileSection(
-                        title: 'Настроение',
-                        child: _VibeCard(vibe: profile.vibe),
-                      ),
-                      _ProfileSection(
-                        title: 'Интересы',
-                        child: _ProfileTags(
-                          values: profile.interests,
-                          emptyLabel: 'Интересы появятся после заполнения',
-                        ),
-                      ),
-                      _ProfileSection(
-                        title: 'О себе',
-                        child: _AboutCard(text: profile.bio),
-                      ),
-                      _ProfileSection(
-                        title: 'История',
-                        child: _HistoryGrid(profile: profile),
-                      ),
                     ],
-                  ),
+                    _ProfileSection(
+                      title: 'Зачем здесь',
+                      child: _ProfileTags(
+                        values: profile.intent,
+                        emptyLabel: 'Пока не выбрано',
+                        iconFor: (value) => value == 'Свидания'
+                            ? LucideIcons.heart
+                            : LucideIcons.users,
+                      ),
+                    ),
+                    _ProfileSection(
+                      title: 'Настроение',
+                      child: _VibeCard(vibe: profile.vibe),
+                    ),
+                    _ProfileSection(
+                      title: 'Интересы',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _ProfileTags(
+                            values: profile.interests,
+                            emptyLabel: 'Интересы появятся после заполнения',
+                            activeValues: interestHighlights,
+                          ),
+                          if (interestFooter != null) ...[
+                            const SizedBox(height: AppSpacing.sm),
+                            interestFooter!,
+                          ],
+                        ],
+                      ),
+                    ),
+                    _ProfileSection(
+                      title: 'О себе',
+                      child: _AboutCard(text: profile.bio),
+                    ),
+                    _ProfileSection(
+                      title: 'История',
+                      child: _HistoryGrid(profile: profile),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
+    );
+
+    return SafeArea(
+      bottom: false,
+      child: bottomOverlay == null
+          ? content
+          : Stack(
+              children: [
+                content,
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: bottomOverlay!,
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _ownerHeroAction(BuildContext context) {
+    return BbV5PillButton(
+      label: 'Изменить',
+      icon: LucideIcons.pen_line,
+      height: 34,
+      fontSize: 11.5,
+      iconSize: 12,
+      padding: const EdgeInsets.symmetric(horizontal: 13),
+      onPressed: () => context.pushRoute(AppRoute.editProfile),
     );
   }
 }
@@ -178,10 +244,16 @@ class _ProfileHeroCard extends StatelessWidget {
   const _ProfileHeroCard({
     required this.profile,
     required this.photoPreviews,
+    required this.locationFallback,
+    this.action,
+    this.signalRow,
   });
 
   final ProfileData profile;
   final Map<String, Uint8List> photoPreviews;
+  final String? locationFallback;
+  final Widget? action;
+  final Widget? signalRow;
 
   @override
   Widget build(BuildContext context) {
@@ -189,6 +261,8 @@ class _ProfileHeroCard extends StatelessWidget {
     final title =
         profile.age == null ? shortName : '$shortName, ${profile.age}';
     final location = composeLocationLabel(profile.city, profile.area);
+    final locationLabel =
+        location.isEmpty ? locationFallback?.trim() ?? '' : location;
     final photos = _heroPhotosFor(profile);
 
     return BbV5Card(
@@ -208,55 +282,53 @@ class _ProfileHeroCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                child: Row(
-                  children: [
-                    const Icon(
-                      LucideIcons.map_pin,
-                      size: 13,
-                      color: BbV5Colors.inkMute,
-                    ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Text(
-                        location.isEmpty ? 'Москва · Чистые пруды' : location,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.meta.copyWith(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w400,
-                          color: BbV5Colors.inkMute,
-                        ),
+                child: locationLabel.isEmpty
+                    ? const SizedBox.shrink()
+                    : Row(
+                        children: [
+                          const Icon(
+                            LucideIcons.map_pin,
+                            size: 13,
+                            color: BbV5Colors.inkMute,
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              locationLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.meta.copyWith(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w400,
+                                color: BbV5Colors.inkMute,
+                              ),
+                            ),
+                          ),
+                          if (profile.verified) ...[
+                            const SizedBox(width: 8),
+                            const Icon(
+                              LucideIcons.shield_check,
+                              size: 17,
+                              color: BbV5Colors.brand,
+                            ),
+                          ],
+                        ],
                       ),
-                    ),
-                    if (profile.verified) ...[
-                      const SizedBox(width: 8),
-                      const Icon(
-                        LucideIcons.shield_check,
-                        size: 17,
-                        color: BbV5Colors.brand,
-                      ),
-                    ],
-                  ],
-                ),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              BbV5PillButton(
-                label: 'Изменить',
-                icon: LucideIcons.pen_line,
-                height: 34,
-                fontSize: 11.5,
-                iconSize: 12,
-                padding: const EdgeInsets.symmetric(horizontal: 13),
-                onPressed: () => context.pushRoute(AppRoute.editProfile),
-              ),
+              if (action != null) ...[
+                const SizedBox(width: AppSpacing.sm),
+                action!,
+              ],
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
           const Divider(height: 1, color: BbV5Colors.hairSoft),
           const SizedBox(height: AppSpacing.md),
           _ProfileStatsRow(profile: profile),
-          const SizedBox(height: AppSpacing.md),
-          _ProfileSignalRow(profile: profile),
+          if (signalRow != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            signalRow!,
+          ],
         ],
       ),
     );
@@ -864,11 +936,13 @@ class _ProfileTags extends StatelessWidget {
   const _ProfileTags({
     required this.values,
     required this.emptyLabel,
+    this.activeValues = const {},
     this.iconFor,
   });
 
   final List<String> values;
   final String emptyLabel;
+  final Set<String> activeValues;
   final IconData Function(String value)? iconFor;
 
   @override
@@ -885,6 +959,7 @@ class _ProfileTags extends StatelessWidget {
             (value) => _ProfileTag(
               label: value,
               icon: iconFor?.call(value),
+              active: activeValues.contains(value),
             ),
           )
           .toList(growable: false),
@@ -895,28 +970,43 @@ class _ProfileTags extends StatelessWidget {
 class _ProfileTag extends StatelessWidget {
   const _ProfileTag({
     required this.label,
+    this.active = false,
     this.icon,
   });
 
   final String label;
+  final bool active;
   final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
+    final foreground = active ? BbV5Colors.terra : BbV5Colors.ink;
     return Container(
       height: 36,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: BbV5Colors.paperHi,
+        color: active ? BbV5Colors.terraSoft : BbV5Colors.paperHi,
         borderRadius: BorderRadius.circular(BbV5Radii.pill),
-        border: Border.all(color: BbV5Colors.hair),
+        border: Border.all(
+          color: active ? BbV5Colors.accent : BbV5Colors.hair,
+        ),
         boxShadow: BbV5Shadows.pill,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 14, color: BbV5Colors.ink),
+            Icon(icon, size: 14, color: foreground),
+            const SizedBox(width: 6),
+          ] else if (active) ...[
+            Container(
+              width: 6,
+              height: 6,
+              decoration: const BoxDecoration(
+                color: BbV5Colors.terra,
+                shape: BoxShape.circle,
+              ),
+            ),
             const SizedBox(width: 6),
           ],
           Text(
@@ -927,7 +1017,7 @@ class _ProfileTag extends StatelessWidget {
               fontWeight: FontWeight.w600,
               height: 1,
               letterSpacing: 0,
-              color: BbV5Colors.ink,
+              color: foreground,
             ),
           ),
         ],
