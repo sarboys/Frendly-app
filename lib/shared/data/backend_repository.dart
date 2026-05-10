@@ -777,7 +777,6 @@ class BackendRepository {
     int limit = 100,
     CancelToken? cancelToken,
   }) async {
-    final currentUserId = ref.read(currentUserIdProvider) ?? 'user-me';
     final response = await dio.get<Map<String, dynamic>>(
       '/chats/$chatId/messages',
       queryParameters: {
@@ -790,8 +789,19 @@ class BackendRepository {
       ),
       cancelToken: cancelToken,
     );
+    final payload = response.data!;
+    final serverCurrentUserId = payload['currentUserId'] as String?;
+    final localCurrentUserId = ref.read(currentUserIdProvider);
+    final currentUserId = serverCurrentUserId ?? localCurrentUserId;
+    if (serverCurrentUserId != null &&
+        serverCurrentUserId != localCurrentUserId) {
+      ref.read(currentUserIdProvider.notifier).state = serverCurrentUserId;
+    }
+    if (currentUserId == null) {
+      throw StateError('current_user_id_missing');
+    }
     return PaginatedResponse.fromJson(
-      response.data!,
+      payload,
       (json) => Message.fromJson(json, currentUserId: currentUserId),
     );
   }

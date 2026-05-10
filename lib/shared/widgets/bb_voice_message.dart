@@ -60,8 +60,14 @@ class BbVoiceMessage extends ConsumerWidget {
       0.70,
       0.50,
       0.30,
+      0.50,
+      0.65,
+      0.45,
+      0.60,
+      0.35,
+      0.50,
     ];
-    final bars = math.max(18, math.min(32, durationMs ~/ 500));
+    final bars = math.max(24, math.min(30, durationMs ~/ 500));
     return List<double>.generate(
       bars,
       (index) => seed[index % seed.length],
@@ -117,6 +123,9 @@ class BbVoiceMessage extends ConsumerWidget {
         builder: (context, constraints) {
           final maxWidth =
               constraints.hasBoundedWidth ? constraints.maxWidth : 184.0;
+          final waveformWidth = useV5
+              ? math.min(138.0, math.max(60.0, maxWidth - 90.0))
+              : math.max(60.0, maxWidth - 110.0);
 
           return Row(
             key: const Key('bb-chat-voice-message'),
@@ -174,7 +183,8 @@ class BbVoiceMessage extends ConsumerWidget {
               ),
               const SizedBox(width: 10),
               SizedBox(
-                width: math.max(60, maxWidth - 110),
+                key: const Key('bb-chat-voice-waveform'),
+                width: waveformWidth,
                 height: 28,
                 child: ClipRect(
                   child: CustomPaint(
@@ -302,10 +312,14 @@ class _WaveformPainter extends CustomPainter {
       return;
     }
 
-    final count = bars.length;
-    const gap = 2.4;
-    final barWidth =
-        math.max(2.0, (size.width - (gap * math.max(0, count - 1))) / count);
+    const barWidth = 2.5;
+    const gap = 3.0;
+    final maxBars = math.max(
+      1,
+      ((size.width + gap) / (barWidth + gap)).floor(),
+    );
+    final visibleBars = _fitBars(bars, maxBars);
+    final count = visibleBars.length;
     final paint = Paint()..strokeCap = StrokeCap.round;
 
     var x = 0.0;
@@ -314,8 +328,8 @@ class _WaveformPainter extends CustomPainter {
         break;
       }
 
-      final factor = bars[index].clamp(0.0, 1.0);
-      final barHeight = 12 + (factor * 16);
+      final factor = visibleBars[index].clamp(0.0, 1.0);
+      final barHeight = math.max(15.0, factor * size.height);
       final active = (index + 1) / count <= progress;
       paint
         ..color = active ? activeColor : inactiveColor
@@ -340,6 +354,26 @@ class _WaveformPainter extends CustomPainter {
         oldDelegate.activeColor != activeColor ||
         oldDelegate.inactiveColor != inactiveColor ||
         !listEquals(oldDelegate.bars, bars);
+  }
+
+  List<double> _fitBars(List<double> source, int maxBars) {
+    if (source.length <= maxBars) {
+      return source;
+    }
+    if (maxBars <= 1) {
+      return <double>[source.last];
+    }
+
+    return List<double>.generate(maxBars, (index) {
+      final start = (index * source.length / maxBars).floor();
+      final end = math.max(
+        start + 1,
+        ((index + 1) * source.length / maxBars).ceil(),
+      );
+      return source
+          .sublist(start, math.min(end, source.length))
+          .reduce(math.max);
+    }, growable: false);
   }
 }
 

@@ -104,6 +104,92 @@ class _FakeChatVoicePlaybackEngine implements ChatVoicePlaybackEngine {
 }
 
 void main() {
+  testWidgets('v5 voice message matches front compact row metrics', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 236,
+                child: BbVoiceMessage(
+                  chatId: 'p1',
+                  playbackId: 'voice-1',
+                  attachmentId: 'voice-1',
+                  durationMs: 7000,
+                  isMine: true,
+                  waveform: [
+                    0.10,
+                    0.20,
+                    0.30,
+                    0.40,
+                    0.50,
+                    0.60,
+                    0.70,
+                    0.80,
+                    0.90,
+                    1.00,
+                    0.10,
+                    0.20,
+                    0.30,
+                    0.40,
+                    0.50,
+                    0.60,
+                    0.70,
+                    0.80,
+                    0.90,
+                    1.00,
+                    0.10,
+                    0.20,
+                    0.30,
+                    0.40,
+                    0.50,
+                    0.60,
+                    0.70,
+                    0.80,
+                    0.90,
+                    1.00,
+                    0.10,
+                    0.20,
+                    0.30,
+                    0.40,
+                    0.50,
+                    0.60,
+                    0.70,
+                    0.80,
+                    0.90,
+                    1.00,
+                    0.10,
+                    0.20,
+                    0.30,
+                    0.40,
+                    0.50,
+                    0.60,
+                    0.70,
+                    0.80,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final rowRect = tester.getRect(
+      find.byKey(const Key('bb-chat-voice-message')),
+    );
+    final waveformRect = tester.getRect(
+      find.byKey(const Key('bb-chat-voice-waveform')),
+    );
+
+    expect(rowRect.width, closeTo(236, 0.1));
+    expect(waveformRect.width, closeTo(138, 0.1));
+    expect(waveformRect.height, 28);
+  });
+
   test('playback controller pauses current voice and restores saved position',
       () async {
     final engine = _FakeChatVoicePlaybackEngine();

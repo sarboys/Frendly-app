@@ -125,24 +125,34 @@ class BbChatBubble extends StatelessWidget {
                         ),
                       if (attachments.isNotEmpty) ...[
                         if (showText) const SizedBox(height: AppSpacing.xs),
-                        ...attachments.map(
-                          (attachment) => Padding(
-                            padding:
-                                const EdgeInsets.only(bottom: AppSpacing.xs),
-                            child: _AttachmentTile(
-                              attachment: attachment,
-                              isMine: true,
-                              isPending: isPending,
-                              onTap: onAttachmentTap,
-                              onDownloadTap: onAttachmentDownloadTap,
-                              onImageResolveLocalPath: onImageResolveLocalPath,
-                              onImageResolveRemoteUrl: onImageResolveRemoteUrl,
-                              onVoiceResolvePath: onVoiceResolvePath,
-                              onVoiceResolveRemoteUrl: onVoiceResolveRemoteUrl,
-                              chatId: chatId,
-                              messageClientId: messageClientId,
-                            ),
-                          ),
+                        ...List<Widget>.generate(
+                          attachments.length,
+                          (index) {
+                            final attachment = attachments[index];
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                bottom: index == attachments.length - 1
+                                    ? 0
+                                    : AppSpacing.xs,
+                              ),
+                              child: _AttachmentTile(
+                                attachment: attachment,
+                                isMine: true,
+                                isPending: isPending,
+                                onTap: onAttachmentTap,
+                                onDownloadTap: onAttachmentDownloadTap,
+                                onImageResolveLocalPath:
+                                    onImageResolveLocalPath,
+                                onImageResolveRemoteUrl:
+                                    onImageResolveRemoteUrl,
+                                onVoiceResolvePath: onVoiceResolvePath,
+                                onVoiceResolveRemoteUrl:
+                                    onVoiceResolveRemoteUrl,
+                                chatId: chatId,
+                                messageClientId: messageClientId,
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ],
@@ -252,27 +262,34 @@ class BbChatBubble extends StatelessWidget {
                           ),
                         if (attachments.isNotEmpty) ...[
                           if (showText) const SizedBox(height: AppSpacing.xs),
-                          ...attachments.map(
-                            (attachment) => Padding(
-                              padding:
-                                  const EdgeInsets.only(bottom: AppSpacing.xs),
-                              child: _AttachmentTile(
-                                attachment: attachment,
-                                isMine: false,
-                                isPending: isPending,
-                                onTap: onAttachmentTap,
-                                onDownloadTap: onAttachmentDownloadTap,
-                                onImageResolveLocalPath:
-                                    onImageResolveLocalPath,
-                                onImageResolveRemoteUrl:
-                                    onImageResolveRemoteUrl,
-                                onVoiceResolvePath: onVoiceResolvePath,
-                                onVoiceResolveRemoteUrl:
-                                    onVoiceResolveRemoteUrl,
-                                chatId: chatId,
-                                messageClientId: messageClientId,
-                              ),
-                            ),
+                          ...List<Widget>.generate(
+                            attachments.length,
+                            (index) {
+                              final attachment = attachments[index];
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: index == attachments.length - 1
+                                      ? 0
+                                      : AppSpacing.xs,
+                                ),
+                                child: _AttachmentTile(
+                                  attachment: attachment,
+                                  isMine: false,
+                                  isPending: isPending,
+                                  onTap: onAttachmentTap,
+                                  onDownloadTap: onAttachmentDownloadTap,
+                                  onImageResolveLocalPath:
+                                      onImageResolveLocalPath,
+                                  onImageResolveRemoteUrl:
+                                      onImageResolveRemoteUrl,
+                                  onVoiceResolvePath: onVoiceResolvePath,
+                                  onVoiceResolveRemoteUrl:
+                                      onVoiceResolveRemoteUrl,
+                                  chatId: chatId,
+                                  messageClientId: messageClientId,
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ],
@@ -535,8 +552,11 @@ class _AttachmentTile extends StatelessWidget {
         : colors.background;
 
     if (attachment.isVoice) {
+      final voiceWidthFactor =
+          colors.background == AppColors.lightTheme.background ? 0.64 : 0.58;
       return SizedBox(
-        width: math.min(MediaQuery.sizeOf(context).width * 0.58, 236),
+        width:
+            math.min(MediaQuery.sizeOf(context).width * voiceWidthFactor, 236),
         child: BbVoiceMessage(
           chatId: chatId,
           playbackId: messageClientId.isEmpty ? attachment.id : messageClientId,

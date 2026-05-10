@@ -557,8 +557,7 @@ class _BbComposerState extends State<BbComposer> {
 
   Widget _buildV5ComposerRow() {
     final showSendButton = _hasText || !_canRecordVoice;
-    final showVoiceButton =
-        _canRecordVoice && !_hasText && !_inputFocusNode.hasFocus;
+    final showVoiceButton = _canRecordVoice && !_isEditing;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -579,10 +578,10 @@ class _BbComposerState extends State<BbComposer> {
         Expanded(
           child: Container(
             key: const Key('bb-composer-input-shell'),
-            constraints: const BoxConstraints(minHeight: 40),
+            constraints: const BoxConstraints(minHeight: 44),
             decoration: BoxDecoration(
               color: BbV5Colors.paperHi,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(24),
               border: Border.all(color: BbV5Colors.hair),
               boxShadow: BbV5Shadows.pill,
             ),
@@ -636,27 +635,25 @@ class _BbComposerState extends State<BbComposer> {
                       shadows: BbV5Shadows.ink,
                       onTap: widget.enabled ? _submit : null,
                     ),
-                  )
-                else if (showVoiceButton)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 3),
-                    child: _CircleButton(
-                      key: const Key('bb-composer-mic-button'),
-                      icon: Icons.mic_none_rounded,
-                      size: 32,
-                      iconSize: 17,
-                      foreground: BbV5Colors.ink,
-                      background: BbV5Colors.paper,
-                      borderColor: BbV5Colors.hair,
-                      onTap: widget.enabled && !_sending
-                          ? _startVoiceRecording
-                          : null,
-                    ),
                   ),
               ],
             ),
           ),
         ),
+        if (showVoiceButton) ...[
+          const SizedBox(width: AppSpacing.xs),
+          _CircleButton(
+            key: const Key('bb-composer-mic-button'),
+            icon: Icons.mic_rounded,
+            size: 44,
+            iconSize: 18,
+            foreground: BbV5Colors.ink,
+            background: BbV5Colors.paperHi,
+            borderColor: BbV5Colors.hair,
+            shadows: BbV5Shadows.pill,
+            onTap: widget.enabled && !_sending ? _startVoiceRecording : null,
+          ),
+        ],
       ],
     );
   }

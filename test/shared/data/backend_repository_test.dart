@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/communities/domain/community.dart';
+import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
@@ -163,6 +164,57 @@ void main() {
     expect(result.chatId, 'chat-1');
     expect(result.privacy, EveningPrivacy.request);
     expect(result.inviteToken, 'secret-token');
+  });
+
+  test('fetch messages trusts server current user id after cold install',
+      () async {
+    final apiDio = Dio(
+      BaseOptions(baseUrl: 'http://api.example.com'),
+    )..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'currentUserId': 'user-real',
+                  'items': [
+                    {
+                      'id': 'msg-1',
+                      'chatId': 'chat-1',
+                      'clientMessageId': 'client-1',
+                      'senderId': 'user-real',
+                      'senderName': 'Марк Тест',
+                      'senderAvatarUrl': null,
+                      'senderAvatarVariants': {},
+                      'text': 'Это мое сообщение',
+                      'createdAt': '2026-05-10T09:16:00.000Z',
+                      'kind': 'user',
+                      'replyTo': null,
+                      'attachments': [],
+                    },
+                  ],
+                  'nextCursor': null,
+                  'lastEventId': null,
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final repository = container.read(
+      Provider(
+        (ref) => BackendRepository(ref: ref, dio: apiDio),
+      ),
+    );
+
+    final result = await repository.fetchMessages('chat-1');
+
+    expect(result.items.single.mine, true);
+    expect(container.read(currentUserIdProvider), 'user-real');
   });
 
   test('evening builder endpoints fetch options and resolve route', () async {

@@ -201,7 +201,8 @@ void main() {
     expect(sentVoice!.waveform, isNotEmpty);
   });
 
-  testWidgets('v5 composer keeps idle mic and text send inside input', (
+  testWidgets('v5 composer matches front heights and keeps mic as side action',
+      (
     tester,
   ) async {
     final recorder = _FakeVoiceRecorderService();
@@ -222,17 +223,25 @@ void main() {
       ),
     );
 
+    final attachFinder = find.byIcon(Icons.add_rounded);
     final micFinder = find.byKey(const Key('bb-composer-mic-button'));
+    final inputFinder = find.byKey(const Key('bb-composer-input-shell'));
+    expect(attachFinder, findsOneWidget);
+    expect(inputFinder, findsOneWidget);
     expect(micFinder, findsOneWidget);
-    expect(find.byIcon(Icons.send), findsNothing);
     final inputRect =
         tester.getRect(find.byKey(const Key('bb-composer-input-shell')));
-    expect(inputRect.contains(tester.getCenter(micFinder)), isTrue);
+    final attachRect = tester.getRect(attachFinder);
+    final micRect = tester.getRect(micFinder);
+    expect(inputRect.height, attachRect.height);
+    expect(micRect.height, attachRect.height);
+    expect(inputRect.contains(tester.getCenter(micFinder)), isFalse);
+    expect(micRect.left, greaterThan(inputRect.right));
 
     await tester.enterText(find.byType(TextField), 'Привет');
     await tester.pumpAndSettle();
 
-    expect(micFinder, findsNothing);
+    expect(micFinder, findsOneWidget);
     final sendFinder = find.byKey(const Key('bb-composer-send-button'));
     expect(sendFinder, findsOneWidget);
     expect(inputRect.contains(tester.getCenter(sendFinder)), isTrue);
