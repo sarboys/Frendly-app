@@ -32,6 +32,7 @@ const _mapZoomStep = 1.0;
 const _minMapZoom = 2.0;
 const _maxMapZoom = 19.0;
 const _radarCarouselInitialPage = 0;
+const _nativeMapPoiLimit = 80;
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({
@@ -48,6 +49,7 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen> {
   late final Future<void> _mapBootstrapFuture;
   late final PageController _eventPageController;
+  final MapObjectCache _mapObjectCache = MapObjectCache();
   ym.YandexMapController? _mapController;
   Timer? _viewportQueryDebounce;
   int _mapControllerGeneration = 0;
@@ -64,6 +66,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _triedInitialLocation = false;
   bool _autoFitPending = false;
   String _lastViewportFitKey = '';
+  List<Event> _visibleMapEvents = const [];
 
   bool get _supportsNativeMap =>
       !kIsWeb &&
@@ -118,10 +121,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             .firstOrNull ??
         (filteredEvents.isNotEmpty ? filteredEvents.first : null);
     final selectedId = activeEvent?.id ?? selected;
-    final mapObjects = _buildMapObjects(
-      filteredEvents,
-      selectedId,
-      liveEvenings,
+    _visibleMapEvents = filteredEvents;
+    final mapObjects = _mapObjectCache.objectsFor(
+      events: filteredEvents,
+      selectedId: selectedId,
+      liveEvenings: liveEvenings,
+      userPoint: _userPoint,
+      searchPoint: _searchPoint,
+      onEventTap: _handleEventTap,
+      onSessionTap: _openEveningPreview,
     );
     _syncPagerToSelected(filteredEvents, selectedId);
     _scheduleViewportFit(filteredEvents);
@@ -139,13 +147,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 selectedId,
               ),
             ),
-            Positioned.fill(
-              child: IgnorePointer(
-                child: _RadarMapVisualOverlay(
-                  showUserPulse: !_supportsNativeMap,
+            if (!_supportsNativeMap)
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: _RadarMapVisualOverlay(
+                    showUserPulse: true,
+                  ),
                 ),
               ),
-            ),
             if (!_supportsNativeMap)
               for (final entry in liveEvenings.asMap().entries)
                 _LiveEveningMapPin(
@@ -268,7 +277,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       return _FallbackMapSurface(
         events: filteredEvents,
         selectedId: selectedId,
-        onTap: (eventId) => _handleEventTap(eventId, filteredEvents),
+        onTap: _handleEventTap,
       );
     }
 
@@ -280,7 +289,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             key: const Key('map-bootstrap-error-surface'),
             events: filteredEvents,
             selectedId: selectedId,
-            onTap: (eventId) => _handleEventTap(eventId, filteredEvents),
+            onTap: _handleEventTap,
             footer: const _NativeMapErrorBadge(),
           );
         }
@@ -300,57 +309,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 _onMapCreated(controller, filteredEvents),
             onCameraPositionChanged: _onCameraPositionChanged,
             onMapTap: _onMapTap,
-            mapType: ym.MapType.map,
+            mapType: ym.MapType.vector,
             mode2DEnabled: true,
-            poiLimit: 0,
+            poiLimit: _nativeMapPoiLimit,
           ),
         );
       },
     );
-  }
-
-  List<ym.MapObject> _buildMapObjects(
-    List<Event> filteredEvents,
-    String selectedId,
-    List<EveningSessionSummary> liveEvenings,
-  ) {
-    final eventPlacemarks = buildEventPlacemarks(
-      events: filteredEvents,
-      selectedId: selectedId,
-      onEventTap: (eventId) => _handleEventTap(eventId, filteredEvents),
-    );
-    final eveningPlacemarks = buildLiveEveningPlacemarks(
-      sessions: liveEvenings,
-      onSessionTap: _openEveningPreview,
-    );
-    final objects = <ym.MapObject>[
-      ...eventPlacemarks,
-      ...eveningPlacemarks,
-    ];
-
-    if (_userPoint != null) {
-      objects.add(buildUserLocationPlacemark(_userPoint!));
-    }
-
-    if (_searchPoint != null) {
-      objects.add(
-        ym.PlacemarkMapObject(
-          mapId: const ym.MapObjectId('search_point'),
-          point: _searchPoint!,
-          zIndex: 3,
-          text: const ym.PlacemarkText(
-            text: '📍',
-            style: ym.PlacemarkTextStyle(
-              size: 18,
-              placement: ym.TextStylePlacement.center,
-              offsetFromIcon: false,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return objects;
   }
 
   void _openEveningPreview(String sessionId) {
@@ -366,7 +331,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   ) {
     _mapControllerGeneration += 1;
     _mapController = controller;
-    unawaited(controller.setMapStyle(_yandexV5MapStyle));
     if (mapAutoNativeUserLayerEnabled) {
       unawaited(controller.toggleUserLayer(visible: true));
     }
@@ -769,7 +733,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     unawaited(_moveToPoint(point, zoom: 15));
   }
 
-  void _handleEventTap(String eventId, List<Event> events) {
+  void _handleEventTap(String eventId) {
+    final events = _visibleMapEvents;
     final event = events.where((item) => item.id == eventId).firstOrNull;
     if (event == null) {
       return;
@@ -1412,49 +1377,6 @@ const _radarFilters = [
   _RadarFilterDefinition(key: 'calm', title: 'Спокойно'),
 ];
 
-const _yandexV5MapStyle = '''
-[
-  {
-    "tags": {
-      "all": ["landscape"]
-    },
-    "stylers": {
-      "color": "F1E6D6",
-      "saturation": -0.6,
-      "lightness": 0.24
-    }
-  },
-  {
-    "tags": {
-      "all": ["water"]
-    },
-    "stylers": {
-      "color": "E8D6BE",
-      "saturation": -0.7,
-      "lightness": 0.18
-    }
-  },
-  {
-    "tags": {
-      "all": ["road"]
-    },
-    "stylers": {
-      "color": "D8C7B4",
-      "saturation": -0.8,
-      "lightness": 0.26
-    }
-  },
-  {
-    "tags": {
-      "all": ["poi"]
-    },
-    "stylers": {
-      "visibility": "off"
-    }
-  }
-]
-''';
-
 @visibleForTesting
 ym.BoundingBox? buildMapViewportBounds({
   required ym.Point? userPoint,
@@ -1571,6 +1493,86 @@ String buildMapViewportFitKey(List<Event> events, String filter) {
 }
 
 @visibleForTesting
+class MapObjectCache {
+  String _key = '';
+  List<ym.MapObject> _objects = const [];
+
+  List<ym.MapObject> objectsFor({
+    required List<Event> events,
+    required String selectedId,
+    required List<EveningSessionSummary> liveEvenings,
+    required ym.Point? userPoint,
+    required ym.Point? searchPoint,
+    required void Function(String eventId) onEventTap,
+    required void Function(String sessionId) onSessionTap,
+  }) {
+    final nextKey = buildMapObjectsCacheKey(
+      events: events,
+      selectedId: selectedId,
+      liveEvenings: liveEvenings,
+      userPoint: userPoint,
+      searchPoint: searchPoint,
+    );
+    if (nextKey == _key) {
+      return _objects;
+    }
+
+    final objects = <ym.MapObject>[
+      ...buildEventPlacemarks(
+        events: events,
+        selectedId: selectedId,
+        onEventTap: onEventTap,
+      ),
+      ...buildLiveEveningPlacemarks(
+        sessions: liveEvenings,
+        onSessionTap: onSessionTap,
+      ),
+      if (userPoint != null) buildUserLocationPlacemark(userPoint),
+      if (searchPoint != null) buildSearchPointPlacemark(searchPoint),
+    ];
+
+    _key = nextKey;
+    _objects = List<ym.MapObject>.unmodifiable(objects);
+    return _objects;
+  }
+}
+
+@visibleForTesting
+String buildMapObjectsCacheKey({
+  required List<Event> events,
+  required String selectedId,
+  required List<EveningSessionSummary> liveEvenings,
+  required ym.Point? userPoint,
+  required ym.Point? searchPoint,
+}) {
+  final parts = <String>[
+    'selected:$selectedId',
+    'user:${_pointCacheKey(userPoint)}',
+    'search:${_pointCacheKey(searchPoint)}',
+    for (final event in events)
+      if (event.latitude != null && event.longitude != null)
+        [
+          'event',
+          event.id,
+          _roundGeo(event.latitude!).toStringAsFixed(5),
+          _roundGeo(event.longitude!).toStringAsFixed(5),
+          event.emoji,
+        ].join(':'),
+    for (final session in liveEvenings)
+      if (session.lat != null && session.lng != null)
+        [
+          'session',
+          session.id,
+          _roundGeo(session.lat!).toStringAsFixed(5),
+          _roundGeo(session.lng!).toStringAsFixed(5),
+          session.emoji,
+        ].join(':'),
+  ];
+
+  return parts.join('|');
+}
+
+@visibleForTesting
 List<ym.PlacemarkMapObject> buildEventPlacemarks({
   required List<Event> events,
   required String selectedId,
@@ -1683,6 +1685,23 @@ ym.PlacemarkMapObject buildUserLocationPlacemark(ym.Point point) {
   );
 }
 
+@visibleForTesting
+ym.PlacemarkMapObject buildSearchPointPlacemark(ym.Point point) {
+  return ym.PlacemarkMapObject(
+    mapId: const ym.MapObjectId('search_point'),
+    point: point,
+    zIndex: 3,
+    text: const ym.PlacemarkText(
+      text: '📍',
+      style: ym.PlacemarkTextStyle(
+        size: 18,
+        placement: ym.TextStylePlacement.center,
+        offsetFromIcon: false,
+      ),
+    ),
+  );
+}
+
 ym.Point? _pointForEventModel(Event event) {
   final latitude = event.latitude;
   final longitude = event.longitude;
@@ -1707,15 +1726,15 @@ MapEventsQuery buildMapEventsQuery({
   ].reduce((value, item) => value > item ? value : item);
 
   return MapEventsQuery(
-    centerLatitude: _roundGeo(center.latitude),
-    centerLongitude: _roundGeo(center.longitude),
+    centerLatitude: _roundViewportGeo(center.latitude),
+    centerLongitude: _roundViewportGeo(center.longitude),
     radiusKm: _roundDistanceKm(
       radiusKm.clamp(0.5, nearbyEventsMaxRadiusKm).toDouble(),
     ),
-    southWestLatitude: _roundGeo(bounds.southWest.latitude),
-    southWestLongitude: _roundGeo(bounds.southWest.longitude),
-    northEastLatitude: _roundGeo(bounds.northEast.latitude),
-    northEastLongitude: _roundGeo(bounds.northEast.longitude),
+    southWestLatitude: _roundViewportGeo(bounds.southWest.latitude),
+    southWestLongitude: _roundViewportGeo(bounds.southWest.longitude),
+    northEastLatitude: _roundViewportGeo(bounds.northEast.latitude),
+    northEastLongitude: _roundViewportGeo(bounds.northEast.longitude),
   );
 }
 
@@ -1784,6 +1803,15 @@ ym.Point? resolvePreferredMapPoint({
   );
 }
 
+String _pointCacheKey(ym.Point? point) {
+  if (point == null) {
+    return '-';
+  }
+
+  return '${_roundGeo(point.latitude).toStringAsFixed(5)},'
+      '${_roundGeo(point.longitude).toStringAsFixed(5)}';
+}
+
 final _eventPinCache = <String, Uint8List>{};
 
 Uint8List _eventPinBytes() {
@@ -1801,6 +1829,9 @@ Uint8List _eventPinBytes() {
 }
 
 double _roundGeo(double value) => double.parse(value.toStringAsFixed(5));
+
+double _roundViewportGeo(double value) =>
+    double.parse(value.toStringAsFixed(3));
 
 double _roundDistanceKm(double value) => double.parse(value.toStringAsFixed(1));
 

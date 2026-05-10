@@ -127,8 +127,6 @@ String _moodKey(EveningMood value) {
       return 'date';
     case EveningMood.wild:
       return 'wild';
-    case EveningMood.afterdark:
-      return 'afterdark';
   }
 }
 
@@ -155,8 +153,6 @@ String _goalKey(EveningGoal value) {
       return 'company';
     case EveningGoal.quiet:
       return 'quiet';
-    case EveningGoal.afterdark:
-      return 'afterdark';
   }
 }
 

@@ -13,8 +13,4 @@ void main() {
   test('dark background color matches design token', () {
     expect(AppColors.darkBackground.toARGB32(), 0xFF121217);
   });
-
-  test('after dark magenta matches design token', () {
-    expect(AppColors.adMagenta.toARGB32(), 0xFFFF3EA5);
-  });
 }

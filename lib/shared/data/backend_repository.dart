@@ -33,7 +33,6 @@ import 'package:big_break_mobile/shared/models/tokens.dart';
 import 'package:big_break_mobile/shared/models/user_settings.dart';
 import 'package:big_break_mobile/shared/models/verification_state.dart';
 import 'package:big_break_mobile/shared/utils/voice_metrics.dart';
-import 'package:big_break_mobile/features/after_dark/presentation/after_dark_models.dart';
 import 'package:big_break_mobile/features/communities/domain/community.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
@@ -866,8 +865,6 @@ class BackendRepository {
     String? routeId,
     CreateEventRoutePayload? route,
     String? communityId,
-    String? afterDarkCategory,
-    String? afterDarkGlow,
     String? dressCode,
     String? ageRange,
     String? ratioLabel,
@@ -908,8 +905,6 @@ class BackendRepository {
         if (routeId != null) 'routeId': routeId,
         if (route != null) 'route': route.toJson(),
         if (communityId != null) 'communityId': communityId,
-        if (afterDarkCategory != null) 'afterDarkCategory': afterDarkCategory,
-        if (afterDarkGlow != null) 'afterDarkGlow': afterDarkGlow,
         if (dressCode != null) 'dressCode': dressCode,
         if (ageRange != null) 'ageRange': ageRange,
         if (ratioLabel != null) 'ratioLabel': ratioLabel,
@@ -1402,20 +1397,6 @@ class BackendRepository {
     return UserSettingsData.fromJson(response.data!);
   }
 
-  Future<Map<String, dynamic>> updateTestingAccess({
-    required bool frendlyPlusEnabled,
-    required bool afterDarkEnabled,
-  }) async {
-    final response = await dio.put<Map<String, dynamic>>(
-      '/settings/me/testing-access',
-      data: {
-        'frendlyPlusEnabled': frendlyPlusEnabled,
-        'afterDarkEnabled': afterDarkEnabled,
-      },
-    );
-    return response.data!;
-  }
-
   Future<VerificationStateData> fetchVerification({
     CancelToken? cancelToken,
   }) async {
@@ -1607,76 +1588,6 @@ class BackendRepository {
   Future<Map<String, dynamic>> restoreSubscription() async {
     final response =
         await dio.post<Map<String, dynamic>>('/subscription/restore');
-    return response.data!;
-  }
-
-  Future<AfterDarkAccessData> fetchAfterDarkAccess() async {
-    final response = await dio.get<Map<String, dynamic>>('/after-dark/access');
-    return AfterDarkAccessData.fromJson(response.data!);
-  }
-
-  Future<AfterDarkAccessData> unlockAfterDark({
-    required String plan,
-    required bool ageConfirmed,
-    required bool codeAccepted,
-  }) async {
-    final response = await dio.post<Map<String, dynamic>>(
-      '/after-dark/unlock',
-      data: {
-        'plan': plan,
-        'ageConfirmed': ageConfirmed,
-        'codeAccepted': codeAccepted,
-      },
-    );
-    return AfterDarkAccessData.fromJson(response.data!);
-  }
-
-  Future<PaginatedResponse<AfterDarkEvent>> fetchAfterDarkEvents({
-    String? q,
-    String? date,
-    String? cursor,
-    int limit = 20,
-    CancelToken? cancelToken,
-  }) async {
-    final response = await dio.get<Map<String, dynamic>>(
-      '/after-dark/events',
-      queryParameters: {
-        'limit': limit,
-        if (q != null && q.isNotEmpty) 'q': q,
-        if (date != null && date.isNotEmpty && date != 'any') 'date': date,
-        if (cursor != null) 'cursor': cursor,
-      },
-      cancelToken: cancelToken,
-    );
-    return PaginatedResponse.fromJson(
-      response.data!,
-      (item) => AfterDarkEvent.fromJson(item),
-    );
-  }
-
-  Future<AfterDarkEventDetail> fetchAfterDarkEventDetail(
-    String eventId, {
-    CancelToken? cancelToken,
-  }) async {
-    final response = await dio.get<Map<String, dynamic>>(
-      '/after-dark/events/$eventId',
-      cancelToken: cancelToken,
-    );
-    return AfterDarkEventDetail.fromJson(response.data!);
-  }
-
-  Future<Map<String, dynamic>> joinAfterDarkEvent(
-    String eventId, {
-    required bool acceptedRules,
-    String? note,
-  }) async {
-    final response = await dio.post<Map<String, dynamic>>(
-      '/after-dark/events/$eventId/join',
-      data: {
-        'acceptedRules': acceptedRules,
-        if (note != null && note.isNotEmpty) 'note': note,
-      },
-    );
     return response.data!;
   }
 

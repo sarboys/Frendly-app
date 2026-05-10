@@ -274,6 +274,59 @@ void main() {
     expect(placemarks.last.text?.text, '🎙️');
   });
 
+  test('map object cache reuses unchanged object lists', () {
+    final cache = MapObjectCache();
+    const events = [
+      Event(
+        id: 'map-1',
+        title: 'Первая точка',
+        emoji: '☕',
+        time: 'Сегодня · 12:00',
+        place: 'Москва',
+        distance: '0.5 км',
+        attendees: ['Аня'],
+        going: 1,
+        capacity: 4,
+        vibe: 'Спокойно',
+        tone: EventTone.warm,
+        latitude: 55.75,
+        longitude: 37.61,
+        joined: false,
+      ),
+    ];
+
+    final first = cache.objectsFor(
+      events: events,
+      selectedId: 'map-1',
+      liveEvenings: const [],
+      userPoint: null,
+      searchPoint: null,
+      onEventTap: (_) {},
+      onSessionTap: (_) {},
+    );
+    final second = cache.objectsFor(
+      events: events,
+      selectedId: 'map-1',
+      liveEvenings: const [],
+      userPoint: null,
+      searchPoint: null,
+      onEventTap: (_) {},
+      onSessionTap: (_) {},
+    );
+    final changedSelection = cache.objectsFor(
+      events: events,
+      selectedId: '',
+      liveEvenings: const [],
+      userPoint: null,
+      searchPoint: null,
+      onEventTap: (_) {},
+      onSessionTap: (_) {},
+    );
+
+    expect(identical(second, first), isTrue);
+    expect(identical(changedSelection, first), isFalse);
+  });
+
   test('map live evening objects use session coordinates', () {
     const sessions = [
       EveningSessionSummary(
@@ -334,6 +387,25 @@ void main() {
     expect(query.northEastLatitude, 55.80);
     expect(query.northEastLongitude, 37.70);
     expect(query.radiusKm, greaterThan(0));
+  });
+
+  test('map viewport query ignores tiny camera jitter', () {
+    final first = buildMapEventsQuery(
+      bounds: const ym.BoundingBox(
+        southWest: ym.Point(latitude: 55.700004, longitude: 37.500004),
+        northEast: ym.Point(latitude: 55.800004, longitude: 37.700004),
+      ),
+      center: const ym.Point(latitude: 55.750004, longitude: 37.610004),
+    );
+    final second = buildMapEventsQuery(
+      bounds: const ym.BoundingBox(
+        southWest: ym.Point(latitude: 55.700006, longitude: 37.500006),
+        northEast: ym.Point(latitude: 55.800006, longitude: 37.700006),
+      ),
+      center: const ym.Point(latitude: 55.750006, longitude: 37.610006),
+    );
+
+    expect(second, first);
   });
 
   test('map viewport query can request the shared maximum radius', () {
@@ -584,6 +656,60 @@ void main() {
     }
   });
 
+  testWidgets('map reuses native map objects across unrelated rebuilds',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ..._mapTestOverrides([
+              mapkitBootstrapProvider.overrideWithValue(
+                const _ImmediateMapkitBootstrap(),
+              ),
+              mapEventsProvider.overrideWith(
+                (ref, query) async => const [
+                  Event(
+                    id: 'map-1',
+                    title: 'Первая точка',
+                    emoji: '☕',
+                    time: 'Сегодня · 12:00',
+                    place: 'Москва',
+                    distance: '0.5 км',
+                    attendees: ['Аня'],
+                    going: 1,
+                    capacity: 4,
+                    vibe: 'Спокойно',
+                    tone: EventTone.warm,
+                    latitude: 55.75,
+                    longitude: 37.61,
+                    joined: false,
+                  ),
+                ],
+              ),
+            ]),
+          ],
+          child: const MaterialApp(
+            home: MapScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final firstMap = tester.widget<ym.YandexMap>(find.byType(ym.YandexMap));
+      final firstObjects = firstMap.mapObjects;
+
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pump();
+
+      final secondMap = tester.widget<ym.YandexMap>(find.byType(ym.YandexMap));
+      expect(identical(secondMap.mapObjects, firstObjects), isTrue);
+    } finally {
+      await tester.binding.setSurfaceSize(null);
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('map renders zoom controls', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     try {
@@ -771,6 +897,42 @@ void main() {
       expect(
         find.byWidgetPredicate(
           (widget) => widget.runtimeType.toString() == '_RadarUserPulse',
+        ),
+        findsNothing,
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('native map keeps base map details visible', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ..._mapTestOverrides([
+              mapkitBootstrapProvider.overrideWithValue(
+                const _ImmediateMapkitBootstrap(),
+              ),
+            ]),
+          ],
+          child: const MaterialApp(
+            home: MapScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final map = tester.widget<ym.YandexMap>(find.byType(ym.YandexMap));
+      expect(map.mapType, ym.MapType.vector);
+      expect(map.poiLimit, greaterThan(0));
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is CustomPaint &&
+              widget.painter.runtimeType.toString() ==
+                  '_RadarTopographyPainter',
         ),
         findsNothing,
       );

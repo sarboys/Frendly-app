@@ -39,8 +39,6 @@ class CreateMeetupDraft {
     this.routeId,
     this.route,
     this.communityId,
-    this.afterDarkCategory,
-    this.afterDarkGlow,
     this.dressCode,
     this.ageRange,
     this.ratioLabel,
@@ -75,8 +73,6 @@ class CreateMeetupDraft {
   final String? routeId;
   final CreateEventRoutePayload? route;
   final String? communityId;
-  final String? afterDarkCategory;
-  final String? afterDarkGlow;
   final String? dressCode;
   final String? ageRange;
   final String? ratioLabel;
@@ -161,8 +157,6 @@ class CreateMeetupDraft {
       routeId: routeId,
       route: route,
       communityId: communityId,
-      afterDarkCategory: afterDarkCategory,
-      afterDarkGlow: afterDarkGlow,
       dressCode: dressCode,
       ageRange: ageRange,
       ratioLabel: ratioLabel,
@@ -210,8 +204,6 @@ Future<EventDetail> submitCreateMeetupDraft(
     routeId: draft.routeId,
     route: draft.route,
     communityId: draft.communityId,
-    afterDarkCategory: draft.afterDarkCategory,
-    afterDarkGlow: draft.afterDarkGlow,
     dressCode: draft.dressCode,
     ageRange: draft.ageRange,
     ratioLabel: draft.ratioLabel,

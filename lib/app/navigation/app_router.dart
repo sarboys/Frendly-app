@@ -1,8 +1,4 @@
 import 'package:big_break_mobile/features/after_party/presentation/after_party_screen.dart';
-import 'package:big_break_mobile/features/after_dark/presentation/after_dark_event_screen.dart';
-import 'package:big_break_mobile/features/after_dark/presentation/after_dark_paywall_screen.dart';
-import 'package:big_break_mobile/features/after_dark/presentation/after_dark_screen.dart';
-import 'package:big_break_mobile/features/after_dark/presentation/after_dark_verify_screen.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/navigation/app_shell.dart';
 import 'package:big_break_mobile/features/affiche/presentation/affiche_events_screen.dart';
@@ -348,32 +344,6 @@ GoRouter buildAppRouter({
         name: AppRoute.notifications.name,
         pageBuilder: (context, state) =>
             _slidePage(const NotificationsScreen()),
-      ),
-      GoRoute(
-        path: AppRoute.afterDark.path,
-        name: AppRoute.afterDark.name,
-        pageBuilder: (context, state) => _slidePage(const AfterDarkScreen()),
-      ),
-      GoRoute(
-        path: AppRoute.afterDarkPaywall.path,
-        name: AppRoute.afterDarkPaywall.name,
-        pageBuilder: (context, state) =>
-            _slidePage(const AfterDarkPaywallScreen()),
-      ),
-      GoRoute(
-        path: AppRoute.afterDarkEvent.path,
-        name: AppRoute.afterDarkEvent.name,
-        pageBuilder: (context, state) => _slidePage(
-          AfterDarkEventScreen(
-            eventId: state.pathParameters['eventId']!,
-          ),
-        ),
-      ),
-      GoRoute(
-        path: AppRoute.afterDarkVerify.path,
-        name: AppRoute.afterDarkVerify.name,
-        pageBuilder: (context, state) =>
-            _slidePage(const AfterDarkVerifyScreen()),
       ),
       GoRoute(
         path: AppRoute.tokensFocus.path,
@@ -763,9 +733,6 @@ GoRouter buildAppRouter({
         pageBuilder: (context, state) => _slidePage(
           MeetupChatScreen(
             chatId: state.pathParameters['chatId']!,
-            afterDarkGlow: state.uri.queryParameters['theme'] == 'after-dark'
-                ? state.uri.queryParameters['glow']
-                : null,
           ),
         ),
       ),

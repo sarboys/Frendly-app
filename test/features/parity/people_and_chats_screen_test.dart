@@ -275,40 +275,6 @@ void main() {
     expect(find.text('Включить'), findsOneWidget);
   });
 
-  testWidgets('after dark meetup chat is marked in the chats list',
-      (tester) async {
-    await tester.pumpWidget(
-      _wrapWithRouter(
-        child: const ChatsScreen(),
-        targetText: 'unused',
-        extraOverrides: [
-          meetupChatsProvider.overrideWith(
-            (ref) async => const [
-              MeetupChat(
-                id: 'mc-ad1',
-                eventId: 'ad1',
-                title: 'After Dark Lounge',
-                emoji: '🖤',
-                time: '23:30',
-                lastMessage: 'Список на входе обновили',
-                lastAuthor: 'Хост',
-                lastTime: 'сейчас',
-                unread: 2,
-                members: ['Хост', 'Ты'],
-                status: 'Сегодня',
-                isAfterDark: true,
-                afterDarkGlow: 'magenta',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('After Dark'), findsOneWidget);
-  });
-
   testWidgets('meetup chats are grouped by live, soon and upcoming phases',
       (tester) async {
     await tester.pumpWidget(

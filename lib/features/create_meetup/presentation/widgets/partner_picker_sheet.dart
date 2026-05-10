@@ -119,7 +119,6 @@ const partnerVenues = <PartnerVenue>[
 Future<PartnerVenue?> showPartnerPickerSheet(
   BuildContext context, {
   PartnerVenue? initialValue,
-  bool dark = false,
 }) {
   return showModalBottomSheet<PartnerVenue>(
     context: context,
@@ -128,7 +127,6 @@ Future<PartnerVenue?> showPartnerPickerSheet(
     barrierColor: AppColors.of(context).foreground.withValues(alpha: 0.4),
     builder: (context) => _PartnerPickerSheet(
       initialValue: initialValue,
-      dark: dark,
     ),
   );
 }
@@ -136,11 +134,9 @@ Future<PartnerVenue?> showPartnerPickerSheet(
 class _PartnerPickerSheet extends StatefulWidget {
   const _PartnerPickerSheet({
     required this.initialValue,
-    required this.dark,
   });
 
   final PartnerVenue? initialValue;
-  final bool dark;
 
   @override
   State<_PartnerPickerSheet> createState() => _PartnerPickerSheetState();

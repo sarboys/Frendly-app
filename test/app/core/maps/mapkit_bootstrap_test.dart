@@ -12,6 +12,7 @@ void main() {
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+    AndroidYandexMap.useAndroidViewSurface = true;
     debugDefaultTargetPlatformOverride = null;
   });
 
@@ -34,11 +35,20 @@ void main() {
     expect(callCount, 1);
   });
 
-  test('android map uses virtual display composition for stable rendering', () {
-    AndroidYandexMap.useAndroidViewSurface = true;
+  test('android map uses hybrid composition by default', () {
+    AndroidYandexMap.useAndroidViewSurface = false;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
 
     configureYandexMapRendering();
+
+    expect(AndroidYandexMap.useAndroidViewSurface, isTrue);
+  });
+
+  test('android map can fall back to virtual display composition', () {
+    AndroidYandexMap.useAndroidViewSurface = true;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    configureYandexMapRendering(useVirtualDisplay: true);
 
     expect(AndroidYandexMap.useAndroidViewSurface, isFalse);
   });

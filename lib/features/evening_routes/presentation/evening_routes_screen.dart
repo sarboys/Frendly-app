@@ -609,5 +609,4 @@ const _moodFilters = [
   _MoodFilter(key: 'date', emoji: '🌹', label: 'Свидание'),
   _MoodFilter(key: 'wild', emoji: '🔥', label: 'Огонь'),
   _MoodFilter(key: 'outdoor', emoji: '🌳', label: 'На природе'),
-  _MoodFilter(key: 'afterdark', emoji: '🌙', label: 'After Dark'),
 ];

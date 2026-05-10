@@ -3,7 +3,6 @@ import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/core/device/app_reverse_geocoding_service.dart';
 import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
 import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
-import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/features/create_meetup/presentation/publish_meetup_screen.dart';
 import 'package:big_break_mobile/features/create_meetup/presentation/create_meetup_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -16,7 +15,6 @@ import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:big_break_mobile/shared/models/host_dashboard.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
@@ -71,8 +69,6 @@ class _FakeCreateMeetupRepository extends BackendRepository {
     String? afficheEventId,
     String? routeId,
     CreateEventRoutePayload? route,
-    String? afterDarkCategory,
-    String? afterDarkGlow,
     String? dressCode,
     String? ageRange,
     String? ratioLabel,
@@ -567,22 +563,6 @@ void main() {
     );
   });
 
-  testWidgets('after dark route picker opens in dark style', (tester) async {
-    await tester.pumpWidget(
-      _wrap(
-        (_) {},
-        initialMode: CreateMeetupMode.afterdark,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await scrollToAttachActions(tester);
-    await tapAttachIconButton(tester, 'Маршрут');
-
-    final routeIcon = tester.widget<Icon>(find.byIcon(LucideIcons.route).last);
-    expect(routeIcon.color, AppColors.adMagenta);
-  });
-
   testWidgets('create meetup screen shows meetup plus dating mode segment',
       (tester) async {
     await tester.pumpWidget(_wrap((_) {}));
@@ -590,7 +570,7 @@ void main() {
 
     expect(find.text('Обычная'), findsOneWidget);
     expect(find.text('Свидание'), findsOneWidget);
-    expect(find.text('After Dark'), findsOneWidget);
+    expect(find.text('After Dark'), findsNothing);
   });
 
   testWidgets('create meetup edit mode prefills event fields', (tester) async {

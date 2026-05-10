@@ -11,9 +11,16 @@ final mapkitBootstrapProvider = Provider<MapkitBootstrap>(
   (ref) => const MethodChannelMapkitBootstrap(),
 );
 
-void configureYandexMapRendering() {
+const _useAndroidYandexVirtualDisplay = bool.fromEnvironment(
+  'BIG_BREAK_ANDROID_YANDEX_USE_VIRTUAL_DISPLAY',
+  defaultValue: false,
+);
+
+void configureYandexMapRendering({
+  bool useVirtualDisplay = _useAndroidYandexVirtualDisplay,
+}) {
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-    AndroidYandexMap.useAndroidViewSurface = false;
+    AndroidYandexMap.useAndroidViewSurface = !useVirtualDisplay;
   }
 }
 

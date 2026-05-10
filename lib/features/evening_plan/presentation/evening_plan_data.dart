@@ -1,8 +1,8 @@
-enum EveningMood { chill, social, date, wild, afterdark }
+enum EveningMood { chill, social, date, wild }
 
 enum EveningBudget { free, low, mid, high }
 
-enum EveningGoal { newfriends, date, company, quiet, afterdark }
+enum EveningGoal { newfriends, date, company, quiet }
 
 enum EveningFormat { bar, show, active, culture, mixed }
 
@@ -318,12 +318,6 @@ const eveningGoals = <EveningOption>[
     label: 'Тихий вечер',
     blurb: 'Сам(а) с собой',
   ),
-  EveningOption(
-    key: 'afterdark',
-    emoji: '🔮',
-    label: 'After Dark',
-    blurb: '18+ закрытое',
-  ),
 ];
 
 const eveningMoods = <EveningOption>[
@@ -331,7 +325,6 @@ const eveningMoods = <EveningOption>[
   EveningOption(key: 'social', emoji: '🫶', label: 'Общение'),
   EveningOption(key: 'date', emoji: '💞', label: 'Романтика'),
   EveningOption(key: 'wild', emoji: '🪩', label: 'Громче'),
-  EveningOption(key: 'afterdark', emoji: '🔮', label: 'After Dark'),
 ];
 
 const eveningBudgets = <EveningOption>[
@@ -519,8 +512,6 @@ EveningGoal? eveningGoalFromKey(String? key) {
       return EveningGoal.company;
     case 'quiet':
       return EveningGoal.quiet;
-    case 'afterdark':
-      return EveningGoal.afterdark;
     default:
       return null;
   }
@@ -536,8 +527,6 @@ EveningMood? eveningMoodFromKey(String? key) {
       return EveningMood.date;
     case 'wild':
       return EveningMood.wild;
-    case 'afterdark':
-      return EveningMood.afterdark;
     default:
       return null;
   }

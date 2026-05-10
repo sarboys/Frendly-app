@@ -1155,8 +1155,6 @@ List<MeetupChat> updateMeetupChatFromRealtime(
                 status: chat.status,
                 isPinned: chat.isPinned,
                 typing: chat.typing,
-                isAfterDark: chat.isAfterDark,
-                afterDarkGlow: chat.afterDarkGlow,
                 phase: phase ?? chat.phase,
                 currentStep: hasCurrentStep ? currentStep : chat.currentStep,
                 totalSteps: hasTotalSteps ? totalSteps : chat.totalSteps,

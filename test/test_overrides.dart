@@ -1,5 +1,4 @@
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
-import 'package:big_break_mobile/features/after_dark/presentation/after_dark_providers.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -148,12 +147,6 @@ List<Override> buildTestOverrides() {
     subscriptionStateProvider.overrideWith(
       (ref) async => mockSubscriptionState,
     ),
-    afterDarkAccessProvider.overrideWith((ref) async => mockAfterDarkAccess),
-    afterDarkEventsProvider.overrideWith((ref) async => mockAfterDarkEvents),
-    afterDarkEventDetailProvider.overrideWith((ref, eventId) async {
-      return mockAfterDarkEventDetails[eventId] ??
-          mockAfterDarkEventDetails.values.first;
-    }),
     communitiesFeedProvider.overrideWith(
       (ref) => CommunitiesFeedController(
         ref,

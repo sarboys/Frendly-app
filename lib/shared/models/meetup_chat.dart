@@ -62,8 +62,6 @@ class MeetupChat {
     this.status,
     this.isPinned = false,
     this.typing = false,
-    this.isAfterDark = false,
-    this.afterDarkGlow,
     this.phase = MeetupPhase.upcoming,
     this.currentStep,
     this.totalSteps,
@@ -104,8 +102,6 @@ class MeetupChat {
   final String? status;
   final bool isPinned;
   final bool typing;
-  final bool isAfterDark;
-  final String? afterDarkGlow;
   final MeetupPhase phase;
   final int? currentStep;
   final int? totalSteps;
@@ -166,8 +162,6 @@ class MeetupChat {
       status: json['status'] as String?,
       isPinned: (json['isPinned'] as bool?) ?? false,
       typing: (json['typing'] as bool?) ?? false,
-      isAfterDark: (json['isAfterDark'] as bool?) ?? false,
-      afterDarkGlow: json['afterDarkGlow'] as String?,
       phase: parseMeetupPhase(_optionalString(json['phase']) ??
           _optionalString(json['meetupPhase'])),
       currentStep: (json['currentStep'] as num?)?.toInt(),
@@ -213,8 +207,6 @@ class MeetupChat {
     String? status,
     bool? isPinned,
     bool? typing,
-    bool? isAfterDark,
-    String? afterDarkGlow,
     MeetupPhase? phase,
     int? currentStep,
     int? totalSteps,
@@ -256,8 +248,6 @@ class MeetupChat {
       status: status ?? this.status,
       isPinned: isPinned ?? this.isPinned,
       typing: typing ?? this.typing,
-      isAfterDark: isAfterDark ?? this.isAfterDark,
-      afterDarkGlow: afterDarkGlow ?? this.afterDarkGlow,
       phase: phase ?? this.phase,
       currentStep: currentStep ?? this.currentStep,
       totalSteps: totalSteps ?? this.totalSteps,

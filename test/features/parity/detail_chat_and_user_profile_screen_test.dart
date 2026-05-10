@@ -710,44 +710,6 @@ void main() {
     expect(olderOffset.dy, lessThan(newerOffset.dy));
   });
 
-  testWidgets('after dark meetup chat switches to after dark palette',
-      (tester) async {
-    await tester.pumpWidget(
-      _wrap(
-        const MeetupChatScreen(
-          chatId: 'mc-ad1',
-          afterDarkGlow: 'magenta',
-        ),
-        withChatOverrides: true,
-        extraOverrides: [
-          meetupChatsProvider.overrideWith(
-            (ref) async => const [
-              MeetupChat(
-                id: 'mc-ad1',
-                eventId: 'ad1',
-                title: 'After Dark Lounge',
-                emoji: '🖤',
-                time: '23:30',
-                lastMessage: 'Список на входе обновили',
-                lastAuthor: 'Хост',
-                lastTime: 'сейчас',
-                unread: 2,
-                members: ['Хост', 'Ты'],
-                status: 'Сегодня',
-                isAfterDark: true,
-                afterDarkGlow: 'magenta',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
-    expect(scaffold.backgroundColor, AppColors.adBg);
-  });
-
   testWidgets('personal chat tap on document saves it to device',
       (tester) async {
     final attachmentService = _SpyAttachmentService();

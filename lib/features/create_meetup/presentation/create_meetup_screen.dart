@@ -4,7 +4,6 @@ import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
-import 'package:big_break_mobile/features/after_dark/presentation/after_dark_providers.dart';
 import 'package:big_break_mobile/features/affiche/presentation/affiche_event_picker_sheet.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/features/create_meetup/presentation/create_meetup_draft.dart';
@@ -66,14 +65,12 @@ IconData _iconForEmoji(String value) {
   };
 }
 
-enum CreateMeetupMode { meetup, dating, afterdark }
+enum CreateMeetupMode { meetup, dating }
 
 CreateMeetupMode parseCreateMeetupMode(String? raw) {
   switch (raw) {
     case 'dating':
       return CreateMeetupMode.dating;
-    case 'afterdark':
-      return CreateMeetupMode.afterdark;
     default:
       return CreateMeetupMode.meetup;
   }
@@ -194,20 +191,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
       _placeController.text = _placeLabel();
       return;
     }
-
-    if (mode == CreateMeetupMode.afterdark) {
-      emoji = '🖤';
-      vibe = 'Шумно';
-      accessMode = 'request';
-      startsAt = DateTime.now().add(const Duration(hours: 5));
-      placeSelection = const PlaceSelection(
-        name: 'Адрес откроется позже',
-        address: 'После подтверждения',
-        distance: 'Закрытая локация',
-        emoji: '🖤',
-      );
-      _placeController.text = _placeLabel();
-    }
   }
 
   void _applyEditEvent(EventDetail event) {
@@ -271,32 +254,22 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     }
     final isEditMode = widget.editEventId != null;
     final isDatingMode = _mode == CreateMeetupMode.dating;
-    final isAfterDarkMode = _mode == CreateMeetupMode.afterdark;
     final subscription = !isEditMode && isDatingMode
         ? ref.watch(subscriptionStateProvider).valueOrNull
         : null;
-    final afterDarkAccess = !isEditMode && isAfterDarkMode
-        ? ref.watch(afterDarkAccessProvider).valueOrNull
-        : null;
     final isPremium =
         subscription?.status == 'trial' || subscription?.status == 'active';
-    final afterDarkUnlocked = afterDarkAccess?.unlocked ?? false;
     final titleText = isEditMode
         ? 'Редактировать встречу'
         : isDatingMode
             ? 'Новое свидание'
-            : isAfterDarkMode
-                ? 'After Dark'
-                : 'Новая встреча';
+            : 'Новая встреча';
     final publishText = isEditMode
         ? 'Сохранить'
         : isDatingMode
             ? 'Отправить инвайт'
-            : isAfterDarkMode
-                ? 'Создать 18+ событие'
-                : 'Дальше · превью';
-    final canSubmit = isEditMode ||
-        (!isDatingMode ? !isAfterDarkMode || afterDarkUnlocked : isPremium);
+            : 'Дальше · превью';
+    final canSubmit = isEditMode || (!isDatingMode || isPremium);
 
     return BbV5Scaffold(
       child: SafeArea(
@@ -312,7 +285,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                       titleText: titleText,
                       isEditMode: isEditMode,
                       isDatingMode: isDatingMode,
-                      isAfterDarkMode: isAfterDarkMode,
                     ),
                     Expanded(
                       child: ListView(
@@ -325,7 +297,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                           ],
                           _buildV5PreviewCard(
                             isDatingMode: isDatingMode,
-                            isAfterDarkMode: isAfterDarkMode,
                           ),
                           _buildV5TitleSection(isDatingMode: isDatingMode),
                           if (!isDatingMode) _buildV5EmojiSection(),
@@ -339,18 +310,15 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                           _buildV5PriceSection(isDatingMode: isDatingMode),
                           _buildV5AccessSection(
                             isDatingMode: isDatingMode,
-                            isAfterDarkMode: isAfterDarkMode,
                           ),
                           if (!isDatingMode) _buildV5GenderSection(),
                           if (isDatingMode) _buildV5DateIdeasSection(),
                           _buildV5DescriptionSection(
                             isDatingMode: isDatingMode,
-                            isAfterDarkMode: isAfterDarkMode,
                           ),
                           _buildV5AiHelper(),
                           _buildV5VisibilitySection(
                             isDatingMode: isDatingMode,
-                            isAfterDarkMode: isAfterDarkMode,
                           ),
                         ],
                       ),
@@ -365,7 +333,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                     publishText: publishText,
                     canSubmit: canSubmit,
                     isDatingMode: isDatingMode,
-                    isAfterDarkMode: isAfterDarkMode,
                   ),
                 ),
               ],
@@ -380,15 +347,12 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     required String titleText,
     required bool isEditMode,
     required bool isDatingMode,
-    required bool isAfterDarkMode,
   }) {
     final headerTitle = isEditMode
         ? titleText
         : isDatingMode
             ? 'Свидание'
-            : isAfterDarkMode
-                ? 'After Dark · 18+'
-                : 'Собрать своих';
+            : 'Собрать своих';
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 32, 20, 12),
       child: Row(
@@ -445,21 +409,12 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
             _applyModeDefaults(_mode);
           }),
         ),
-        _V5TabItem(
-          label: 'After Dark',
-          active: _mode == CreateMeetupMode.afterdark,
-          onTap: () => setState(() {
-            _mode = CreateMeetupMode.afterdark;
-            _applyModeDefaults(_mode);
-          }),
-        ),
       ],
     );
   }
 
   Widget _buildV5PreviewCard({
     required bool isDatingMode,
-    required bool isAfterDarkMode,
   }) {
     return BbV5Card(
       tint: isDatingMode ? BbV5Colors.rose : BbV5Colors.terraSoft,
@@ -467,13 +422,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          BbV5Kicker(
-            isDatingMode
-                ? 'frendly+ date'
-                : isAfterDarkMode
-                    ? 'frendly after dark'
-                    : 'превью',
-          ),
+          BbV5Kicker(isDatingMode ? 'frendly+ date' : 'превью'),
           const SizedBox(height: 8),
           AnimatedBuilder(
             animation: _titleController,
@@ -487,7 +436,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                     TextSpan(
                       text: _previewTitle(
                         isDatingMode: isDatingMode,
-                        isAfterDarkMode: isAfterDarkMode,
                       ),
                     ),
                   ],
@@ -506,7 +454,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  _previewSubtitle(isDatingMode, isAfterDarkMode),
+                  _previewSubtitle(isDatingMode),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.caption.copyWith(
@@ -525,7 +473,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
             children: [
               _V5Tag(vibe),
               if (!isDatingMode) _V5Tag(_lifestyleTag()),
-              _V5Tag(_accessTag(isDatingMode, isAfterDarkMode)),
+              _V5Tag(_accessTag(isDatingMode)),
               _V5Tag(_priceTag()),
             ],
           ),
@@ -1013,7 +961,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
 
   Widget _buildV5AccessSection({
     required bool isDatingMode,
-    required bool isAfterDarkMode,
   }) {
     return BbV5Section(
       title: 'Как присоединяются',
@@ -1040,7 +987,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
             _V5AccessRow(
               active: accessMode == 'request' || isDatingMode,
               icon: LucideIcons.shield_check,
-              title: isAfterDarkMode ? 'По заявке и модерации' : 'По заявке',
+              title: 'По заявке',
               subtitle: 'Ты подтверждаешь каждого участника',
               onTap: () => setState(() => accessMode = 'request'),
             ),
@@ -1147,7 +1094,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
 
   Widget _buildV5DescriptionSection({
     required bool isDatingMode,
-    required bool isAfterDarkMode,
   }) {
     const maxLength = 500;
     return BbV5Section(
@@ -1167,9 +1113,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                   decoration: InputDecoration(
                     hintText: isDatingMode
                         ? 'Как хочешь провести свидание? Что оплачиваешь, какой темп, что важно?'
-                        : isAfterDarkMode
-                            ? 'Опиши формат, границы, dress code, что обсудить до встречи.'
-                            : 'Что за встреча? Чего ждать?',
+                        : 'Что за встреча? Чего ждать?',
                     hintStyle: AppTextStyles.bodySoft.copyWith(
                       color: BbV5Colors.inkMute,
                       fontSize: 13.5,
@@ -1253,7 +1197,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
 
   Widget _buildV5VisibilitySection({
     required bool isDatingMode,
-    required bool isAfterDarkMode,
   }) {
     return BbV5Section(
       title: 'Кто увидит',
@@ -1264,7 +1207,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
               active: isDatingMode ? false : visibility == 'public',
               disabled: isDatingMode,
               icon: LucideIcons.globe,
-              title: isAfterDarkMode ? 'В After Dark ленте' : 'Все рядом',
+              title: 'Все рядом',
               subtitle: 'видно на радаре',
               onTap: () => setState(() => visibility = 'public'),
             ),
@@ -1288,7 +1231,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     required String publishText,
     required bool canSubmit,
     required bool isDatingMode,
-    required bool isAfterDarkMode,
   }) {
     final accent = BbV5Colors.accent;
     return Stack(
@@ -1370,9 +1312,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                 child: Text(
                   isDatingMode
                       ? 'Чат откроется только после принятия инвайта'
-                      : isAfterDarkMode
-                          ? 'Правила и safety-блок показываем каждому до входа'
-                          : 'Чат откроется автоматически, когда кто-то присоединится',
+                      : 'Чат откроется автоматически, когда кто-то присоединится',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.caption.copyWith(
                     color: BbV5Colors.inkMute,
@@ -1390,7 +1330,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
 
   String _previewTitle({
     required bool isDatingMode,
-    required bool isAfterDarkMode,
   }) {
     final title = _titleController.text.trim();
     if (title.isNotEmpty) {
@@ -1399,15 +1338,11 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     if (isDatingMode) {
       return 'Свидание на двоих';
     }
-    if (isAfterDarkMode) {
-      return 'Закрытая 18+ встреча';
-    }
     return 'Название появится здесь';
   }
 
-  String _previewSubtitle(bool isDatingMode, bool isAfterDarkMode) {
-    final place =
-        isAfterDarkMode ? 'локация после подтверждения' : _placeLabel();
+  String _previewSubtitle(bool isDatingMode) {
+    final place = _placeLabel();
     final cap = isDatingMode
         ? '2 человека'
         : unlimited
@@ -1428,12 +1363,9 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     }
   }
 
-  String _accessTag(bool isDatingMode, bool isAfterDarkMode) {
+  String _accessTag(bool isDatingMode) {
     if (isDatingMode) {
       return 'личное';
-    }
-    if (isAfterDarkMode) {
-      return 'по заявке';
     }
     switch (accessMode) {
       case 'request':
@@ -1484,14 +1416,10 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
 
     final isEditMode = widget.editEventId != null;
     final isDatingMode = _mode == CreateMeetupMode.dating;
-    final isAfterDarkMode = _mode == CreateMeetupMode.afterdark;
     final subscription =
         isDatingMode ? ref.read(subscriptionStateProvider).valueOrNull : null;
-    final afterDarkAccess =
-        isAfterDarkMode ? ref.read(afterDarkAccessProvider).valueOrNull : null;
     final isPremium =
         subscription?.status == 'trial' || subscription?.status == 'active';
-    final afterDarkUnlocked = afterDarkAccess?.unlocked ?? false;
 
     if (isEditMode) {
       if (_titleController.text.trim().isEmpty) {
@@ -1517,14 +1445,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
       return;
     }
 
-    if (isAfterDarkMode && !afterDarkUnlocked) {
-      if (!mounted) {
-        return;
-      }
-      context.pushRoute(AppRoute.afterDarkPaywall);
-      return;
-    }
-
     if (_titleController.text.trim().isEmpty) {
       _showSubmitError('Добавь название встречи.');
       return;
@@ -1535,7 +1455,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
       return;
     }
 
-    if (!isDatingMode && !isAfterDarkMode) {
+    if (!isDatingMode) {
       ref.read(createMeetupDraftProvider.notifier).state = _buildPublishDraft();
       context.pushRoute(AppRoute.publishMeetup);
       return;
@@ -1564,37 +1484,25 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
         longitude: submitPlace.longitude,
         mode: switch (_mode) {
           CreateMeetupMode.dating => 'dating',
-          CreateMeetupMode.afterdark => 'afterdark',
           CreateMeetupMode.meetup => 'default',
         },
         lifestyle: lifestyle,
         priceMode: priceMode,
         priceAmountFrom: _priceAmountFrom(),
         priceAmountTo: _priceAmountTo(),
-        accessMode: isDatingMode || isAfterDarkMode ? 'request' : accessMode,
+        accessMode: isDatingMode ? 'request' : accessMode,
         genderMode: genderMode,
         visibilityMode: isDatingMode ? 'friends' : visibility,
-        joinMode: isDatingMode ||
-                isAfterDarkMode ||
-                visibility == 'friends' ||
-                accessMode == 'request'
-            ? EventJoinMode.request
-            : EventJoinMode.open,
+        joinMode:
+            isDatingMode || visibility == 'friends' || accessMode == 'request'
+                ? EventJoinMode.request
+                : EventJoinMode.open,
         inviteeUserId: widget.inviteeUserId,
         afficheEventId: _afficheEvent?.id,
         routeId:
             _routeSelection?.custom == true ? null : _routeSelection?.routeId,
         route: _routeSelection?.toCustomPayload(),
         communityId: widget.communityId,
-        afterDarkCategory: isAfterDarkMode ? 'dating' : null,
-        afterDarkGlow: isAfterDarkMode ? 'magenta' : null,
-        dressCode: isAfterDarkMode ? 'Black' : null,
-        ageRange: isAfterDarkMode ? '25-36' : null,
-        ratioLabel: isAfterDarkMode ? 'Balanced' : null,
-        consentRequired: isAfterDarkMode,
-        rules: isAfterDarkMode
-            ? const ['Consent-first', 'No photo', 'Respect boundaries']
-            : null,
         idempotencyKey: _ensureCreateIdempotencyKey(),
       );
       if (!mounted) {
@@ -1885,7 +1793,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     final venue = await showPartnerPickerSheet(
       context,
       initialValue: _partnerVenue,
-      dark: _mode == CreateMeetupMode.afterdark,
     );
     if (venue == null || !mounted) {
       return;
@@ -1899,7 +1806,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     final route = await showRoutePickerSheet(
       context,
       initialValue: _routeSelection,
-      dark: _mode == CreateMeetupMode.afterdark,
     );
     if (route == null || !mounted) {
       return;
@@ -3226,13 +3132,11 @@ class _RoutePreviewCard extends StatelessWidget {
 class _PartnerVenueField extends StatelessWidget {
   const _PartnerVenueField({
     required this.venue,
-    required this.dark,
     required this.onOpen,
     required this.onClear,
   });
 
   final PartnerVenue? venue;
-  final bool dark;
   final VoidCallback onOpen;
   final VoidCallback onClear;
 
@@ -3247,11 +3151,9 @@ class _PartnerVenueField extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            color: dark ? AppColors.adSurface : colors.card,
+            color: colors.card,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: dark ? AppColors.adBorder : colors.border,
-            ),
+            border: Border.all(color: colors.border),
           ),
           child: Row(
             children: [
@@ -3259,13 +3161,13 @@ class _PartnerVenueField extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: dark ? AppColors.adSurfaceElev : colors.primarySoft,
+                  color: colors.primarySoft,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
                   LucideIcons.sparkles,
                   size: 18,
-                  color: dark ? AppColors.adMagenta : colors.primary,
+                  color: colors.primary,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -3277,14 +3179,14 @@ class _PartnerVenueField extends StatelessWidget {
                       'Партнёрские места',
                       style: AppTextStyles.body.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: dark ? AppColors.adFg : colors.foreground,
+                        color: colors.foreground,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Список мест с перками по клику',
                       style: AppTextStyles.meta.copyWith(
-                        color: dark ? AppColors.adFgMute : colors.inkMute,
+                        color: colors.inkMute,
                       ),
                     ),
                   ],
@@ -3292,7 +3194,7 @@ class _PartnerVenueField extends StatelessWidget {
               ),
               Icon(
                 Icons.chevron_right_rounded,
-                color: dark ? AppColors.adFgMute : colors.inkMute,
+                color: colors.inkMute,
               ),
             ],
           ),
@@ -3303,13 +3205,9 @@ class _PartnerVenueField extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: dark ? AppColors.adSurface : colors.card,
+        color: colors.card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: dark
-              ? AppColors.adMagenta.withValues(alpha: 0.4)
-              : colors.primary.withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: colors.primary.withValues(alpha: 0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3318,7 +3216,7 @@ class _PartnerVenueField extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: dark ? AppColors.adSurfaceElev : colors.background,
+              color: colors.background,
               borderRadius: BorderRadius.circular(16),
             ),
             alignment: Alignment.center,
@@ -3334,13 +3232,13 @@ class _PartnerVenueField extends StatelessWidget {
                     Icon(
                       LucideIcons.sparkles,
                       size: 12,
-                      color: dark ? AppColors.adMagenta : colors.primary,
+                      color: colors.primary,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       'Партнёр Frendly',
                       style: AppTextStyles.caption.copyWith(
-                        color: dark ? AppColors.adMagenta : colors.primary,
+                        color: colors.primary,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0,
                       ),
@@ -3350,7 +3248,7 @@ class _PartnerVenueField extends StatelessWidget {
                       Icon(
                         LucideIcons.badge_check,
                         size: 13,
-                        color: dark ? AppColors.adCyan : colors.primary,
+                        color: colors.primary,
                       ),
                     ],
                   ],
@@ -3362,7 +3260,7 @@ class _PartnerVenueField extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.body.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: dark ? AppColors.adFg : colors.foreground,
+                    color: colors.foreground,
                   ),
                 ),
                 Text(
@@ -3370,7 +3268,7 @@ class _PartnerVenueField extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.meta.copyWith(
-                    color: dark ? AppColors.adFgMute : colors.inkMute,
+                    color: colors.inkMute,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -3378,9 +3276,7 @@ class _PartnerVenueField extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: dark
-                        ? AppColors.adMagentaSoft.withValues(alpha: 0.3)
-                        : colors.primarySoft,
+                    color: colors.primarySoft,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Row(
@@ -3389,7 +3285,7 @@ class _PartnerVenueField extends StatelessWidget {
                       Icon(
                         LucideIcons.gift,
                         size: 13,
-                        color: dark ? AppColors.adMagenta : colors.primary,
+                        color: colors.primary,
                       ),
                       const SizedBox(width: 6),
                       Flexible(
@@ -3398,7 +3294,7 @@ class _PartnerVenueField extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.caption.copyWith(
-                            color: dark ? AppColors.adMagenta : colors.primary,
+                            color: colors.primary,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -3422,7 +3318,7 @@ class _PartnerVenueField extends StatelessWidget {
                 icon: Icon(
                   LucideIcons.x,
                   size: 18,
-                  color: dark ? AppColors.adFgMute : colors.inkMute,
+                  color: colors.inkMute,
                 ),
               ),
             ],

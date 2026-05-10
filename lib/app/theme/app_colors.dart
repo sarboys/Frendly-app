@@ -347,22 +347,4 @@ class AppColors {
   static const eveningEnd = Color(0xFFD08A63);
   static const darkBackground = Color(0xFF121217);
   static const darkForeground = Color(0xFFF3EEE7);
-  static const adBg = Color(0xFF120B17);
-  static const adSurface = Color(0xFF1C1323);
-  static const adSurfaceElev = Color(0xFF24172D);
-  static const adBorder = Color(0xFF3E2E48);
-  static const adFg = Color(0xFFF8F0FA);
-  static const adFgSoft = Color(0xFFCDBBD3);
-  static const adFgMute = Color(0xFF9C8BA5);
-  static const adMagenta = Color(0xFFFF3EA5);
-  static const adMagentaSoft = Color(0xFF5B1C43);
-  static const adViolet = Color(0xFF9962FF);
-  static const adVioletSoft = Color(0xFF34204D);
-  static const adCyan = Color(0xFF2FE3FF);
-  static const adGold = Color(0xFFFFC83D);
-  static const afterDarkGradientStart = Color(0xFF241136);
-  static const afterDarkGradientMid = Color(0xFF2E173F);
-  static const afterDarkGradientEnd = Color(0xFF45142D);
-  static const neonStart = adMagenta;
-  static const neonEnd = adViolet;
 }

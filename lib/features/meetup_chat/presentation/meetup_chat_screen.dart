@@ -9,7 +9,6 @@ import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_shadows.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
-import 'package:big_break_mobile/features/after_dark/presentation/after_dark_style.dart';
 import 'package:big_break_mobile/features/chats/presentation/chat_thread_screen.dart';
 import 'package:big_break_mobile/features/chats/presentation/chat_thread_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -39,12 +38,10 @@ import 'package:yandex_mapkit/yandex_mapkit.dart' show Point;
 class MeetupChatScreen extends ConsumerStatefulWidget {
   const MeetupChatScreen({
     required this.chatId,
-    this.afterDarkGlow,
     super.key,
   });
 
   final String chatId;
-  final String? afterDarkGlow;
 
   @override
   ConsumerState<MeetupChatScreen> createState() => _MeetupChatScreenState();
@@ -516,15 +513,8 @@ class _MeetupChatScreenState extends ConsumerState<MeetupChatScreen> {
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
     final chat = ref.watch(meetupChatSummaryProvider(widget.chatId));
-    final isAfterDark =
-        widget.afterDarkGlow != null || (chat?.isAfterDark ?? false);
-    final glow = widget.afterDarkGlow ?? chat?.afterDarkGlow;
-    final themeColors = isAfterDark
-        ? buildAfterDarkChatColors(
-            baseTheme.extension<BigBreakThemeColors>() ?? AppColors.lightTheme,
-            glow: glow,
-          )
-        : (baseTheme.extension<BigBreakThemeColors>() ?? AppColors.lightTheme);
+    final themeColors =
+        baseTheme.extension<BigBreakThemeColors>() ?? AppColors.lightTheme;
     final messagesAsync = ref.watch(chatThreadProvider(widget.chatId));
     final currentUserId = ref.watch(currentUserIdProvider);
     final isEveningHost = chat != null &&
@@ -534,7 +524,7 @@ class _MeetupChatScreenState extends ConsumerState<MeetupChatScreen> {
     final eveningSessionAsync = isEveningHost
         ? ref.watch(eveningSessionProvider(chat.sessionId!))
         : null;
-    final eventAsync = chat?.eventId == null || isAfterDark
+    final eventAsync = chat?.eventId == null
         ? null
         : ref.watch(eventDetailProvider(chat!.eventId!));
 

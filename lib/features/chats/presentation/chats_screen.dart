@@ -9,7 +9,6 @@ import 'package:big_break_mobile/app/theme/app_shadows.dart';
 import 'package:big_break_mobile/app/theme/app_radii.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
-import 'package:big_break_mobile/features/after_dark/presentation/after_dark_style.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_providers.dart';
 import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/features/tonight/presentation/v5_search_modal.dart';
@@ -785,9 +784,6 @@ int _chatRecencyRank(String label) {
 }
 
 Color _meetupToneColor(MeetupChat chat) {
-  if (chat.isAfterDark) {
-    return BbV5Colors.rose;
-  }
   if (chat.phase == MeetupPhase.live) {
     return BbV5Colors.terra;
   }
@@ -810,9 +806,6 @@ String _meetupPreview(MeetupChat chat) {
 }
 
 String _meetupKind(MeetupChat chat) {
-  if (chat.isAfterDark) {
-    return 'After Dark';
-  }
   if (chat.ticketSourceKind != null || (chat.ticketUrl ?? '').isNotEmpty) {
     return 'афиша';
   }
@@ -1175,11 +1168,9 @@ class _V5MeetupChatRow extends StatelessWidget {
                 children: [
                   _V5InitialsAvatar(
                     initials: _initials(chat.title),
-                    color: chat.isAfterDark
-                        ? BbV5Colors.rose
-                        : isLive
-                            ? BbV5Colors.terra
-                            : _toneColor(chat.title.hashCode),
+                    color: isLive
+                        ? BbV5Colors.terra
+                        : _toneColor(chat.title.hashCode),
                     dot: isLive || chat.unread > 0,
                   ),
                   const SizedBox(width: 16),
@@ -1255,8 +1246,6 @@ class _V5MeetupChatRow extends StatelessWidget {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            if (chat.isAfterDark)
-                              const _V5TinyPill('After Dark'),
                             if (_curatedChatLabel(chat) case final label?)
                               _V5TinyPill(label),
                           ],
@@ -1776,12 +1765,6 @@ void _openMeetupChat(BuildContext context, MeetupChat chat) {
   context.pushRoute(
     AppRoute.meetupChat,
     pathParameters: {'chatId': chat.id},
-    queryParameters: chat.isAfterDark
-        ? {
-            'theme': 'after-dark',
-            'glow': chat.afterDarkGlow ?? 'magenta',
-          }
-        : const {},
   );
 }
 
@@ -2374,209 +2357,6 @@ class _CuratedChatBadge extends StatelessWidget {
           style: AppTextStyles.caption.copyWith(
             color: colors.primary,
             fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MeetupChatTile extends StatelessWidget {
-  const _MeetupChatTile({
-    required this.title,
-    required this.emoji,
-    required this.lastTime,
-    required this.status,
-    required this.preview,
-    required this.unread,
-    required this.typing,
-    required this.isDone,
-    required this.isAfterDark,
-    required this.afterDarkGlow,
-    required this.curatedLabel,
-    required this.members,
-    required this.onTap,
-  });
-
-  final String title;
-  final String emoji;
-  final String lastTime;
-  final String status;
-  final String preview;
-  final int unread;
-  final bool typing;
-  final bool isDone;
-  final bool isAfterDark;
-  final String? afterDarkGlow;
-  final String? curatedLabel;
-  final List<String> members;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    final glowColor = afterDarkGlowColor(afterDarkGlow);
-    final glowSurface = afterDarkGlowSurface(afterDarkGlow);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadii.cardBorder,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: isAfterDark ? glowSurface : Colors.transparent,
-            borderRadius: AppRadii.cardBorder,
-            border: isAfterDark
-                ? Border.all(color: glowColor.withValues(alpha: 0.4))
-                : null,
-          ),
-          foregroundDecoration: isDone
-              ? BoxDecoration(
-                  color: colors.background.withValues(alpha: 0.4),
-                  borderRadius: AppRadii.cardBorder,
-                )
-              : null,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: isAfterDark ? glowSurface : colors.warmStart,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                alignment: Alignment.center,
-                child: Text(emoji, style: const TextStyle(fontSize: 24)),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: AppTextStyles.itemTitle.copyWith(
-                              fontSize: 15,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          lastTime,
-                          style: AppTextStyles.meta.copyWith(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w400,
-                            color: isAfterDark ? glowColor : null,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: isAfterDark
-                                ? glowSurface
-                                : colors.secondarySoft,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            child: Text(
-                              status,
-                              style: AppTextStyles.caption.copyWith(
-                                color:
-                                    isAfterDark ? glowColor : colors.secondary,
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (isAfterDark)
-                          DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: AppColors.adSurface,
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: glowColor.withValues(alpha: 0.5),
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              child: Text(
-                                'After Dark',
-                                style: AppTextStyles.caption.copyWith(
-                                  color: glowColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (curatedLabel != null)
-                          _CuratedChatBadge(label: curatedLabel!),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            preview,
-                            style: AppTextStyles.meta.copyWith(
-                              fontSize: 13,
-                              color: isAfterDark
-                                  ? (typing ? glowColor : colors.inkSoft)
-                                  : (typing
-                                      ? colors.secondary
-                                      : colors.inkMute),
-                              fontWeight:
-                                  typing ? FontWeight.w500 : FontWeight.w400,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (unread > 0)
-                          Container(
-                            constraints: const BoxConstraints(
-                                minWidth: 20, minHeight: 20),
-                            padding: const EdgeInsets.symmetric(horizontal: 5),
-                            decoration: BoxDecoration(
-                              color: isAfterDark ? glowColor : colors.primary,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              '$unread',
-                              style: AppTextStyles.caption.copyWith(
-                                color: isAfterDark
-                                    ? AppColors.adFg
-                                    : colors.primaryForeground,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    BbAvatarStack(
-                        names: members, size: BbAvatarSize.xs, max: 4),
-                  ],
-                ),
-              ),
-            ],
           ),
         ),
       ),

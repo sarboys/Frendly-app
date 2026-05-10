@@ -3,7 +3,6 @@ import 'package:big_break_mobile/app/core/device/app_attachment_service.dart';
 import 'package:big_break_mobile/app/core/device/app_permission_preferences.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_shell.dart';
-import 'package:big_break_mobile/features/after_dark/presentation/after_dark_providers.dart';
 import 'package:big_break_mobile/features/chats/presentation/chat_thread_providers.dart';
 import 'package:big_break_mobile/features/chats/presentation/chat_voice_playback_controller.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_providers.dart';
@@ -171,9 +170,6 @@ class AppSessionController {
     ref.invalidate(personalChatsProvider);
     ref.invalidate(notificationsProvider);
     ref.invalidate(notificationUnreadCountProvider);
-    ref.invalidate(afterDarkAccessProvider);
-    ref.invalidate(afterDarkEventsProvider);
-    ref.invalidate(afterDarkEventDetailProvider);
     ref.invalidate(datingDiscoverProvider);
     ref.invalidate(datingLikesProvider);
     ref.invalidate(communitiesFeedProvider);

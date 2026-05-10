@@ -66,7 +66,6 @@ class CreateMeetupRouteStep {
 Future<CreateMeetupRouteSelection?> showRoutePickerSheet(
   BuildContext context, {
   CreateMeetupRouteSelection? initialValue,
-  bool dark = false,
 }) {
   final container = ProviderScope.containerOf(context, listen: false);
 
@@ -78,7 +77,6 @@ Future<CreateMeetupRouteSelection?> showRoutePickerSheet(
       container: container,
       child: _RoutePickerSheet(
         initialValue: initialValue,
-        dark: dark,
       ),
     ),
   );
@@ -87,11 +85,9 @@ Future<CreateMeetupRouteSelection?> showRoutePickerSheet(
 class _RoutePickerSheet extends ConsumerStatefulWidget {
   const _RoutePickerSheet({
     this.initialValue,
-    required this.dark,
   });
 
   final CreateMeetupRouteSelection? initialValue;
-  final bool dark;
 
   @override
   ConsumerState<_RoutePickerSheet> createState() => _RoutePickerSheetState();
@@ -130,14 +126,13 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
     final routesAsync = ref.watch(eveningRouteTemplatesProvider('Москва'));
-    final dark = widget.dark;
 
     return SafeArea(
       top: false,
       child: Container(
         height: MediaQuery.of(context).size.height * 0.92,
         decoration: BoxDecoration(
-          color: dark ? AppColors.adBg : colors.background,
+          color: colors.background,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
         ),
         child: Column(
@@ -147,7 +142,7 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: dark ? AppColors.adBorder : colors.border,
+                color: colors.border,
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
@@ -159,21 +154,16 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: dark ? AppColors.adSurface : null,
-                      gradient: dark
-                          ? null
-                          : LinearGradient(
-                              colors: [colors.warmStart, colors.warmEnd],
-                            ),
-                      border:
-                          dark ? Border.all(color: AppColors.adBorder) : null,
+                      gradient: LinearGradient(
+                        colors: [colors.warmStart, colors.warmEnd],
+                      ),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     alignment: Alignment.center,
                     child: Icon(
                       LucideIcons.route,
                       size: 18,
-                      color: dark ? AppColors.adMagenta : colors.secondary,
+                      color: colors.secondary,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
@@ -188,14 +178,14 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
                             height: 1.25,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0,
-                            color: dark ? AppColors.adFg : colors.foreground,
+                            color: colors.foreground,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           'Готовый или свой — несколько мест за вечер',
                           style: AppTextStyles.caption.copyWith(
-                            color: dark ? AppColors.adFgMute : colors.inkMute,
+                            color: colors.inkMute,
                             fontSize: 11.5,
                             height: 1.35,
                           ),
@@ -215,7 +205,7 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
                       icon: Icon(
                         LucideIcons.x,
                         size: 20,
-                        color: dark ? AppColors.adFgSoft : colors.inkSoft,
+                        color: colors.inkSoft,
                       ),
                     ),
                   ),
@@ -228,9 +218,8 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
                 height: 44,
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: dark ? AppColors.adSurface : colors.muted,
+                  color: colors.muted,
                   borderRadius: BorderRadius.circular(18),
-                  border: dark ? Border.all(color: AppColors.adBorder) : null,
                 ),
                 child: Row(
                   children: [
@@ -239,7 +228,6 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
                         active: _tab == _RoutePickerTab.presets,
                         icon: LucideIcons.sparkles,
                         label: 'Готовые',
-                        dark: dark,
                         onTap: () =>
                             setState(() => _tab = _RoutePickerTab.presets),
                       ),
@@ -250,7 +238,6 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
                         active: _tab == _RoutePickerTab.custom,
                         icon: LucideIcons.pencil,
                         label: 'Свой',
-                        dark: dark,
                         onTap: () =>
                             setState(() => _tab = _RoutePickerTab.custom),
                       ),
@@ -265,7 +252,6 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
                       query: _query,
                       controller: _searchController,
                       routesAsync: routesAsync,
-                      dark: dark,
                       onChanged: (value) => setState(() {
                         _query = value;
                       }),
@@ -361,14 +347,12 @@ class _RouteTabButton extends StatelessWidget {
     required this.active,
     required this.icon,
     required this.label,
-    required this.dark,
     required this.onTap,
   });
 
   final bool active;
   final IconData icon;
   final String label;
-  final bool dark;
   final VoidCallback onTap;
 
   @override
@@ -381,11 +365,7 @@ class _RouteTabButton extends StatelessWidget {
       child: Container(
         height: double.infinity,
         decoration: BoxDecoration(
-          color: active
-              ? dark
-                  ? AppColors.adBg
-                  : colors.background
-              : Colors.transparent,
+          color: active ? colors.background : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
           boxShadow: active
               ? [
@@ -403,13 +383,7 @@ class _RouteTabButton extends StatelessWidget {
             Icon(
               icon,
               size: 16,
-              color: active
-                  ? dark
-                      ? AppColors.adFg
-                      : colors.foreground
-                  : dark
-                      ? AppColors.adFgMute
-                      : colors.inkMute,
+              color: active ? colors.foreground : colors.inkMute,
             ),
             const SizedBox(width: 6),
             Text(
@@ -418,13 +392,7 @@ class _RouteTabButton extends StatelessWidget {
                 fontSize: 12,
                 height: 1.1,
                 fontWeight: FontWeight.w600,
-                color: active
-                    ? dark
-                        ? AppColors.adFg
-                        : colors.foreground
-                    : dark
-                        ? AppColors.adFgMute
-                        : colors.inkMute,
+                color: active ? colors.foreground : colors.inkMute,
               ),
             ),
           ],
@@ -439,7 +407,6 @@ class _ReadyRoutesTab extends StatelessWidget {
     required this.query,
     required this.controller,
     required this.routesAsync,
-    required this.dark,
     required this.onChanged,
     required this.onPick,
   });
@@ -447,7 +414,6 @@ class _ReadyRoutesTab extends StatelessWidget {
   final String query;
   final TextEditingController controller;
   final AsyncValue<List<EveningRouteTemplateSummary>> routesAsync;
-  final bool dark;
   final ValueChanged<String> onChanged;
   final ValueChanged<EveningRouteTemplateSummary> onPick;
 
@@ -463,18 +429,16 @@ class _ReadyRoutesTab extends StatelessWidget {
             height: 44,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: dark ? AppColors.adSurface : colors.background,
+              color: colors.background,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: dark ? AppColors.adBorder : colors.border,
-              ),
+              border: Border.all(color: colors.border),
             ),
             child: Row(
               children: [
                 Icon(
                   Icons.search_rounded,
                   size: 18,
-                  color: dark ? AppColors.adFgMute : colors.inkMute,
+                  color: colors.inkMute,
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
@@ -485,13 +449,13 @@ class _ReadyRoutesTab extends StatelessWidget {
                       border: InputBorder.none,
                       hintText: 'Найти маршрут или место',
                       hintStyle: AppTextStyles.bodySoft.copyWith(
-                        color: dark ? AppColors.adFgMute : colors.inkMute,
+                        color: colors.inkMute,
                         fontSize: 13.5,
                         height: 1.2,
                       ),
                     ),
                     style: AppTextStyles.bodySoft.copyWith(
-                      color: dark ? AppColors.adFg : colors.foreground,
+                      color: colors.foreground,
                       fontSize: 13.5,
                       height: 1.2,
                     ),
@@ -510,7 +474,7 @@ class _ReadyRoutesTab extends StatelessWidget {
                   child: Text(
                     'Ничего не нашлось — попробуй собрать свой маршрут',
                     style: AppTextStyles.body.copyWith(
-                      color: dark ? AppColors.adFgMute : colors.inkMute,
+                      color: colors.inkMute,
                       fontSize: 12.5,
                       height: 1.35,
                     ),
@@ -527,7 +491,6 @@ class _ReadyRoutesTab extends StatelessWidget {
                   final route = visible[index];
                   return _ReadyRouteRow(
                     route: route,
-                    dark: dark,
                     onTap: () => onPick(route),
                   );
                 },
@@ -538,7 +501,7 @@ class _ReadyRoutesTab extends StatelessWidget {
               child: Text(
                 'Не получилось загрузить маршруты',
                 style: AppTextStyles.body.copyWith(
-                  color: dark ? AppColors.adFgMute : colors.inkMute,
+                  color: colors.inkMute,
                   fontSize: 12.5,
                   height: 1.35,
                 ),
@@ -572,12 +535,10 @@ class _ReadyRoutesTab extends StatelessWidget {
 class _ReadyRouteRow extends StatelessWidget {
   const _ReadyRouteRow({
     required this.route,
-    required this.dark,
     required this.onTap,
   });
 
   final EveningRouteTemplateSummary route;
-  final bool dark;
   final VoidCallback onTap;
 
   @override
@@ -591,9 +552,9 @@ class _ReadyRouteRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: dark ? AppColors.adSurface : colors.card,
+          color: colors.card,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: dark ? AppColors.adBorder : colors.border),
+          border: Border.all(color: colors.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -613,7 +574,7 @@ class _ReadyRouteRow extends StatelessWidget {
                           fontSize: 14.5,
                           height: 1.25,
                           fontWeight: FontWeight.w600,
-                          color: dark ? AppColors.adFg : colors.foreground,
+                          color: colors.foreground,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -622,7 +583,7 @@ class _ReadyRouteRow extends StatelessWidget {
                           Icon(
                             LucideIcons.clock,
                             size: 14,
-                            color: dark ? AppColors.adFgMute : colors.inkMute,
+                            color: colors.inkMute,
                           ),
                           const SizedBox(width: 6),
                           Flexible(
@@ -631,8 +592,7 @@ class _ReadyRouteRow extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.caption.copyWith(
-                                color:
-                                    dark ? AppColors.adFgMute : colors.inkMute,
+                                color: colors.inkMute,
                                 fontSize: 11.5,
                                 height: 1.25,
                               ),
@@ -643,16 +603,14 @@ class _ReadyRouteRow extends StatelessWidget {
                             child: Text(
                               '·',
                               style: AppTextStyles.caption.copyWith(
-                                color:
-                                    (dark ? AppColors.adFgMute : colors.inkMute)
-                                        .withValues(alpha: 0.45),
+                                color: colors.inkMute.withValues(alpha: 0.45),
                               ),
                             ),
                           ),
                           Icon(
                             LucideIcons.map_pin,
                             size: 14,
-                            color: dark ? AppColors.adFgMute : colors.inkMute,
+                            color: colors.inkMute,
                           ),
                           const SizedBox(width: 6),
                           Flexible(
@@ -661,8 +619,7 @@ class _ReadyRouteRow extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.caption.copyWith(
-                                color:
-                                    dark ? AppColors.adFgMute : colors.inkMute,
+                                color: colors.inkMute,
                                 fontSize: 11.5,
                                 height: 1.25,
                               ),
@@ -678,13 +635,13 @@ class _ReadyRouteRow extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: dark ? AppColors.adBg : colors.muted,
+                    color: colors.muted,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     '${steps.length} шагов',
                     style: AppTextStyles.caption.copyWith(
-                      color: dark ? AppColors.adFgMute : colors.inkMute,
+                      color: colors.inkMute,
                       fontSize: 10.5,
                       height: 1.1,
                       fontWeight: FontWeight.w600,
@@ -697,13 +654,13 @@ class _ReadyRouteRow extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             Row(
               children: [
-                _RouteStepDots(steps: steps, dark: dark),
+                _RouteStepDots(steps: steps),
                 const Spacer(),
                 if (route.totalSavings > 0)
                   Text(
                     '−${route.totalSavings} ₽',
                     style: AppTextStyles.meta.copyWith(
-                      color: dark ? AppColors.adCyan : colors.primary,
+                      color: colors.primary,
                       fontSize: 12.5,
                       height: 1.1,
                       fontWeight: FontWeight.w600,
@@ -721,11 +678,9 @@ class _ReadyRouteRow extends StatelessWidget {
 class _RouteStepDots extends StatelessWidget {
   const _RouteStepDots({
     required this.steps,
-    required this.dark,
   });
 
   final List<EveningRouteTemplateStepPreview> steps;
-  final bool dark;
 
   @override
   Widget build(BuildContext context) {
@@ -738,12 +693,9 @@ class _RouteStepDots extends StatelessWidget {
             width: 30,
             height: 30,
             decoration: BoxDecoration(
-              color: dark ? AppColors.adBg : null,
-              gradient: dark
-                  ? null
-                  : LinearGradient(
-                      colors: [colors.warmStart, colors.warmEnd],
-                    ),
+              gradient: LinearGradient(
+                colors: [colors.warmStart, colors.warmEnd],
+              ),
               borderRadius: BorderRadius.circular(10),
             ),
             alignment: Alignment.center,
@@ -756,7 +708,7 @@ class _RouteStepDots extends StatelessWidget {
             Container(
               width: 12,
               height: 1,
-              color: dark ? AppColors.adBorder : colors.border,
+              color: colors.border,
               margin: const EdgeInsets.symmetric(horizontal: 4),
             ),
         ],

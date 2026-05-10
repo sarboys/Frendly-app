@@ -1,6 +1,5 @@
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
-import 'package:big_break_mobile/features/after_dark/presentation/after_dark_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/subscription.dart';
@@ -98,7 +97,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         return;
       }
       container.invalidate(subscriptionStateProvider);
-      container.invalidate(afterDarkAccessProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Frendly+ активирован')),
       );

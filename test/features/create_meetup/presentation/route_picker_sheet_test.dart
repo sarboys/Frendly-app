@@ -1,5 +1,4 @@
 import 'package:big_break_mobile/features/create_meetup/presentation/widgets/route_picker_sheet.dart';
-import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +6,7 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Widget _wrap({bool dark = false}) {
+Widget _wrap() {
   return ProviderScope(
     overrides: [
       eveningRouteTemplatesProvider.overrideWith(
@@ -20,7 +19,7 @@ Widget _wrap({bool dark = false}) {
           builder: (context) => Center(
             child: ElevatedButton(
               onPressed: () {
-                showRoutePickerSheet(context, dark: dark);
+                showRoutePickerSheet(context);
               },
               child: const Text('open'),
             ),
@@ -110,16 +109,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byIcon(LucideIcons.wine), findsWidgets);
-  });
-
-  testWidgets('route picker supports After Dark styling', (tester) async {
-    await tester.pumpWidget(_wrap(dark: true));
-
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
-
-    final routeIcon = tester.widget<Icon>(find.byIcon(LucideIcons.route));
-    expect(routeIcon.color, AppColors.adMagenta);
   });
 }
 

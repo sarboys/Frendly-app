@@ -102,13 +102,6 @@ void main() {
     );
 
     expect(
-      appRouter.namedLocation(
-        AppRoute.afterDark.name,
-      ),
-      '/after-dark',
-    );
-
-    expect(
       appRouter.namedLocation('tokensFocus'),
       '/tokens/focus',
     );
@@ -139,28 +132,6 @@ void main() {
         pathParameters: const {'communityId': 'c1'},
       ),
       '/community/c1/edit',
-    );
-
-    expect(
-      appRouter.namedLocation(
-        AppRoute.afterDarkPaywall.name,
-      ),
-      '/after-dark/paywall',
-    );
-
-    expect(
-      appRouter.namedLocation(
-        AppRoute.afterDarkEvent.name,
-        pathParameters: const {'eventId': 'ad1'},
-      ),
-      '/after-dark/event/ad1',
-    );
-
-    expect(
-      appRouter.namedLocation(
-        AppRoute.afterDarkVerify.name,
-      ),
-      '/after-dark/verify',
     );
 
     expect(
@@ -223,12 +194,21 @@ void main() {
     );
   });
 
-  test('router does not expose old search or posters routes', () {
+  test('router does not expose old search, posters or after dark routes', () {
     final paths = AppRoute.values.map((route) => route.path).toSet();
+    final names = AppRoute.values.map((route) => route.name).toSet();
 
     expect(paths, isNot(contains('/search')));
     expect(paths, isNot(contains('/posters')));
     expect(paths, isNot(contains('/poster/:posterId')));
+    expect(paths, isNot(contains('/after-dark')));
+    expect(paths, isNot(contains('/after-dark/paywall')));
+    expect(paths, isNot(contains('/after-dark/event/:eventId')));
+    expect(paths, isNot(contains('/after-dark/verify')));
+    expect(names, isNot(contains('afterDark')));
+    expect(names, isNot(contains('afterDarkPaywall')));
+    expect(names, isNot(contains('afterDarkEvent')));
+    expect(names, isNot(contains('afterDarkVerify')));
   });
 
   test(
