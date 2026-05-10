@@ -3,6 +3,31 @@ import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('promoted meetups stay above regular meetups for every sort', () {
+    final regularSoon = _event('regular-soon', DateTime(2026, 5, 9, 18));
+    final promotedLater = _event('promoted-later', DateTime(2026, 5, 9, 22));
+    final regularPopular =
+        _event('regular-popular', DateTime(2026, 5, 9, 17), going: 8);
+
+    expect(
+      sortMeetupsForTest(
+        [regularSoon, promotedLater, regularPopular],
+        promotedIds: {'promoted-later'},
+        sort: MeetupsSortForTest.time,
+      ).map((event) => event.id),
+      ['promoted-later', 'regular-popular', 'regular-soon'],
+    );
+
+    expect(
+      sortMeetupsForTest(
+        [regularSoon, promotedLater, regularPopular],
+        promotedIds: {'promoted-later'},
+        sort: MeetupsSortForTest.popular,
+      ).map((event) => event.id),
+      ['promoted-later', 'regular-popular', 'regular-soon'],
+    );
+  });
+
   test('week filter stops at the end of the current local week', () {
     final now = DateTime(2026, 5, 9, 12);
 
@@ -60,9 +85,15 @@ void main() {
       isFalse,
     );
   });
+
+  test('event feed ISO dates are parsed as local dates for filters', () {
+    final event = _event('utc-event', DateTime.utc(2026, 5, 9, 18));
+
+    expect(eventDateForTest(event).isUtc, isFalse);
+  });
 }
 
-Event _event(String id, DateTime startsAt) {
+Event _event(String id, DateTime startsAt, {int going = 1}) {
   return Event(
     id: id,
     title: 'Кофе',
@@ -72,7 +103,7 @@ Event _event(String id, DateTime startsAt) {
     place: 'Brix',
     distance: '1 км',
     attendees: const [],
-    going: 1,
+    going: going,
     capacity: 6,
     vibe: 'Спокойно',
     tone: EventTone.warm,

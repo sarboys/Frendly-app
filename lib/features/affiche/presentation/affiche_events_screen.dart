@@ -14,15 +14,62 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class AfficheEventsScreen extends ConsumerStatefulWidget {
+class AfficheEventsScreen extends StatelessWidget {
   const AfficheEventsScreen({super.key});
 
   @override
-  ConsumerState<AfficheEventsScreen> createState() =>
-      _AfficheEventsScreenState();
+  Widget build(BuildContext context) {
+    return BbV5Scaffold(
+      child: AfficheEventsBrowser(
+        onBack: () => _handleBack(context),
+      ),
+    );
+  }
+
+  void _handleBack(BuildContext context) async {
+    final popped = await Navigator.of(context).maybePop();
+    if (!popped && context.mounted) {
+      context.goRoute(AppRoute.tonight);
+    }
+  }
 }
 
-class _AfficheEventsScreenState extends ConsumerState<AfficheEventsScreen> {
+class AfficheEventsBrowser extends ConsumerStatefulWidget {
+  const AfficheEventsBrowser({
+    this.initialSelectedEvent,
+    this.onEventSelected,
+    this.onBack,
+    this.backIcon = LucideIcons.arrow_left,
+    this.kicker = 'Афиша города',
+    this.title = 'Куда пойти',
+    this.accent = 'сегодня',
+    this.searchHintText = 'Концерт, выставка, стендап…',
+    this.safeAreaTop = true,
+    this.showDragHandle = false,
+    this.headerTopPadding = 32,
+    this.bottomSpacer = 112,
+    super.key,
+  });
+
+  final AfficheEvent? initialSelectedEvent;
+  final ValueChanged<AfficheEvent>? onEventSelected;
+  final VoidCallback? onBack;
+  final IconData backIcon;
+  final String kicker;
+  final String title;
+  final String accent;
+  final String searchHintText;
+  final bool safeAreaTop;
+  final bool showDragHandle;
+  final double headerTopPadding;
+  final double bottomSpacer;
+
+  @override
+  ConsumerState<AfficheEventsBrowser> createState() =>
+      _AfficheEventsBrowserState();
+}
+
+class _AfficheEventsBrowserState extends ConsumerState<AfficheEventsBrowser> {
   final _queryController = TextEditingController();
   final _scrollController = ScrollController();
   Timer? _queryDebounce;
@@ -116,153 +163,138 @@ class _AfficheEventsScreenState extends ConsumerState<AfficheEventsScreen> {
     final showInitialLoading = eventsAsync.isLoading && visibleState == null;
     final visibleEvents = visibleState?.items ?? const <AfficheEvent>[];
 
-    return BbV5Scaffold(
-      child: SafeArea(
-        bottom: false,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: CustomScrollView(
-              controller: _scrollController,
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              slivers: [
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
-                  sliver: SliverToBoxAdapter(
-                    child: _AfficheV5Header(
-                      onBack: () => _handleBack(context),
-                    ),
-                  ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                  sliver: SliverToBoxAdapter(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: BbV5SearchPill(
-                            controller: _queryController,
-                            onChanged: _handleQueryChanged,
-                            hintText: 'Концерт, выставка, стендап…',
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _AfficheV5FilterButton(
-                          activeCount: _activeFilterCount,
-                          onTap: _openFilterSheet,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+    return SafeArea(
+      key: const Key('affiche-v5-browser'),
+      top: widget.safeAreaTop,
+      bottom: false,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: CustomScrollView(
+            controller: _scrollController,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
+              if (widget.showDragHandle)
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 16, bottom: 18),
-                    child: SizedBox(
-                      height: 34,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        itemCount: afficheCategoryOptions.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(width: AppSpacing.xs),
-                        itemBuilder: (context, index) {
-                          final option = afficheCategoryOptions[index];
-                          return BbV5Chip(
-                            label: _categoryChipLabel(option),
-                            active: option.value == null
-                                ? _categories.isEmpty
-                                : _categories.contains(option.value),
-                            onTap: () {
-                              setState(() {
-                                if (option.value == null) {
-                                  _categories = const {};
-                                  _category = null;
-                                } else if (_categories.contains(option.value)) {
-                                  _categories = {
-                                    ..._categories,
-                                  }..remove(option.value);
-                                  _category = _categories.isEmpty
-                                      ? null
-                                      : _categories.first;
-                                } else {
-                                  _categories = {
-                                    ..._categories,
-                                    option.value!,
-                                  };
-                                  _category = option.value;
-                                }
-                              });
-                            },
-                          );
-                        },
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                    child: Center(
+                      child: Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: BbV5Colors.hair,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
                       ),
                     ),
                   ),
                 ),
-                if (showInitialLoading)
-                  const _AfficheStateSliver(
-                    icon: LucideIcons.ticket,
-                    title: 'Загружаем афишу',
-                    message: 'Собираем события рядом.',
-                    loading: true,
-                  )
-                else if (visibleState == null)
-                  const _AfficheStateSliver(
-                    icon: LucideIcons.wifi_off,
-                    title: 'Не получилось загрузить афишу',
-                    message: 'Проверь соединение и попробуй еще раз.',
-                  )
-                else ...[
-                  if (eventsAsync.isLoading)
-                    const SliverToBoxAdapter(
-                      child: LinearProgressIndicator(
-                        minHeight: 2,
-                        color: BbV5Colors.accent,
-                        backgroundColor: Colors.transparent,
+              SliverPadding(
+                padding:
+                    EdgeInsets.fromLTRB(20, widget.headerTopPadding, 20, 0),
+                sliver: SliverToBoxAdapter(
+                  child: _AfficheV5Header(
+                    onBack: widget.onBack,
+                    backIcon: widget.backIcon,
+                    kicker: widget.kicker,
+                    title: widget.title,
+                    accent: widget.accent,
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                sliver: SliverToBoxAdapter(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: BbV5SearchPill(
+                          controller: _queryController,
+                          onChanged: _handleQueryChanged,
+                          hintText: widget.searchHintText,
+                        ),
                       ),
-                    ),
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    sliver: SliverToBoxAdapter(
-                      child: BbV5Kicker('${visibleEvents.length} событий'),
+                      const SizedBox(width: 8),
+                      _AfficheV5FilterButton(
+                        activeCount: _activeFilterCount,
+                        onTap: _openFilterSheet,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: _AfficheQuickFilterRows(
+                  date: _date,
+                  priceMode: _priceMode,
+                  categories: _categories,
+                  onDateChanged: (value) => setState(() => _date = value),
+                  onPriceChanged: (value) => setState(
+                    () => _priceMode = value ?? 'any',
+                  ),
+                  onCategoryChanged: _toggleCategory,
+                ),
+              ),
+              if (showInitialLoading)
+                const _AfficheStateSliver(
+                  icon: LucideIcons.ticket,
+                  title: 'Загружаем афишу',
+                  message: 'Собираем события рядом.',
+                  loading: true,
+                )
+              else if (visibleState == null)
+                const _AfficheStateSliver(
+                  icon: LucideIcons.wifi_off,
+                  title: 'Не получилось загрузить афишу',
+                  message: 'Проверь соединение и попробуй еще раз.',
+                )
+              else ...[
+                if (eventsAsync.isLoading)
+                  const SliverToBoxAdapter(
+                    child: LinearProgressIndicator(
+                      minHeight: 2,
+                      color: BbV5Colors.accent,
+                      backgroundColor: Colors.transparent,
                     ),
                   ),
-                  if (visibleEvents.isEmpty)
-                    const _AfficheStateSliver(
-                      icon: LucideIcons.search_x,
-                      title: 'Ничего не нашли',
-                      message: 'Попробуй другой запрос или категорию.',
-                    )
-                  else
-                    _AfficheEventsGrid(events: visibleEvents),
-                  if (visibleState.isLoadingMore)
-                    const SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: BbV5Colors.ink,
-                          ),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverToBoxAdapter(
+                    child: BbV5Kicker('${visibleEvents.length} событий'),
+                  ),
+                ),
+                if (visibleEvents.isEmpty)
+                  const _AfficheStateSliver(
+                    icon: LucideIcons.search_x,
+                    title: 'Ничего не нашли',
+                    message: 'Попробуй другой запрос или категорию.',
+                  )
+                else
+                  _AfficheEventsGrid(
+                    events: visibleEvents,
+                    selectedEventId: widget.initialSelectedEvent?.id,
+                    onEventTap: widget.onEventSelected,
+                  ),
+                if (visibleState.isLoadingMore)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: BbV5Colors.ink,
                         ),
                       ),
                     ),
-                ],
-                const SliverToBoxAdapter(child: SizedBox(height: 112)),
+                  ),
               ],
-            ),
+              SliverToBoxAdapter(child: SizedBox(height: widget.bottomSpacer)),
+            ],
           ),
         ),
       ),
     );
-  }
-
-  void _handleBack(BuildContext context) async {
-    final popped = await Navigator.of(context).maybePop();
-    if (!popped && context.mounted) {
-      context.goRoute(AppRoute.tonight);
-    }
   }
 
   int get _activeFilterCount {
@@ -312,6 +344,21 @@ class _AfficheEventsScreenState extends ConsumerState<AfficheEventsScreen> {
       _radiusKm = result.radiusKm;
     });
   }
+
+  void _toggleCategory(AfficheFilterOption option) {
+    setState(() {
+      if (option.value == null) {
+        _categories = const {};
+        _category = null;
+      } else if (_categories.contains(option.value)) {
+        _categories = {..._categories}..remove(option.value);
+        _category = _categories.isEmpty ? null : _categories.first;
+      } else {
+        _categories = {..._categories, option.value!};
+        _category = option.value;
+      }
+    });
+  }
 }
 
 String _categoryChipLabel(AfficheFilterOption option) {
@@ -334,34 +381,136 @@ String _categoryChipLabel(AfficheFilterOption option) {
 }
 
 class _AfficheV5Header extends StatelessWidget {
-  const _AfficheV5Header({required this.onBack});
+  const _AfficheV5Header({
+    required this.onBack,
+    required this.backIcon,
+    required this.kicker,
+    required this.title,
+    required this.accent,
+  });
 
-  final VoidCallback onBack;
+  final VoidCallback? onBack;
+  final IconData backIcon;
+  final String kicker;
+  final String title;
+  final String accent;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        BbV5IconButton(
-          icon: LucideIcons.arrow_left,
-          onPressed: onBack,
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        const Expanded(
+        if (onBack != null) ...[
+          BbV5IconButton(
+            icon: backIcon,
+            onPressed: onBack!,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+        ],
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              BbV5Kicker('Афиша города'),
-              SizedBox(height: 4),
+              BbV5Kicker(kicker),
+              const SizedBox(height: 4),
               BbV5HeroTitle(
-                title: 'Куда пойти',
-                accent: 'сегодня',
+                title: title,
+                accent: accent,
                 fontSize: 22,
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AfficheQuickFilterRows extends StatelessWidget {
+  const _AfficheQuickFilterRows({
+    required this.date,
+    required this.priceMode,
+    required this.categories,
+    required this.onDateChanged,
+    required this.onPriceChanged,
+    required this.onCategoryChanged,
+  });
+
+  final String? date;
+  final String priceMode;
+  final Set<String> categories;
+  final ValueChanged<String?> onDateChanged;
+  final ValueChanged<String?> onPriceChanged;
+  final ValueChanged<AfficheFilterOption> onCategoryChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 18),
+      child: Column(
+        children: [
+          _AfficheV5FilterRow(
+            key: const Key('affiche-v5-filter-row-date'),
+            options: afficheDateOptions(),
+            isActive: (option) => date == option.value,
+            onTap: (option) => onDateChanged(option.value),
+          ),
+          const SizedBox(height: 8),
+          _AfficheV5FilterRow(
+            key: const Key('affiche-v5-filter-row-price'),
+            options: affichePriceOptions,
+            isActive: (option) => priceMode == option.value,
+            onTap: (option) => onPriceChanged(option.value),
+          ),
+          const SizedBox(height: 8),
+          _AfficheV5FilterRow(
+            key: const Key('affiche-v5-filter-row-category'),
+            options: afficheCategoryOptions,
+            labelFor: _categoryChipLabel,
+            isActive: (option) => option.value == null
+                ? categories.isEmpty
+                : categories.contains(option.value),
+            onTap: onCategoryChanged,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AfficheV5FilterRow extends StatelessWidget {
+  const _AfficheV5FilterRow({
+    required this.options,
+    required this.isActive,
+    required this.onTap,
+    this.labelFor,
+    super.key,
+  });
+
+  final List<AfficheFilterOption> options;
+  final bool Function(AfficheFilterOption option) isActive;
+  final ValueChanged<AfficheFilterOption> onTap;
+  final String Function(AfficheFilterOption option)? labelFor;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelBuilder = labelFor ?? (option) => option.label;
+    return SizedBox(
+      height: 34,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: options.length,
+        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.xs),
+        itemBuilder: (context, index) {
+          final option = options[index];
+          return BbV5Chip(
+            label: labelBuilder(option),
+            active: isActive(option),
+            icon: labelFor == null ? option.icon : null,
+            onTap: () => onTap(option),
+          );
+        },
+      ),
     );
   }
 }
@@ -418,9 +567,15 @@ class _AfficheV5FilterButton extends StatelessWidget {
 }
 
 class _AfficheEventsGrid extends StatelessWidget {
-  const _AfficheEventsGrid({required this.events});
+  const _AfficheEventsGrid({
+    required this.events,
+    this.selectedEventId,
+    this.onEventTap,
+  });
 
   final List<AfficheEvent> events;
+  final String? selectedEventId;
+  final ValueChanged<AfficheEvent>? onEventTap;
 
   @override
   Widget build(BuildContext context) {
@@ -430,12 +585,16 @@ class _AfficheEventsGrid extends StatelessWidget {
         delegate: SliverChildBuilderDelegate(
           (context, index) {
             final event = events[index];
+            final selectionHandler = onEventTap;
             return _AfficheGridCardV5(
               event: event,
-              onTap: () => context.pushRoute(
-                AppRoute.afficheEvent,
-                pathParameters: {'eventId': event.id},
-              ),
+              selected: selectedEventId == event.id,
+              onTap: selectionHandler == null
+                  ? () => context.pushRoute(
+                        AppRoute.afficheEvent,
+                        pathParameters: {'eventId': event.id},
+                      )
+                  : () => selectionHandler(event),
             );
           },
           childCount: events.length,
@@ -455,14 +614,17 @@ class _AfficheGridCardV5 extends StatelessWidget {
   const _AfficheGridCardV5({
     required this.event,
     required this.onTap,
+    this.selected = false,
   });
 
   final AfficheEvent event;
   final VoidCallback onTap;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
     return Material(
+      key: ValueKey('affiche-v5-event-${event.id}'),
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
@@ -471,7 +633,10 @@ class _AfficheGridCardV5 extends StatelessWidget {
           decoration: BoxDecoration(
             color: BbV5Colors.paperHi,
             borderRadius: BorderRadius.circular(BbV5Radii.md),
-            border: Border.all(color: BbV5Colors.hair),
+            border: Border.all(
+              color: selected ? BbV5Colors.accent : BbV5Colors.hair,
+              width: selected ? 2 : 1,
+            ),
             boxShadow: BbV5Shadows.card,
           ),
           child: ClipRRect(

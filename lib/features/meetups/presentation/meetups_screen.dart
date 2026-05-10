@@ -4,6 +4,7 @@ import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
@@ -37,6 +38,9 @@ const _vibeOptions = [
 const _accessOptions = ['Открытое', 'По заявке'];
 
 enum _MeetupsSort { time, near, popular }
+
+@visibleForTesting
+enum MeetupsSortForTest { time, near, popular }
 
 final _meetupsFeedProvider =
     FutureProvider.autoDispose.family<List<Event>, _MeetupsQuery>(
@@ -108,6 +112,10 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
     final feedAsync = usesSharedNearbyFeed
         ? ref.watch(eventsProvider('nearby'))
         : ref.watch(_meetupsFeedProvider(query));
+    final wallet = ref.watch(tokenWalletProvider);
+    final promotedIds = wallet.promoted.keys
+        .where((eventId) => wallet.isPromoted(eventId))
+        .toSet();
     final activeCount = _activeFilterCount;
 
     return BbV5Scaffold(
@@ -176,7 +184,7 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
                   padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
                   child: feedAsync.when(
                     data: (events) {
-                      final visible = _visibleEvents(events);
+                      final visible = _visibleEvents(events, promotedIds);
                       return _SortHeader(
                         count: visible.length,
                         sort: _sort,
@@ -211,7 +219,7 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
                 Expanded(
                   child: feedAsync.when(
                     data: (events) {
-                      final visible = _visibleEvents(events);
+                      final visible = _visibleEvents(events, promotedIds);
                       if (visible.isEmpty) {
                         return _MeetupsEmptyState(
                           onReset: _resetFilters,
@@ -233,6 +241,7 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
                           itemBuilder: (context, index) => _MeetupListCard(
                             event: visible[index],
+                            promoted: promotedIds.contains(visible[index].id),
                             onTap: () => context.pushRoute(
                               AppRoute.eventDetail,
                               pathParameters: {'eventId': visible[index].id},
@@ -317,21 +326,9 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
         .setRadiusKm(nearbyEventsDefaultRadiusKm);
   }
 
-  List<Event> _visibleEvents(List<Event> source) {
+  List<Event> _visibleEvents(List<Event> source, Set<String> promotedIds) {
     final result = source.where(_matchesFilters).toList(growable: false);
-    final sorted = [...result];
-    sorted.sort((a, b) {
-      switch (_sort) {
-        case _MeetupsSort.near:
-          return _distanceValue(a.distance)
-              .compareTo(_distanceValue(b.distance));
-        case _MeetupsSort.popular:
-          return b.going.compareTo(a.going);
-        case _MeetupsSort.time:
-          return _eventDate(a).compareTo(_eventDate(b));
-      }
-    });
-    return sorted;
+    return _sortMeetups(result, promotedIds: promotedIds, sort: _sort);
   }
 
   bool _matchesFilters(Event event) {
@@ -798,10 +795,12 @@ class _SortChip extends StatelessWidget {
 class _MeetupListCard extends StatelessWidget {
   const _MeetupListCard({
     required this.event,
+    required this.promoted,
     required this.onTap,
   });
 
   final Event event;
+  final bool promoted;
   final VoidCallback onTap;
 
   @override
@@ -810,6 +809,8 @@ class _MeetupListCard extends StatelessWidget {
     return BbV5Card(
       padding: const EdgeInsets.all(10),
       radius: 24,
+      tint: promoted ? BbV5Colors.terraSoft : null,
+      borderColor: promoted ? BbV5Colors.accent : BbV5Colors.hair,
       onTap: onTap,
       child: Row(
         children: [
@@ -863,6 +864,12 @@ class _MeetupListCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (promoted)
+                    const Positioned(
+                      left: 7,
+                      top: 7,
+                      child: _PromotedMeetupBadge(),
+                    ),
                 ],
               ),
             ),
@@ -876,6 +883,10 @@ class _MeetupListCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
+                      if (promoted) ...[
+                        const _PromotedMeetupBadge(dark: true),
+                        const SizedBox(width: 6),
+                      ],
                       Container(
                         width: 6,
                         height: 6,
@@ -958,6 +969,46 @@ class _MeetupListCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PromotedMeetupBadge extends StatelessWidget {
+  const _PromotedMeetupBadge({this.dark = false});
+
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = dark ? BbV5Colors.terra : BbV5Colors.paperHi;
+    final foreground = dark ? BbV5Colors.paperHi : BbV5Colors.accentDeep;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: dark ? BbV5Colors.terra : BbV5Colors.paperHi,
+        ),
+        boxShadow: BbV5Shadows.pill,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.flame, size: 10, color: foreground),
+          const SizedBox(width: 3),
+          Text(
+            'ТОП',
+            style: AppTextStyles.caption.copyWith(
+              color: foreground,
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1,
             ),
           ),
         ],
@@ -1179,8 +1230,12 @@ bool _matchesAccess(Event event, String label) {
   };
 }
 
+@visibleForTesting
+DateTime eventDateForTest(Event event) => _eventDate(event);
+
 DateTime _eventDate(Event event) {
-  return DateTime.tryParse(event.startsAtIso ?? '') ?? DateTime.now();
+  return DateTime.tryParse(event.startsAtIso ?? '')?.toLocal() ??
+      DateTime.now();
 }
 
 ({DateTime start, DateTime end}) _weekendWindow(DateTime today) {
@@ -1251,6 +1306,44 @@ String _accessLabel(Event event) {
     return 'По заявке';
   }
   return 'Открытое';
+}
+
+List<Event> _sortMeetups(
+  List<Event> source, {
+  required Set<String> promotedIds,
+  required _MeetupsSort sort,
+}) {
+  final sorted = [...source];
+  sorted.sort((a, b) => _compareMeetupsBySort(a, b, sort));
+  return [
+    ...sorted.where((event) => promotedIds.contains(event.id)),
+    ...sorted.where((event) => !promotedIds.contains(event.id)),
+  ];
+}
+
+int _compareMeetupsBySort(Event a, Event b, _MeetupsSort sort) {
+  switch (sort) {
+    case _MeetupsSort.near:
+      return _distanceValue(a.distance).compareTo(_distanceValue(b.distance));
+    case _MeetupsSort.popular:
+      return b.going.compareTo(a.going);
+    case _MeetupsSort.time:
+      return _eventDate(a).compareTo(_eventDate(b));
+  }
+}
+
+@visibleForTesting
+List<Event> sortMeetupsForTest(
+  List<Event> source, {
+  required Set<String> promotedIds,
+  required MeetupsSortForTest sort,
+}) {
+  final mappedSort = switch (sort) {
+    MeetupsSortForTest.time => _MeetupsSort.time,
+    MeetupsSortForTest.near => _MeetupsSort.near,
+    MeetupsSortForTest.popular => _MeetupsSort.popular,
+  };
+  return _sortMeetups(source, promotedIds: promotedIds, sort: mappedSort);
 }
 
 LinearGradient _eventGradient(EventTone tone) {

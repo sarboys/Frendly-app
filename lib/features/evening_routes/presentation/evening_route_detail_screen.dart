@@ -608,7 +608,7 @@ class _RouteStickyCta extends StatelessWidget {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
               child: BbV5PillButton(
-                label: 'Запустить маршрут · в чат',
+                label: 'Опубликовать встречу',
                 icon: LucideIcons.play,
                 onPressed: onLaunch,
                 dark: true,

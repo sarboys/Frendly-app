@@ -61,15 +61,11 @@ void main() {
 
     expect(find.text('Афиша 0'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Фильтры'));
-    await tester.pumpAndSettle();
-    await _dragUntil(
+    await _tapQuickFilterChip(
       tester,
-      () => find.text('Платные').evaluate().isNotEmpty,
-      step: 220,
+      const Key('affiche-v5-filter-row-price'),
+      'Платные',
     );
-    await _tapFilterChip(tester, 'Платные');
-    await _tapShowEvents(tester);
 
     expect(find.text('Афиша 0'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
@@ -94,13 +90,21 @@ void main() {
     expect(repository.calls, hasLength(1));
     expect(repository.calls.last.category, isNull);
 
-    await tester.tap(find.text('🎧 Концерты'));
+    await _tapQuickFilterChip(
+      tester,
+      const Key('affiche-v5-filter-row-category'),
+      '🎧 Концерты',
+    );
     await tester.pumpAndSettle();
 
     expect(repository.calls, hasLength(2));
     expect(repository.calls.last.category, 'concert');
 
-    await tester.tap(find.text('Все'));
+    await _tapQuickFilterChip(
+      tester,
+      const Key('affiche-v5-filter-row-category'),
+      '🎧 Концерты',
+    );
     await tester.pumpAndSettle();
 
     expect(repository.calls, hasLength(2));
@@ -117,25 +121,27 @@ void main() {
     await tester.pumpWidget(_afficheApp(repository));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Фильтры'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Завтра'));
-    await _tapShowEvents(tester);
+    await _tapQuickFilterChip(
+      tester,
+      const Key('affiche-v5-filter-row-date'),
+      'Завтра',
+    );
     await tester.pumpAndSettle();
 
     expect(repository.calls.last.date, tomorrowIso);
 
-    await tester.tap(find.byTooltip('Фильтры'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Концерты'));
-    await _tapShowEvents(tester);
+    await _tapQuickFilterChip(
+      tester,
+      const Key('affiche-v5-filter-row-category'),
+      '🎧 Концерты',
+    );
     await tester.pumpAndSettle();
 
     expect(repository.calls.last.date, tomorrowIso);
     expect(repository.calls.last.category, 'concert');
   });
 
-  testWidgets('affiche keeps filter chrome compact until sheet opens', (
+  testWidgets('affiche common surface shows three quick filter rows', (
     tester,
   ) async {
     _setMobileViewport(tester);
@@ -147,21 +153,18 @@ void main() {
     expect(
         find.byKey(const ValueKey('affiche-filter-summary')), findsOneWidget);
     expect(find.byTooltip('Фильтры'), findsOneWidget);
-    expect(find.text('Завтра'), findsNothing);
-    expect(find.text('Бесплатные'), findsNothing);
-    expect(find.text('Стендап'), findsNothing);
-
-    await tester.tap(find.byTooltip('Фильтры'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Завтра'), findsOneWidget);
-    expect(find.text('Стендап'), findsOneWidget);
-    await _dragUntil(
-      tester,
-      () => find.text('Бесплатные').evaluate().isNotEmpty,
-      step: 220,
+    expect(find.byKey(const Key('affiche-v5-filter-row-date')), findsOneWidget);
+    expect(
+      find.byKey(const Key('affiche-v5-filter-row-price')),
+      findsOneWidget,
     );
+    expect(
+      find.byKey(const Key('affiche-v5-filter-row-category')),
+      findsOneWidget,
+    );
+    expect(find.text('Завтра'), findsOneWidget);
     expect(find.text('Бесплатные'), findsOneWidget);
+    expect(find.text('🎭 Театр'), findsOneWidget);
   });
 
   testWidgets('affiche filter sheet uses v5 chrome and active count', (
@@ -180,7 +183,7 @@ void main() {
     expect(find.text('Когда'), findsOneWidget);
     expect(find.text('Показать события · 18'), findsOneWidget);
 
-    await tester.tap(find.text('Завтра'));
+    await _tapFilterSheetChip(tester, 'Завтра');
     await tester.tap(find.text('Показать события · 18'));
     await tester.pumpAndSettle();
 
@@ -199,10 +202,15 @@ void main() {
     await tester.tap(find.byTooltip('Фильтры'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Сегодня'), findsOneWidget);
-    expect(find.text('Завтра'), findsOneWidget);
-    expect(find.text('Выходные'), findsOneWidget);
-    expect(find.text('Неделя'), findsOneWidget);
+    final sheet = find.byKey(const Key('affiche-v5-filter-sheet'));
+    expect(find.descendant(of: sheet, matching: find.text('Сегодня')),
+        findsOneWidget);
+    expect(find.descendant(of: sheet, matching: find.text('Завтра')),
+        findsOneWidget);
+    expect(find.descendant(of: sheet, matching: find.text('Выходные')),
+        findsOneWidget);
+    expect(find.descendant(of: sheet, matching: find.text('Неделя')),
+        findsOneWidget);
     expect(find.text('Время суток'), findsOneWidget);
     expect(find.text('Вечер'), findsOneWidget);
 
@@ -215,8 +223,28 @@ void main() {
   });
 }
 
-Future<void> _tapFilterChip(WidgetTester tester, String label) async {
-  final labelFinder = find.text(label);
+Future<void> _tapQuickFilterChip(
+  WidgetTester tester,
+  Key rowKey,
+  String label,
+) async {
+  final rowFinder = find.byKey(rowKey);
+  final labelFinder = find.descendant(
+    of: rowFinder,
+    matching: find.text(label),
+  );
+  await tester.ensureVisible(labelFinder);
+  await tester.pumpAndSettle();
+  await tester.tap(labelFinder);
+  await tester.pump();
+}
+
+Future<void> _tapFilterSheetChip(WidgetTester tester, String label) async {
+  final sheetFinder = find.byKey(const Key('affiche-v5-filter-sheet'));
+  final labelFinder = find.descendant(
+    of: sheetFinder,
+    matching: find.text(label),
+  );
   await tester.ensureVisible(labelFinder);
   await tester.pumpAndSettle();
   await tester.tap(
@@ -224,20 +252,6 @@ Future<void> _tapFilterChip(WidgetTester tester, String label) async {
         .ancestor(
           of: labelFinder,
           matching: find.byType(InkWell),
-        )
-        .last,
-  );
-  await tester.pump();
-}
-
-Future<void> _tapShowEvents(WidgetTester tester) async {
-  final labelFinder = find.textContaining('Показать события');
-  await tester.ensureVisible(labelFinder);
-  await tester.tap(
-    find
-        .ancestor(
-          of: labelFinder,
-          matching: find.byType(FilledButton),
         )
         .last,
   );

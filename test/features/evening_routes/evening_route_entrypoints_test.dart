@@ -29,13 +29,11 @@ void main() {
     expect(find.text('Generated route from template'), findsNWidgets(2));
     expect(find.text('Тёплый круг на Покровке'), findsNothing);
     expect(find.text('Generated concert'), findsOneWidget);
-    expect(find.text('Шоу'), findsOneWidget);
-    expect(find.text('Поехали по маршруту'), findsOneWidget);
+    expect(find.text('Опубликовать встречу'), findsOneWidget);
     expect(find.text('У маршрута нет чата.'), findsNothing);
   });
 
-  testWidgets('create session entry opens the same launch sheet as route plan',
-      (
+  testWidgets('create session entry opens common publish screen', (
     tester,
   ) async {
     _setMobileViewport(tester);
@@ -47,9 +45,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Опубликовать вечер?'), findsOneWidget);
-    expect(find.text('Кто может вписаться'), findsOneWidget);
-    expect(find.text('Опубликовать и собрать людей'), findsOneWidget);
+    expect(find.text('Опубликовать вечер?'), findsNothing);
+    expect(find.text('Кто может вписаться'), findsNothing);
+    expect(find.text('Опубликовать и собрать людей'), findsNothing);
+    expect(find.text('Собрать своих'), findsNothing);
+    expect(find.text('Дальше · превью'), findsNothing);
+    expect(find.text('Финальный шаг'), findsOneWidget);
+    expect(find.text('превью карточки'), findsOneWidget);
+    expect(find.text('Кто увидит'), findsOneWidget);
+    expect(
+        find.text('Маршрут · Generated route from template'), findsOneWidget);
     expect(find.text('Заметка хоста'), findsNothing);
   });
 }

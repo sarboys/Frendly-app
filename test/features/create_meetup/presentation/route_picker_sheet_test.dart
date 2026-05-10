@@ -43,16 +43,20 @@ void main() {
       find.text('Готовый или свой — несколько мест за вечер'),
       findsOneWidget,
     );
-    expect(find.text('Создать свой маршрут'), findsOneWidget);
-    expect(find.text('Из 2–6 шагов · сохраним в твоей коллекции'), findsOneWidget);
+    expect(find.text('Создать свой маршрут'), findsNothing);
+    expect(
+      find.text('Из 2–6 шагов · сохраним в твоей коллекции'),
+      findsNothing,
+    );
     expect(find.text('Найти маршрут или место'), findsOneWidget);
     expect(find.text('Тёплый круг на Покровке'), findsOneWidget);
     expect(find.text('3 шагов'), findsOneWidget);
     expect(find.text('−650 ₽'), findsOneWidget);
   });
 
-  testWidgets('custom route tab mirrors front defaults and labels',
-      (tester) async {
+  testWidgets('custom route tab shows the v5 route constructor', (
+    tester,
+  ) async {
     await tester.pumpWidget(_wrap());
 
     await tester.tap(find.text('open'));
@@ -60,19 +64,16 @@ void main() {
     await tester.tap(find.text('Свой'));
     await tester.pumpAndSettle();
 
-    expect(find.text('НАЗВАНИЕ'), findsOneWidget);
-    expect(find.text('ШАГИ ВЕЧЕРА'), findsOneWidget);
     expect(find.text('Свой маршрут'), findsAtLeastNWidgets(1));
-    expect(find.text('19:00'), findsAtLeastNWidgets(1));
-    expect(find.text('Аперитив'), findsAtLeastNWidgets(1));
-    expect(find.text('21:00'), findsAtLeastNWidgets(1));
-    expect(find.text('Ужин'), findsAtLeastNWidgets(1));
-    expect(find.text('Место (необязательно)'), findsAtLeastNWidgets(2));
-    expect(find.text('Добавить шаг'), findsOneWidget);
+    expect(find.text('Собери вечер'), findsOneWidget);
+    expect(find.text('Настроение'), findsOneWidget);
+    expect(find.text('Длительность'), findsOneWidget);
+    expect(find.text('Шаги вечера · 2'), findsOneWidget);
+    expect(find.text('Добавить шаг (2/6)'), findsOneWidget);
     expect(find.text('Сохранить маршрут'), findsOneWidget);
   });
 
-  testWidgets('custom route tab uses compact front metrics', (tester) async {
+  testWidgets('custom route tab uses route constructor fields', (tester) async {
     await tester.pumpWidget(_wrap());
 
     await tester.tap(find.text('open'));
@@ -83,18 +84,15 @@ void main() {
     final fields =
         tester.widgetList<TextField>(find.byType(TextField)).toList();
 
-    expect(tester.getSize(find.byType(TextField).at(0)).height, 44);
-    expect(
-      fields[0].decoration?.contentPadding,
-      const EdgeInsets.symmetric(horizontal: 14),
-    );
-    expect(tester.getSize(find.byType(TextField).at(1)).width, 56);
-    expect(fields[1].decoration?.contentPadding, EdgeInsets.zero);
-    expect(tester.getSize(find.byType(TextField).at(2)).height, 20);
-    expect(tester.getSize(find.byType(TextField).at(3)).height, 20);
+    expect(fields, hasLength(5));
+    expect(fields[0].decoration?.hintText, 'Slow night на Патриках');
+    expect(fields[1].decoration?.hintText, 'Бар или кафе');
+    expect(fields[2].decoration?.hintText, 'Адрес или ориентир');
+    expect(fields[3].decoration?.hintText, 'Прогулка');
+    expect(fields[4].decoration?.hintText, 'Адрес или ориентир');
   });
 
-  testWidgets('custom route step emoji opens picker like front', (
+  testWidgets('custom route step icon cycles like route constructor', (
     tester,
   ) async {
     await tester.pumpWidget(_wrap());
@@ -103,15 +101,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Свой'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('🍷').first);
+
+    expect(find.byIcon(LucideIcons.coffee), findsOneWidget);
+
+    await tester.ensureVisible(find.byIcon(LucideIcons.coffee));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(LucideIcons.coffee));
     await tester.pumpAndSettle();
 
-    expect(find.text('⚽'), findsOneWidget);
-
-    await tester.tap(find.text('⚽'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('⚽'), findsOneWidget);
+    expect(find.byIcon(LucideIcons.wine), findsWidgets);
   });
 
   testWidgets('route picker supports After Dark styling', (tester) async {

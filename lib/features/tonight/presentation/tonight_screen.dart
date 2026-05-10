@@ -841,7 +841,10 @@ class _TonightGatheringNowSectionState
 
   @override
   Widget build(BuildContext context) {
-    final visible = widget.events.take(5).toList(growable: false);
+    final visible = _promotedFirstEvents(
+      widget.events,
+      widget.promotedIds,
+    ).take(5).toList(growable: false);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
@@ -3783,4 +3786,14 @@ String _initial(String value) {
     return 'F';
   }
   return trimmed.substring(0, 1).toUpperCase();
+}
+
+List<Event> _promotedFirstEvents(List<Event> events, Set<String> promotedIds) {
+  if (promotedIds.isEmpty || events.isEmpty) {
+    return events;
+  }
+  return [
+    ...events.where((event) => promotedIds.contains(event.id)),
+    ...events.where((event) => !promotedIds.contains(event.id)),
+  ];
 }

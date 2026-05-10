@@ -1,29 +1,14 @@
-import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/evening_routes/application/custom_route_controller.dart';
+import 'package:big_break_mobile/features/evening_routes/presentation/widgets/custom_evening_route_form.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/models/create_event_route.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
-import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-const _stepEmojis = [
-  '🍷',
-  '🍝',
-  '⚽',
-  '🥟',
-  '☕',
-  '🎬',
-  '🎶',
-  '🎨',
-  '🌿',
-  '🥂',
-  '🌙',
-  '🏃',
-];
 
 class CreateMeetupRouteSelection {
   const CreateMeetupRouteSelection({
@@ -114,8 +99,7 @@ class _RoutePickerSheet extends ConsumerStatefulWidget {
 
 class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
   final _searchController = TextEditingController();
-  final _titleController = TextEditingController(text: 'Свой маршрут');
-  late final List<_EditableRouteStep> _steps;
+  late final CustomEveningRouteDraft _customRouteDraft;
   _RoutePickerTab _tab = _RoutePickerTab.presets;
   String _query = '';
 
@@ -125,42 +109,20 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
     final initial = widget.initialValue;
     if (initial?.custom == true) {
       _tab = _RoutePickerTab.custom;
-      _titleController.text = initial!.title;
-      _steps = initial.steps
-          .map(
-            (step) => _EditableRouteStep(
-              time: step.time,
-              emoji: step.emoji,
-              title: step.title,
-              place: step.place,
-            ),
-          )
-          .toList(growable: true);
+      _customRouteDraft = CustomEveningRouteDraft(
+        title: initial!.title,
+        duration: initial.durationLabel,
+        steps: _draftStepsFromInitialValue(initial),
+      );
     } else {
-      _steps = [
-        _EditableRouteStep(
-          time: '19:00',
-          emoji: '🍷',
-          title: 'Аперитив',
-          place: '',
-        ),
-        _EditableRouteStep(
-          time: '21:00',
-          emoji: '🍝',
-          title: 'Ужин',
-          place: '',
-        ),
-      ];
+      _customRouteDraft = CustomEveningRouteDraft();
     }
   }
 
   @override
   void dispose() {
     _searchController.dispose();
-    _titleController.dispose();
-    for (final step in _steps) {
-      step.dispose();
-    }
+    _customRouteDraft.dispose();
     super.dispose();
   }
 
@@ -327,12 +289,8 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
                       ),
                     )
                   : _CustomRouteTab(
-                      titleController: _titleController,
-                      steps: _steps,
-                      dark: dark,
+                      draft: _customRouteDraft,
                       onChanged: () => setState(() {}),
-                      onAddStep: _addStep,
-                      onRemoveStep: _removeStep,
                       onSave: _saveCustomRoute,
                     ),
             ),
@@ -342,45 +300,56 @@ class _RoutePickerSheetState extends ConsumerState<_RoutePickerSheet> {
     );
   }
 
-  void _addStep() {
-    setState(() {
-      _steps.add(
-        _EditableRouteStep(
-          time: '22:00',
-          emoji: '🌙',
-          title: '',
-          place: '',
-        ),
-      );
-    });
-  }
-
-  void _removeStep(_EditableRouteStep step) {
-    if (_steps.length <= 1) {
+  Future<void> _saveCustomRoute() async {
+    if (!_customRouteDraft.valid) {
       return;
     }
-    setState(() {
-      _steps.remove(step);
-      step.dispose();
-    });
-  }
-
-  void _saveCustomRoute() {
-    if (_steps.length < 2 ||
-        _steps.any((step) => step.titleController.text.trim().isEmpty)) {
+    final route = _customRouteDraft.toRoute();
+    await ref.read(customEveningRoutesProvider.notifier).save(route);
+    if (!mounted) {
       return;
     }
-    final steps = _steps.map((step) => step.value()).toList(growable: false);
-    final title = _titleController.text.trim().isEmpty
-        ? 'Свой маршрут'
-        : _titleController.text.trim();
     Navigator.of(context).pop(
-      CreateMeetupRouteSelection(
-        title: title,
-        durationLabel: '${steps.length} шага',
-        custom: true,
-        steps: steps,
-      ),
+      _selectionFromCustomRoute(route),
+    );
+  }
+
+  List<CustomEveningRouteStepDraft> _draftStepsFromInitialValue(
+    CreateMeetupRouteSelection initial,
+  ) {
+    final steps = initial.steps
+        .map(
+          (step) => CustomEveningRouteStepDraft(
+            iconIndex: customEveningRouteIconIndexForEmoji(step.emoji),
+            place: step.title,
+            subtitle: step.place,
+          ),
+        )
+        .toList(growable: true);
+    while (steps.length < 2) {
+      steps.add(
+        CustomEveningRouteStepDraft(iconIndex: steps.length),
+      );
+    }
+    return steps;
+  }
+
+  CreateMeetupRouteSelection _selectionFromCustomRoute(
+    CustomEveningRoute route,
+  ) {
+    return CreateMeetupRouteSelection(
+      title: route.title,
+      durationLabel: route.duration,
+      custom: true,
+      steps: [
+        for (final step in route.steps)
+          CreateMeetupRouteStep(
+            time: '',
+            emoji: customEveningRouteEmojiForIconKey(step.iconKey),
+            title: step.place,
+            place: step.subtitle,
+          ),
+      ],
     );
   }
 }
@@ -551,14 +520,11 @@ class _ReadyRoutesTab extends StatelessWidget {
 
               return ListView.separated(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                itemCount: visible.length + 1,
+                itemCount: visible.length,
                 separatorBuilder: (context, index) =>
                     const SizedBox(height: 10),
                 itemBuilder: (context, index) {
-                  if (index == 0) {
-                    return _CreateCustomRouteRow(dark: dark);
-                  }
-                  final route = visible[index - 1];
+                  final route = visible[index];
                   return _ReadyRouteRow(
                     route: route,
                     dark: dark,
@@ -600,85 +566,6 @@ class _ReadyRoutesTab extends StatelessWidget {
       ].whereType<String>().join(' ').toLowerCase();
       return haystack.contains(normalized);
     }).toList(growable: false);
-  }
-}
-
-class _CreateCustomRouteRow extends StatelessWidget {
-  const _CreateCustomRouteRow({required this.dark});
-
-  final bool dark;
-
-  @override
-  Widget build(BuildContext context) {
-    final background = dark ? AppColors.adMagenta : BbV5Colors.accent;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Navigator.of(context).pop();
-          context.pushRoute(AppRoute.newEveningRoute);
-        },
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: background),
-            boxShadow: BbV5Shadows.ink,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  LucideIcons.plus,
-                  size: 18,
-                  color: BbV5Colors.paperHi,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Создать свой маршрут',
-                      style: AppTextStyles.itemTitle.copyWith(
-                        fontSize: 13.5,
-                        height: 1.15,
-                        fontWeight: FontWeight.w600,
-                        color: dark ? AppColors.adFg : BbV5Colors.paperHi,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Из 2–6 шагов · сохраним в твоей коллекции',
-                      style: AppTextStyles.caption.copyWith(
-                        fontSize: 11,
-                        height: 1.25,
-                        color: (dark ? AppColors.adFg : BbV5Colors.paperHi)
-                            .withValues(alpha: 0.75),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                LucideIcons.chevron_right,
-                size: 17,
-                color: dark ? AppColors.adFg : BbV5Colors.paperHi,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -880,593 +767,38 @@ class _RouteStepDots extends StatelessWidget {
 
 class _CustomRouteTab extends StatelessWidget {
   const _CustomRouteTab({
-    required this.titleController,
-    required this.steps,
-    required this.dark,
+    required this.draft,
     required this.onChanged,
-    required this.onAddStep,
-    required this.onRemoveStep,
     required this.onSave,
   });
 
-  final TextEditingController titleController;
-  final List<_EditableRouteStep> steps;
-  final bool dark;
+  final CustomEveningRouteDraft draft;
   final VoidCallback onChanged;
-  final VoidCallback onAddStep;
-  final ValueChanged<_EditableRouteStep> onRemoveStep;
   final VoidCallback onSave;
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    final canSave = steps.length >= 2 &&
-        steps.every((step) => step.titleController.text.trim().isNotEmpty);
-
     return Column(
       children: [
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-            children: [
-              _RouteSectionLabel('Название', dark: dark),
-              const SizedBox(height: 6),
-              _RouteBoxTextField(
-                controller: titleController,
-                hint: 'Свой маршрут',
-                dark: dark,
-                height: 44,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                onChanged: (_) => onChanged(),
-              ),
-              const SizedBox(height: 12),
-              _RouteSectionLabel('Шаги вечера', dark: dark),
-              const SizedBox(height: 6),
-              for (var index = 0; index < steps.length; index++)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _CustomStepRow(
-                    step: steps[index],
-                    index: index,
-                    canRemove: steps.length > 1,
-                    dark: dark,
-                    onChanged: onChanged,
-                    onRemove: () => onRemoveStep(steps[index]),
-                  ),
-                ),
-              const SizedBox(height: 6),
-              _DashedBorder(
-                color: dark ? AppColors.adBorder : colors.border,
-                radius: 16,
-                child: InkWell(
-                  onTap: onAddStep,
-                  borderRadius: BorderRadius.circular(16),
-                  child: SizedBox(
-                    height: 44,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          LucideIcons.plus,
-                          size: 16,
-                          color: dark ? AppColors.adFgSoft : colors.inkSoft,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Добавить шаг',
-                          style: AppTextStyles.bodySoft.copyWith(
-                            color: dark ? AppColors.adFgSoft : colors.inkSoft,
-                            fontSize: 12.5,
-                            height: 1.1,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  'Этот маршрут будет только в твоей встрече и не появится в общей вкладке «Маршруты».',
-                  style: AppTextStyles.bodySoft.copyWith(
-                    color: dark ? AppColors.adFgMute : colors.inkMute,
-                    fontSize: 11,
-                    height: 1.45,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
+          child: CustomEveningRouteEditorList(
+            draft: draft,
+            onChanged: onChanged,
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            onBack: () => Navigator.of(context).pop(),
           ),
         ),
-        Padding(
+        CustomEveningRouteSaveBar(
+          enabled: draft.valid,
+          onSave: onSave,
           padding: EdgeInsets.fromLTRB(
             20,
-            12,
+            14,
             20,
-            24 + MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: InkWell(
-            onTap: canSave ? onSave : null,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              height: 48,
-              decoration: BoxDecoration(
-                color: canSave
-                    ? dark
-                        ? AppColors.adMagenta
-                        : colors.foreground
-                    : dark
-                        ? AppColors.adSurfaceElev
-                        : colors.muted,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                'Сохранить маршрут',
-                style: AppTextStyles.button.copyWith(
-                  color: canSave
-                      ? dark
-                          ? AppColors.adFg
-                          : colors.background
-                      : dark
-                          ? AppColors.adFgMute
-                          : colors.inkMute,
-                  fontSize: 14,
-                  height: 1.1,
-                  letterSpacing: 0,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
+            16 + MediaQuery.of(context).viewInsets.bottom,
           ),
         ),
       ],
     );
-  }
-}
-
-class _CustomStepRow extends StatelessWidget {
-  const _CustomStepRow({
-    required this.step,
-    required this.index,
-    required this.canRemove,
-    required this.dark,
-    required this.onChanged,
-    required this.onRemove,
-  });
-
-  final _EditableRouteStep step;
-  final int index;
-  final bool canRemove;
-  final bool dark;
-  final VoidCallback onChanged;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: dark ? AppColors.adSurface : colors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: dark ? AppColors.adBorder : colors.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 56,
-            child: _RouteBoxTextField(
-              controller: step.timeController,
-              hint: '19:00',
-              dark: dark,
-              height: 40,
-              contentPadding: EdgeInsets.zero,
-              borderRadius: 12,
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.datetime,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              onChanged: (_) => onChanged(),
-            ),
-          ),
-          const SizedBox(width: 8),
-          _EmojiPickerButton(
-            value: step.emojiController.text,
-            dark: dark,
-            onChanged: (emoji) {
-              step.emojiController.text = emoji;
-              onChanged();
-            },
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _RouteInlineTextField(
-                  controller: step.titleController,
-                  hint: index == 0 ? 'Например: футбол' : 'Что делаем',
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                  color: dark ? AppColors.adFg : colors.foreground,
-                  onChanged: (_) => onChanged(),
-                ),
-                const SizedBox(height: 2),
-                _RouteInlineTextField(
-                  controller: step.placeController,
-                  hint: 'Место (необязательно)',
-                  fontSize: 11.5,
-                  color: dark ? AppColors.adFgMute : colors.inkMute,
-                  onChanged: (_) => onChanged(),
-                ),
-              ],
-            ),
-          ),
-          if (canRemove)
-            IconButton(
-              onPressed: onRemove,
-              constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-              padding: EdgeInsets.zero,
-              icon: Icon(
-                LucideIcons.trash_2,
-                size: 16,
-                color: dark ? AppColors.adFgMute : colors.inkMute,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmojiPickerButton extends StatelessWidget {
-  const _EmojiPickerButton({
-    required this.value,
-    required this.dark,
-    required this.onChanged,
-  });
-
-  final String value;
-  final bool dark;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    final emoji = value.trim().isEmpty ? '✨' : value.trim();
-
-    return PopupMenuButton<String>(
-      tooltip: 'Выбрать emoji',
-      padding: EdgeInsets.zero,
-      offset: const Offset(0, 44),
-      color: dark ? AppColors.adBg : colors.background,
-      elevation: 10,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: dark ? AppColors.adBorder : colors.border),
-      ),
-      constraints: const BoxConstraints.tightFor(width: 230),
-      onSelected: onChanged,
-      itemBuilder: (context) => [
-        PopupMenuItem<String>(
-          enabled: false,
-          padding: const EdgeInsets.all(6),
-          child: Wrap(
-            spacing: 4,
-            runSpacing: 4,
-            children: [
-              for (final item in _stepEmojis)
-                _EmojiMenuButton(
-                  emoji: item,
-                  selected: item == emoji,
-                  dark: dark,
-                  onTap: () => Navigator.of(context).pop(item),
-                ),
-            ],
-          ),
-        ),
-      ],
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: dark ? AppColors.adBg : colors.background,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: dark ? AppColors.adBorder : colors.border),
-        ),
-        alignment: Alignment.center,
-        child: Text(emoji, style: const TextStyle(fontSize: 20)),
-      ),
-    );
-  }
-}
-
-class _EmojiMenuButton extends StatelessWidget {
-  const _EmojiMenuButton({
-    required this.emoji,
-    required this.selected,
-    required this.dark,
-    required this.onTap,
-  });
-
-  final String emoji;
-  final bool selected;
-  final bool dark;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(9),
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: selected
-              ? dark
-                  ? AppColors.adSurface
-                  : colors.muted
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(9),
-        ),
-        alignment: Alignment.center,
-        child: Text(emoji, style: const TextStyle(fontSize: 18)),
-      ),
-    );
-  }
-}
-
-class _RouteSectionLabel extends StatelessWidget {
-  const _RouteSectionLabel(
-    this.text, {
-    required this.dark,
-  });
-
-  final String text;
-  final bool dark;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return Text(
-      text.toUpperCase(),
-      style: bbV5KickerStyle(
-        color: dark ? AppColors.adFgMute : colors.inkMute,
-      ),
-    );
-  }
-}
-
-class _RouteBoxTextField extends StatelessWidget {
-  const _RouteBoxTextField({
-    required this.controller,
-    required this.hint,
-    required this.dark,
-    required this.onChanged,
-    this.height = 40,
-    this.fontSize = 13,
-    this.fontWeight = FontWeight.w600,
-    this.contentPadding = const EdgeInsets.symmetric(horizontal: 14),
-    this.borderRadius = 16,
-    this.keyboardType,
-    this.textAlign = TextAlign.start,
-  });
-
-  final TextEditingController controller;
-  final String hint;
-  final bool dark;
-  final double height;
-  final double fontSize;
-  final FontWeight fontWeight;
-  final EdgeInsetsGeometry contentPadding;
-  final double borderRadius;
-  final TextInputType? keyboardType;
-  final TextAlign textAlign;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-
-    return SizedBox(
-      height: height,
-      child: TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-        textAlign: textAlign,
-        decoration: InputDecoration(
-          isDense: true,
-          contentPadding: contentPadding,
-          hintText: hint,
-          hintStyle: AppTextStyles.meta.copyWith(
-            color: dark ? AppColors.adFgMute : colors.inkMute,
-            fontSize: fontSize,
-            height: 1.15,
-          ),
-          filled: true,
-          fillColor: dark ? AppColors.adBg : colors.background,
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(borderRadius),
-            borderSide: BorderSide(
-              color: dark ? AppColors.adBorder : colors.border,
-            ),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(borderRadius),
-            borderSide: BorderSide(
-              color: dark ? AppColors.adMagenta : colors.foreground,
-            ),
-          ),
-          disabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(borderRadius),
-            borderSide: BorderSide(
-              color: dark ? AppColors.adBorder : colors.border,
-            ),
-          ),
-        ),
-        style: AppTextStyles.body.copyWith(
-          color: dark ? AppColors.adFg : colors.foreground,
-          fontSize: fontSize,
-          fontWeight: fontWeight,
-          height: 1.15,
-          letterSpacing: 0,
-        ),
-        onChanged: onChanged,
-      ),
-    );
-  }
-}
-
-class _RouteInlineTextField extends StatelessWidget {
-  const _RouteInlineTextField({
-    required this.controller,
-    required this.hint,
-    required this.onChanged,
-    required this.fontSize,
-    required this.color,
-    this.fontWeight = FontWeight.w500,
-  });
-
-  final TextEditingController controller;
-  final String hint;
-  final ValueChanged<String> onChanged;
-  final double fontSize;
-  final Color color;
-  final FontWeight fontWeight;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-
-    return SizedBox(
-      height: 20,
-      child: TextField(
-        controller: controller,
-        decoration: InputDecoration(
-          isDense: true,
-          contentPadding: EdgeInsets.zero,
-          hintText: hint,
-          hintStyle: AppTextStyles.bodySoft.copyWith(
-            color: colors.inkMute,
-            fontSize: fontSize,
-            fontWeight: FontWeight.w400,
-          ),
-          border: InputBorder.none,
-        ),
-        style: AppTextStyles.bodySoft.copyWith(
-          color: color,
-          fontSize: fontSize,
-          fontWeight: fontWeight,
-          height: 1.15,
-        ),
-        onChanged: onChanged,
-      ),
-    );
-  }
-}
-
-class _DashedBorder extends StatelessWidget {
-  const _DashedBorder({
-    required this.child,
-    required this.color,
-    required this.radius,
-  });
-
-  final Widget child;
-  final Color color;
-  final double radius;
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _DashedBorderPainter(color: color, radius: radius),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: child,
-      ),
-    );
-  }
-}
-
-class _DashedBorderPainter extends CustomPainter {
-  const _DashedBorderPainter({
-    required this.color,
-    required this.radius,
-  });
-
-  final Color color;
-  final double radius;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    final path = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          Offset.zero & size,
-          Radius.circular(radius),
-        ),
-      );
-    for (final metric in path.computeMetrics()) {
-      var distance = 0.0;
-      while (distance < metric.length) {
-        final next = distance + 6;
-        canvas.drawPath(metric.extractPath(distance, next), paint);
-        distance = next + 5;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) {
-    return oldDelegate.color != color || oldDelegate.radius != radius;
-  }
-}
-
-class _EditableRouteStep {
-  _EditableRouteStep({
-    required String time,
-    required String emoji,
-    required String title,
-    required String place,
-  })  : timeController = TextEditingController(text: time),
-        emojiController = TextEditingController(text: emoji),
-        titleController = TextEditingController(text: title),
-        placeController = TextEditingController(text: place);
-
-  final TextEditingController timeController;
-  final TextEditingController emojiController;
-  final TextEditingController titleController;
-  final TextEditingController placeController;
-
-  CreateMeetupRouteStep value() {
-    final emoji = emojiController.text.trim();
-    return CreateMeetupRouteStep(
-      time: timeController.text.trim(),
-      emoji: emoji.isEmpty ? '✨' : emoji,
-      title: titleController.text.trim(),
-      place: placeController.text.trim(),
-    );
-  }
-
-  void dispose() {
-    timeController.dispose();
-    emojiController.dispose();
-    titleController.dispose();
-    placeController.dispose();
   }
 }

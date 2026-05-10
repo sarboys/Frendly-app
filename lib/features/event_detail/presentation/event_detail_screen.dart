@@ -353,6 +353,11 @@ class _EventDetailBody extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (event.hasPaidTicket)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                        child: _V5TicketBottomAction(event: event),
+                      ),
                     if (onSecondaryAction != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.xs),
@@ -702,6 +707,56 @@ class _V5InfoTile extends StatelessWidget {
               letterSpacing: 0,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _V5TicketBottomAction extends StatelessWidget {
+  const _V5TicketBottomAction({required this.event});
+
+  final EventDetail event;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: BbV5Colors.paperHi,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: BbV5Colors.accent),
+        boxShadow: BbV5Shadows.pill,
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            LucideIcons.ticket,
+            size: 18,
+            color: BbV5Colors.accentDeep,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              _ticketSubtitle(event),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.caption.copyWith(
+                color: BbV5Colors.inkSoft,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          BbV5PillButton(
+            label: 'Купить билет',
+            icon: LucideIcons.ticket,
+            height: 40,
+            fontSize: 12,
+            dark: true,
+            onPressed: () => _openEventTicketUrl(context, event.ticketUrl!),
           ),
         ],
       ),
@@ -1177,6 +1232,37 @@ Future<void> _openEventMapUrl(
   ScaffoldMessenger.of(rootContext).showSnackBar(
     const SnackBar(content: Text('Не получилось открыть карты.')),
   );
+}
+
+Future<void> _openEventTicketUrl(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null || !uri.hasScheme) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Не получилось открыть билет.')),
+    );
+    return;
+  }
+
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (opened || !context.mounted) {
+    return;
+  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Не получилось открыть билет.')),
+  );
+}
+
+String _ticketSubtitle(EventDetail event) {
+  final parts = <String>[];
+  final price = event.ticketPriceFrom;
+  if (price != null && price > 0) {
+    parts.add('от $price ₽');
+  }
+  final venue = event.ticketVenue?.trim();
+  if (venue != null && venue.isNotEmpty) {
+    parts.add(venue);
+  }
+  return parts.isEmpty ? 'Откроется внешний сайт' : parts.join(' · ');
 }
 
 class _EventMapOption extends StatelessWidget {

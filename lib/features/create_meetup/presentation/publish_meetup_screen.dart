@@ -11,7 +11,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 class PublishMeetupScreen extends ConsumerStatefulWidget {
-  const PublishMeetupScreen({super.key});
+  const PublishMeetupScreen({
+    this.initialDraft,
+    super.key,
+  });
+
+  final CreateMeetupDraft? initialDraft;
 
   @override
   ConsumerState<PublishMeetupScreen> createState() =>
@@ -26,7 +31,7 @@ class _PublishMeetupScreenState extends ConsumerState<PublishMeetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final draft = ref.watch(createMeetupDraftProvider);
+    final draft = widget.initialDraft ?? ref.watch(createMeetupDraftProvider);
     final wallet = ref.watch(tokenWalletProvider);
 
     if (draft == null) {
@@ -70,7 +75,7 @@ class _PublishMeetupScreenState extends ConsumerState<PublishMeetupScreen> {
       child: Stack(
         children: [
           BbV5Page(
-            padding: const EdgeInsets.fromLTRB(20, 32, 20, 148),
+            padding: const EdgeInsets.fromLTRB(20, 32, 20, 96),
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
@@ -137,14 +142,8 @@ class _PublishMeetupScreenState extends ConsumerState<PublishMeetupScreen> {
             right: 0,
             bottom: 0,
             child: BbV5FixedBottomBar(
-              footer: Text(
-                'Чат откроется автоматически, как только кто-то присоединится',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.caption.copyWith(
-                  fontSize: 10.5,
-                  color: BbV5Colors.inkMute,
-                ),
-              ),
+              fadeStop: 0.72,
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
               child: BbV5PillButton(
                 label: _publishing ? 'Публикуем' : 'Опубликовать',
                 icon: LucideIcons.send,

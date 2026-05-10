@@ -10,6 +10,8 @@ enum EventAttendanceStatus { notCheckedIn, checkedIn, left }
 
 enum EventLiveStatus { idle, live, finished }
 
+enum EventTicketSourceKind { poster, affiche }
+
 class Event {
   const Event({
     required this.id,
@@ -41,6 +43,12 @@ class Event {
     this.attendanceStatus = EventAttendanceStatus.notCheckedIn,
     this.liveStatus = EventLiveStatus.idle,
     this.isHost = false,
+    this.ticketUrl,
+    this.ticketSourceKind,
+    this.ticketSourceId,
+    this.ticketPriceFrom,
+    this.ticketProvider,
+    this.ticketVenue,
   });
 
   final String id;
@@ -72,6 +80,17 @@ class Event {
   final EventAttendanceStatus attendanceStatus;
   final EventLiveStatus liveStatus;
   final bool isHost;
+  final String? ticketUrl;
+  final EventTicketSourceKind? ticketSourceKind;
+  final String? ticketSourceId;
+  final int? ticketPriceFrom;
+  final String? ticketProvider;
+  final String? ticketVenue;
+
+  bool get hasPaidTicket =>
+      (ticketUrl ?? '').trim().isNotEmpty &&
+      ticketPriceFrom != null &&
+      ticketPriceFrom! > 0;
 
   factory Event.fromJson(Map<String, dynamic> json) {
     return Event(
@@ -108,6 +127,13 @@ class Event {
           parseAttendanceStatus(json['attendanceStatus'] as String?),
       liveStatus: parseLiveStatus(json['liveStatus'] as String?),
       isHost: (json['isHost'] as bool?) ?? false,
+      ticketUrl: json['ticketUrl'] as String?,
+      ticketSourceKind:
+          parseTicketSourceKind(json['ticketSourceKind'] as String?),
+      ticketSourceId: json['ticketSourceId'] as String?,
+      ticketPriceFrom: (json['ticketPriceFrom'] as num?)?.toInt(),
+      ticketProvider: json['ticketProvider'] as String?,
+      ticketVenue: json['ticketVenue'] as String?,
     );
   }
 
@@ -169,6 +195,17 @@ class Event {
       case 'idle':
       default:
         return EventLiveStatus.idle;
+    }
+  }
+
+  static EventTicketSourceKind? parseTicketSourceKind(String? raw) {
+    switch (raw) {
+      case 'poster':
+        return EventTicketSourceKind.poster;
+      case 'affiche':
+        return EventTicketSourceKind.affiche;
+      default:
+        return null;
     }
   }
 }

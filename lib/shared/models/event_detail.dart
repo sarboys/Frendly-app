@@ -36,6 +36,12 @@ class EventDetail {
     this.attendanceStatus = EventAttendanceStatus.notCheckedIn,
     this.liveStatus = EventLiveStatus.idle,
     this.isHost = false,
+    this.ticketUrl,
+    this.ticketSourceKind,
+    this.ticketSourceId,
+    this.ticketPriceFrom,
+    this.ticketProvider,
+    this.ticketVenue,
   });
 
   final String id;
@@ -71,6 +77,17 @@ class EventDetail {
   final EventAttendanceStatus attendanceStatus;
   final EventLiveStatus liveStatus;
   final bool isHost;
+  final String? ticketUrl;
+  final EventTicketSourceKind? ticketSourceKind;
+  final String? ticketSourceId;
+  final int? ticketPriceFrom;
+  final String? ticketProvider;
+  final String? ticketVenue;
+
+  bool get hasPaidTicket =>
+      (ticketUrl ?? '').trim().isNotEmpty &&
+      ticketPriceFrom != null &&
+      ticketPriceFrom! > 0;
 
   factory EventDetail.fromJson(Map<String, dynamic> json) {
     return EventDetail(
@@ -113,6 +130,13 @@ class EventDetail {
           Event.parseAttendanceStatus(json['attendanceStatus'] as String?),
       liveStatus: Event.parseLiveStatus(json['liveStatus'] as String?),
       isHost: (json['isHost'] as bool?) ?? false,
+      ticketUrl: json['ticketUrl'] as String?,
+      ticketSourceKind:
+          Event.parseTicketSourceKind(json['ticketSourceKind'] as String?),
+      ticketSourceId: json['ticketSourceId'] as String?,
+      ticketPriceFrom: (json['ticketPriceFrom'] as num?)?.toInt(),
+      ticketProvider: json['ticketProvider'] as String?,
+      ticketVenue: json['ticketVenue'] as String?,
     );
   }
 }

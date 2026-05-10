@@ -901,6 +901,26 @@ void main() {
     await tapAttachIconButton(tester, 'Маршрут');
     await tester.tap(find.text('Свой'));
     await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Slow night на Патриках'),
+      'Футбол и хинкали',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Бар или кафе'),
+      'Футбол',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Адрес или ориентир').first,
+      'Парк Горького',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Прогулка'),
+      'Хинкали',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Адрес или ориентир').last,
+      'Хинкальная',
+    );
     await tester.ensureVisible(find.text('Сохранить маршрут'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(InkWell, 'Сохранить маршрут'));
@@ -914,7 +934,7 @@ void main() {
     expect(repository, isNotNull);
     expect(repository!.lastRouteId, isNull);
     expect(repository!.lastRoute, isNotNull);
-    expect(repository!.lastRoute!.title, 'Свой маршрут');
+    expect(repository!.lastRoute!.title, 'Футбол и хинкали');
     expect(repository!.lastRoute!.steps, hasLength(2));
   });
 

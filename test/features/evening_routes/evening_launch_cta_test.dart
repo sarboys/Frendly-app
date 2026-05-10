@@ -11,8 +11,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('launch entry does not leave plan sticky CTA after sheet dismiss',
-      (tester) async {
+  testWidgets('launch entry uses common publish screen without plan sheet', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(390, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -40,14 +41,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Опубликовать вечер?'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('Закрыть'));
-    await tester.pumpAndSettle();
-
     expect(find.text('Опубликовать вечер?'), findsNothing);
     expect(find.text('Собрать вечер по маршруту'), findsNothing);
     expect(find.text('Запустить маршрут · в чат'), findsNothing);
+    expect(find.text('Собрать своих'), findsNothing);
+    expect(find.text('Дальше · превью'), findsNothing);
+    expect(find.text('Финальный шаг'), findsOneWidget);
+    expect(find.text('превью карточки'), findsOneWidget);
+    expect(
+      find.text('Маршрут · Спокойный вечер: Kitchen Burger Bar → дом Шурика'),
+      findsOneWidget,
+    );
   });
 }
 

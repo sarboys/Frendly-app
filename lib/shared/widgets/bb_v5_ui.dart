@@ -255,12 +255,14 @@ class BbV5FixedBottomBar extends StatelessWidget {
     required this.child,
     this.footer,
     this.padding = const EdgeInsets.fromLTRB(20, 16, 20, 20),
+    this.fadeStop = 0.4,
     super.key,
-  });
+  }) : assert(fadeStop >= 0 && fadeStop <= 1);
 
   final Widget child;
   final Widget? footer;
   final EdgeInsetsGeometry padding;
+  final double fadeStop;
 
   @override
   Widget build(BuildContext context) {
@@ -276,7 +278,7 @@ class BbV5FixedBottomBar extends StatelessWidget {
             BbV5Colors.paper.withValues(alpha: 0.96),
             BbV5Colors.paper,
           ],
-          stops: const [0, 0.4, 1],
+          stops: [0, fadeStop, 1],
         ),
       ),
       child: Center(

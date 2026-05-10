@@ -11,6 +11,7 @@ import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/after_dark/presentation/after_dark_style.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_providers.dart';
+import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/features/tonight/presentation/v5_search_modal.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
@@ -31,6 +32,7 @@ class ChatsScreen extends ConsumerWidget {
     final currentUserId = ref.watch(currentUserIdProvider);
     final meetupChatsAsync = ref.watch(meetupChatsProvider);
     final personalChatsAsync = ref.watch(personalChatsProvider);
+    final wallet = ref.watch(tokenWalletProvider);
     ref.watch(chatRealtimeSyncProvider);
     final meetupChats = meetupChatsAsync.valueOrNull ?? const [];
     final personalChats = personalChatsAsync.valueOrNull ?? const [];
@@ -75,6 +77,9 @@ class ChatsScreen extends ConsumerWidget {
                 _V5ActiveChatsRail(
                   meetupChats: meetupChats,
                   personalChats: personalChats,
+                  promotedIds: wallet.promoted.keys
+                      .where((eventId) => wallet.isPromoted(eventId))
+                      .toSet(),
                   onMeetupTap: (chat) => _openMeetupChat(context, chat),
                   onPersonalTap: (chat) => context.pushRoute(
                     AppRoute.personalChat,
@@ -301,21 +306,32 @@ class _V5ActiveChatsRail extends StatelessWidget {
   const _V5ActiveChatsRail({
     required this.meetupChats,
     required this.personalChats,
+    required this.promotedIds,
     required this.onMeetupTap,
     required this.onPersonalTap,
   });
 
   final List<MeetupChat> meetupChats;
   final List<PersonalChat> personalChats;
+  final Set<String> promotedIds;
   final ValueChanged<MeetupChat> onMeetupTap;
   final ValueChanged<PersonalChat> onPersonalTap;
 
   @override
   Widget build(BuildContext context) {
     final activeMeetups = [
-      ...meetupChats.where((chat) => chat.phase == MeetupPhase.live),
-      ...meetupChats.where((chat) => chat.phase == MeetupPhase.soon),
-      ...meetupChats.where((chat) => chat.phase == MeetupPhase.upcoming),
+      ..._promotedFirstMeetupChats(
+        meetupChats.where((chat) => chat.phase == MeetupPhase.live),
+        promotedIds,
+      ),
+      ..._promotedFirstMeetupChats(
+        meetupChats.where((chat) => chat.phase == MeetupPhase.soon),
+        promotedIds,
+      ),
+      ..._promotedFirstMeetupChats(
+        meetupChats.where((chat) => chat.phase == MeetupPhase.upcoming),
+        promotedIds,
+      ),
     ].take(5).toList(growable: false);
     final activePersonal =
         personalChats.where((chat) => chat.online).take(3).toList();
@@ -364,6 +380,7 @@ class _V5ActiveChatsRail extends StatelessWidget {
                   label: _shortLabel(chat.title),
                   initials: _initials(chat.title),
                   color: _toneColor(index),
+                  promoted: _isPromotedMeetupChat(chat, promotedIds),
                   onTap: () => onMeetupTap(chat),
                 );
               }
@@ -372,6 +389,7 @@ class _V5ActiveChatsRail extends StatelessWidget {
                 label: _shortLabel(chat.name),
                 initials: _initials(chat.name),
                 color: BbV5Colors.rose,
+                promoted: false,
                 onTap: () => onPersonalTap(chat),
               );
             },
@@ -387,12 +405,14 @@ class _V5ActiveBubble extends StatelessWidget {
     required this.label,
     required this.initials,
     required this.color,
+    required this.promoted,
     required this.onTap,
   });
 
   final String label;
   final String initials;
   final Color color;
+  final bool promoted;
   final VoidCallback onTap;
 
   @override
@@ -404,11 +424,28 @@ class _V5ActiveBubble extends StatelessWidget {
         borderRadius: BorderRadius.circular(BbV5Radii.pill),
         child: Column(
           children: [
-            _V5InitialsAvatar(
-              initials: initials,
-              color: color,
-              size: 56,
-              dot: true,
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _V5InitialsAvatar(
+                    initials: initials,
+                    color: promoted ? BbV5Colors.terra : color,
+                    size: 56,
+                    dot: true,
+                    ringColor:
+                        promoted ? BbV5Colors.accent : BbV5Colors.paperHi,
+                  ),
+                  if (promoted)
+                    const Positioned(
+                      right: -6,
+                      top: -4,
+                      child: _V5ActivePromotedBadge(),
+                    ),
+                ],
+              ),
             ),
             const SizedBox(height: 6),
             Text(
@@ -425,6 +462,43 @@ class _V5ActiveBubble extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _V5ActivePromotedBadge extends StatelessWidget {
+  const _V5ActivePromotedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: BbV5Colors.terra,
+        borderRadius: BorderRadius.circular(BbV5Radii.pill),
+        border: Border.all(color: BbV5Colors.paperHi, width: 1.5),
+        boxShadow: BbV5Shadows.pill,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            LucideIcons.flame,
+            size: 9,
+            color: BbV5Colors.paperHi,
+          ),
+          const SizedBox(width: 2),
+          Text(
+            'ТОП',
+            style: AppTextStyles.caption.copyWith(
+              color: BbV5Colors.paperHi,
+              fontSize: 8.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1364,12 +1438,14 @@ class _V5InitialsAvatar extends StatelessWidget {
     required this.color,
     this.size = 44,
     this.dot = false,
+    this.ringColor = BbV5Colors.hair,
   });
 
   final String initials;
   final Color color;
   final double size;
   final bool dot;
+  final Color ringColor;
 
   @override
   Widget build(BuildContext context) {
@@ -1384,7 +1460,7 @@ class _V5InitialsAvatar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: BbV5Colors.paperHi,
                 shape: BoxShape.circle,
-                border: Border.all(color: BbV5Colors.hair),
+                border: Border.all(color: ringColor),
                 boxShadow: BbV5Shadows.pill,
               ),
               child: Center(
@@ -1619,6 +1695,26 @@ String _shortLabel(String value) {
   }
   final split = trimmed.split(RegExp(r'\s+|·'));
   return split.first.trim().isEmpty ? trimmed : split.first.trim();
+}
+
+List<MeetupChat> _promotedFirstMeetupChats(
+  Iterable<MeetupChat> chats,
+  Set<String> promotedIds,
+) {
+  final source = chats.toList(growable: false);
+  if (promotedIds.isEmpty || source.isEmpty) {
+    return source;
+  }
+  return [
+    ...source.where((chat) => _isPromotedMeetupChat(chat, promotedIds)),
+    ...source.where((chat) => !_isPromotedMeetupChat(chat, promotedIds)),
+  ];
+}
+
+bool _isPromotedMeetupChat(MeetupChat chat, Set<String> promotedIds) {
+  final eventId = chat.eventId;
+  return promotedIds.contains(chat.id) ||
+      (eventId != null && promotedIds.contains(eventId));
 }
 
 Color _toneColor(int seed) {

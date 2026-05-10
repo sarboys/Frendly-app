@@ -211,6 +211,58 @@ void main() {
     expect(pendingButton.onPressed, isNull);
   });
 
+  testWidgets('event detail shows buy ticket button for paid affiche meetup',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...buildTestOverrides(),
+          eventDetailProvider.overrideWith((ref, eventId) async {
+            return const EventDetail(
+              id: 'e-ticket',
+              title: 'Концерт и встреча',
+              emoji: '🎟',
+              time: 'Сегодня · 20:00',
+              place: 'Live Arena',
+              distance: '1.1 км',
+              vibe: 'Музыка',
+              description: 'Идем вместе на концерт.',
+              hostNote: null,
+              joined: false,
+              partnerName: null,
+              partnerOffer: null,
+              capacity: 8,
+              going: 2,
+              chatId: 'mc-ticket',
+              ticketUrl: 'https://tickets.example/show',
+              ticketSourceKind: EventTicketSourceKind.affiche,
+              ticketSourceId: 'affiche-1',
+              ticketPriceFrom: 1500,
+              ticketProvider: 'Ticketland',
+              ticketVenue: 'Live Arena',
+              host: EventHost(
+                id: 'user-host',
+                displayName: 'Мира',
+                verified: true,
+                rating: 4.9,
+                meetupCount: 10,
+                avatarUrl: null,
+              ),
+              attendees: [],
+            );
+          }),
+        ],
+        child: const MaterialApp(
+          home: EventDetailScreen(eventId: 'e-ticket'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Купить билет'), findsOneWidget);
+    expect(find.textContaining('от 1500 ₽'), findsOneWidget);
+  });
+
   testWidgets('map filter updates count and selected card', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() {

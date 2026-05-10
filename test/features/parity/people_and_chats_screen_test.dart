@@ -1,5 +1,6 @@
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_screen.dart';
+import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
@@ -98,6 +99,62 @@ void main() {
     expect(find.text('LIVE'), findsOneWidget);
     expect(find.text('Live'), findsNothing);
     expect(find.byIcon(LucideIcons.search), findsNWidgets(2));
+  });
+
+  testWidgets('chats active rail highlights promoted meetup bubbles',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        child: const ChatsScreen(),
+        targetText: 'unused',
+        extraOverrides: [
+          tokenWalletProvider.overrideWith(
+            (ref) => _TestTokenWalletController(
+              promoted: {
+                'event-promoted': DateTime(2099, 1, 1),
+              },
+            ),
+          ),
+          meetupChatsProvider.overrideWith(
+            (ref) async => const [
+              MeetupChat(
+                id: 'chat-regular',
+                eventId: 'event-regular',
+                title: 'Обычная встреча',
+                emoji: '☕',
+                time: '19:00',
+                lastMessage: 'Собираемся',
+                lastAuthor: 'Аня',
+                lastTime: 'сейчас',
+                unread: 0,
+                members: ['Ты', 'Аня'],
+                phase: MeetupPhase.live,
+              ),
+              MeetupChat(
+                id: 'chat-promoted',
+                eventId: 'event-promoted',
+                title: 'Промо вечер',
+                emoji: '🎟',
+                time: '20:00',
+                lastMessage: 'Берем билеты',
+                lastAuthor: 'Мира',
+                lastTime: '2 мин',
+                unread: 0,
+                members: ['Ты', 'Мира'],
+                phase: MeetupPhase.live,
+              ),
+            ],
+          ),
+          personalChatsProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('ТОП'), findsOneWidget);
+    final promotedLeft = tester.getTopLeft(find.text('Промо')).dx;
+    final regularLeft = tester.getTopLeft(find.text('Обычная')).dx;
+    expect(promotedLeft, lessThan(regularLeft));
   });
 
   testWidgets('empty chats do not render fallback people or meetup data',
@@ -460,5 +517,17 @@ class _RecordingBackendRepository extends BackendRepository {
   @override
   Future<void> startEveningSession(String sessionId) async {
     startedSessionIds.add(sessionId);
+  }
+}
+
+class _TestTokenWalletController extends TokenWalletController {
+  _TestTokenWalletController({
+    required Map<String, DateTime> promoted,
+  }) : super(null) {
+    state = TokenWalletState(
+      balance: 0,
+      promoted: promoted,
+      history: const [],
+    );
   }
 }

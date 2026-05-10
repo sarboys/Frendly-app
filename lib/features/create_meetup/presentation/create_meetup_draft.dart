@@ -1,7 +1,9 @@
+import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/create_event_route.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/event_detail.dart';
@@ -88,6 +90,21 @@ class CreateMeetupDraft {
   final String? attachmentSubtitle;
   final IconData attachmentIcon;
 
+  String get submitDescription {
+    final cleanDescription = description.trim();
+    if (cleanDescription.isNotEmpty) {
+      return cleanDescription;
+    }
+
+    final cleanPlace = place.trim();
+    if (cleanPlace.isNotEmpty) {
+      return 'Встречаемся: $cleanPlace';
+    }
+
+    final cleanTitle = title.trim();
+    return cleanTitle.isEmpty ? 'Встреча в Frendly' : cleanTitle;
+  }
+
   String get timeLabel {
     final now = DateTime.now();
     final local = startsAt.toLocal();
@@ -167,17 +184,18 @@ Future<EventDetail> submitCreateMeetupDraft(
   CreateMeetupDraft draft,
 ) async {
   final repository = ref.read(backendRepositoryProvider);
+  final coordinates = await _resolveCreateMeetupCoordinates(ref, draft);
   final event = await repository.createEvent(
     title: draft.title,
-    description: draft.description,
+    description: draft.submitDescription,
     emoji: draft.emoji,
     vibe: draft.vibe,
     place: draft.place,
     startsAt: draft.startsAt,
     capacity: draft.capacity,
     distanceKm: draft.distanceKm,
-    latitude: draft.latitude,
-    longitude: draft.longitude,
+    latitude: coordinates?.latitude,
+    longitude: coordinates?.longitude,
     mode: draft.mode,
     lifestyle: draft.lifestyle,
     priceMode: draft.priceMode,
@@ -215,4 +233,58 @@ Future<EventDetail> submitCreateMeetupDraft(
   }
 
   return event;
+}
+
+typedef MeetupCoordinates = ({double latitude, double longitude});
+
+@visibleForTesting
+MeetupCoordinates? createMeetupPublishCoordinatesForTest(
+  CreateMeetupDraft draft,
+  ManualLocation? manualLocation,
+) {
+  return _createMeetupPublishCoordinates(draft, manualLocation);
+}
+
+Future<MeetupCoordinates?> _resolveCreateMeetupCoordinates(
+  WidgetRef ref,
+  CreateMeetupDraft draft,
+) async {
+  final knownCoordinates = _createMeetupPublishCoordinates(
+    draft,
+    ref.read(manualLocationProvider),
+  );
+  if (knownCoordinates != null) {
+    return knownCoordinates;
+  }
+
+  try {
+    final position =
+        await ref.read(appLocationServiceProvider).getCurrentPosition();
+    return _validCoordinates(position?.latitude, position?.longitude);
+  } catch (_) {
+    return null;
+  }
+}
+
+MeetupCoordinates? _createMeetupPublishCoordinates(
+  CreateMeetupDraft draft,
+  ManualLocation? manualLocation,
+) {
+  return _validCoordinates(draft.latitude, draft.longitude) ??
+      _validCoordinates(manualLocation?.latitude, manualLocation?.longitude);
+}
+
+MeetupCoordinates? _validCoordinates(double? latitude, double? longitude) {
+  if (latitude == null ||
+      longitude == null ||
+      !latitude.isFinite ||
+      !longitude.isFinite ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180) {
+    return null;
+  }
+
+  return (latitude: latitude, longitude: longitude);
 }
