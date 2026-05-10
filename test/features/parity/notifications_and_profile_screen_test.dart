@@ -99,6 +99,17 @@ void main() {
           createdAt: now.subtract(const Duration(minutes: 5)),
         ),
         NotificationItem(
+          id: 'n-chat',
+          kind: 'message',
+          title: 'Сообщение',
+          body: 'Марк С: Я уже у входа',
+          payload: const {
+            'chatId': 'mc1',
+          },
+          readAt: null,
+          createdAt: now.subtract(const Duration(minutes: 12)),
+        ),
+        NotificationItem(
           id: 'n2',
           kind: 'like',
           title: 'Лайк',
@@ -121,13 +132,24 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.text('Активность'), findsOneWidget);
+      expect(find.text('Все'), findsWidgets);
+      expect(find.text('Приглашения'), findsOneWidget);
+      expect(find.text('Чаты'), findsOneWidget);
       expect(find.text('Сегодня'), findsOneWidget);
       expect(find.text('Раньше'), findsOneWidget);
       expect(find.textContaining('Аня К'), findsOneWidget);
+      expect(find.textContaining('Марк С'), findsOneWidget);
       expect(find.text('5 мин'), findsOneWidget);
       expect(find.text('вчера'), findsOneWidget);
       expect(find.text('Принять'), findsOneWidget);
       expect(find.text('Не сейчас'), findsOneWidget);
+
+      await tester.tap(find.text('Чаты'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Марк С'), findsOneWidget);
+      expect(find.textContaining('Аня К'), findsNothing);
     },
   );
 
@@ -138,6 +160,9 @@ void main() {
 
     expect(find.text('Аккаунт'), findsOneWidget);
     expect(find.text('Frendly Tokens'), findsOneWidget);
+    expect(find.text('Верификация'), findsOneWidget);
+    expect(find.text('Кнопка SOS'), findsOneWidget);
+    expect(find.text('Уведомления'), findsOneWidget);
     expect(find.text('1 240'), findsOneWidget);
     expect(find.text('Подписчиков'), findsNothing);
     expect(find.text('Лайков'), findsNothing);

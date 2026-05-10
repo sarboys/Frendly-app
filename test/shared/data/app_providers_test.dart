@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
+import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
+import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
@@ -13,6 +15,7 @@ import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:big_break_mobile/shared/models/notification_item.dart';
 import 'package:big_break_mobile/shared/models/onboarding_data.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
+import 'package:big_break_mobile/shared/models/person_summary.dart';
 import 'package:big_break_mobile/shared/models/personal_chat.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
@@ -221,6 +224,68 @@ class _EmptyChatListsRepository extends BackendRepository {
     int limit = 20,
   }) async {
     return const PaginatedResponse<PersonalChat>(
+      items: [],
+      nextCursor: null,
+    );
+  }
+}
+
+class _DatingPreviewRepository extends BackendRepository {
+  _DatingPreviewRepository({
+    required super.ref,
+    required super.dio,
+    this.discoverError,
+  });
+
+  final Object? discoverError;
+  int? discoverLimit;
+  var peopleCalls = 0;
+
+  @override
+  Future<PaginatedResponse<DatingProfileData>> fetchDatingDiscover({
+    String? cursor,
+    int limit = 20,
+    CancelToken? cancelToken,
+  }) async {
+    discoverLimit = limit;
+    final error = discoverError;
+    if (error != null) {
+      throw error;
+    }
+    return PaginatedResponse<DatingProfileData>(
+      items: List.generate(
+        limit,
+        (index) => DatingProfileData(
+          userId: 'dating-$index',
+          name: 'Дейтинг $index',
+          age: 28,
+          distance: 'Рядом',
+          about: '',
+          tags: const ['музыка'],
+          prompt: '',
+          photoEmoji: '💘',
+          avatarUrl: null,
+          likedYou: false,
+          premium: true,
+          vibe: 'Спокойно',
+          area: 'Центр',
+          verified: true,
+          online: true,
+        ),
+      ),
+      nextCursor: null,
+    );
+  }
+
+  @override
+  Future<PaginatedResponse<PersonSummary>> fetchPeople({
+    String? q,
+    String? cursor,
+    int limit = 20,
+    CancelToken? cancelToken,
+  }) async {
+    peopleCalls += 1;
+    return const PaginatedResponse<PersonSummary>(
       items: [],
       nextCursor: null,
     );
@@ -631,6 +696,53 @@ void main() {
     expect(repository!.lastLatitude, 55.757);
     expect(repository!.lastLongitude, 37.648);
     expect(repository!.lastRadiusKm, 50);
+  });
+
+  test('datingHomePreviewProvider requests compact dating discover page',
+      () async {
+    _DatingPreviewRepository? repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DatingPreviewRepository(ref: ref, dio: Dio());
+          return repository!;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final items = await container.read(datingHomePreviewProvider.future);
+
+    expect(repository, isNotNull);
+    expect(repository!.discoverLimit, 4);
+    expect(items, hasLength(4));
+  });
+
+  test('datingHomePreviewProvider does not fall back to people after error',
+      () async {
+    _DatingPreviewRepository? repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DatingPreviewRepository(
+            ref: ref,
+            dio: Dio(),
+            discoverError: StateError('discover failed'),
+          );
+          return repository!;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final items = await container.read(datingHomePreviewProvider.future);
+
+    expect(items, isEmpty);
+    expect(repository, isNotNull);
+    expect(repository!.discoverLimit, 4);
+    expect(repository!.peopleCalls, 0);
   });
 
   test('eventsProvider uses Saint Petersburg manual location coordinates',

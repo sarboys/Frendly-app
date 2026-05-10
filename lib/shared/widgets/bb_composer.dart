@@ -585,44 +585,45 @@ class _BbComposerState extends State<BbComposer> {
               border: Border.all(color: BbV5Colors.hair),
               boxShadow: BbV5Shadows.pill,
             ),
-            padding: const EdgeInsets.only(left: 12, right: 4),
+            padding: const EdgeInsets.only(left: 16, right: 4),
             alignment: Alignment.center,
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 5),
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _inputFocusNode,
-                      enabled: widget.enabled && !_sending,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction: TextInputAction.send,
-                      onTapOutside: (_) {
-                        unawaited(_dismissKeyboard());
-                      },
-                      onSubmitted: (_) => _submit(),
-                      decoration: InputDecoration(
-                        hintText: widget.hintText,
-                        hintStyle: AppTextStyles.body.copyWith(
-                          color: BbV5Colors.inkMute,
-                          fontSize: 13.5,
-                        ),
-                        border: InputBorder.none,
-                        isCollapsed: true,
-                      ),
-                      style: AppTextStyles.body.copyWith(
-                        color: BbV5Colors.ink,
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _inputFocusNode,
+                    enabled: widget.enabled && !_sending,
+                    minLines: 1,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.send,
+                    textAlignVertical: TextAlignVertical.center,
+                    onTapOutside: (_) {
+                      unawaited(_dismissKeyboard());
+                    },
+                    onSubmitted: (_) => _submit(),
+                    decoration: InputDecoration(
+                      hintText: widget.hintText,
+                      hintStyle: AppTextStyles.body.copyWith(
+                        color: BbV5Colors.inkMute,
                         fontSize: 13.5,
                       ),
+                      border: InputBorder.none,
+                      isCollapsed: true,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    style: AppTextStyles.body.copyWith(
+                      color: BbV5Colors.ink,
+                      fontSize: 13.5,
+                      height: 1.2,
                     ),
                   ),
                 ),
                 if (showSendButton)
                   Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 3),
+                    padding: const EdgeInsets.only(left: 4),
                     child: _CircleButton(
                       key: const Key('bb-composer-send-button'),
                       icon: _sending

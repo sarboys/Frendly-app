@@ -9,13 +9,14 @@ import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
 import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
+import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
-import 'package:big_break_mobile/shared/models/person_summary.dart';
 import 'package:big_break_mobile/features/tonight/presentation/v5_search_modal.dart';
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_brand_icon.dart';
@@ -1258,8 +1259,8 @@ class _TonightDatingSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final peopleAsync = ref.watch(peopleProvider);
-    final people = peopleAsync.valueOrNull ?? const <PersonSummary>[];
+    final profilesAsync = ref.watch(datingHomePreviewProvider);
+    final profiles = profilesAsync.valueOrNull ?? const <DatingProfileData>[];
 
     return BbV5Section(
       title: 'Дейтинг · рядом',
@@ -1271,25 +1272,25 @@ class _TonightDatingSection extends ConsumerWidget {
       ),
       child: SizedBox(
         height: 224,
-        child: peopleAsync.isLoading && people.isEmpty
+        child: profilesAsync.isLoading && profiles.isEmpty
             ? const _DatingSkeletonRail()
-            : people.isEmpty
+            : profiles.isEmpty
                 ? const _V5EmptyCard(message: 'Пока нет людей рядом')
                 : ListView.separated(
                     scrollDirection: Axis.horizontal,
                     clipBehavior: Clip.none,
                     padding: EdgeInsets.zero,
                     itemBuilder: (context, index) {
-                      final person = people[index];
+                      final profile = profiles[index];
                       return _DatingPreviewCard(
-                        person: person,
+                        profile: profile,
                         index: index,
-                        onTap: () => onOpenPerson(person.id),
+                        onTap: () => onOpenPerson(profile.userId),
                       );
                     },
                     separatorBuilder: (_, __) =>
                         const SizedBox(width: AppSpacing.sm),
-                    itemCount: people.length > 4 ? 4 : people.length,
+                    itemCount: profiles.length > 4 ? 4 : profiles.length,
                   ),
       ),
     );
@@ -1321,24 +1322,24 @@ class _DatingSkeletonRail extends StatelessWidget {
 
 class _DatingPreviewCard extends StatelessWidget {
   const _DatingPreviewCard({
-    required this.person,
+    required this.profile,
     required this.index,
     required this.onTap,
   });
 
-  final PersonSummary person;
+  final DatingProfileData profile;
   final int index;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final palette = _datingPalette(index);
-    final fallbackTag = person.common.isNotEmpty ? person.common.first : 'арт';
-    final tag = (person.vibe ?? fallbackTag).trim();
-    final area = (person.area ?? 'рядом').trim();
+    final fallbackTag = profile.tags.isNotEmpty ? profile.tags.first : 'арт';
+    final tag = (profile.vibe ?? fallbackTag).trim();
+    final area = (profile.area ?? profile.distance).trim();
     final title =
-        person.age == null ? person.name : '${person.name}, ${person.age}';
-    final avatarUrl = person.avatarUrl?.trim();
+        profile.age == null ? profile.name : '${profile.name}, ${profile.age}';
+    final avatarUrl = profile.avatarUrl?.trim();
     final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
 
     return SizedBox(
@@ -1376,7 +1377,7 @@ class _DatingPreviewCard extends StatelessWidget {
                             Positioned.fill(
                               child: BbProfilePhotoImage(
                                 imageUrl: avatarUrl,
-                                fallbackText: _initial(person.name),
+                                fallbackText: _initial(profile.name),
                                 usageProfile: BbImageUsageProfile.card,
                                 fallbackFontSize: 42,
                               ),
@@ -2249,6 +2250,10 @@ class _TonightHeader extends ConsumerWidget {
           onPressed: () => showV5SearchModal(context),
         ),
         const SizedBox(width: AppSpacing.xs),
+        const _HeaderNotificationsButton(),
+        const SizedBox(width: AppSpacing.xs),
+        const _HeaderSosButton(),
+        const SizedBox(width: AppSpacing.xs),
         _HeaderAiButton(
           onTap: () => unawaited(
             _openCityLimitedFeature(
@@ -2259,6 +2264,78 @@ class _TonightHeader extends ConsumerWidget {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _HeaderSosButton extends StatelessWidget {
+  const _HeaderSosButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => context.pushRoute(AppRoute.sos),
+        borderRadius: BorderRadius.circular(BbV5Radii.pill),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: const Color(0xFFD85B4A),
+            shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xFFB5443B)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x99B5443B),
+                blurRadius: 18,
+                spreadRadius: -8,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: const Icon(
+            LucideIcons.shield_alert,
+            size: 16,
+            color: BbV5Colors.paperHi,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderNotificationsButton extends ConsumerWidget {
+  const _HeaderNotificationsButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(notificationUnreadCountProvider).valueOrNull ?? 0;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        BbV5IconButton(
+          icon: LucideIcons.bell,
+          size: 40,
+          iconSize: 16,
+          onPressed: () => context.pushRoute(AppRoute.notifications),
+        ),
+        if (unread > 0)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: BbV5Colors.accent,
+                shape: BoxShape.circle,
+                border: Border.all(color: BbV5Colors.paperHi, width: 2),
+              ),
+            ),
+          ),
       ],
     );
   }

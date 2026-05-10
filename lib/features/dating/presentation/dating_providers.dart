@@ -6,6 +6,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final datingDiscoverProvider =
     FutureProvider.autoDispose<List<DatingProfileData>>((ref) async {
+  return _fetchDatingDiscover(ref, limit: 20, allowPeopleFallback: true);
+});
+
+final datingHomePreviewProvider =
+    FutureProvider.autoDispose<List<DatingProfileData>>((ref) async {
+  return _fetchDatingDiscover(ref, limit: 4, allowPeopleFallback: false);
+});
+
+Future<List<DatingProfileData>> _fetchDatingDiscover(
+  Ref ref, {
+  required int limit,
+  required bool allowPeopleFallback,
+}) async {
   final repository = ref.read(backendRepositoryProvider);
   final authBootstrap = ref.watch(authBootstrapProvider.future);
   final cancelToken = _autoDisposeCancelToken(ref);
@@ -21,16 +34,22 @@ final datingDiscoverProvider =
 
   try {
     return await repository
-        .fetchDatingDiscover(cancelToken: cancelToken)
+        .fetchDatingDiscover(limit: limit, cancelToken: cancelToken)
         .then((value) => value.items);
   } catch (_) {
     if (cancelToken.isCancelled) {
       return const [];
     }
-    final people = await repository.fetchPeople(cancelToken: cancelToken);
+    if (!allowPeopleFallback) {
+      return const [];
+    }
+    final people = await repository.fetchPeople(
+      limit: limit,
+      cancelToken: cancelToken,
+    );
     return people.items.map(_mapPersonToDatingFallback).toList(growable: false);
   }
-});
+}
 
 final datingLikesProvider =
     FutureProvider.autoDispose<List<DatingProfileData>>((ref) async {

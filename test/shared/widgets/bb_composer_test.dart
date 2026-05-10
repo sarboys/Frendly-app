@@ -226,15 +226,41 @@ void main() {
     final attachFinder = find.byIcon(Icons.add_rounded);
     final micFinder = find.byKey(const Key('bb-composer-mic-button'));
     final inputFinder = find.byKey(const Key('bb-composer-input-shell'));
+    final textFieldFinder = find.byType(TextField);
     expect(attachFinder, findsOneWidget);
     expect(inputFinder, findsOneWidget);
     expect(micFinder, findsOneWidget);
-    final inputRect =
-        tester.getRect(find.byKey(const Key('bb-composer-input-shell')));
-    final attachRect = tester.getRect(attachFinder);
+    expect(textFieldFinder, findsOneWidget);
+    final attachButtonFinder = find.ancestor(
+      of: attachFinder,
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is SizedBox && widget.width == 44 && widget.height == 44,
+      ),
+    );
+    expect(attachButtonFinder, findsOneWidget);
+    final inputRect = tester.getRect(inputFinder);
+    final attachRect = tester.getRect(attachButtonFinder);
     final micRect = tester.getRect(micFinder);
-    expect(inputRect.height, attachRect.height);
-    expect(micRect.height, attachRect.height);
+    final textFieldRect = tester.getRect(textFieldFinder);
+    expect(inputRect.height, 44);
+    expect(attachRect.height, 44);
+    expect(micRect.height, 44);
+    expect(inputRect.center.dy, attachRect.center.dy);
+    expect(inputRect.center.dy, micRect.center.dy);
+    expect(
+        (textFieldRect.center.dy - inputRect.center.dy).abs(), lessThan(0.5));
+    expect(
+      find.ancestor(
+        of: textFieldFinder,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Padding &&
+              widget.padding == const EdgeInsets.symmetric(vertical: 5),
+        ),
+      ),
+      findsNothing,
+    );
     expect(inputRect.contains(tester.getCenter(micFinder)), isFalse);
     expect(micRect.left, greaterThan(inputRect.right));
 

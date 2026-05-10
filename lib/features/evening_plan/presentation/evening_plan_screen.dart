@@ -215,7 +215,17 @@ class _EveningPlanScreenState extends ConsumerState<EveningPlanScreen> {
       builder: (context) => _LaunchEveningSheet(route: route),
     );
 
-    if (result == null || !mounted || !context.mounted) {
+    if (result == null) {
+      if (widget.autoOpenLaunch && mounted && context.mounted) {
+        final navigator = Navigator.of(context);
+        if (navigator.canPop()) {
+          navigator.pop();
+        }
+      }
+      return;
+    }
+
+    if (!mounted || !context.mounted) {
       return;
     }
 
@@ -480,15 +490,13 @@ class _EveningPlanScreenState extends ConsumerState<EveningPlanScreen> {
                 ),
             ],
           ),
-          if (!locked)
+          if (!locked && !widget.autoOpenLaunch)
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
               child: _StickyPlanCta(
-                label: widget.autoOpenLaunch
-                    ? 'Собрать вечер по маршруту'
-                    : 'Запустить маршрут · в чат',
+                label: 'Запустить маршрут · в чат',
                 onTap: _openLaunchSheet,
                 bottomGap: 96,
               ),

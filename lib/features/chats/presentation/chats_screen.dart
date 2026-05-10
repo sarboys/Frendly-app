@@ -31,6 +31,7 @@ class ChatsScreen extends ConsumerWidget {
     final currentUserId = ref.watch(currentUserIdProvider);
     final meetupChatsAsync = ref.watch(meetupChatsProvider);
     final personalChatsAsync = ref.watch(personalChatsProvider);
+    ref.watch(chatRealtimeSyncProvider);
     final meetupChats = meetupChatsAsync.valueOrNull ?? const [];
     final personalChats = personalChatsAsync.valueOrNull ?? const [];
     final liveChats = meetupChats

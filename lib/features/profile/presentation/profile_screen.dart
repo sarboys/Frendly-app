@@ -85,6 +85,14 @@ class _ProfileContent extends StatelessWidget {
                         onTopUp: () => context.pushRoute(AppRoute.tokensTopUp),
                         onBoost: () => context.pushRoute(AppRoute.tokensBoost),
                       ),
+                      const SizedBox(height: AppSpacing.md),
+                      _ProfileTrustActions(
+                        onVerification: () =>
+                            context.pushRoute(AppRoute.verification),
+                        onSos: () => context.pushRoute(AppRoute.sos),
+                        onNotifications: () =>
+                            context.pushRoute(AppRoute.notifications),
+                      ),
                       _ProfileSection(
                         title: 'Зачем здесь',
                         child: _ProfileTags(
@@ -602,6 +610,202 @@ class _FriendlyTokensCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ProfileTrustActions extends ConsumerWidget {
+  const _ProfileTrustActions({
+    required this.onVerification,
+    required this.onSos,
+    required this.onNotifications,
+  });
+
+  final VoidCallback onVerification;
+  final VoidCallback onSos;
+  final VoidCallback onNotifications;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(notificationUnreadCountProvider).valueOrNull ?? 0;
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _ProfileActionTile(
+                icon: LucideIcons.shield_check,
+                iconColor: BbV5Colors.brand,
+                title: 'Верификация',
+                subtitle: 'Получи галочку доверия',
+                onTap: onVerification,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: _ProfileActionTile(
+                icon: LucideIcons.shield_alert,
+                iconColor: const Color(0xFFB5443B),
+                iconBackground: const Color(0x1FD85B4A),
+                title: 'Кнопка SOS',
+                subtitle: 'Доверенные и горячие линии',
+                onTap: onSos,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        BbV5Card(
+          radius: BbV5Radii.md,
+          padding: const EdgeInsets.all(16),
+          onTap: onNotifications,
+          child: Row(
+            children: [
+              const _ProfileActionIcon(
+                icon: LucideIcons.bell,
+                color: BbV5Colors.terra,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Уведомления',
+                      style: AppTextStyles.caption.copyWith(
+                        fontFamily: 'Sora',
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: BbV5Colors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Приглашения, чаты, перки',
+                      style: AppTextStyles.caption.copyWith(
+                        fontSize: 10.5,
+                        color: BbV5Colors.inkMute,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (unread > 0)
+                Container(
+                  height: 24,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: BbV5Colors.accent,
+                    borderRadius: BorderRadius.circular(BbV5Radii.pill),
+                  ),
+                  child: Text(
+                    unread > 99 ? '99+' : '$unread',
+                    style: AppTextStyles.caption.copyWith(
+                      fontFamily: 'Sora',
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: BbV5Colors.paperHi,
+                    ),
+                  ),
+                ),
+              const SizedBox(width: AppSpacing.xs),
+              const Icon(
+                LucideIcons.chevron_right,
+                size: 17,
+                color: BbV5Colors.inkMute,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileActionTile extends StatelessWidget {
+  const _ProfileActionTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.iconBackground,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final Color? iconBackground;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5Card(
+      radius: BbV5Radii.md,
+      padding: const EdgeInsets.all(16),
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ProfileActionIcon(
+            icon: icon,
+            color: iconColor,
+            background: iconBackground,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.caption.copyWith(
+              fontFamily: 'Sora',
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: BbV5Colors.ink,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.caption.copyWith(
+              fontSize: 10.5,
+              height: 1.25,
+              color: BbV5Colors.inkMute,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileActionIcon extends StatelessWidget {
+  const _ProfileActionIcon({
+    required this.icon,
+    required this.color,
+    this.background,
+  });
+
+  final IconData icon;
+  final Color color;
+  final Color? background;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: background ?? BbV5Colors.paper,
+        shape: BoxShape.circle,
+        border: Border.all(color: BbV5Colors.hair),
+      ),
+      child: Icon(icon, size: 17, color: color),
     );
   }
 }

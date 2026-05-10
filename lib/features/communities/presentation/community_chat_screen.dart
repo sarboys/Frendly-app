@@ -5,10 +5,8 @@ import 'package:big_break_mobile/app/core/device/app_voice_recorder_service.dart
 import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
-import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/chats/presentation/chat_thread_providers.dart';
 import 'package:big_break_mobile/features/chats/presentation/chat_thread_screen.dart';
-import 'package:big_break_mobile/features/communities/domain/community.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_widgets.dart';
 import 'package:big_break_mobile/shared/models/message.dart';
@@ -18,7 +16,6 @@ import 'package:big_break_mobile/shared/widgets/bb_message_actions_sheet.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart' show Point;
@@ -488,10 +485,6 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
             subtitle: 'Чат сообщества',
             onBack: _leaveChat,
           ),
-          topContent: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-            child: _CommunityChatIntro(community: community),
-          ),
           messagesAsync: messagesAsync,
           onMessageReply: (message) {
             setState(() {
@@ -542,127 +535,6 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
           ),
         );
       },
-    );
-  }
-}
-
-class _CommunityChatIntro extends StatelessWidget {
-  const _CommunityChatIntro({
-    required this.community,
-  });
-
-  final Community community;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return CommunityInfoCard(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Сообщения и контекст ближайших встреч',
-                    style: AppTextStyles.cardTitle.copyWith(
-                      color: colors.foreground,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(LucideIcons.users, size: 20, color: colors.inkSoft),
-          ],
-        ),
-        if (community.nextMeetup case final meetup?) ...[
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: colors.background,
-              border: Border.all(color: colors.border),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CommunityAvatarBox(
-                  emoji: meetup.emoji,
-                  size: 44,
-                  radius: 16,
-                  fontSize: 22,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Контекст встречи: ${meetup.title}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySoft.copyWith(
-                          color: colors.foreground,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 4,
-                        children: [
-                          _InlineMetaIcon(
-                            icon: LucideIcons.clock_3,
-                            label: meetup.time,
-                          ),
-                          _InlineMetaIcon(
-                            icon: LucideIcons.map_pin,
-                            label: meetup.place,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _InlineMetaIcon extends StatelessWidget {
-  const _InlineMetaIcon({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 12, color: colors.inkMute),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: AppTextStyles.meta.copyWith(
-            color: colors.inkMute,
-            fontSize: 12,
-          ),
-        ),
-      ],
     );
   }
 }

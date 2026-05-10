@@ -46,10 +46,6 @@ class _RootAppViewState extends ConsumerState<_RootAppView> {
   late final GoRouter _router;
   bool _sessionClearQueued = false;
   bool _pendingPersistedChatClear = false;
-  String? _settingsSyncUserId;
-  bool _settingsSyncQueued = false;
-  String? _chatRealtimeSyncUserId;
-  bool _chatRealtimeSyncQueued = false;
 
   @override
   void initState() {
@@ -91,21 +87,10 @@ class _RootAppViewState extends ConsumerState<_RootAppView> {
 
     final themeMode = ref.watch(appThemeModeProvider);
     final authTokens = ref.watch(authTokensProvider);
-    final currentUserId = ref.watch(currentUserIdProvider);
     ref.watch(authBootstrapProvider);
     final isAuthenticated = authTokens != null;
     final onboardingAsync =
         isAuthenticated ? ref.watch(onboardingProvider) : null;
-
-    if (isAuthenticated && currentUserId != null) {
-      _queueChatRealtimeSync(currentUserId);
-      _queueSettingsThemeSync(currentUserId);
-    } else {
-      _settingsSyncUserId = null;
-      _settingsSyncQueued = false;
-      _chatRealtimeSyncUserId = null;
-      _chatRealtimeSyncQueued = false;
-    }
 
     if (_authenticatedNotifier.value != isAuthenticated) {
       _authenticatedNotifier.value = isAuthenticated;
@@ -139,85 +124,6 @@ class _RootAppViewState extends ConsumerState<_RootAppView> {
         ),
       ),
     );
-  }
-
-  void _queueSettingsThemeSync(String userId) {
-    if (_settingsSyncUserId == userId) {
-      return;
-    }
-
-    _settingsSyncUserId = userId;
-    if (_settingsSyncQueued) {
-      return;
-    }
-
-    _settingsSyncQueued = true;
-    final authTokens = ref.read(authTokensProvider.notifier);
-    final currentUser = ref.read(currentUserIdProvider.notifier);
-    final themeMode = ref.read(appThemeModeProvider.notifier);
-    final container = ProviderScope.containerOf(context, listen: false);
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) {
-        return;
-      }
-
-      final queuedUserId = _settingsSyncUserId;
-      _settingsSyncQueued = false;
-      if (queuedUserId == null) {
-        return;
-      }
-
-      final settingsFuture = container.read(settingsProvider.future);
-      if (await authTokens.readAccessToken() == null ||
-          currentUser.state != queuedUserId) {
-        return;
-      }
-
-      try {
-        final settings = await settingsFuture;
-        if (!mounted ||
-            await authTokens.readAccessToken() == null ||
-            currentUser.state != queuedUserId) {
-          return;
-        }
-        themeMode.syncFromSettings(settings);
-      } catch (_) {}
-    });
-  }
-
-  void _queueChatRealtimeSync(String userId) {
-    if (_chatRealtimeSyncUserId == userId) {
-      return;
-    }
-
-    _chatRealtimeSyncUserId = userId;
-    if (_chatRealtimeSyncQueued) {
-      return;
-    }
-
-    _chatRealtimeSyncQueued = true;
-    final authTokens = ref.read(authTokensProvider.notifier);
-    final currentUser = ref.read(currentUserIdProvider.notifier);
-    final container = ProviderScope.containerOf(context, listen: false);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-
-      final queuedUserId = _chatRealtimeSyncUserId;
-      _chatRealtimeSyncQueued = false;
-      if (queuedUserId == null ||
-          authTokens.currentTokens == null ||
-          currentUser.state != queuedUserId) {
-        return;
-      }
-
-      final hadRealtimeSync = container.exists(chatRealtimeSyncProvider);
-      container.read(chatRealtimeSyncProvider);
-      if (!hadRealtimeSync && mounted) {
-        setState(() {});
-      }
-    });
   }
 
   void _queueSessionRuntimeClear({

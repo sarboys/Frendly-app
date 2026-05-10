@@ -1,3 +1,4 @@
+import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
@@ -550,14 +551,20 @@ class _ReadyRoutesTab extends StatelessWidget {
 
               return ListView.separated(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                itemCount: visible.length,
+                itemCount: visible.length + 1,
                 separatorBuilder: (context, index) =>
                     const SizedBox(height: 10),
-                itemBuilder: (context, index) => _ReadyRouteRow(
-                  route: visible[index],
-                  dark: dark,
-                  onTap: () => onPick(visible[index]),
-                ),
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return _CreateCustomRouteRow(dark: dark);
+                  }
+                  final route = visible[index - 1];
+                  return _ReadyRouteRow(
+                    route: route,
+                    dark: dark,
+                    onTap: () => onPick(route),
+                  );
+                },
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
@@ -593,6 +600,85 @@ class _ReadyRoutesTab extends StatelessWidget {
       ].whereType<String>().join(' ').toLowerCase();
       return haystack.contains(normalized);
     }).toList(growable: false);
+  }
+}
+
+class _CreateCustomRouteRow extends StatelessWidget {
+  const _CreateCustomRouteRow({required this.dark});
+
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = dark ? AppColors.adMagenta : BbV5Colors.accent;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).pop();
+          context.pushRoute(AppRoute.newEveningRoute);
+        },
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: background),
+            boxShadow: BbV5Shadows.ink,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  LucideIcons.plus,
+                  size: 18,
+                  color: BbV5Colors.paperHi,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Создать свой маршрут',
+                      style: AppTextStyles.itemTitle.copyWith(
+                        fontSize: 13.5,
+                        height: 1.15,
+                        fontWeight: FontWeight.w600,
+                        color: dark ? AppColors.adFg : BbV5Colors.paperHi,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Из 2–6 шагов · сохраним в твоей коллекции',
+                      style: AppTextStyles.caption.copyWith(
+                        fontSize: 11,
+                        height: 1.25,
+                        color: (dark ? AppColors.adFg : BbV5Colors.paperHi)
+                            .withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                LucideIcons.chevron_right,
+                size: 17,
+                color: dark ? AppColors.adFg : BbV5Colors.paperHi,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

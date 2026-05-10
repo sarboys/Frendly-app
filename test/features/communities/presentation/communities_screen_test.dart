@@ -541,6 +541,30 @@ void main() {
     expect(find.text('Общий поток сообщества'), findsNothing);
   });
 
+  testWidgets('community chat does not show context intro card', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...buildTestOverrides(),
+          backendRepositoryProvider.overrideWith(
+            (ref) => _FakeCommunityChatRepository(ref: ref, dio: Dio()),
+          ),
+          chatSocketClientProvider.overrideWith(
+            (ref) => _FakeCommunityChatSocketClient(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: CommunityChatScreen(communityId: 'c1'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Сообщения и контекст ближайших встреч'), findsNothing);
+  });
+
   testWidgets('community chat exposes the shared attachment and voice controls',
       (tester) async {
     await tester.pumpWidget(

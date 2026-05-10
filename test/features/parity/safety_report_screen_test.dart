@@ -20,17 +20,18 @@ void main() {
     await tester.pumpWidget(_wrap(const SafetyHubScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.text('SOS-рассылка'), findsOneWidget);
-    expect(find.text('Отправить SOS'), findsOneWidget);
-
-    await tester.tap(find.text('Отправить SOS'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Подтвердить SOS'), findsOneWidget);
-    expect(find.text('Предпросмотр сообщения'), findsOneWidget);
-
-    await tester.tap(find.text('Отмена'));
-    await tester.pumpAndSettle();
+    expect(find.text('Безопасность'), findsOneWidget);
+    expect(find.text('УДЕРЖИВАЙ КНОПКУ'), findsOneWidget);
+    expect(find.text('Позвонить 112'), findsOneWidget);
+    expect(find.text('Поделиться гео'), findsOneWidget);
+    expect(find.text('Safe Walk'), findsOneWidget);
+    expect(find.text('Чат с поддержкой'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('ГОРЯЧИЕ ЛИНИИ'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('ГОРЯЧИЕ ЛИНИИ'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('Добавить контакт'),

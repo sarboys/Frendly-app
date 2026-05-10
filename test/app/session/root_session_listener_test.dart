@@ -1,7 +1,9 @@
 import 'package:big_break_mobile/app/app.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/session/app_session_controller.dart';
+import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
+import 'package:big_break_mobile/shared/models/user_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +12,71 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../test_overrides.dart';
 
 void main() {
+  testWidgets('root keeps chat realtime idle before chats are opened',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'auth.tokens':
+          '{"accessToken":"access-token","refreshToken":"refresh-token"}',
+    });
+    final preferences = await SharedPreferences.getInstance();
+    var syncStarted = false;
+
+    await tester.pumpWidget(
+      BigBreakRoot(
+        overrides: [
+          ...buildTestOverrides(),
+          initialAuthTokensProvider.overrideWithValue(
+            const AuthTokens(
+              accessToken: 'access-token',
+              refreshToken: 'refresh-token',
+            ),
+          ),
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          chatRealtimeSyncProvider.overrideWith((ref) {
+            syncStarted = true;
+          }),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(syncStarted, isFalse);
+  });
+
+  testWidgets('root keeps remote settings idle on authenticated startup',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'auth.tokens':
+          '{"accessToken":"access-token","refreshToken":"refresh-token"}',
+    });
+    final preferences = await SharedPreferences.getInstance();
+    var settingsRead = false;
+
+    await tester.pumpWidget(
+      BigBreakRoot(
+        overrides: [
+          ...buildTestOverrides(),
+          initialAuthTokensProvider.overrideWithValue(
+            const AuthTokens(
+              accessToken: 'access-token',
+              refreshToken: 'refresh-token',
+            ),
+          ),
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          settingsProvider.overrideWith((ref) async {
+            settingsRead = true;
+            return UserSettingsData.fallback;
+          }),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(settingsRead, isFalse);
+  });
+
   testWidgets('root resets app session when auth tokens are cleared',
       (tester) async {
     SharedPreferences.setMockInitialValues({

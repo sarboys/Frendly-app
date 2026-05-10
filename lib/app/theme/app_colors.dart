@@ -229,42 +229,42 @@ class AppColors {
 
   static const lightTheme = BigBreakThemeColors(
     isDark: false,
-    background: Color(0xFFF8F5F0),
-    foreground: Color(0xFF1A1A1F),
-    card: Colors.white,
-    cardForeground: Color(0xFF1A1A1F),
-    paper: Color(0xFFF7F2EA),
-    popover: Colors.white,
-    popoverForeground: Color(0xFF1A1A1F),
+    background: Color(0xFFF1E6D6),
+    foreground: Color(0xFF1B1A18),
+    card: Color(0xFFFBF3E6),
+    cardForeground: Color(0xFF1B1A18),
+    paper: Color(0xFFF1E6D6),
+    popover: Color(0xFFFBF3E6),
+    popoverForeground: Color(0xFF1B1A18),
     primary: Color(0xFFD08A63),
     primaryForeground: Color(0xFFFEFBF7),
-    primarySoft: Color(0xFFFCE7E2),
-    secondary: Color(0xFF7FA88E),
-    secondaryForeground: Colors.white,
-    secondarySoft: Color(0xFFEAF3EC),
-    muted: Color(0xFFF0EAE1),
-    mutedForeground: Color(0xFF68686E),
-    accent: Color(0xFFE8DFD2),
-    accentForeground: Color(0xFF1A1A1F),
-    destructive: Color(0xFFDD3F3F),
+    primarySoft: Color(0xFFEBC0A0),
+    secondary: Color(0xFF6F8B72),
+    secondaryForeground: Color(0xFFFBF3E6),
+    secondarySoft: Color(0xFFC9D5BE),
+    muted: Color(0xFFE8D6BE),
+    mutedForeground: Color(0xFF8A7E72),
+    accent: Color(0xFFD08A63),
+    accentForeground: Color(0xFFFBF3E6),
+    destructive: Color(0xFFD85B4A),
     destructiveForeground: Colors.white,
-    border: Color(0xFFE4DED6),
-    input: Color(0xFFE4DED6),
+    border: Color(0x1A3C281C),
+    input: Color(0x1A3C281C),
     ring: Color(0xFFD08A63),
-    inkSoft: Color(0xFF44454C),
-    inkMute: Color(0xFF8C8C91),
+    inkSoft: Color(0xFF3F3A34),
+    inkMute: Color(0xFF8A7E72),
     bubbleMe: Color(0xFFD08A63),
-    bubbleMeForeground: Color(0xFFFEFBF7),
-    bubbleThem: Color(0xFFF3EEE7),
-    bubbleThemForeground: Color(0xFF1A1A1F),
-    online: Color(0xFF39AC67),
-    warmStart: Color(0xFFF6F0E4),
-    warmEnd: Color(0xFFEEE3D8),
-    eveningStart: Color(0xFFF1D6C6),
-    eveningEnd: Color(0xFFEFB4A1),
-    viewportBackground: Color(0xFFEFE7DB),
-    phoneFrameShadowStrong: Color(0x591A1A1F),
-    phoneFrameShadowSoft: Color(0x401A1A1F),
+    bubbleMeForeground: Color(0xFFFBF3E6),
+    bubbleThem: Color(0xFFFBF3E6),
+    bubbleThemForeground: Color(0xFF1B1A18),
+    online: Color(0xFF6F8B72),
+    warmStart: Color(0xFFF6E2CC),
+    warmEnd: Color(0xFFECDFCB),
+    eveningStart: Color(0xFFEBC0A0),
+    eveningEnd: Color(0xFFD08A63),
+    viewportBackground: Color(0xFFE8D6BE),
+    phoneFrameShadowStrong: Color(0x591F241D),
+    phoneFrameShadowSoft: Color(0x401F241D),
   );
 
   static const darkTheme = BigBreakThemeColors(
@@ -312,39 +312,39 @@ class AppColors {
     return palette ?? lightTheme;
   }
 
-  static const background = Color(0xFFF8F5F0);
-  static const foreground = Color(0xFF1A1A1F);
-  static const card = Colors.white;
+  static const background = Color(0xFFF1E6D6);
+  static const foreground = Color(0xFF1B1A18);
+  static const card = Color(0xFFFBF3E6);
   static const cardForeground = foreground;
-  static const paper = Color(0xFFF7F2EA);
-  static const popover = Colors.white;
+  static const paper = Color(0xFFF1E6D6);
+  static const popover = Color(0xFFFBF3E6);
   static const popoverForeground = foreground;
   static const primary = Color(0xFFD08A63);
-  static const primaryForeground = Color(0xFFFEFBF7);
-  static const primarySoft = Color(0xFFFCE7E2);
-  static const secondary = Color(0xFF7FA88E);
-  static const secondaryForeground = Colors.white;
-  static const secondarySoft = Color(0xFFEAF3EC);
-  static const muted = Color(0xFFF0EAE1);
-  static const mutedForeground = Color(0xFF68686E);
-  static const accent = Color(0xFFE8DFD2);
-  static const accentForeground = foreground;
-  static const destructive = Color(0xFFDD3F3F);
+  static const primaryForeground = Color(0xFFFBF3E6);
+  static const primarySoft = Color(0xFFEBC0A0);
+  static const secondary = Color(0xFF6F8B72);
+  static const secondaryForeground = Color(0xFFFBF3E6);
+  static const secondarySoft = Color(0xFFC9D5BE);
+  static const muted = Color(0xFFE8D6BE);
+  static const mutedForeground = Color(0xFF8A7E72);
+  static const accent = Color(0xFFD08A63);
+  static const accentForeground = Color(0xFFFBF3E6);
+  static const destructive = Color(0xFFD85B4A);
   static const destructiveForeground = Colors.white;
-  static const border = Color(0xFFE4DED6);
+  static const border = Color(0x1A3C281C);
   static const input = border;
   static const ring = primary;
-  static const inkSoft = Color(0xFF44454C);
-  static const inkMute = Color(0xFF8C8C91);
+  static const inkSoft = Color(0xFF3F3A34);
+  static const inkMute = Color(0xFF8A7E72);
   static const bubbleMe = primary;
   static const bubbleMeForeground = primaryForeground;
-  static const bubbleThem = Color(0xFFF3EEE7);
+  static const bubbleThem = Color(0xFFFBF3E6);
   static const bubbleThemForeground = foreground;
-  static const online = Color(0xFF39AC67);
-  static const warmStart = Color(0xFFF6F0E4);
-  static const warmEnd = Color(0xFFEEE3D8);
-  static const eveningStart = Color(0xFFF1D6C6);
-  static const eveningEnd = Color(0xFFEFB4A1);
+  static const online = Color(0xFF6F8B72);
+  static const warmStart = Color(0xFFF6E2CC);
+  static const warmEnd = Color(0xFFECDFCB);
+  static const eveningStart = Color(0xFFEBC0A0);
+  static const eveningEnd = Color(0xFFD08A63);
   static const darkBackground = Color(0xFF121217);
   static const darkForeground = Color(0xFFF3EEE7);
   static const adBg = Color(0xFF120B17);

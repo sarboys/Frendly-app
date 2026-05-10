@@ -4,16 +4,17 @@ import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/features/affiche/presentation/affiche_events_screen.dart';
+import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
 import 'package:big_break_mobile/features/meetups/presentation/meetups_screen.dart';
 import 'package:big_break_mobile/features/tonight/presentation/tonight_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
+import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
-import 'package:big_break_mobile/shared/models/person_summary.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
@@ -202,14 +203,20 @@ void main() {
     await _pumpTonightApp(
       tester,
       extraOverrides: [
-        peopleProvider.overrideWith(
+        datingHomePreviewProvider.overrideWith(
           (ref) async => const [
-            PersonSummary(
-              id: 'user-sergey',
+            DatingProfileData(
+              userId: 'user-sergey',
               name: 'Сергей',
               age: 31,
+              distance: 'Рядом',
+              about: '',
+              tags: ['Музыка', 'Бары'],
+              prompt: '',
+              photoEmoji: '💘',
+              likedYou: false,
+              premium: true,
               area: 'Центр',
-              common: ['Музыка', 'Бары'],
               online: true,
               verified: true,
               vibe: 'джаз',
@@ -232,14 +239,20 @@ void main() {
     await _pumpTonightApp(
       tester,
       extraOverrides: [
-        peopleProvider.overrideWith(
+        datingHomePreviewProvider.overrideWith(
           (ref) async => const [
-            PersonSummary(
-              id: 'user-sergey',
+            DatingProfileData(
+              userId: 'user-sergey',
               name: 'Сергей',
               age: 31,
+              distance: 'Рядом',
+              about: '',
+              tags: ['Музыка', 'Бары'],
+              prompt: '',
+              photoEmoji: '💘',
+              likedYou: false,
+              premium: true,
               area: 'Центр',
-              common: ['Музыка', 'Бары'],
               online: true,
               verified: true,
               vibe: 'джаз',
@@ -269,14 +282,20 @@ void main() {
     await _pumpTonightApp(
       tester,
       extraOverrides: [
-        peopleProvider.overrideWith(
+        datingHomePreviewProvider.overrideWith(
           (ref) async => const [
-            PersonSummary(
-              id: 'user-dasha',
+            DatingProfileData(
+              userId: 'user-dasha',
               name: 'Даша',
               age: 34,
+              distance: 'Рядом',
+              about: '',
+              tags: ['Кино', 'Вино'],
+              prompt: '',
+              photoEmoji: '💘',
+              likedYou: false,
+              premium: true,
               area: 'Патриаршие пруды',
-              common: ['Кино', 'Вино'],
               online: true,
               verified: true,
               vibe: 'вечер',

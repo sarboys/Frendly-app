@@ -314,11 +314,7 @@ class _WaveformPainter extends CustomPainter {
 
     const barWidth = 2.5;
     const gap = 3.0;
-    final maxBars = math.max(
-      1,
-      ((size.width + gap) / (barWidth + gap)).floor(),
-    );
-    final visibleBars = _fitBars(bars, maxBars);
+    final visibleBars = visibleBarsForWidth(size.width);
     final count = visibleBars.length;
     final paint = Paint()..strokeCap = StrokeCap.round;
 
@@ -348,6 +344,17 @@ class _WaveformPainter extends CustomPainter {
     }
   }
 
+  @visibleForTesting
+  List<double> visibleBarsForWidth(double width) {
+    const barWidth = 2.5;
+    const gap = 3.0;
+    final maxBars = math.max(
+      1,
+      ((width + gap) / (barWidth + gap)).floor(),
+    );
+    return _fitBars(bars, maxBars);
+  }
+
   @override
   bool shouldRepaint(covariant _WaveformPainter oldDelegate) {
     return oldDelegate.progress != progress ||
@@ -357,11 +364,30 @@ class _WaveformPainter extends CustomPainter {
   }
 
   List<double> _fitBars(List<double> source, int maxBars) {
-    if (source.length <= maxBars) {
+    if (source.isEmpty) {
+      return const <double>[];
+    }
+    if (source.length == maxBars) {
       return source;
     }
     if (maxBars <= 1) {
       return <double>[source.last];
+    }
+    if (source.length == 1) {
+      return List<double>.filled(maxBars, source.single, growable: false);
+    }
+
+    if (source.length < maxBars) {
+      return List<double>.generate(maxBars, (index) {
+        final position = index * (source.length - 1) / (maxBars - 1);
+        final lower = position.floor();
+        final upper = position.ceil();
+        if (lower == upper) {
+          return source[lower];
+        }
+        final t = position - lower;
+        return source[lower] + ((source[upper] - source[lower]) * t);
+      }, growable: false);
     }
 
     return List<double>.generate(maxBars, (index) {

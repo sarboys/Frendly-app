@@ -20,6 +20,7 @@ import 'package:big_break_mobile/features/communities/presentation/community_med
 import 'package:big_break_mobile/features/communities/presentation/create_community_screen.dart';
 import 'package:big_break_mobile/features/communities/presentation/create_community_post_screen.dart';
 import 'package:big_break_mobile/features/create_meetup/presentation/create_meetup_screen.dart';
+import 'package:big_break_mobile/features/create_meetup/presentation/publish_meetup_screen.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_screen.dart';
 import 'package:big_break_mobile/features/edit_profile/presentation/edit_profile_screen.dart';
 import 'package:big_break_mobile/features/evening_plan/presentation/evening_builder_screen.dart';
@@ -32,6 +33,7 @@ import 'package:big_break_mobile/features/evening_plan/presentation/evening_shar
 import 'package:big_break_mobile/features/evening_routes/presentation/create_evening_session_screen.dart';
 import 'package:big_break_mobile/features/evening_routes/presentation/evening_route_detail_screen.dart';
 import 'package:big_break_mobile/features/evening_routes/presentation/evening_routes_screen.dart';
+import 'package:big_break_mobile/features/evening_routes/presentation/route_form_screen.dart';
 import 'package:big_break_mobile/features/evening_routes/presentation/partner_offer_qr_screen.dart';
 import 'package:big_break_mobile/features/event_detail/presentation/event_detail_screen.dart';
 import 'package:big_break_mobile/features/host_dashboard/presentation/host_dashboard_screen.dart';
@@ -499,6 +501,13 @@ GoRouter buildAppRouter({
         ),
       ),
       GoRoute(
+        path: AppRoute.newEveningRoute.path,
+        name: AppRoute.newEveningRoute.name,
+        pageBuilder: (context, state) => _slidePage(
+          const RouteFormScreen(),
+        ),
+      ),
+      GoRoute(
         path: AppRoute.eveningRouteDetail.path,
         name: AppRoute.eveningRouteDetail.name,
         pageBuilder: (context, state) => _slidePage(
@@ -556,6 +565,13 @@ GoRouter buildAppRouter({
         ),
       ),
       GoRoute(
+        path: AppRoute.publishMeetup.path,
+        name: AppRoute.publishMeetup.name,
+        pageBuilder: (context, state) => _slidePage(
+          const PublishMeetupScreen(),
+        ),
+      ),
+      GoRoute(
         path: AppRoute.joinRequest.path,
         name: AppRoute.joinRequest.name,
         pageBuilder: (context, state) => _slidePage(
@@ -610,6 +626,11 @@ GoRouter buildAppRouter({
         path: AppRoute.verification.path,
         name: AppRoute.verification.name,
         pageBuilder: (context, state) => _slidePage(const VerificationScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.sos.path,
+        name: AppRoute.sos.name,
+        pageBuilder: (context, state) => _slidePage(const SafetyHubScreen()),
       ),
       GoRoute(
         path: AppRoute.safetyHub.path,

@@ -104,6 +104,43 @@ class _FakeChatVoicePlaybackEngine implements ChatVoicePlaybackEngine {
 }
 
 void main() {
+  testWidgets('short waveform still fills v5 voice track width', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: SizedBox(
+                width: 236,
+                child: BbVoiceMessage(
+                  chatId: 'p1',
+                  playbackId: 'voice-short',
+                  attachmentId: 'voice-short',
+                  durationMs: 1000,
+                  waveform: [0.2, 0.8],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final customPaint = tester.widget<CustomPaint>(
+      find.descendant(
+        of: find.byKey(const Key('bb-chat-voice-waveform')),
+        matching: find.byType(CustomPaint),
+      ),
+    );
+    final bars = (customPaint.painter as dynamic).visibleBarsForWidth(138.0)
+        as List<double>;
+
+    expect(bars.length, greaterThanOrEqualTo(24));
+  });
+
   testWidgets('v5 voice message matches front compact row metrics', (
     tester,
   ) async {

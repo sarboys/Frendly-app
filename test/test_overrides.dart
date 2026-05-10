@@ -1,8 +1,10 @@
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/after_dark/presentation/after_dark_providers.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
+import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/event_detail.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
@@ -202,6 +204,14 @@ List<Override> buildTestOverrides() {
           .toList(growable: false),
     ),
     personalChatsProvider.overrideWith((ref) async => mockPersonalChats),
+    datingDiscoverProvider.overrideWith(
+      (ref) async =>
+          mockPeople.map(_mockPersonToDating).toList(growable: false),
+    ),
+    datingHomePreviewProvider.overrideWith(
+      (ref) async =>
+          mockPeople.map(_mockPersonToDating).take(4).toList(growable: false),
+    ),
     peopleProvider.overrideWith(
       (ref) async => mockPeople
           .map(
@@ -260,4 +270,34 @@ List<Override> buildTestOverrides() {
     ),
     notificationUnreadCountProvider.overrideWith((ref) async => 1),
   ];
+}
+
+DatingProfileData _mockPersonToDating(
+  ({
+    String name,
+    int age,
+    String area,
+    List<String> common,
+    bool online,
+    bool verified,
+    String vibe,
+  }) item,
+) {
+  return DatingProfileData(
+    userId: item.name,
+    name: item.name,
+    age: item.age,
+    distance: 'Рядом',
+    about: '',
+    tags: item.common,
+    prompt: '',
+    photoEmoji: item.online ? '💘' : '✨',
+    avatarUrl: null,
+    likedYou: false,
+    premium: true,
+    vibe: item.vibe,
+    area: item.area,
+    verified: item.verified,
+    online: item.online,
+  );
 }

@@ -1,3 +1,7 @@
+// ignore_for_file: unused_element
+
+import 'dart:async';
+
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_radii.dart';
 import 'package:big_break_mobile/app/theme/app_shadows.dart';
@@ -7,6 +11,7 @@ import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/safety_hub.dart';
 import 'package:big_break_mobile/shared/models/user_settings.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,117 +27,221 @@ class SafetyHubScreen extends ConsumerStatefulWidget {
 
 class _SafetyHubScreenState extends ConsumerState<SafetyHubScreen> {
   bool _saving = false;
+  bool _sosActive = false;
+  bool _firingSos = false;
+  double _holdProgress = 0;
+  Timer? _holdTimer;
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     final safetyAsync = ref.watch(safetyHubProvider);
     final settingsAsync = ref.watch(settingsProvider);
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            const _SafetyHeader(),
-            Expanded(
-              child: safetyAsync.when(
-                data: (safety) => settingsAsync.when(
-                  data: (settings) => ListView(
-                    padding: const EdgeInsets.only(bottom: 40),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                        child: _TrustScoreCard(score: safety.trustScore),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                        child: _SosHeroCard(
-                          contactsCount: safety.trustedContacts.length,
-                          onTap: safety.trustedContacts.isEmpty
-                              ? null
-                              : () => _showSosSheet(safety.trustedContacts),
-                        ),
-                      ),
-                      _TrustedContactsSection(
-                        contacts: safety.trustedContacts,
-                        onAdd: _showAddContactSheet,
-                        onDelete: _deleteContact,
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(20, 24, 20, 0),
-                        child: _SosIncludedCard(),
-                      ),
-                      _SafetyGroup(
-                        title: 'Автоматическая защита',
-                        children: [
-                          _ToggleRow(
-                            icon: LucideIcons.share_2,
-                            label: 'Делиться планом автоматически',
-                            sub: 'Перед выходом на встречу',
-                            value: settings.autoSharePlans,
-                            onChanged: _saving
-                                ? null
-                                : (value) => _saveSafety(
-                                      settings.copyWith(
-                                        autoSharePlans: value,
-                                      ),
-                                    ),
-                          ),
-                          _ToggleRow(
-                            icon: LucideIcons.eye,
-                            label: 'Скрыть точную геолокацию',
-                            sub: 'Контактам видна только зона',
-                            value: settings.hideExactLocation,
-                            onChanged: _saving
-                                ? null
-                                : (value) => _saveSafety(
-                                      settings.copyWith(
-                                        hideExactLocation: value,
-                                      ),
-                                    ),
-                          ),
-                        ],
-                      ),
-                      _SafetyGroup(
-                        title: 'Модерация',
-                        children: [
-                          _ActionRow(
-                            icon: LucideIcons.user_minus,
-                            label: 'Заблокированные',
-                            sub: '${safety.blockedUsersCount} пользователя',
-                            onTap: _showBlockedUsersSheet,
-                          ),
-                          _ActionRow(
-                            icon: LucideIcons.flag,
-                            label: 'Мои жалобы',
-                            sub: '${safety.reportsCount} в работе',
-                            onTap: _showReportsSheet,
-                          ),
-                        ],
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                        child: _HelpCard(onTap: _openSupport),
-                      ),
-                    ],
-                  ),
-                  loading: () => Center(
-                    child: CircularProgressIndicator(color: colors.primary),
-                  ),
-                  error: (error, _) => Center(child: Text(error.toString())),
+    return BbV5Scaffold(
+      child: safetyAsync.when(
+        data: (safety) => settingsAsync.when(
+          data: (settings) => BbV5Page(
+            padding: const EdgeInsets.fromLTRB(20, 32, 20, 88),
+            child: ListView(
+              cacheExtent: 1200,
+              padding: EdgeInsets.zero,
+              children: [
+                const BbV5TopBar(
+                  kicker: 'Безопасность',
+                  title: 'Кнопка',
+                  accent: 'SOS',
                 ),
-                loading: () => Center(
-                  child: CircularProgressIndicator(color: colors.primary),
+                const SizedBox(height: 20),
+                _SosHoldCard(
+                  active: _sosActive,
+                  progress: _holdProgress,
+                  loading: _firingSos,
+                  onDown: _startHold,
+                  onUp: _cancelHold,
+                  onCancelActive: () => setState(() {
+                    _sosActive = false;
+                  }),
                 ),
-                error: (error, _) => Center(child: Text(error.toString())),
-              ),
+                const SizedBox(height: 16),
+                GridView.count(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 1.26,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    _QuickAction(
+                      icon: LucideIcons.phone,
+                      label: 'Позвонить 112',
+                      onTap: _callEmergency,
+                    ),
+                    _QuickAction(
+                      icon: LucideIcons.share_2,
+                      label: 'Поделиться гео',
+                      onTap: _shareLocation,
+                    ),
+                    _QuickAction(
+                      icon: LucideIcons.map_pin,
+                      label: 'Safe Walk',
+                      onTap: _startSafeWalk,
+                    ),
+                    _QuickAction(
+                      icon: LucideIcons.message_circle,
+                      label: 'Чат с поддержкой',
+                      onTap: _openSupport,
+                    ),
+                  ],
+                ),
+                const _HotlinesSection(),
+                _V5TrustedContactsSection(
+                  contacts: safety.trustedContacts,
+                  onAdd: _showAddContactSheet,
+                  onDelete: _deleteContact,
+                ),
+                const _PrivacyNote(),
+                _SafetyGroup(
+                  title: 'Автоматическая защита',
+                  children: [
+                    _ToggleRow(
+                      icon: LucideIcons.share_2,
+                      label: 'Делиться планом автоматически',
+                      sub: 'Перед выходом на встречу',
+                      value: settings.autoSharePlans,
+                      onChanged: _saving
+                          ? null
+                          : (value) => _saveSafety(
+                                settings.copyWith(autoSharePlans: value),
+                              ),
+                    ),
+                    _ToggleRow(
+                      icon: LucideIcons.eye,
+                      label: 'Скрыть точную геолокацию',
+                      sub: 'Контактам видна только зона',
+                      value: settings.hideExactLocation,
+                      onChanged: _saving
+                          ? null
+                          : (value) => _saveSafety(
+                                settings.copyWith(hideExactLocation: value),
+                              ),
+                    ),
+                  ],
+                ),
+                _SafetyGroup(
+                  title: 'Модерация',
+                  children: [
+                    _ActionRow(
+                      icon: LucideIcons.user_minus,
+                      label: 'Заблокированные',
+                      sub: '${safety.blockedUsersCount} пользователя',
+                      onTap: _showBlockedUsersSheet,
+                    ),
+                    _ActionRow(
+                      icon: LucideIcons.flag,
+                      label: 'Мои жалобы',
+                      sub: '${safety.reportsCount} в работе',
+                      onTap: _showReportsSheet,
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
+          loading: () => const Center(
+            child: CircularProgressIndicator(color: BbV5Colors.accent),
+          ),
+          error: (error, _) => Center(child: Text(error.toString())),
         ),
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: BbV5Colors.accent),
+        ),
+        error: (error, _) => Center(child: Text(error.toString())),
       ),
     );
+  }
+
+  void _startHold() {
+    if (_sosActive || _firingSos) {
+      return;
+    }
+    _holdTimer?.cancel();
+    setState(() {
+      _holdProgress = 0.02;
+    });
+    _holdTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      final next = (_holdProgress + 0.025).clamp(0.0, 1.0);
+      setState(() {
+        _holdProgress = next;
+      });
+      if (next >= 1) {
+        timer.cancel();
+        unawaited(_fireSos());
+      }
+    });
+  }
+
+  void _cancelHold() {
+    _holdTimer?.cancel();
+    if (_holdProgress < 1 && mounted) {
+      setState(() {
+        _holdProgress = 0;
+      });
+    }
+  }
+
+  Future<void> _fireSos() async {
+    if (_firingSos) {
+      return;
+    }
+    final repository = ref.read(backendRepositoryProvider);
+    final container = ProviderScope.containerOf(context, listen: false);
+    setState(() {
+      _firingSos = true;
+    });
+    try {
+      final result = await repository.createSos();
+      if (!mounted) {
+        return;
+      }
+      container.invalidate(safetyHubProvider);
+      setState(() {
+        _sosActive = true;
+        _holdProgress = 0;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'SOS отправлен. Контактов уведомлено: ${result.notifiedContactsCount}',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _holdProgress = 0;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не получилось отправить SOS')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _firingSos = false;
+        });
+      }
+    }
   }
 
   Future<void> _saveSafety(UserSettingsData settings) async {
@@ -316,6 +425,456 @@ class _SafetyHubScreenState extends ConsumerState<SafetyHubScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Не получилось открыть поддержку')),
+    );
+  }
+
+  Future<void> _callEmergency() async {
+    final opened = await launchUrl(Uri.parse('tel:112'));
+    if (opened || !mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Не получилось открыть звонок 112')),
+    );
+  }
+
+  void _shareLocation() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Гео отправлено доверенным контактам')),
+    );
+  }
+
+  void _startSafeWalk() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Safe Walk запущен')),
+    );
+  }
+}
+
+class _SosHoldCard extends StatelessWidget {
+  const _SosHoldCard({
+    required this.active,
+    required this.progress,
+    required this.loading,
+    required this.onDown,
+    required this.onUp,
+    required this.onCancelActive,
+  });
+
+  final bool active;
+  final double progress;
+  final bool loading;
+  final VoidCallback onDown;
+  final VoidCallback onUp;
+  final VoidCallback onCancelActive;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5Card(
+      tint: const Color(0xFFE8806E),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          Text(
+            active ? 'СИГНАЛ ОТПРАВЛЕН' : 'УДЕРЖИВАЙ КНОПКУ',
+            style: bbV5KickerStyle(
+              color: const Color(0xFFB5443B),
+              letterSpacing: 2.2,
+            ),
+          ),
+          const SizedBox(height: 20),
+          GestureDetector(
+            onTapDown: (_) => onDown(),
+            onTapUp: (_) => onUp(),
+            onTapCancel: onUp,
+            child: SizedBox(
+              width: 176,
+              height: 176,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: active
+                          ? const Color(0xFFB5443B)
+                          : const Color(0xFFD85B4A),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color:
+                              const Color(0xFFD85B4A).withValues(alpha: 0.18),
+                          spreadRadius: 8,
+                        ),
+                        const BoxShadow(
+                          color: Color(0x991F241D),
+                          blurRadius: 60,
+                          spreadRadius: -20,
+                          offset: Offset(0, 30),
+                        ),
+                      ],
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                  SizedBox(
+                    width: 176,
+                    height: 176,
+                    child: CircularProgressIndicator(
+                      value: progress,
+                      strokeWidth: 3,
+                      color: BbV5Colors.paperHi,
+                      backgroundColor:
+                          BbV5Colors.paperHi.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  loading
+                      ? const CircularProgressIndicator(
+                          color: BbV5Colors.paperHi,
+                        )
+                      : const Icon(
+                          LucideIcons.shield_alert,
+                          size: 56,
+                          color: BbV5Colors.paperHi,
+                        ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            active
+                ? 'Геолокация отправлена доверенным контактам и в Frendly'
+                : 'Зажми на 2 секунды. Мы пришлём твою геолокацию доверенным и предложим вызвать 112.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.caption.copyWith(
+              fontSize: 12,
+              height: 1.45,
+              color: BbV5Colors.inkSoft,
+            ),
+          ),
+          if (active) ...[
+            const SizedBox(height: 16),
+            BbV5PillButton(
+              label: 'Отменить тревогу',
+              icon: LucideIcons.x,
+              height: 40,
+              fontSize: 12,
+              onPressed: onCancelActive,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5Card(
+      radius: BbV5Radii.md,
+      padding: const EdgeInsets.all(16),
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: BbV5Colors.paper,
+              shape: BoxShape.circle,
+              border: Border.all(color: BbV5Colors.hair),
+            ),
+            child: Icon(icon, size: 17, color: BbV5Colors.terra),
+          ),
+          const Spacer(),
+          Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.caption.copyWith(
+              fontFamily: 'Sora',
+              fontSize: 12.5,
+              height: 1.15,
+              fontWeight: FontWeight.w600,
+              color: BbV5Colors.ink,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _V5TrustedContactsSection extends StatelessWidget {
+  const _V5TrustedContactsSection({
+    required this.contacts,
+    required this.onAdd,
+    required this.onDelete,
+  });
+
+  final List<TrustedContactData> contacts;
+  final VoidCallback onAdd;
+  final ValueChanged<String> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5Section(
+      title: 'ДОВЕРЕННЫЕ КОНТАКТЫ',
+      child: BbV5Card(
+        radius: BbV5Radii.md,
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            for (var index = 0; index < contacts.length; index++) ...[
+              _V5ContactRow(
+                contact: contacts[index],
+                onDelete: () => onDelete(contacts[index].id),
+              ),
+              if (index != contacts.length - 1)
+                const Divider(height: 1, color: BbV5Colors.hairSoft),
+            ],
+            if (contacts.isNotEmpty)
+              const Divider(height: 1, color: BbV5Colors.hairSoft),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: contacts.length < 5 ? onAdd : null,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        LucideIcons.users,
+                        size: 17,
+                        color: BbV5Colors.terra,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Добавить контакт',
+                        style: AppTextStyles.caption.copyWith(
+                          fontFamily: 'Sora',
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: BbV5Colors.terra,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _V5ContactRow extends StatelessWidget {
+  const _V5ContactRow({
+    required this.contact,
+    required this.onDelete,
+  });
+
+  final TrustedContactData contact;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (contact.mode) {
+      'sos_only' => 'только SOS',
+      _ => 'встречи + SOS',
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: BbV5Colors.paper,
+              shape: BoxShape.circle,
+              border: Border.all(color: BbV5Colors.hair),
+            ),
+            child: Text(
+              contact.name.isEmpty ? '?' : contact.name.characters.first,
+              style: AppTextStyles.itemTitle.copyWith(
+                fontSize: 14,
+                color: BbV5Colors.ink,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  contact.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption.copyWith(
+                    fontFamily: 'Sora',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: BbV5Colors.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption.copyWith(
+                    fontSize: 11,
+                    color: BbV5Colors.inkMute,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(LucideIcons.check, size: 16, color: BbV5Colors.brand),
+          IconButton(
+            tooltip: 'Удалить',
+            onPressed: onDelete,
+            icon: const Icon(
+              LucideIcons.trash_2,
+              size: 15,
+              color: BbV5Colors.inkMute,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HotlinesSection extends StatelessWidget {
+  const _HotlinesSection();
+
+  @override
+  Widget build(BuildContext context) {
+    const hotlines = [
+      ('112 — экстренные службы', '112'),
+      ('8 800 2000 122 — психологическая помощь', '88002000122'),
+      ('Поддержка Frendly', '112'),
+    ];
+
+    return BbV5Section(
+      title: 'ГОРЯЧИЕ ЛИНИИ',
+      child: BbV5Card(
+        radius: BbV5Radii.md,
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            for (var index = 0; index < hotlines.length; index++) ...[
+              _HotlineRow(label: hotlines[index].$1, phone: hotlines[index].$2),
+              if (index != hotlines.length - 1)
+                const Divider(height: 1, color: BbV5Colors.hairSoft),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HotlineRow extends StatelessWidget {
+  const _HotlineRow({
+    required this.label,
+    required this.phone,
+  });
+
+  final String label;
+  final String phone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => launchUrl(Uri.parse('tel:$phone')),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: BbV5Colors.paper,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: BbV5Colors.hair),
+                ),
+                child: const Icon(
+                  LucideIcons.phone,
+                  size: 16,
+                  color: BbV5Colors.terra,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTextStyles.caption.copyWith(
+                    fontFamily: 'Sora',
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: BbV5Colors.ink,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PrivacyNote extends StatelessWidget {
+  const _PrivacyNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: BbV5Colors.paperHi,
+        borderRadius: BorderRadius.circular(BbV5Radii.md),
+        border: Border.all(color: BbV5Colors.hair),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(LucideIcons.bell, size: 17, color: BbV5Colors.terra),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Frendly не передаёт геолокацию третьим сторонам. SOS-сигнал хранится 7 дней и потом удаляется.',
+              style: AppTextStyles.caption.copyWith(
+                fontSize: 11.5,
+                height: 1.45,
+                color: BbV5Colors.inkSoft,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

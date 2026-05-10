@@ -43,6 +43,8 @@ void main() {
       find.text('Готовый или свой — несколько мест за вечер'),
       findsOneWidget,
     );
+    expect(find.text('Создать свой маршрут'), findsOneWidget);
+    expect(find.text('Из 2–6 шагов · сохраним в твоей коллекции'), findsOneWidget);
     expect(find.text('Найти маршрут или место'), findsOneWidget);
     expect(find.text('Тёплый круг на Покровке'), findsOneWidget);
     expect(find.text('3 шагов'), findsOneWidget);

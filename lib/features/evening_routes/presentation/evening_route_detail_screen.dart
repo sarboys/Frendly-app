@@ -26,7 +26,6 @@ class EveningRouteDetailScreen extends ConsumerWidget {
     return detailAsync.when(
       data: (route) => _RouteDetailContent(
         route: route,
-        wantLaunch: wantLaunch,
       ),
       loading: () => const _RouteDetailLoading(),
       error: (_, __) => const _RouteDetailMissing(),
@@ -37,11 +36,9 @@ class EveningRouteDetailScreen extends ConsumerWidget {
 class _RouteDetailContent extends StatelessWidget {
   const _RouteDetailContent({
     required this.route,
-    required this.wantLaunch,
   });
 
   final EveningRouteTemplateDetail route;
-  final bool wantLaunch;
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +78,6 @@ class _RouteDetailContent extends StatelessWidget {
             right: 0,
             bottom: 82 + MediaQuery.paddingOf(context).bottom,
             child: _RouteStickyCta(
-              wantLaunch: wantLaunch,
               onLaunch: () => context.pushRoute(
                 AppRoute.createEveningSession,
                 pathParameters: {'templateId': route.id},
@@ -586,11 +582,9 @@ class _StepPerkBadge extends StatelessWidget {
 
 class _RouteStickyCta extends StatelessWidget {
   const _RouteStickyCta({
-    required this.wantLaunch,
     required this.onLaunch,
   });
 
-  final bool wantLaunch;
   final VoidCallback onLaunch;
 
   @override
@@ -614,9 +608,7 @@ class _RouteStickyCta extends StatelessWidget {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
               child: BbV5PillButton(
-                label: wantLaunch
-                    ? 'Собрать вечер по маршруту'
-                    : 'Запустить маршрут · в чат',
+                label: 'Запустить маршрут · в чат',
                 icon: LucideIcons.play,
                 onPressed: onLaunch,
                 dark: true,

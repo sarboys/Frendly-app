@@ -4,6 +4,7 @@ import 'package:big_break_mobile/app/core/device/app_reverse_geocoding_service.d
 import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
 import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
+import 'package:big_break_mobile/features/create_meetup/presentation/publish_meetup_screen.dart';
 import 'package:big_break_mobile/features/create_meetup/presentation/create_meetup_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
@@ -370,34 +371,42 @@ Widget _wrap(
     routes: [
       GoRoute(
         path: '/',
-        builder: (context, state) => ProviderScope(
-          overrides: [
-            ...buildTestOverrides(),
-            backendRepositoryProvider.overrideWith((ref) {
-              final repository = _FakeCreateMeetupRepository(
-                ref: ref,
-                dio: Dio(),
-              );
-              onReady(repository);
-              return repository;
-            }),
-            yandexMapServiceProvider.overrideWithValue(_FakeYandexMapService()),
-            ...overrides,
-          ],
-          child: buildScreen(),
-        ),
-        routes: [
-          GoRoute(
-            path: 'event/:eventId',
-            name: 'eventDetail',
-            builder: (context, state) => const SizedBox.shrink(),
-          ),
-        ],
+        builder: (context, state) => buildScreen(),
+      ),
+      GoRoute(
+        path: '/publish',
+        name: 'publishMeetup',
+        builder: (context, state) => const PublishMeetupScreen(),
+      ),
+      GoRoute(
+        path: '/event/:eventId',
+        name: 'eventDetail',
+        builder: (context, state) => const SizedBox.shrink(),
+      ),
+      GoRoute(
+        path: '/paywall',
+        name: 'paywall',
+        builder: (context, state) => const SizedBox.shrink(),
       ),
     ],
   );
 
-  return MaterialApp.router(routerConfig: router);
+  return ProviderScope(
+    overrides: [
+      ...buildTestOverrides(),
+      backendRepositoryProvider.overrideWith((ref) {
+        final repository = _FakeCreateMeetupRepository(
+          ref: ref,
+          dio: Dio(),
+        );
+        onReady(repository);
+        return repository;
+      }),
+      yandexMapServiceProvider.overrideWithValue(_FakeYandexMapService()),
+      ...overrides,
+    ],
+    child: MaterialApp.router(routerConfig: router),
+  );
 }
 
 void main() {
@@ -442,7 +451,9 @@ void main() {
   }
 
   Future<void> tapCreate(WidgetTester tester) async {
-    await tester.tap(find.text('Опубликовать встречу'));
+    await tester.tap(find.text('Дальше · превью'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Опубликовать'));
     await tester.pumpAndSettle();
   }
 
@@ -495,7 +506,7 @@ void main() {
     expect(find.text('Стоимость'), findsOneWidget);
     await scrollTo(tester, find.text('Кого приглашаешь'));
     expect(find.text('Кого приглашаешь'), findsOneWidget);
-    expect(find.text('Опубликовать встречу'), findsOneWidget);
+    expect(find.text('Дальше · превью'), findsOneWidget);
     expect(
       find.text(
         'Чат откроется автоматически, когда кто-то присоединится',
@@ -789,15 +800,11 @@ void main() {
     await tester.tap(find.text('Использовать «Ручной адрес»'));
     await tester.pumpAndSettle();
     await enterDescription(tester, 'Короткое описание');
-    final publishButton = find.widgetWithText(
-      FilledButton,
-      'Опубликовать встречу',
-    );
+    final publishButton = find.widgetWithText(FilledButton, 'Дальше · превью');
     expect(publishButton, findsOneWidget);
     await tester.ensureVisible(publishButton);
     await tester.pumpAndSettle();
-    await tester.tap(publishButton);
-    await tester.pump();
+    await tapCreate(tester);
 
     expect(repository, isNotNull);
     expect(repository!.createEventCalls, 1);

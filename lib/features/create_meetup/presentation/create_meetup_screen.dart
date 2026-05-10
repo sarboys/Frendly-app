@@ -7,6 +7,7 @@ import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/after_dark/presentation/after_dark_providers.dart';
 import 'package:big_break_mobile/features/affiche/presentation/affiche_event_picker_sheet.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
+import 'package:big_break_mobile/features/create_meetup/presentation/create_meetup_draft.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
 import 'package:big_break_mobile/features/create_meetup/presentation/widgets/date_time_sheet.dart';
 import 'package:big_break_mobile/features/create_meetup/presentation/widgets/partner_picker_sheet.dart';
@@ -293,7 +294,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
             ? 'Отправить инвайт'
             : isAfterDarkMode
                 ? 'Создать 18+ событие'
-                : 'Опубликовать встречу';
+                : 'Дальше · превью';
     final canSubmit = isEditMode ||
         (!isDatingMode ? !isAfterDarkMode || afterDarkUnlocked : isPremium);
 
@@ -1534,6 +1535,12 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
       return;
     }
 
+    if (!isDatingMode && !isAfterDarkMode) {
+      ref.read(createMeetupDraftProvider.notifier).state = _buildPublishDraft();
+      context.pushRoute(AppRoute.publishMeetup);
+      return;
+    }
+
     setState(() {
       _creating = true;
     });
@@ -1621,6 +1628,79 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
         });
       }
     }
+  }
+
+  CreateMeetupDraft _buildPublishDraft() {
+    final submitPlace = placeSelection;
+    return CreateMeetupDraft(
+      title: _titleController.text.trim(),
+      description: _descriptionController.text.trim(),
+      emoji: emoji,
+      vibe: vibe,
+      place: _placeLabel(submitPlace),
+      startsAt: startsAt,
+      capacity: capacity.round(),
+      distanceKm: submitPlace.distanceKm,
+      latitude: submitPlace.latitude,
+      longitude: submitPlace.longitude,
+      mode: 'default',
+      lifestyle: lifestyle,
+      priceMode: priceMode,
+      priceAmountFrom: _priceAmountFrom(),
+      priceAmountTo: _priceAmountTo(),
+      accessMode: accessMode,
+      genderMode: genderMode,
+      visibilityMode: visibility,
+      joinMode: visibility == 'friends' || accessMode == 'request'
+          ? EventJoinMode.request
+          : EventJoinMode.open,
+      afficheEventId: _afficheEvent?.id,
+      routeId:
+          _routeSelection?.custom == true ? null : _routeSelection?.routeId,
+      route: _routeSelection?.toCustomPayload(),
+      communityId: widget.communityId,
+      idempotencyKey: _ensureCreateIdempotencyKey(),
+      attachmentTitle: _publishAttachmentTitle(),
+      attachmentSubtitle: _publishAttachmentSubtitle(),
+      attachmentIcon: _publishAttachmentIcon(),
+    );
+  }
+
+  String? _publishAttachmentTitle() {
+    if (_afficheEvent != null) {
+      return 'Афиша · ${_afficheEvent!.title}';
+    }
+    if (_routeSelection != null) {
+      return 'Маршрут · ${_routeSelection!.title}';
+    }
+    if (_partnerVenue != null) {
+      return 'Партнёр · ${_partnerVenue!.name}';
+    }
+    return null;
+  }
+
+  String? _publishAttachmentSubtitle() {
+    if (_afficheEvent != null) {
+      return _afficheEvent!.venue ?? _afficheEvent!.city;
+    }
+    if (_routeSelection != null) {
+      return _routeSelection!.durationLabel ??
+          '${_routeSelection!.steps.length} шага';
+    }
+    if (_partnerVenue != null) {
+      return _partnerVenue!.perkShort;
+    }
+    return null;
+  }
+
+  IconData _publishAttachmentIcon() {
+    if (_routeSelection != null) {
+      return LucideIcons.route;
+    }
+    if (_partnerVenue != null) {
+      return LucideIcons.gift;
+    }
+    return LucideIcons.ticket;
   }
 
   String _ensureCreateIdempotencyKey() {

@@ -250,6 +250,57 @@ class BbV5Page extends StatelessWidget {
   }
 }
 
+class BbV5FixedBottomBar extends StatelessWidget {
+  const BbV5FixedBottomBar({
+    required this.child,
+    this.footer,
+    this.padding = const EdgeInsets.fromLTRB(20, 16, 20, 20),
+    super.key,
+  });
+
+  final Widget child;
+  final Widget? footer;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).padding.bottom;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            BbV5Colors.paper.withValues(alpha: 0),
+            BbV5Colors.paper.withValues(alpha: 0.96),
+            BbV5Colors.paper,
+          ],
+          stops: const [0, 0.4, 1],
+        ),
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Padding(
+            padding: padding.add(EdgeInsets.only(bottom: bottom)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                child,
+                if (footer != null) ...[
+                  const SizedBox(height: 8),
+                  footer!,
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class BbV5Card extends StatelessWidget {
   const BbV5Card({
     required this.child,
@@ -329,6 +380,68 @@ class BbV5Card extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(radius),
         child: card,
+      ),
+    );
+  }
+}
+
+class BbV5BottomSheet extends StatelessWidget {
+  const BbV5BottomSheet({
+    required this.child,
+    this.maxHeightFactor = 0.85,
+    this.padding = const EdgeInsets.fromLTRB(20, 8, 20, 24),
+    super.key,
+  });
+
+  final Widget child;
+  final double maxHeightFactor;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final height = MediaQuery.of(context).size.height * maxHeightFactor;
+    return SafeArea(
+      top: false,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Container(
+            constraints: BoxConstraints(maxHeight: height),
+            decoration: const BoxDecoration(
+              color: BbV5Colors.paper,
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(BbV5Radii.lg),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x4D000000),
+                  blurRadius: 40,
+                  spreadRadius: -10,
+                  offset: Offset(0, -20),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: padding,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: BbV5Colors.hair,
+                      borderRadius: BorderRadius.circular(BbV5Radii.pill),
+                    ),
+                  ),
+                  Flexible(child: child),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
