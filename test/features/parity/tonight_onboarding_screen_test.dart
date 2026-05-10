@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
 import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
+import 'package:big_break_mobile/app/core/device/app_permission_service.dart';
 import 'package:big_break_mobile/app/core/device/app_reverse_geocoding_service.dart';
 import 'package:big_break_mobile/app/navigation/app_router.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
@@ -60,6 +61,13 @@ Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _pressPrimaryAction(WidgetTester tester, String label) async {
+  final button =
+      tester.widget<FilledButton>(find.widgetWithText(FilledButton, label));
+  button.onPressed?.call();
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('onboarding exposes the v5 seven-step flow', (tester) async {
     await tester.pumpWidget(
@@ -88,7 +96,7 @@ void main() {
     expect(find.text('Streak'), findsOneWidget);
     expect(find.text('Перки'), findsOneWidget);
     expect(find.text('Карта'), findsOneWidget);
-    expect(find.text('Сказать вслух'), findsOneWidget);
+    expect(find.text('Сказать вслух'), findsWidgets);
   });
 
   testWidgets('onboarding asks phone and sms users for email before profile',
@@ -139,7 +147,7 @@ void main() {
     tester.widget<FilledButton>(find.byType(FilledButton)).onPressed!.call();
     await tester.pumpAndSettle();
 
-    expect(find.text('Дата рождения'), findsOneWidget);
+    expect(find.text('Когда у тебя день рождения?'), findsOneWidget);
   });
 
   testWidgets('onboarding asks google and yandex users for phone with country',
@@ -182,7 +190,7 @@ void main() {
     tester.widget<FilledButton>(find.byType(FilledButton)).onPressed!.call();
     await tester.pumpAndSettle();
 
-    expect(find.text('Дата рождения'), findsOneWidget);
+    expect(find.text('Когда у тебя день рождения?'), findsOneWidget);
   });
 
   testWidgets('onboarding blocks duplicate email on contact step',
@@ -391,6 +399,9 @@ void main() {
               );
             },
           ),
+          appPermissionServiceProvider.overrideWithValue(
+            const _AllowPermissionService(),
+          ),
         ],
       ),
     );
@@ -423,6 +434,8 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Разрешить').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Войти в Frendly'));
     await tester.pumpAndSettle();
@@ -458,6 +471,34 @@ void main() {
     expect(find.text('Определить по гео'), findsOneWidget);
     expect(find.text('Москва'), findsNothing);
     expect(find.text('Чистые пруды'), findsNothing);
+  });
+
+  testWidgets('onboarding requires a location before continuing',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const OnboardingScreen(),
+        extraOverrides: [
+          onboardingProvider.overrideWith(
+            (ref) async => const OnboardingData(
+              intent: null,
+              gender: null,
+              city: null,
+              area: null,
+              interests: [],
+              vibe: null,
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _completeFirstOnboardingStep(tester);
+    await _pressPrimaryAction(tester, 'Дальше');
+
+    expect(find.text('Где ты?'), findsOneWidget);
+    expect(find.text('Что тебе нравится?'), findsNothing);
   });
 
   testWidgets('onboarding location step shows yandex suggestions',
@@ -514,6 +555,9 @@ void main() {
           yandexMapServiceProvider.overrideWithValue(
             _FakeYandexMapService(),
           ),
+          appPermissionServiceProvider.overrideWithValue(
+            const _AllowPermissionService(),
+          ),
         ],
       ),
     );
@@ -549,6 +593,8 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Разрешить').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Войти в Frendly'));
     await tester.pumpAndSettle();
@@ -593,6 +639,44 @@ void main() {
 
     expect(find.text('Зачем ты здесь?'), findsOneWidget);
     expect(find.text('Где ты?'), findsNothing);
+  });
+
+  testWidgets('onboarding requires a permission choice before final save',
+      (tester) async {
+    _RecordingOnboardingRepository? repository;
+
+    await tester.pumpWidget(
+      _wrapOnboardingFlow(
+        (ref) => repository = _RecordingOnboardingRepository(ref: ref),
+        extraOverrides: [
+          onboardingProvider.overrideWith(
+            (ref) async => const OnboardingData(
+              intent: 'both',
+              gender: 'male',
+              birthDate: '2000-04-24',
+              city: 'Москва',
+              area: 'Чистые пруды',
+              interests: ['Кофе'],
+              vibe: 'calm',
+              email: 'user@example.com',
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (var i = 0; i < 6; i += 1) {
+      await _pressPrimaryAction(tester, 'Дальше');
+    }
+
+    expect(find.text('Несколько разрешений'), findsOneWidget);
+    expect(find.text('Пропустить и настроить позже'), findsNothing);
+
+    await _pressPrimaryAction(tester, 'Войти в Frendly');
+
+    expect(repository?.saved, isNull);
+    expect(find.text('Несколько разрешений'), findsOneWidget);
   });
 
   testWidgets('onboarding first step fits above fixed CTA on phone viewport',
@@ -728,7 +812,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('tonight-location-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Где искать встречи?'), findsOneWidget);
+    expect(find.text('Где ты сейчас'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const ValueKey('tonight-location-input')),
@@ -782,7 +866,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pumpAndSettle();
 
-    expect(find.text('Москва'), findsOneWidget);
+    expect(find.text('Москва'), findsWidgets);
     expect(find.textContaining('Алматы'), findsNothing);
   });
 
@@ -1136,6 +1220,28 @@ class _NoLocationService implements AppLocationService {
   }) {
     return 0;
   }
+}
+
+class _AllowPermissionService implements AppPermissionService {
+  const _AllowPermissionService();
+
+  @override
+  Future<bool> requestContacts() async => true;
+
+  @override
+  Future<bool> requestCamera() async => true;
+
+  @override
+  Future<bool> requestLocation() async => true;
+
+  @override
+  Future<bool> requestMicrophone() async => true;
+
+  @override
+  Future<bool> requestNotifications() async => true;
+
+  @override
+  Future<bool> requestPhotos() async => true;
 }
 
 class _RecordingOnboardingRepository extends BackendRepository {

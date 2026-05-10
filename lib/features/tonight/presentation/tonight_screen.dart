@@ -2167,8 +2167,10 @@ class _TonightHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final manualLocation = ref.watch(manualLocationProvider);
-    final locationLabel =
-        manualLocation?.city ?? manualLocation?.label ?? 'Москва';
+    final detectedLocation = ref.watch(tonightHeaderLocationProvider);
+    final locationLabel = manualLocation?.label ??
+        detectedLocation.valueOrNull ??
+        'Геолокация недоступна';
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,

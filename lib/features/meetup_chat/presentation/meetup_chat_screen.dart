@@ -18,6 +18,7 @@ import 'package:big_break_mobile/shared/models/evening_session.dart';
 import 'package:big_break_mobile/shared/models/event_detail.dart';
 import 'package:big_break_mobile/shared/models/message.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
+import 'package:big_break_mobile/shared/utils/event_time_labels.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
 import 'package:big_break_mobile/shared/widgets/bb_chat_attachment_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_composer.dart';
@@ -1206,9 +1207,15 @@ class _V5EditMeetupDialogState extends State<_V5EditMeetupDialog> {
     _titleController = TextEditingController(text: widget.event.title);
     _placeController = TextEditingController(text: widget.event.place);
     final eventTime = widget.event.time.trim();
+    final dayLabel = eventDayLabel(
+      time: eventTime,
+      startsAtIso: widget.event.startsAtIso,
+    );
     _dateController = TextEditingController(
-      text:
-          eventTime.startsWith('Сегодня') ? eventTime : 'Сегодня · $eventTime',
+      text: eventDateTimeLabel(
+        time: eventTime,
+        status: dayLabel,
+      ),
     );
     _capacityController = TextEditingController(
       text: widget.event.capacity <= 0 ? '8' : '${widget.event.capacity}',

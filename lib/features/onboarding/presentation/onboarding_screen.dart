@@ -42,8 +42,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   String? intent;
   String? gender;
   String? birthDate;
-  String city = 'Москва';
-  String? area = 'Чистые пруды';
+  String city = '';
+  String? area;
   String? email;
   String? phoneNumber;
   bool _geoPermissionDone = false;
@@ -73,33 +73,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   static const interests = [
     'Кофе',
     'Бары',
-    'Бег',
-    'Кино',
-    'Музыка',
     'Настолки',
-    'Йога',
+    'Кино',
     'Книги',
-    'Выставки',
     'Велик',
+    'Йога',
+    'Бег',
     'Театр',
     'Готовка',
-  ];
-
-  static const cities = [
-    'Москва',
-    'Санкт-Петербург',
-    'Тбилиси',
-    'Ереван',
-    'Белград',
-  ];
-
-  static const areas = [
-    'Центр',
-    'Чистые пруды',
-    'Патрики',
-    'Хамовники',
-    'Сокол',
-    'Замоскворечье',
+    'Музыка',
+    'Выставки',
+    'Походы',
+    'Фото',
   ];
 
   static const vibes = [
@@ -171,7 +156,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         return _locationController.text.trim().isNotEmpty ||
             (city.trim().isNotEmpty && area?.trim().isNotEmpty == true);
       case _OnboardingStep.interests:
-        return picked.length >= 2;
+        return picked.isNotEmpty;
       case _OnboardingStep.vibe:
         return vibe != null;
       case _OnboardingStep.birthday:
@@ -190,12 +175,20 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             !_checkingContact &&
             _contactError == null;
       case _OnboardingStep.permissions:
-        return true;
+        return _hasPermissionChoice;
     }
   }
 
+  bool get _hasPermissionChoice =>
+      _geoPermissionDone ||
+      _notificationsPermissionDone ||
+      _contactsPermissionDone;
+
   Future<void> next() async {
     if (_saving || _checkingContact) {
+      return;
+    }
+    if (!canContinue) {
       return;
     }
     if (step < _steps.length - 1) {
@@ -579,39 +572,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               'Покажем встречи рядом с тобой.',
             ),
             const SizedBox(height: 24),
-            const BbV5Kicker('Город'),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: cities
-                  .map(
-                    (item) => _PillButton(
-                      active: city == item,
-                      label: item,
-                      onTap: () => _selectCity(item),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-            const SizedBox(height: 20),
-            const BbV5Kicker('Район'),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: areas
-                  .map(
-                    (item) => _PillButton(
-                      active: area == item,
-                      label: item,
-                      onTap: () => _selectArea(item),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-            const SizedBox(height: 24),
-            const BbV5Kicker('Адрес вручную'),
+            const BbV5Kicker('Адрес или город'),
             const SizedBox(height: 8),
             TextField(
               controller: _locationController,
@@ -987,18 +948,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ),
         ),
         const SizedBox(height: 18),
-        Center(
-          child: TextButton(
-            onPressed: _save,
-            child: Text(
-              'Пропустить и настроить позже',
-              style: AppTextStyles.meta.copyWith(
-                color: BbV5Colors.inkMute,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -1273,30 +1222,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         .where((item) => item.isNotEmpty)
         .toList(growable: false);
     return parts.join(', ');
-  }
-
-  void _selectCity(String value) {
-    setState(() {
-      _didTouchForm = true;
-      city = value;
-      area ??= areas.first;
-      _locationController.text = _composeLocation(city, area);
-      _locationSuggestions = const [];
-      _searchingLocationSuggestions = false;
-    });
-  }
-
-  void _selectArea(String value) {
-    setState(() {
-      _didTouchForm = true;
-      area = value;
-      if (city.trim().isEmpty) {
-        city = cities.first;
-      }
-      _locationController.text = _composeLocation(city, area);
-      _locationSuggestions = const [];
-      _searchingLocationSuggestions = false;
-    });
   }
 
   void _handleLocationChanged(String value) {

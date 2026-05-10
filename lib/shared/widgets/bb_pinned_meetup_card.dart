@@ -1,5 +1,6 @@
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
+import 'package:big_break_mobile/shared/utils/event_time_labels.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -56,7 +57,10 @@ class BbPinnedMeetupCard extends StatelessWidget {
             children: [
               _PinnedMeta(
                 icon: LucideIcons.calendar,
-                label: 'Сегодня · ${chat.time}',
+                label: eventDateTimeLabel(
+                  time: chat.time,
+                  status: chat.status,
+                ),
               ),
               _PinnedMeta(
                 icon: LucideIcons.map_pin,

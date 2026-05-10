@@ -32,4 +32,32 @@ void main() {
 
     expect(find.text('Купить билет'), findsNothing);
   });
+
+  testWidgets('pinned meetup card keeps backend day label', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: BbPinnedMeetupCard(
+            chat: MeetupChat(
+              id: 'chat-tomorrow',
+              eventId: 'event-tomorrow',
+              title: 'Прогулка',
+              emoji: '🚶',
+              time: '15:00',
+              status: 'Завтра',
+              lastMessage: '',
+              lastAuthor: '',
+              lastTime: '',
+              unread: 0,
+              members: ['Ты'],
+            ),
+            place: 'Маросейка',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Завтра · 15:00'), findsOneWidget);
+    expect(find.text('Сегодня · 15:00'), findsNothing);
+  });
 }

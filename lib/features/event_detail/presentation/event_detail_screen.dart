@@ -5,6 +5,7 @@ import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/event_detail.dart';
+import 'package:big_break_mobile/shared/utils/event_time_labels.dart';
 import 'package:big_break_mobile/shared/widgets/async_value_view.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
@@ -618,8 +619,11 @@ class _V5MeetupHeroCard extends StatelessWidget {
                 _V5InfoTile(
                   icon: LucideIcons.calendar,
                   label: 'Когда',
-                  value: 'Сегодня',
-                  subtitle: event.time,
+                  value: eventDayLabel(
+                    time: event.time,
+                    startsAtIso: event.startsAtIso,
+                  ),
+                  subtitle: eventClockLabel(event.time),
                 ),
                 _V5InfoTile(
                   icon: LucideIcons.map_pin,

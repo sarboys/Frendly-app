@@ -9,6 +9,7 @@ import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
+import 'package:big_break_mobile/shared/utils/event_time_labels.dart';
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:dio/dio.dart';
@@ -1286,7 +1287,10 @@ String _phaseLabel(Event event) {
   if (diff.inMinutes > 0 && diff.inMinutes <= 90) {
     return 'СКОРО';
   }
-  return 'СЕГОДНЯ';
+  return eventDayLabel(
+    time: event.time,
+    startsAtIso: event.startsAtIso,
+  ).toUpperCase();
 }
 
 Color _phaseColor(Event event) {

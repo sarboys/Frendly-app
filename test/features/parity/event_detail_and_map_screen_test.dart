@@ -152,6 +152,59 @@ void main() {
     expect(lifestyleValue.style?.fontWeight, FontWeight.w600);
   });
 
+  testWidgets('event detail labels tomorrow event date as tomorrow', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...buildTestOverrides(),
+          eventDetailProvider.overrideWith((ref, eventId) async {
+            return const EventDetail(
+              id: 'e-tomorrow',
+              title: 'Прогулка по району',
+              emoji: '🚶',
+              time: 'Завтра · 15:00',
+              place: 'Маросейка',
+              distance: '3.2 км',
+              vibe: 'Спокойно',
+              description: 'Идем гулять по району.',
+              hostNote: null,
+              joined: false,
+              partnerName: null,
+              partnerOffer: null,
+              capacity: 8,
+              going: 1,
+              chatId: null,
+              host: EventHost(
+                id: 'user-host',
+                displayName: 'Лена',
+                verified: true,
+                rating: 4.8,
+                meetupCount: 9,
+                avatarUrl: null,
+              ),
+              attendees: [
+                EventAttendee(
+                  id: 'user-host',
+                  displayName: 'Лена',
+                  avatarUrl: null,
+                ),
+              ],
+            );
+          }),
+        ],
+        child: const MaterialApp(
+          home: EventDetailScreen(eventId: 'e-tomorrow'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Завтра'), findsOneWidget);
+    expect(find.text('Сегодня'), findsNothing);
+  });
+
   testWidgets('event detail shows pending join request state', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
