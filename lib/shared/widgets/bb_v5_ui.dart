@@ -31,6 +31,53 @@ class BbV5Colors {
   static const hairSoft = Color(0x0F3C281C);
 }
 
+class BbV5AfterDarkColors {
+  const BbV5AfterDarkColors._();
+
+  static const background = Color(0xFF160D24);
+  static const surface = Color(0xCC241735);
+  static const border = Color(0x3DFFFFFF);
+  static const foreground = Color(0xFFFFF6FC);
+  static const foregroundSoft = Color(0xFFD9C5DC);
+  static const foregroundMute = Color(0xFF9D84A7);
+  static const magenta = Color(0xFFFF3EA5);
+  static const violet = Color(0xFF8D5BFF);
+  static const cyan = Color(0xFF2FE3FF);
+
+  static const neonGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [violet, magenta],
+  );
+
+  static const glowShadow = [
+    BoxShadow(
+      color: Color(0x592FE3FF),
+      blurRadius: 24,
+      spreadRadius: -12,
+      offset: Offset(0, 10),
+    ),
+  ];
+
+  static const neonShadow = [
+    BoxShadow(
+      color: Color(0x80FF3EA5),
+      blurRadius: 24,
+      spreadRadius: -8,
+      offset: Offset(0, 12),
+    ),
+  ];
+
+  static const cardShadow = [
+    BoxShadow(
+      color: Color(0x66000000),
+      blurRadius: 32,
+      spreadRadius: -16,
+      offset: Offset(0, 18),
+    ),
+  ];
+}
+
 class BbV5Radii {
   const BbV5Radii._();
 

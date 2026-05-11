@@ -22,6 +22,7 @@ import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_brand_icon.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_system_overlays.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_promo.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -981,8 +982,21 @@ class _GatheringCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: BbV5Colors.paperHi,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: BbV5Colors.hair),
-            boxShadow: BbV5Shadows.card,
+            border: Border.all(
+              color: promoted ? BbV5PromoColors.gold : BbV5Colors.hair,
+              width: promoted ? 1.4 : 1,
+            ),
+            boxShadow: promoted
+                ? const [
+                    BoxShadow(
+                      color: BbV5PromoColors.glow,
+                      blurRadius: 28,
+                      spreadRadius: -14,
+                      offset: Offset(0, 14),
+                    ),
+                    ...BbV5Shadows.card,
+                  ]
+                : BbV5Shadows.card,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1028,37 +1042,7 @@ class _GatheringCard extends StatelessWidget {
                         left: 8,
                         top: 8,
                         child: promoted
-                            ? Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: BbV5Colors.terra,
-                                  borderRadius: BorderRadius.circular(999),
-                                  boxShadow: BbV5Shadows.pill,
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      LucideIcons.flame,
-                                      size: 11,
-                                      color: BbV5Colors.paperHi,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'ТОП',
-                                      style: AppTextStyles.caption.copyWith(
-                                        color: BbV5Colors.paperHi,
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 1,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
+                            ? const BbV5PromoBadge(compact: true)
                             : const SizedBox.shrink(),
                       ),
                       Positioned(
@@ -2255,6 +2239,8 @@ class _TonightHeader extends ConsumerWidget {
           onPressed: () => showV5SearchModal(context),
         ),
         const SizedBox(width: AppSpacing.xs),
+        const _HeaderAfterDarkButton(),
+        const SizedBox(width: AppSpacing.xs),
         const _HeaderNotificationsButton(),
         const SizedBox(width: AppSpacing.xs),
         const _HeaderSosButton(),
@@ -2302,6 +2288,47 @@ class _HeaderSosButton extends StatelessWidget {
           ),
           child: const Icon(
             LucideIcons.shield_alert,
+            size: 16,
+            color: BbV5Colors.paperHi,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderAfterDarkButton extends StatelessWidget {
+  const _HeaderAfterDarkButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => context.pushRoute(AppRoute.afterDark),
+        borderRadius: BorderRadius.circular(BbV5Radii.pill),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF8D5BFF), Color(0xFFFF3EA5)],
+            ),
+            shape: BoxShape.circle,
+            border: Border.all(color: const Color(0x66FFFFFF)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x66FF3EA5),
+                blurRadius: 20,
+                spreadRadius: -8,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: const Icon(
+            LucideIcons.moon,
             size: 16,
             color: BbV5Colors.paperHi,
           ),

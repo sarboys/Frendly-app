@@ -409,6 +409,12 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
             _applyModeDefaults(_mode);
           }),
         ),
+        _V5TabItem(
+          label: 'After Dark',
+          active: false,
+          afterDark: true,
+          onTap: () => context.pushRoute(AppRoute.afterDark),
+        ),
       ],
     );
   }
@@ -1882,11 +1888,13 @@ class _V5TabItem {
     required this.label,
     required this.active,
     required this.onTap,
+    this.afterDark = false,
   });
 
   final String label;
   final bool active;
   final VoidCallback onTap;
+  final bool afterDark;
 }
 
 class _V5SegmentedTabs extends StatelessWidget {
@@ -1922,6 +1930,7 @@ class _V5TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isAfterDark = item.afterDark;
     return SizedBox(
       height: 40,
       child: FilledButton(
@@ -1929,9 +1938,10 @@ class _V5TabButton extends StatelessWidget {
         style: FilledButton.styleFrom(
           elevation: 0,
           padding: EdgeInsets.zero,
-          backgroundColor: item.active ? BbV5Colors.accent : Colors.transparent,
-          foregroundColor:
-              item.active ? BbV5Colors.paperHi : BbV5Colors.inkSoft,
+          backgroundColor: Colors.transparent,
+          foregroundColor: item.active || isAfterDark
+              ? BbV5Colors.paperHi
+              : BbV5Colors.inkSoft,
           shape: const StadiumBorder(),
           textStyle: AppTextStyles.button.copyWith(
             fontFamily: 'Sora',
@@ -1939,10 +1949,46 @@ class _V5TabButton extends StatelessWidget {
             fontWeight: FontWeight.w600,
           ),
         ),
-        child: Text(
-          item.label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: item.active ? BbV5Colors.accent : null,
+            gradient: isAfterDark
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF8D5BFF), Color(0xFFFF3EA5)],
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(BbV5Radii.pill),
+            boxShadow: isAfterDark
+                ? const [
+                    BoxShadow(
+                      color: Color(0x66FF3EA5),
+                      blurRadius: 18,
+                      spreadRadius: -8,
+                      offset: Offset(0, 8),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isAfterDark) ...[
+                  const Icon(LucideIcons.moon, size: 13),
+                  const SizedBox(width: 5),
+                ],
+                Flexible(
+                  child: Text(
+                    item.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

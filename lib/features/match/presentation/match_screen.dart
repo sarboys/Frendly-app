@@ -1,11 +1,12 @@
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -19,26 +20,15 @@ class MatchScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = AppColors.of(context);
     final matchesAsync = ref.watch(matchesProvider);
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
+    return BbV5Scaffold(
+      child: SafeArea(
         bottom: false,
         child: matchesAsync.when(
           data: (matches) {
             if (matches.isEmpty) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'Совпадений пока нет',
-                    style: AppTextStyles.body,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              );
+              return const _MatchEmptyState(text: 'Совпадений пока нет');
             }
 
             final match = matches.firstWhere(
@@ -47,255 +37,230 @@ class MatchScreen extends ConsumerWidget {
             );
 
             if (match.userId != userId) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'Совпадение не найдено',
-                    style: AppTextStyles.body,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              );
+              return const _MatchEmptyState(text: 'Совпадение не найдено');
             }
             final shortName = match.displayName.split(' ').first;
 
-            return Column(
+            return Stack(
               children: [
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                    children: [
-                      IconButton(
-                        onPressed: () => context.pop(),
-                        icon: const Icon(Icons.chevron_left_rounded, size: 28),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const BbAvatar(name: 'Ты', size: BbAvatarSize.lg),
-                          const SizedBox(width: AppSpacing.md),
-                          Icon(
-                            Icons.auto_awesome_rounded,
-                            size: 20,
-                            color: colors.primary,
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          BbAvatar(
-                            name: match.displayName,
-                            imageUrl: match.avatarUrl,
-                            size: BbAvatarSize.lg,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        'Ты и $shortName',
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.itemTitle.copyWith(
-                          color: colors.inkMute,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 132),
+                      children: [
+                        BbV5TopBar(
+                          kicker: 'MATCH',
+                          title: 'Совпадение',
+                          onBack: () => context.pop(),
                         ),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Center(
-                        child: SizedBox(
-                          width: 160,
-                          height: 160,
-                          child: Stack(
-                            alignment: Alignment.center,
+                        const SizedBox(height: 22),
+                        BbV5Card(
+                          tint: BbV5Colors.terraSoft,
+                          child: Column(
                             children: [
-                              SizedBox(
-                                width: 160,
-                                height: 160,
-                                child: CircularProgressIndicator(
-                                  value: match.score / 100,
-                                  strokeWidth: 10,
-                                  backgroundColor: colors.muted,
-                                  color: colors.primary,
-                                ),
-                              ),
-                              Column(
-                                mainAxisSize: MainAxisSize.min,
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text(
-                                    '${match.score}%',
-                                    textAlign: TextAlign.center,
-                                    style: AppTextStyles.screenTitle
-                                        .copyWith(fontSize: 44),
+                                  const BbAvatar(
+                                    name: 'Ты',
+                                    size: BbAvatarSize.lg,
                                   ),
-                                  Text(
-                                    'совпадение',
-                                    textAlign: TextAlign.center,
-                                    style: AppTextStyles.caption.copyWith(
-                                      letterSpacing: 0,
-                                    ),
+                                  const SizedBox(width: AppSpacing.md),
+                                  const Icon(
+                                    LucideIcons.sparkles,
+                                    size: 20,
+                                    color: BbV5Colors.accent,
+                                  ),
+                                  const SizedBox(width: AppSpacing.md),
+                                  BbAvatar(
+                                    name: match.displayName,
+                                    imageUrl: match.avatarUrl,
+                                    size: BbAvatarSize.lg,
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Text(
-                        'Высокая совместимость. Похожий вайб и ${match.commonInterests.length} общих интересов.',
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.bodySoft,
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-                      Text(
-                        'Что совпадает',
-                        style: AppTextStyles.caption.copyWith(
-                          color: colors.inkMute,
-                          letterSpacing: 0,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Container(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: colors.card,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: colors.border),
-                        ),
-                        child: Column(
-                          children: [
-                            _MatchTraitRow(
-                              label: 'Вайб',
-                              you: 'Спокойно',
-                              them: match.vibe ?? 'Спокойно',
-                              match: true,
-                            ),
-                            if (match.area != null)
-                              _MatchTraitRow(
-                                label: 'Район',
-                                you: 'Твой район',
-                                them: match.area!,
-                                match: true,
+                              const SizedBox(height: AppSpacing.sm),
+                              Text(
+                                'Ты и $shortName',
+                                textAlign: TextAlign.center,
+                                style: AppTextStyles.itemTitle.copyWith(
+                                  color: BbV5Colors.inkMute,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            _MatchTraitRow(
-                              label: 'Общие интересы',
-                              you: '${match.commonInterests.length}',
-                              them: match.commonInterests.join(', '),
-                              match: match.commonInterests.isNotEmpty,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-                      Text(
-                        'Интересы · ${match.commonInterests.length} общих',
-                        style: AppTextStyles.caption.copyWith(
-                          color: colors.inkMute,
-                          letterSpacing: 0,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        children: match.commonInterests
-                            .map(
-                              (interest) => Container(
-                                height: 36,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: colors.primarySoft,
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(
-                                    color:
-                                        colors.primary.withValues(alpha: 0.3),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
+                              const SizedBox(height: AppSpacing.lg),
+                              SizedBox(
+                                width: 164,
+                                height: 164,
+                                child: Stack(
+                                  alignment: Alignment.center,
                                   children: [
-                                    Container(
-                                      width: 6,
-                                      height: 6,
-                                      decoration: BoxDecoration(
-                                        color: colors.primary,
-                                        shape: BoxShape.circle,
+                                    SizedBox(
+                                      width: 164,
+                                      height: 164,
+                                      child: CircularProgressIndicator(
+                                        value: match.score / 100,
+                                        strokeWidth: 10,
+                                        backgroundColor: BbV5Colors.hair,
+                                        color: BbV5Colors.accent,
                                       ),
                                     ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      interest,
-                                      style: AppTextStyles.meta.copyWith(
-                                        color: colors.foreground,
-                                      ),
+                                    Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          '${match.score}%',
+                                          textAlign: TextAlign.center,
+                                          style: bbV5DisplayStyle(fontSize: 44),
+                                        ),
+                                        Text(
+                                          'совпадение',
+                                          textAlign: TextAlign.center,
+                                          style: AppTextStyles.caption.copyWith(
+                                            color: BbV5Colors.inkMute,
+                                            letterSpacing: 0,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
                               ),
-                            )
-                            .toList(growable: false),
-                      ),
-                    ],
-                  ),
-                ),
-                SafeArea(
-                  top: false,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          colors.background.withValues(alpha: 0),
-                          colors.background,
-                          colors.background,
-                        ],
-                      ),
-                    ),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: colors.foreground,
-                        ),
-                        onPressed: () async {
-                          final repository =
-                              ref.read(backendRepositoryProvider);
-                          final chatId = await repository
-                              .createOrGetDirectChat(match.userId);
-                          if (context.mounted) {
-                            context.pushRoute(
-                              AppRoute.personalChat,
-                              pathParameters: {'chatId': chatId},
-                            );
-                          }
-                        },
-                        icon: Icon(
-                          Icons.message_outlined,
-                          color: colors.primaryForeground,
-                        ),
-                        label: Text(
-                          'Написать $shortName',
-                          style: AppTextStyles.button.copyWith(
-                            color: colors.primaryForeground,
+                              const SizedBox(height: AppSpacing.lg),
+                              Text(
+                                'Похожий вайб и ${match.commonInterests.length} общих интересов.',
+                                textAlign: TextAlign.center,
+                                style: AppTextStyles.bodySoft.copyWith(
+                                  color: BbV5Colors.inkSoft,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
+                        BbV5Section(
+                          title: 'Что совпадает',
+                          child: BbV5Card(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 10,
+                            ),
+                            child: Column(
+                              children: [
+                                _MatchTraitRow(
+                                  label: 'Вайб',
+                                  you: 'Спокойно',
+                                  them: match.vibe ?? 'Спокойно',
+                                  match: true,
+                                ),
+                                if (match.area != null)
+                                  _MatchTraitRow(
+                                    label: 'Район',
+                                    you: 'Твой район',
+                                    them: match.area!,
+                                    match: true,
+                                  ),
+                                _MatchTraitRow(
+                                  label: 'Общие интересы',
+                                  you: '${match.commonInterests.length}',
+                                  them: match.commonInterests.join(', '),
+                                  match: match.commonInterests.isNotEmpty,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        BbV5Section(
+                          title:
+                              'Интересы · ${match.commonInterests.length} общих',
+                          child: Wrap(
+                            spacing: AppSpacing.xs,
+                            runSpacing: AppSpacing.xs,
+                            children: match.commonInterests
+                                .map((interest) => BbV5Chip(label: interest))
+                                .toList(growable: false),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: BbV5FixedBottomBar(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: BbV5PillButton(
+                            label: 'Написать',
+                            icon: LucideIcons.message_circle,
+                            dark: true,
+                            height: 54,
+                            expanded: true,
+                            onPressed: () async {
+                              final repository =
+                                  ref.read(backendRepositoryProvider);
+                              final chatId = await repository
+                                  .createOrGetDirectChat(match.userId);
+                              if (context.mounted) {
+                                context.pushRoute(
+                                  AppRoute.personalChat,
+                                  pathParameters: {'chatId': chatId},
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: BbV5PillButton(
+                            label: 'Пригласить на встречу',
+                            icon: LucideIcons.calendar_plus,
+                            height: 54,
+                            expanded: true,
+                            fontSize: 12,
+                            onPressed: () => context.pushRoute(
+                              AppRoute.createMeetup,
+                              queryParameters: {'inviteeUserId': match.userId},
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ],
             );
           },
-          loading: () => Center(
-            child: CircularProgressIndicator(color: colors.primary),
+          loading: () => const Center(
+            child: CircularProgressIndicator(color: BbV5Colors.accent),
           ),
-          error: (error, _) => Center(child: Text(error.toString())),
+          error: (error, _) => _MatchEmptyState(text: error.toString()),
+        ),
+      ),
+    );
+  }
+}
+
+class _MatchEmptyState extends StatelessWidget {
+  const _MatchEmptyState({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: BbV5Card(
+          child: Text(
+            text,
+            style: AppTextStyles.body.copyWith(color: BbV5Colors.inkSoft),
+            textAlign: TextAlign.center,
+          ),
         ),
       ),
     );
@@ -317,7 +282,6 @@ class _MatchTraitRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -333,7 +297,7 @@ class _MatchTraitRow extends StatelessWidget {
           Text(
             them,
             style: AppTextStyles.meta.copyWith(
-              color: match ? colors.secondary : colors.inkMute,
+              color: match ? BbV5Colors.sage : BbV5Colors.inkMute,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -342,7 +306,7 @@ class _MatchTraitRow extends StatelessWidget {
             width: 8,
             height: 8,
             decoration: BoxDecoration(
-              color: match ? colors.secondary : colors.muted,
+              color: match ? BbV5Colors.sage : BbV5Colors.hair,
               shape: BoxShape.circle,
             ),
           ),

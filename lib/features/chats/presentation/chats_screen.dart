@@ -17,6 +17,7 @@ import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:big_break_mobile/shared/models/personal_chat.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_promo.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -32,6 +33,9 @@ class ChatsScreen extends ConsumerWidget {
     final meetupChatsAsync = ref.watch(meetupChatsProvider);
     final personalChatsAsync = ref.watch(personalChatsProvider);
     final wallet = ref.watch(tokenWalletProvider);
+    final promotedIds = wallet.promoted.keys
+        .where((eventId) => wallet.isPromoted(eventId))
+        .toSet();
     ref.watch(chatRealtimeSyncProvider);
     final meetupChats = meetupChatsAsync.valueOrNull ?? const [];
     final personalChats = personalChatsAsync.valueOrNull ?? const [];
@@ -76,9 +80,7 @@ class ChatsScreen extends ConsumerWidget {
                 _V5ActiveChatsRail(
                   meetupChats: meetupChats,
                   personalChats: personalChats,
-                  promotedIds: wallet.promoted.keys
-                      .where((eventId) => wallet.isPromoted(eventId))
-                      .toSet(),
+                  promotedIds: promotedIds,
                   onMeetupTap: (chat) => _openMeetupChat(context, chat),
                   onPersonalTap: (chat) => context.pushRoute(
                     AppRoute.personalChat,
@@ -104,6 +106,7 @@ class ChatsScreen extends ConsumerWidget {
                   _V5AllChatList(
                     meetupChats: meetupChats,
                     personalChats: personalChats,
+                    promotedIds: promotedIds,
                     loading: meetupChatsAsync.isLoading ||
                         personalChatsAsync.isLoading,
                     error: meetupChatsAsync.hasError ||
@@ -471,35 +474,7 @@ class _V5ActivePromotedBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: BbV5Colors.terra,
-        borderRadius: BorderRadius.circular(BbV5Radii.pill),
-        border: Border.all(color: BbV5Colors.paperHi, width: 1.5),
-        boxShadow: BbV5Shadows.pill,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            LucideIcons.flame,
-            size: 9,
-            color: BbV5Colors.paperHi,
-          ),
-          const SizedBox(width: 2),
-          Text(
-            'ТОП',
-            style: AppTextStyles.caption.copyWith(
-              color: BbV5Colors.paperHi,
-              fontSize: 8.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.8,
-            ),
-          ),
-        ],
-      ),
-    );
+    return const BbV5PromoBadge(compact: true);
   }
 }
 
@@ -619,6 +594,7 @@ class _V5AllChatList extends StatelessWidget {
   const _V5AllChatList({
     required this.meetupChats,
     required this.personalChats,
+    required this.promotedIds,
     required this.loading,
     required this.error,
     required this.onMeetupOpen,
@@ -629,6 +605,7 @@ class _V5AllChatList extends StatelessWidget {
 
   final List<MeetupChat> meetupChats;
   final List<PersonalChat> personalChats;
+  final Set<String> promotedIds;
   final bool loading;
   final bool error;
   final ValueChanged<MeetupChat> onMeetupOpen;
@@ -671,6 +648,7 @@ class _V5AllChatList extends StatelessWidget {
         children: [
           for (var index = 0; index < visibleEntries.length; index++) ...[
             visibleEntries[index].buildRow(
+              promotedIds: promotedIds,
               onMeetupOpen: onMeetupOpen,
               onMeetupPinToggle: onMeetupPinToggle,
               onPersonalOpen: onPersonalOpen,
@@ -696,6 +674,7 @@ class _V5AllChatEntry {
   String get time => meetup?.lastTime ?? personal?.lastTime ?? '';
 
   Widget buildRow({
+    required Set<String> promotedIds,
     required ValueChanged<MeetupChat> onMeetupOpen,
     required ValueChanged<MeetupChat> onMeetupPinToggle,
     required ValueChanged<PersonalChat> onPersonalOpen,
@@ -703,6 +682,7 @@ class _V5AllChatEntry {
   }) {
     final meetupChat = meetup;
     if (meetupChat != null) {
+      final promoted = _isPromotedMeetupChat(meetupChat, promotedIds);
       return _V5ChatRow(
         item: _V5ChatRowItem(
           id: meetupChat.id,
@@ -713,6 +693,7 @@ class _V5AllChatEntry {
           time: meetupChat.lastTime,
           unread: meetupChat.unread,
           pinned: meetupChat.isPinned,
+          promoted: promoted,
           kind: _meetupKind(meetupChat),
           members: _meetupMembersCount(meetupChat),
           dot: meetupChat.phase == MeetupPhase.live || meetupChat.unread > 0,
@@ -834,6 +815,7 @@ class _V5ChatRowItem {
     required this.kind,
     this.unread = 0,
     this.pinned = false,
+    this.promoted = false,
     this.members,
     this.dot = true,
   });
@@ -847,6 +829,7 @@ class _V5ChatRowItem {
   final String kind;
   final int unread;
   final bool pinned;
+  final bool promoted;
   final int? members;
   final bool dot;
 }
@@ -868,10 +851,24 @@ class _V5ChatRow extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
       child: Row(
         children: [
-          _V5InitialsAvatar(
-            initials: item.initials,
-            color: item.color,
-            dot: item.dot,
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              _V5InitialsAvatar(
+                initials: item.initials,
+                color: item.promoted ? BbV5PromoColors.gold : item.color,
+                dot: item.dot,
+                ringColor: item.promoted
+                    ? BbV5PromoColors.goldSoft
+                    : BbV5Colors.paperHi,
+              ),
+              if (item.promoted)
+                const Positioned(
+                  left: -4,
+                  top: -7,
+                  child: BbV5PromoBadge(compact: true),
+                ),
+            ],
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -924,6 +921,10 @@ class _V5ChatRow extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
+                    if (item.promoted) ...[
+                      const BbV5PromoNote(text: 'Продвигается'),
+                      const SizedBox(width: 8),
+                    ],
                     Text(
                       item.kind,
                       style: AppTextStyles.caption.copyWith(

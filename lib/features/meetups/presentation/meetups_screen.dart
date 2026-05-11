@@ -11,6 +11,7 @@ import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/utils/event_time_labels.dart';
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_promo.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -985,36 +986,7 @@ class _PromotedMeetupBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final background = dark ? BbV5Colors.terra : BbV5Colors.paperHi;
-    final foreground = dark ? BbV5Colors.paperHi : BbV5Colors.accentDeep;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: dark ? BbV5Colors.terra : BbV5Colors.paperHi,
-        ),
-        boxShadow: BbV5Shadows.pill,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(LucideIcons.flame, size: 10, color: foreground),
-          const SizedBox(width: 3),
-          Text(
-            'ТОП',
-            style: AppTextStyles.caption.copyWith(
-              color: foreground,
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1,
-            ),
-          ),
-        ],
-      ),
-    );
+    return BbV5PromoBadge(compact: true, dark: dark);
   }
 }
 

@@ -3,6 +3,7 @@ import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/navigation/app_shell.dart';
 import 'package:big_break_mobile/features/affiche/presentation/affiche_events_screen.dart';
 import 'package:big_break_mobile/features/affiche/presentation/affiche_event_detail_screen.dart';
+import 'package:big_break_mobile/features/after_dark/presentation/after_dark_screen.dart';
 import 'package:big_break_mobile/features/ai_create/presentation/ai_create_screen.dart';
 import 'package:big_break_mobile/features/ai_voice/presentation/ai_voice_screen.dart';
 import 'package:big_break_mobile/features/add_photo/presentation/add_photo_screen.dart';
@@ -375,6 +376,11 @@ GoRouter buildAppRouter({
         path: AppRoute.aiCreate.path,
         name: AppRoute.aiCreate.name,
         pageBuilder: (context, state) => _slidePage(const AiCreateScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.afterDark.path,
+        name: AppRoute.afterDark.name,
+        pageBuilder: (context, state) => _slidePage(const AfterDarkScreen()),
       ),
       GoRoute(
         path: AppRoute.aiVoice.path,

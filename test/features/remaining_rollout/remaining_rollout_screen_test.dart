@@ -122,6 +122,8 @@ void main() {
 
     expect(find.text('87%'), findsOneWidget);
     expect(find.text('совпадение'), findsOneWidget);
+    expect(find.textContaining('Написать'), findsOneWidget);
+    expect(find.text('Пригласить на встречу'), findsOneWidget);
     expect(find.text('Вайб'), findsOneWidget);
     expect(find.text('Зачем здесь'), findsNothing);
     expect(find.text('Активность'), findsNothing);

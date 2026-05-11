@@ -22,6 +22,7 @@ enum AppRoute {
   map('/map'),
   notifications('/notifications'),
   sos('/sos'),
+  afterDark('/after-dark'),
   aiCreate('/ai-create'),
   aiVoice('/ai-voice'),
   streak('/streak'),
