@@ -249,6 +249,39 @@ void main() {
     expect(annaTop, lessThan(standupTop));
   });
 
+  testWidgets('personal tab with one chat hides empty hint', (tester) async {
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        child: const ChatsScreen(),
+        targetText: 'unused',
+        extraOverrides: [
+          meetupChatsProvider.overrideWith((ref) async => const []),
+          personalChatsProvider.overrideWith(
+            (ref) async => const [
+              PersonalChat(
+                id: 'pc-1111',
+                peerUserId: 'user-304f0edb-76db-439c-ae10-5b9a52f76da6',
+                name: 'Пользователь 1111',
+                lastMessage: 'stage50 incoming unread',
+                lastTime: '8 ч',
+                unread: 0,
+                online: true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Личные'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Пользователь 1111'), findsOneWidget);
+    expect(find.text('stage50 incoming unread'), findsOneWidget);
+    expect(find.text('Личные чаты появляются после встреч.'), findsNothing);
+  });
+
   testWidgets('chats ai card renders v5 launch CTA', (tester) async {
     await tester.pumpWidget(
       _wrapWithRouter(

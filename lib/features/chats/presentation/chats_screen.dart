@@ -32,13 +32,17 @@ class ChatsScreen extends ConsumerWidget {
     final currentUserId = ref.watch(currentUserIdProvider);
     final meetupChatsAsync = ref.watch(meetupChatsProvider);
     final personalChatsAsync = ref.watch(personalChatsProvider);
+    final knownPersonalChats = ref.watch(knownPersonalChatsProvider);
     final wallet = ref.watch(tokenWalletProvider);
     final promotedIds = wallet.promoted.keys
         .where((eventId) => wallet.isPromoted(eventId))
         .toSet();
     ref.watch(chatRealtimeSyncProvider);
     final meetupChats = meetupChatsAsync.valueOrNull ?? const [];
-    final personalChats = personalChatsAsync.valueOrNull ?? const [];
+    final personalChats = mergeKnownPersonalChats(
+      personalChatsAsync.valueOrNull ?? const [],
+      knownPersonalChats.values,
+    );
     final liveChats = meetupChats
         .where((chat) => chat.phase == MeetupPhase.live)
         .toList(growable: false);
@@ -1115,16 +1119,6 @@ class _V5PersonalChatList extends StatelessWidget {
               onTap: () => onOpen(chat),
               onPinToggle: () => onPinToggle(chat),
             ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
-            child: Text(
-              'Личные чаты появляются после встреч.',
-              style: AppTextStyles.meta.copyWith(
-                color: BbV5Colors.inkMute,
-                fontSize: 13,
-              ),
-            ),
-          ),
         ],
       ),
     );

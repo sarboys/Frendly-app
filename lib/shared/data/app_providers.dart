@@ -839,6 +839,9 @@ final eveningRouteTemplateSessionsProvider = FutureProvider.autoDispose
 final personalChatsLocalStateProvider =
     StateProvider<List<PersonalChat>?>((ref) => null);
 
+final knownPersonalChatsProvider =
+    StateProvider<Map<String, PersonalChat>>((ref) => const {});
+
 final personalChatsProvider = FutureProvider<List<PersonalChat>>((ref) async {
   final authTokens = ref.watch(authTokensProvider);
   if (authTokens == null) {
@@ -856,7 +859,7 @@ final personalChatsProvider = FutureProvider<List<PersonalChat>>((ref) async {
 
 final personalChatSummaryProvider =
     Provider.autoDispose.family<PersonalChat?, String>((ref, chatId) {
-  return ref.watch(personalChatsProvider.select((value) {
+  final loadedChat = ref.watch(personalChatsProvider.select((value) {
     final items = value.valueOrNull;
     if (items == null) {
       return null;
@@ -870,6 +873,13 @@ final personalChatSummaryProvider =
 
     return null;
   }));
+  if (loadedChat != null) {
+    return loadedChat;
+  }
+
+  return ref.watch(
+    knownPersonalChatsProvider.select((value) => value[chatId]),
+  );
 });
 
 final notificationsLocalStateProvider =
@@ -1040,6 +1050,19 @@ List<MeetupChat> upsertMeetupChat(
 void clearChatListLocalStateForRefetch(Ref ref) {
   ref.read(meetupChatsLocalStateProvider.notifier).state = null;
   ref.read(personalChatsLocalStateProvider.notifier).state = null;
+}
+
+List<PersonalChat> mergeKnownPersonalChats(
+  List<PersonalChat> chats,
+  Iterable<PersonalChat> knownChats,
+) {
+  final byId = <String, PersonalChat>{
+    for (final chat in chats) chat.id: chat,
+  };
+  for (final chat in knownChats) {
+    byId.putIfAbsent(chat.id, () => chat);
+  }
+  return sortPersonalChatsByPinned(byId.values.toList(growable: false));
 }
 
 List<PersonalChat> upsertPersonalChatSummary(

@@ -7,6 +7,7 @@ import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/profile/presentation/profile_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/models/personal_chat.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/widgets/async_value_view.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
@@ -64,7 +65,10 @@ class UserProfileScreen extends ConsumerWidget {
                       color: BbV5Colors.inkMute,
                     ),
                   ),
-            bottomOverlay: _PublicProfileBottomBar(userId: userId),
+            bottomOverlay: _PublicProfileBottomBar(
+              userId: userId,
+              profile: profile,
+            ),
           );
         },
       ),
@@ -96,9 +100,13 @@ class _PublicProfileHeader extends StatelessWidget {
 }
 
 class _PublicProfileBottomBar extends ConsumerWidget {
-  const _PublicProfileBottomBar({required this.userId});
+  const _PublicProfileBottomBar({
+    required this.userId,
+    required this.profile,
+  });
 
   final String userId;
+  final ProfileData profile;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -148,6 +156,29 @@ class _PublicProfileBottomBar extends ConsumerWidget {
                         final repository = ref.read(backendRepositoryProvider);
                         final chatId =
                             await repository.createOrGetDirectChat(userId);
+                        final knownChat = PersonalChat(
+                          id: chatId,
+                          peerUserId: userId,
+                          name: profile.displayName,
+                          lastMessage: '',
+                          lastTime: '',
+                          unread: 0,
+                          online: profile.online,
+                        );
+                        ref.read(knownPersonalChatsProvider.notifier).state = {
+                          ...ref.read(knownPersonalChatsProvider),
+                          chatId: knownChat,
+                        };
+                        final currentChats =
+                            ref.read(personalChatsProvider).valueOrNull;
+                        if (currentChats != null) {
+                          ref
+                              .read(personalChatsLocalStateProvider.notifier)
+                              .state = mergeKnownPersonalChats(
+                            currentChats,
+                            [knownChat],
+                          );
+                        }
                         if (context.mounted) {
                           context.pushRoute(
                             AppRoute.personalChat,

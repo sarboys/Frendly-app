@@ -704,6 +704,75 @@ void main() {
     );
   });
 
+  testWidgets('opening direct chat from profile keeps peer title',
+      (tester) async {
+    final router = GoRouter(
+      initialLocation: '/user/user-304f0edb-76db-439c-ae10-5b9a52f76da6',
+      routes: [
+        GoRoute(
+          path: AppRoute.userProfile.path,
+          name: AppRoute.userProfile.name,
+          builder: (context, state) => UserProfileScreen(
+            userId: state.pathParameters['userId']!,
+          ),
+        ),
+        GoRoute(
+          path: AppRoute.personalChat.path,
+          name: AppRoute.personalChat.name,
+          builder: (context, state) => PersonalChatScreen(
+            chatId: state.pathParameters['chatId']!,
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...buildTestOverrides(),
+          backendRepositoryProvider.overrideWith(
+            (ref) => _FakeChatBackendRepository(
+              ref: ref,
+              dio: Dio(),
+              messagesByChat: const {'direct-1111': []},
+              onCreateDirectChat: (_) => 'direct-1111',
+            ),
+          ),
+          chatSocketClientProvider.overrideWith(
+            (ref) => _FakeChatSocketClient(),
+          ),
+          personalChatsProvider.overrideWith((ref) async => const []),
+          personProfileProvider.overrideWith(
+            (ref, userId) async => const ProfileData(
+              id: 'user-304f0edb-76db-439c-ae10-5b9a52f76da6',
+              displayName: 'Пользователь 1111',
+              verified: true,
+              online: true,
+              age: 31,
+              city: 'Москва',
+              area: 'Центр',
+              bio: '',
+              vibe: 'Спокойно',
+              rating: 0,
+              meetupCount: 0,
+              avatarUrl: null,
+              interests: ['Кофе'],
+              intent: ['Свидания'],
+            ),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Написать'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Пользователь 1111'), findsOneWidget);
+    expect(find.text('Личный чат'), findsNothing);
+  });
+
   testWidgets('personal chat opens attachment action sheet from plus button',
       (tester) async {
     await tester.pumpWidget(
