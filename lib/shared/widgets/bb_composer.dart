@@ -1037,7 +1037,7 @@ class _AttachmentActionsSheet extends StatelessWidget {
     _AttachmentActionItem(
       action: BbComposerAttachmentAction.location,
       icon: Icons.place_outlined,
-      label: 'Геолокация',
+      label: 'Локацию',
     ),
   ];
 
@@ -1081,6 +1081,18 @@ class _AttachmentActionsSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Что прикрепить',
+                        style: AppTextStyles.body.copyWith(
+                          fontFamily: 'Sora',
+                          fontWeight: FontWeight.w600,
+                          color: useV5 ? BbV5Colors.ink : colors.foreground,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     for (final item in _items)
                       _AttachmentActionTile(item: item),
                   ],

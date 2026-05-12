@@ -341,11 +341,24 @@ class _TicketAction extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'от ${_formatRubles(chat.ticketPriceFrom!)} ₽ · осталось...',
+                        'Купить билет · от ${_formatRubles(chat.ticketPriceFrom!)} ₽',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: bbV5DisplayStyle(fontSize: 12.5, height: 1.25),
                       ),
+                      if (_ticketMeta(chat).isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          _ticketMeta(chat),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.caption.copyWith(
+                            fontSize: 10.5,
+                            color: BbV5Colors.inkMute,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -459,6 +472,13 @@ String _planNumber(String value) {
     return '1';
   }
   return digits.length > 2 ? digits.substring(digits.length - 2) : digits;
+}
+
+String _ticketMeta(MeetupChat chat) {
+  return [
+    chat.ticketProvider?.trim(),
+    chat.ticketVenue?.trim(),
+  ].where((value) => value != null && value.isNotEmpty).join(' · ');
 }
 
 String _formatRubles(int value) {

@@ -217,7 +217,7 @@ void main() {
         withChatOverrides: true,
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 350));
 
     await tester.scrollUntilVisible(
       find.byKey(const Key('meetup-chat-typing-indicator')),

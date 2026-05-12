@@ -489,21 +489,11 @@ class _MeetupChatScreenState extends ConsumerState<MeetupChatScreen> {
       return '';
     }
 
-    final total = chat.memberProfiles.isNotEmpty
-        ? chat.memberProfiles.length
-        : chat.members.length;
-    final online = chat.memberProfiles.where((member) => member.online).length;
-    if (total > 0) {
-      return online > 0
-          ? '$total участников · $online онлайн'
-          : '$total участников';
-    }
-
     switch (chat.phase) {
       case MeetupPhase.live:
         final step = chat.currentStep == null || chat.totalSteps == null
-            ? 'Live'
-            : 'Live · Шаг ${chat.currentStep}/${chat.totalSteps}';
+            ? 'LIVE'
+            : 'LIVE · Шаг ${chat.currentStep}/${chat.totalSteps}';
         final place = chat.currentPlace;
         return place == null || place.isEmpty ? step : '$step · $place';
       case MeetupPhase.soon:
@@ -511,6 +501,16 @@ class _MeetupChatScreenState extends ConsumerState<MeetupChatScreen> {
       case MeetupPhase.done:
         return 'Завершено';
       case MeetupPhase.upcoming:
+        final total = chat.memberProfiles.isNotEmpty
+            ? chat.memberProfiles.length
+            : chat.members.length;
+        final online =
+            chat.memberProfiles.where((member) => member.online).length;
+        if (total > 0) {
+          return online > 0
+              ? '$total участников · $online онлайн'
+              : '$total участников';
+        }
         final status = chat.status ?? '';
         return '${chat.members.length} участников · $status ${chat.time}'
             .trim();
@@ -1066,6 +1066,7 @@ class _V5MeetupChatHeader extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           GestureDetector(
+            key: const Key('meetup-chat-members-button'),
             onTap: onMembersTap,
             child: Stack(
               clipBehavior: Clip.none,
