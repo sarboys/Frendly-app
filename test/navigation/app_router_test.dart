@@ -192,23 +192,31 @@ void main() {
       ),
       '/stories/e1',
     );
+
+    expect(
+      appRouter.namedLocation(
+        AppRoute.eveningFlow.name,
+        pathParameters: const {'eventId': 'e1'},
+      ),
+      '/evening/e1',
+    );
   });
 
-  test('router does not expose old search, posters or after dark routes', () {
+  test('router does not expose old search or posters routes', () {
     final paths = AppRoute.values.map((route) => route.path).toSet();
     final names = AppRoute.values.map((route) => route.name).toSet();
 
     expect(paths, isNot(contains('/search')));
     expect(paths, isNot(contains('/posters')));
     expect(paths, isNot(contains('/poster/:posterId')));
-    expect(paths, isNot(contains('/after-dark')));
     expect(paths, isNot(contains('/after-dark/paywall')));
     expect(paths, isNot(contains('/after-dark/event/:eventId')));
     expect(paths, isNot(contains('/after-dark/verify')));
-    expect(names, isNot(contains('afterDark')));
     expect(names, isNot(contains('afterDarkPaywall')));
     expect(names, isNot(contains('afterDarkEvent')));
     expect(names, isNot(contains('afterDarkVerify')));
+    expect(paths, contains('/after-dark'));
+    expect(names, contains('afterDark'));
   });
 
   test(

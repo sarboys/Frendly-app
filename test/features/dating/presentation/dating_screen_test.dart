@@ -54,6 +54,15 @@ Widget _wrap({
         ),
       ),
       GoRoute(
+        path: AppRoute.match.path,
+        name: AppRoute.match.name,
+        builder: (context, state) => Scaffold(
+          body: Center(
+            child: Text('match-${state.pathParameters['userId']}'),
+          ),
+        ),
+      ),
+      GoRoute(
         path: AppRoute.createMeetup.path,
         name: AppRoute.createMeetup.name,
         builder: (context, state) => Scaffold(
@@ -96,6 +105,9 @@ void main() {
           currentUserIdProvider.overrideWith((ref) => 'user-me'),
           backendRepositoryProvider.overrideWith(
             (ref) => _MutableDatingRepository(ref: ref, dio: Dio()),
+          ),
+          datingDiscoverProvider.overrideWith(
+            (ref) async => const [_sonyaProfile],
           ),
           subscriptionStateProvider.overrideWith(
             (ref) async => const SubscriptionStateData(
@@ -554,6 +566,39 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('dating mutual like opens match screen', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        overrides: [
+          backendRepositoryProvider.overrideWith(
+            (ref) => _MatchDatingRepository(ref: ref, dio: Dio()),
+          ),
+          subscriptionStateProvider.overrideWith(
+            (ref) async => SubscriptionStateData(
+              plan: 'year',
+              status: 'active',
+              startedAt: DateTime(2026, 4, 18),
+              renewsAt: DateTime(2027, 4, 18),
+              trialEndsAt: null,
+            ),
+          ),
+          datingDiscoverProvider.overrideWith(
+            (ref) async => const [_sonyaProfile],
+          ),
+          datingLikesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Лайк'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Лайк'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('match-user-sonya'), findsOneWidget);
+  });
+
   testWidgets('dating action rolls back profile on backend error', (
     tester,
   ) async {
@@ -925,6 +970,12 @@ void main() {
           backendRepositoryProvider.overrideWith((ref) {
             repository = _MutableDatingRepository(ref: ref, dio: Dio());
             return repository;
+          }),
+          datingDiscoverProvider.overrideWith((ref) async {
+            final repository = ref.read(backendRepositoryProvider);
+            return repository
+                .fetchDatingDiscover()
+                .then((value) => value.items);
           }),
           subscriptionStateProvider.overrideWith(
             (ref) async => SubscriptionStateData(

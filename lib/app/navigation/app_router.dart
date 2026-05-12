@@ -27,6 +27,7 @@ import 'package:big_break_mobile/features/evening_plan/presentation/evening_live
 import 'package:big_break_mobile/features/evening_plan/presentation/evening_plan_screen.dart';
 import 'package:big_break_mobile/features/evening_plan/presentation/evening_preview_screen.dart';
 import 'package:big_break_mobile/features/evening_plan/presentation/evening_share_card_screen.dart';
+import 'package:big_break_mobile/features/evening_flow/presentation/evening_flow_screen.dart';
 import 'package:big_break_mobile/features/evening_routes/presentation/create_evening_session_screen.dart';
 import 'package:big_break_mobile/features/evening_routes/presentation/evening_route_detail_screen.dart';
 import 'package:big_break_mobile/features/evening_routes/presentation/evening_routes_screen.dart';
@@ -579,6 +580,15 @@ GoRouter buildAppRouter({
         name: AppRoute.afterParty.name,
         pageBuilder: (context, state) => _slidePage(
           AfterPartyScreen(
+            eventId: state.pathParameters['eventId']!,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.eveningFlow.path,
+        name: AppRoute.eveningFlow.name,
+        pageBuilder: (context, state) => _slidePage(
+          EveningFlowScreen(
             eventId: state.pathParameters['eventId']!,
           ),
         ),

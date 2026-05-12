@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -35,13 +35,11 @@ class _StoriesScreenState extends ConsumerState<StoriesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     final storiesAsync = ref.watch(storiesProvider(widget.eventId));
     final event = ref.watch(eventDetailProvider(widget.eventId)).valueOrNull;
 
-    return Scaffold(
-      backgroundColor: colors.foreground,
-      body: SafeArea(
+    return BbV5Scaffold(
+      child: SafeArea(
         child: storiesAsync.when(
           data: (stories) {
             if (stories.isEmpty) {
@@ -50,7 +48,9 @@ class _StoriesScreenState extends ConsumerState<StoriesScreen> {
                   padding: const EdgeInsets.all(24),
                   child: Text(
                     'Историй пока нет',
-                    style: AppTextStyles.body.copyWith(color: Colors.white),
+                    style: AppTextStyles.body.copyWith(
+                      color: BbV5Colors.inkSoft,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ),

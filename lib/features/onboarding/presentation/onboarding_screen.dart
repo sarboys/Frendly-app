@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/core/device/app_permission_service.dart';
 import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
+import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_radii.dart';
@@ -69,6 +70,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool _searchingLocationSuggestions = false;
   String? _contactError;
   List<ResolvedAddress> _locationSuggestions = const [];
+  String? _hydratedUserId;
 
   static const interests = [
     'Кофе',
@@ -332,36 +334,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final onboarding = ref.watch(onboardingProvider).valueOrNull;
+    final currentUserId = ref.watch(currentUserIdProvider);
+    if (_hydratedUserId != currentUserId) {
+      _resetFormForAccount(currentUserId);
+    }
+    final onboardingState = ref.watch(onboardingProvider);
+    final onboarding = onboardingState.isLoading
+        ? null
+        : onboardingState.valueOrNull;
     if (onboarding != null && !_initializedFromBackend && !_didTouchForm) {
       _initializedFromBackend = true;
-      intent = onboarding.intent;
-      gender = onboarding.gender;
-      birthDate = onboarding.birthDate;
-      city =
-          onboarding.city?.trim().isNotEmpty == true ? onboarding.city! : city;
-      area =
-          onboarding.area?.trim().isNotEmpty == true ? onboarding.area : area;
-      email = onboarding.email;
-      phoneNumber = onboarding.phoneNumber;
-      _requiredContact = onboarding.requiredContact;
-      _emailController.text = onboarding.email ?? '';
-      _contactPhoneCountry = bbCountryForPhoneNumber(onboarding.phoneNumber);
-      _contactPhoneController.text = _contactPhoneCountry.formatDigits(
-        bbLocalDigitsForPhoneNumber(
-          onboarding.phoneNumber,
-          _contactPhoneCountry,
-        ),
-      );
-      _birthDateController.text =
-          _formatBirthDateForInput(onboarding.birthDate);
-      _syncBirthPartControllers(_birthDateController.text);
-      _locationController.text =
-          _composeLocation(onboarding.city, onboarding.area);
-      picked
-        ..clear()
-        ..addAll(onboarding.interests);
-      vibe = onboarding.vibe;
+      _applyOnboardingData(onboarding);
     }
 
     final steps = _steps;
@@ -456,6 +439,67 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         ),
       ),
     );
+  }
+
+  void _resetFormForAccount(String? userId) {
+    _hydratedUserId = userId;
+    step = 0;
+    intent = null;
+    gender = null;
+    birthDate = null;
+    city = '';
+    area = null;
+    email = null;
+    phoneNumber = null;
+    _geoPermissionDone = false;
+    _notificationsPermissionDone = false;
+    _contactsPermissionDone = false;
+    picked.clear();
+    vibe = null;
+    _requiredContact = null;
+    _contactPhoneCountry = bbPhoneCountries.first;
+    _initializedFromBackend = false;
+    _didTouchForm = false;
+    _saving = false;
+    _checkingContact = false;
+    _resolvingLocation = false;
+    _searchingLocationSuggestions = false;
+    _contactError = null;
+    _locationSuggestions = const [];
+    _searchDebounce?.cancel();
+    _emailController.text = '';
+    _contactPhoneController.text = '';
+    _locationController.text = '';
+    _birthDateController.text = '';
+    _birthDayController.text = '';
+    _birthMonthController.text = '';
+    _birthYearController.text = '';
+  }
+
+  void _applyOnboardingData(OnboardingData onboarding) {
+    intent = onboarding.intent;
+    gender = onboarding.gender;
+    birthDate = onboarding.birthDate;
+    city = onboarding.city?.trim().isNotEmpty == true ? onboarding.city! : city;
+    area = onboarding.area?.trim().isNotEmpty == true ? onboarding.area : area;
+    email = onboarding.email;
+    phoneNumber = onboarding.phoneNumber;
+    _requiredContact = onboarding.requiredContact;
+    _emailController.text = onboarding.email ?? '';
+    _contactPhoneCountry = bbCountryForPhoneNumber(onboarding.phoneNumber);
+    _contactPhoneController.text = _contactPhoneCountry.formatDigits(
+      bbLocalDigitsForPhoneNumber(
+        onboarding.phoneNumber,
+        _contactPhoneCountry,
+      ),
+    );
+    _birthDateController.text = _formatBirthDateForInput(onboarding.birthDate);
+    _syncBirthPartControllers(_birthDateController.text);
+    _locationController.text = _composeLocation(onboarding.city, onboarding.area);
+    picked
+      ..clear()
+      ..addAll(onboarding.interests);
+    vibe = onboarding.vibe;
   }
 
   Widget _buildStepHeading(String title, String subtitle) {

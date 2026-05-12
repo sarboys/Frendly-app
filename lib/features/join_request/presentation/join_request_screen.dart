@@ -1,6 +1,3 @@
-import 'package:big_break_mobile/app/theme/app_colors.dart';
-import 'package:big_break_mobile/app/theme/app_radii.dart';
-import 'package:big_break_mobile/app/theme/app_shadows.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -39,7 +36,7 @@ class _JoinRequestScreenState extends ConsumerState<JoinRequestScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
+    final colors = _V5JoinRequestColors.instance;
     final eventAsync = ref.watch(eventDetailProvider(widget.eventId));
 
     return BbV5Scaffold(
@@ -57,22 +54,11 @@ class _JoinRequestScreenState extends ConsumerState<JoinRequestScreen> {
             return Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () => context.pop(),
-                        icon: const Icon(Icons.chevron_left_rounded, size: 28),
-                      ),
-                      Expanded(
-                        child: Text(
-                          'Заявка',
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.itemTitle.copyWith(fontSize: 16),
-                        ),
-                      ),
-                      const SizedBox(width: 48),
-                    ],
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                  child: BbV5TopBar(
+                    kicker: 'ЗАКРЫТАЯ ВСТРЕЧА',
+                    title: 'Заявка',
+                    onBack: () => context.pop(),
                   ),
                 ),
                 Expanded(
@@ -81,12 +67,9 @@ class _JoinRequestScreenState extends ConsumerState<JoinRequestScreen> {
                     children: [
                       _EventCard(event: event),
                       const SizedBox(height: AppSpacing.lg),
-                      Container(
+                      BbV5Card(
+                        tint: BbV5Colors.brandSoft,
                         padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: colors.secondarySoft,
-                          borderRadius: AppRadii.cardBorder,
-                        ),
                         child: Row(
                           children: [
                             Container(
@@ -139,14 +122,8 @@ class _JoinRequestScreenState extends ConsumerState<JoinRequestScreen> {
                             .copyWith(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: AppSpacing.xs),
-                      Container(
+                      BbV5Card(
                         padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: colors.card,
-                          borderRadius: AppRadii.cardBorder,
-                          border: Border.all(color: colors.border),
-                          boxShadow: AppShadows.soft,
-                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -186,16 +163,9 @@ class _JoinRequestScreenState extends ConsumerState<JoinRequestScreen> {
                           'С другом, ок?',
                         ]
                             .map(
-                              (template) => ActionChip(
-                                backgroundColor: colors.card,
-                                side: BorderSide(color: colors.border),
-                                label: Text(
-                                  template,
-                                  style: AppTextStyles.meta.copyWith(
-                                    color: colors.inkSoft,
-                                  ),
-                                ),
-                                onPressed: () {
+                              (template) => BbV5Chip(
+                                label: template,
+                                onTap: () {
                                   setState(() {
                                     _noteController.text = template;
                                     _noteController.selection =
@@ -209,13 +179,8 @@ class _JoinRequestScreenState extends ConsumerState<JoinRequestScreen> {
                             .toList(growable: false),
                       ),
                       const SizedBox(height: AppSpacing.lg),
-                      Container(
+                      BbV5Card(
                         padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: colors.card,
-                          borderRadius: AppRadii.cardBorder,
-                          border: Border.all(color: colors.border),
-                        ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -252,105 +217,84 @@ class _JoinRequestScreenState extends ConsumerState<JoinRequestScreen> {
                 ),
                 SafeArea(
                   top: false,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: colors.background.withValues(alpha: 0.92),
-                      border: Border(
-                        top: BorderSide(
-                          color: colors.border.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                      child: SizedBox(
-                        width: double.infinity,
+                  child: BbV5FixedBottomBar(
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: BbV5PillButton(
+                        label: isApproved
+                            ? 'Открыть чат встречи'
+                            : isPending
+                                ? 'Заявка отправлена'
+                                : 'Отправить заявку',
+                        dark: true,
                         height: 56,
-                        child: FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: colors.primary,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                          ),
-                          onPressed: _submitting || isPending
-                              ? null
-                              : () async {
-                                  if (isApproved && event.chatId != null) {
-                                    context.pushNamed(
-                                      'meetupChat',
-                                      pathParameters: {'chatId': event.chatId!},
-                                    );
+                        expanded: true,
+                        onPressed: _submitting || isPending
+                            ? null
+                            : () async {
+                                if (isApproved && event.chatId != null) {
+                                  context.pushNamed(
+                                    'meetupChat',
+                                    pathParameters: {'chatId': event.chatId!},
+                                  );
+                                  return;
+                                }
+
+                                final eventId = widget.eventId;
+                                final note = _noteController.text.trim();
+                                final repository =
+                                    ref.read(backendRepositoryProvider);
+                                final container = ProviderScope.containerOf(
+                                  context,
+                                  listen: false,
+                                );
+                                setState(() {
+                                  _submitting = true;
+                                });
+
+                                try {
+                                  await repository.createJoinRequest(
+                                    eventId,
+                                    note: note,
+                                  );
+                                  if (!mounted) {
                                     return;
                                   }
-
-                                  final eventId = widget.eventId;
-                                  final note = _noteController.text.trim();
-                                  final repository =
-                                      ref.read(backendRepositoryProvider);
-                                  final container = ProviderScope.containerOf(
-                                    context,
-                                    listen: false,
+                                  container.invalidate(
+                                    eventDetailProvider(eventId),
                                   );
-                                  setState(() {
-                                    _submitting = true;
-                                  });
-
-                                  try {
-                                    await repository.createJoinRequest(
-                                      eventId,
-                                      note: note,
+                                  container.invalidate(
+                                    eventsProvider('nearby'),
+                                  );
+                                  container.invalidate(mapEventsProvider);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(
+                                      context,
+                                    ).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Заявка отправлена'),
+                                      ),
                                     );
-                                    if (!mounted) {
-                                      return;
-                                    }
-                                    container.invalidate(
-                                      eventDetailProvider(eventId),
-                                    );
-                                    container.invalidate(
-                                      eventsProvider('nearby'),
-                                    );
-                                    container.invalidate(mapEventsProvider);
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Заявка отправлена'),
-                                        ),
-                                      );
-                                      context.pop();
-                                    }
-                                  } catch (_) {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Не получилось отправить заявку',
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  } finally {
-                                    if (mounted) {
-                                      setState(() {
-                                        _submitting = false;
-                                      });
-                                    }
+                                    context.pop();
                                   }
-                                },
-                          child: Text(
-                            isApproved
-                                ? 'Открыть чат встречи'
-                                : isPending
-                                    ? 'Заявка отправлена'
-                                    : 'Отправить заявку',
-                            style: AppTextStyles.button.copyWith(
-                              color: colors.primaryForeground,
-                            ),
-                          ),
-                        ),
+                                } catch (_) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Не получилось отправить заявку',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                } finally {
+                                  if (mounted) {
+                                    setState(() {
+                                      _submitting = false;
+                                    });
+                                  }
+                                }
+                              },
                       ),
                     ),
                   ),
@@ -376,15 +320,9 @@ class _EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return Container(
+    final colors = _V5JoinRequestColors.instance;
+    return BbV5Card(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: AppRadii.cardBorder,
-        border: Border.all(color: colors.border),
-        boxShadow: AppShadows.soft,
-      ),
       child: Column(
         children: [
           Row(
@@ -397,7 +335,7 @@ class _EventCard extends StatelessWidget {
                   gradient: LinearGradient(
                     colors: [colors.warmStart, colors.warmEnd],
                   ),
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(BbV5Radii.md),
                 ),
                 alignment: Alignment.center,
                 child: Text(event.emoji, style: const TextStyle(fontSize: 28)),
@@ -461,4 +399,19 @@ class _EventCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _V5JoinRequestColors {
+  const _V5JoinRequestColors._();
+
+  static const instance = _V5JoinRequestColors._();
+
+  Color get inkMute => BbV5Colors.inkMute;
+  Color get inkSoft => BbV5Colors.inkSoft;
+  Color get primary => BbV5Colors.accent;
+  Color get primarySoft => BbV5Colors.terraSoft;
+  Color get secondary => BbV5Colors.sage;
+  Color get secondaryForeground => BbV5Colors.paperHi;
+  Color get warmEnd => BbV5Colors.accentDeep;
+  Color get warmStart => BbV5Colors.terraSoft;
 }

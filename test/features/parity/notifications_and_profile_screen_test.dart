@@ -160,6 +160,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Аккаунт'), findsOneWidget);
+    expect(find.byKey(const ValueKey('profile-header-sos')), findsOneWidget);
     expect(find.text('Frendly Tokens'), findsOneWidget);
     expect(find.text('Верификация'), findsOneWidget);
     expect(find.text('Кнопка SOS'), findsOneWidget);
@@ -443,6 +444,8 @@ void main() {
     await tester
         .pumpWidget(_wrap(const UserProfileScreen(userId: 'user-anya')));
     await tester.pumpAndSettle();
+
+    expect(find.text('Аня К, 27'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('История'),

@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:big_break_mobile/app/theme/app_colors.dart';
-import 'package:big_break_mobile/app/theme/app_radii.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/partner_offer_code.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -127,45 +126,43 @@ class _PartnerOfferQrScreenState extends ConsumerState<PartnerOfferQrScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            children: [
-              Row(
+    return BbV5Scaffold(
+      child: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              child: Column(
                 children: [
-                  IconButton(
-                    tooltip: 'Закрыть',
-                    onPressed: () => context.pop(),
-                    icon: const Icon(LucideIcons.x),
+                  BbV5TopBar(
+                    kicker: 'ОФФЕР',
+                    title: 'QR код',
+                    onBack: () => context.pop(),
+                    right: BbV5IconButton(
+                      icon: LucideIcons.rotate_cw,
+                      onPressed: _refreshing
+                          ? null
+                          : () => unawaited(_load(initial: true)),
+                    ),
                   ),
-                  const Spacer(),
-                  Text(
-                    'QR оффера',
-                    style: AppTextStyles.itemTitle.copyWith(fontSize: 16),
+                  Expanded(
+                    child: Center(
+                      child: _content(),
+                    ),
                   ),
-                  const Spacer(),
-                  const SizedBox(width: 48),
                 ],
               ),
-              Expanded(
-                child: Center(
-                  child: _content(colors),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _content(BigBreakThemeColors colors) {
+  Widget _content() {
     if (_loading) {
-      return CircularProgressIndicator(color: colors.primary);
+      return const CircularProgressIndicator(color: BbV5Colors.accent);
     }
     if (_error != null || _code == null) {
       return _MessageState(
@@ -178,7 +175,7 @@ class _PartnerOfferQrScreenState extends ConsumerState<PartnerOfferQrScreen> {
     }
 
     final code = _code!;
-    final status = _statusMeta(code.status, colors);
+    final status = _statusMeta(code.status);
     final qrSize = math.min(MediaQuery.sizeOf(context).width - 88, 300.0);
 
     return SingleChildScrollView(
@@ -190,8 +187,9 @@ class _PartnerOfferQrScreenState extends ConsumerState<PartnerOfferQrScreen> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: AppRadii.cardBorder,
-              border: Border.all(color: colors.border),
+              borderRadius: BorderRadius.circular(BbV5Radii.lg),
+              border: Border.all(color: BbV5Colors.hair),
+              boxShadow: BbV5Shadows.card,
             ),
             child: QrImageView(
               data: code.codeUrl,
@@ -205,7 +203,7 @@ class _PartnerOfferQrScreenState extends ConsumerState<PartnerOfferQrScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             decoration: BoxDecoration(
               color: status.background,
-              borderRadius: AppRadii.pillBorder,
+              borderRadius: BorderRadius.circular(BbV5Radii.pill),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -228,7 +226,7 @@ class _PartnerOfferQrScreenState extends ConsumerState<PartnerOfferQrScreen> {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: AppTextStyles.screenTitle.copyWith(fontSize: 28),
+            style: bbV5DisplayStyle(fontSize: 28),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
@@ -236,12 +234,12 @@ class _PartnerOfferQrScreenState extends ConsumerState<PartnerOfferQrScreen> {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: AppTextStyles.body.copyWith(color: colors.inkSoft),
+            style: AppTextStyles.body.copyWith(color: BbV5Colors.inkSoft),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             'Действует до ${_timeLabel(context, code.expiresAt)}',
-            style: AppTextStyles.meta.copyWith(color: colors.inkMute),
+            style: AppTextStyles.meta.copyWith(color: BbV5Colors.inkMute),
           ),
         ],
       ),
@@ -266,23 +264,22 @@ class _MessageState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 42, color: colors.inkMute),
+        Icon(icon, size: 42, color: BbV5Colors.inkMute),
         const SizedBox(height: AppSpacing.sm),
-        Text(title, style: AppTextStyles.sectionTitle),
+        Text(title, style: bbV5DisplayStyle(fontSize: 20)),
         const SizedBox(height: AppSpacing.xxs),
         Text(
           text,
           textAlign: TextAlign.center,
-          style: AppTextStyles.body.copyWith(color: colors.inkSoft),
+          style: AppTextStyles.body.copyWith(color: BbV5Colors.inkSoft),
         ),
         const SizedBox(height: AppSpacing.md),
-        OutlinedButton(
+        BbV5PillButton(
+          label: actionLabel,
           onPressed: onAction,
-          child: Text(actionLabel),
         ),
       ],
     );
@@ -303,31 +300,28 @@ class _StatusMeta {
   final Color background;
 }
 
-_StatusMeta _statusMeta(
-  PartnerOfferCodeStatus status,
-  BigBreakThemeColors colors,
-) {
+_StatusMeta _statusMeta(PartnerOfferCodeStatus status) {
   switch (status) {
     case PartnerOfferCodeStatus.activated:
-      return _StatusMeta(
+      return const _StatusMeta(
         label: 'Использован',
         icon: LucideIcons.circle_check,
-        foreground: colors.secondary,
-        background: colors.secondarySoft,
+        foreground: BbV5Colors.sage,
+        background: BbV5Colors.brandSoft,
       );
     case PartnerOfferCodeStatus.expired:
-      return _StatusMeta(
+      return const _StatusMeta(
         label: 'Истек',
         icon: LucideIcons.clock_3,
-        foreground: colors.destructive,
-        background: colors.destructive.withValues(alpha: 0.1),
+        foreground: BbV5Colors.accentDeep,
+        background: BbV5Colors.terraSoft,
       );
     case PartnerOfferCodeStatus.issued:
-      return _StatusMeta(
+      return const _StatusMeta(
         label: 'Активен',
         icon: LucideIcons.badge_percent,
-        foreground: colors.primary,
-        background: colors.primarySoft,
+        foreground: BbV5Colors.accent,
+        background: BbV5Colors.paperHi,
       );
   }
 }

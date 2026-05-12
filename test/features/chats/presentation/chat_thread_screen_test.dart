@@ -58,6 +58,31 @@ void main() {
     expect(find.text('Новое сообщение'), findsOneWidget);
   });
 
+  testWidgets(
+      'chat keeps latest incoming message visible when already at bottom',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 640);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: _ChatHarness(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('test-add-incoming-message')));
+    await tester.pumpAndSettle();
+
+    final incoming = find.text('Новое входящее');
+    expect(incoming, findsOneWidget);
+    expect(tester.getBottomLeft(incoming).dy, lessThan(560));
+  });
+
   testWidgets('tap on reply quote scrolls to original message', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 640);
@@ -191,21 +216,41 @@ class _ChatHarnessState extends State<_ChatHarness> {
       messagesAsync: AsyncValue.data(_messages),
       composer: SafeArea(
         top: false,
-        child: TextButton(
-          key: const Key('test-send-message'),
-          onPressed: () {
-            setState(() {
-              _messages = [
-                ..._messages,
-                _message(
-                  id: 'new-message',
-                  text: 'Новое сообщение',
-                  mine: true,
-                ),
-              ];
-            });
-          },
-          child: const Text('send'),
+        child: Row(
+          children: [
+            TextButton(
+              key: const Key('test-send-message'),
+              onPressed: () {
+                setState(() {
+                  _messages = [
+                    ..._messages,
+                    _message(
+                      id: 'new-message',
+                      text: 'Новое сообщение',
+                      mine: true,
+                    ),
+                  ];
+                });
+              },
+              child: const Text('send'),
+            ),
+            TextButton(
+              key: const Key('test-add-incoming-message'),
+              onPressed: () {
+                setState(() {
+                  _messages = [
+                    ..._messages,
+                    _message(
+                      id: 'new-incoming-message',
+                      text: 'Новое входящее',
+                      mine: false,
+                    ),
+                  ];
+                });
+              },
+              child: const Text('incoming'),
+            ),
+          ],
         ),
       ),
       onMessageReply: (_) {},

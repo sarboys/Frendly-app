@@ -49,6 +49,7 @@ enum AppRoute {
   checkIn('/check-in/:eventId'),
   liveMeetup('/live/:eventId'),
   afterParty('/after-party/:eventId'),
+  eveningFlow('/evening/:eventId'),
   hostDashboard('/host'),
   hostEvent('/host/event/:eventId'),
   verification('/verification'),

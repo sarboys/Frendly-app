@@ -67,6 +67,7 @@ class _FakeChatSocketClient extends ChatSocketClient {
         super(accessTokenProvider: _token);
 
   final Stream<Map<String, dynamic>> _events;
+  final sentTexts = <String>[];
 
   static Future<String> _token() async => 'token';
 
@@ -92,7 +93,9 @@ class _FakeChatSocketClient extends ChatSocketClient {
     required String clientMessageId,
     List<String> attachmentIds = const [],
     String? replyToMessageId,
-  }) async {}
+  }) async {
+    sentTexts.add(text);
+  }
 
   @override
   Future<void> dispose() async {}
@@ -174,6 +177,14 @@ Widget _wrap(
                   builder: (context, state) => Text(
                     'personal ${state.pathParameters['chatId']}',
                     key: const Key('opened-personal-chat'),
+                  ),
+                ),
+                GoRoute(
+                  path: AppRoute.userProfile.path,
+                  name: AppRoute.userProfile.name,
+                  builder: (context, state) => Text(
+                    'user ${state.pathParameters['userId']}',
+                    key: const Key('opened-user-profile'),
                   ),
                 ),
               ],
@@ -783,13 +794,39 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.add_rounded));
+    await tester.tap(find.bySemanticsLabel('Прикрепить'));
     await tester.pumpAndSettle();
 
     expect(find.text('Что прикрепить'), findsOneWidget);
     expect(find.text('Фото'), findsOneWidget);
     expect(find.text('Файл'), findsOneWidget);
     expect(find.text('Геолокация'), findsOneWidget);
+  });
+
+  testWidgets('personal chat sends text through accessible send button',
+      (tester) async {
+    final socket = _FakeChatSocketClient();
+
+    await tester.pumpWidget(
+      _wrap(
+        const PersonalChatScreen(chatId: 'p1'),
+        withChatOverrides: true,
+        extraOverrides: [
+          chatSocketClientProvider.overrideWith((ref) => socket),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.bySemanticsLabel('Напиши или пригласи на встречу'),
+      'qa retest text',
+    );
+    await tester.pump();
+    await tester.tap(find.bySemanticsLabel('Отправить сообщение'));
+    await tester.pumpAndSettle();
+
+    expect(socket.sentTexts, contains('qa retest text'));
   });
 
   testWidgets('meetup chat shows older messages above newer ones',
@@ -872,6 +909,80 @@ void main() {
     expect(attachmentService.saveCalls, 1);
     expect(attachmentService.openCalls, 0);
     expect(find.text('Файл сохранён на устройство'), findsOneWidget);
+  });
+
+  testWidgets('personal chat document download icon saves it to device',
+      (tester) async {
+    final attachmentService = _SpyAttachmentService();
+
+    await tester.pumpWidget(
+      _wrap(
+        const PersonalChatScreen(chatId: 'p-doc'),
+        withChatOverrides: true,
+        messagesByChat: {
+          'p-doc': [
+            _messageFromJson(
+              id: 'doc-1',
+              chatId: 'p-doc',
+              text: 'contract.zip',
+              createdAt: '2026-04-20T21:09:00Z',
+              senderId: 'user-me',
+              senderName: 'Ты',
+              attachments: const [
+                {
+                  'id': 'a-doc',
+                  'kind': 'chat_attachment',
+                  'status': 'ready',
+                  'url': 'https://cdn.example.com/contract.zip',
+                  'mimeType': 'application/zip',
+                  'byteSize': 128,
+                  'fileName': 'contract.zip',
+                },
+              ],
+            ),
+          ],
+        },
+        extraOverrides: [
+          appAttachmentServiceProvider.overrideWithValue(attachmentService),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.bySemanticsLabel('Скачать contract.zip'));
+    await tester.pumpAndSettle();
+
+    expect(attachmentService.saveCalls, 1);
+    expect(find.text('Файл сохранён на устройство'), findsOneWidget);
+  });
+
+  testWidgets('personal chat incoming text opens sender profile on tap',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const PersonalChatScreen(chatId: 'p-profile'),
+        withChatOverrides: true,
+        withPersonalChatRoute: true,
+        messagesByChat: {
+          'p-profile': [
+            _messageFromJson(
+              id: 'incoming-1',
+              chatId: 'p-profile',
+              text: 'incoming hello',
+              createdAt: '2026-04-20T21:09:00Z',
+              senderId: 'user-anya',
+              senderName: 'Аня К',
+            ),
+          ],
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('incoming hello'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('user user-anya'), findsOneWidget);
   });
 
   testWidgets('user profile renders common interests count', (tester) async {

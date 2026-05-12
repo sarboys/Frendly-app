@@ -1,7 +1,5 @@
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
-import 'package:big_break_mobile/app/theme/app_colors.dart';
-import 'package:big_break_mobile/app/theme/app_radii.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -11,6 +9,7 @@ import 'package:big_break_mobile/shared/models/event_check_in.dart';
 import 'package:big_break_mobile/shared/widgets/async_value_view.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
 import 'package:big_break_mobile/shared/widgets/bb_brand_icon.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -128,12 +127,11 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
+    final colors = _V5CheckInColors.instance;
     final checkInAsync = ref.watch(checkInProvider(widget.eventId));
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
+    return BbV5Scaffold(
+      child: SafeArea(
         bottom: false,
         child: AsyncValueView<EventCheckInData>(
           value: checkInAsync,
@@ -187,7 +185,7 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
                         padding: const EdgeInsets.all(AppSpacing.xl),
                         decoration: BoxDecoration(
                           color: colors.card,
-                          borderRadius: AppRadii.cardBorder,
+                          borderRadius: BorderRadius.circular(BbV5Radii.lg),
                           border: Border.all(color: colors.border),
                         ),
                         child: Column(
@@ -227,7 +225,7 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
                         padding: const EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
                           color: colors.card,
-                          borderRadius: AppRadii.cardBorder,
+                          borderRadius: BorderRadius.circular(BbV5Radii.lg),
                           border: Border.all(color: colors.border),
                         ),
                         child: Row(
@@ -326,7 +324,7 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
                         padding: const EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
                           color: colors.card,
-                          borderRadius: AppRadii.cardBorder,
+                          borderRadius: BorderRadius.circular(BbV5Radii.lg),
                           border: Border.all(color: colors.border),
                         ),
                         child: Row(
@@ -524,4 +522,21 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
 
     return 'До точки около ${(distanceMeters / 1000).toStringAsFixed(1)} км';
   }
+}
+
+class _V5CheckInColors {
+  const _V5CheckInColors._();
+
+  static const instance = _V5CheckInColors._();
+
+  Color get background => BbV5Colors.paper;
+  Color get card => BbV5Colors.paperHi;
+  Color get border => BbV5Colors.hair;
+  Color get foreground => BbV5Colors.ink;
+  Color get inkMute => BbV5Colors.inkMute;
+  Color get inkSoft => BbV5Colors.inkSoft;
+  Color get online => BbV5Colors.sage;
+  Color get primaryForeground => BbV5Colors.paperHi;
+  Color get secondary => BbV5Colors.sage;
+  Color get secondarySoft => BbV5Colors.brandSoft;
 }

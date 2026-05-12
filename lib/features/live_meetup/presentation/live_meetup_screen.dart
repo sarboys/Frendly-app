@@ -1,6 +1,4 @@
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/app/theme/app_colors.dart';
-import 'package:big_break_mobile/app/theme/app_radii.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -8,6 +6,7 @@ import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/live_meetup.dart';
 import 'package:big_break_mobile/shared/widgets/async_value_view.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,12 +22,11 @@ class LiveMeetupScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = AppColors.of(context);
+    final colors = _V5LiveColors.instance;
     final liveAsync = ref.watch(liveMeetupProvider(eventId));
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
+    return BbV5Scaffold(
+      child: SafeArea(
         bottom: false,
         child: AsyncValueView<LiveMeetupData>(
           value: liveAsync,
@@ -122,7 +120,7 @@ class LiveMeetupScreen extends ConsumerWidget {
                       padding: const EdgeInsets.all(AppSpacing.lg),
                       decoration: BoxDecoration(
                         color: colors.card,
-                        borderRadius: AppRadii.cardBorder,
+                        borderRadius: BorderRadius.circular(BbV5Radii.lg),
                         border: Border.all(color: colors.border),
                       ),
                       child: Column(
@@ -400,4 +398,21 @@ class LiveMeetupScreen extends ConsumerWidget {
     }
     return '$hours ч ${minutes.toString().padLeft(2, '0')} мин';
   }
+}
+
+class _V5LiveColors {
+  const _V5LiveColors._();
+
+  static const instance = _V5LiveColors._();
+
+  Color get background => BbV5Colors.paper;
+  Color get border => BbV5Colors.hair;
+  Color get card => BbV5Colors.paperHi;
+  Color get destructive => BbV5Colors.accentDeep;
+  Color get foreground => BbV5Colors.ink;
+  Color get inkMute => BbV5Colors.inkMute;
+  Color get inkSoft => BbV5Colors.inkSoft;
+  Color get primary => BbV5Colors.accent;
+  Color get primaryForeground => BbV5Colors.paperHi;
+  Color get secondary => BbV5Colors.sage;
 }

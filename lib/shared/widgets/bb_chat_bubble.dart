@@ -181,6 +181,12 @@ class BbChatBubble extends StatelessWidget {
       );
     }
 
+    final handleAuthorTap = onAuthorAvatarTap;
+    final canOpenProfileFromBody = handleAuthorTap != null &&
+        authorId.isNotEmpty &&
+        attachments.isEmpty &&
+        text.trim().isNotEmpty;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -221,80 +227,86 @@ class BbChatBubble extends StatelessWidget {
                     ),
                   ),
                 ),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.sizeOf(context).width * 0.75,
-                ),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: themBackground,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
-                      bottomLeft: Radius.circular(6),
-                      bottomRight: Radius.circular(20),
-                    ),
-                    border: useV5 ? Border.all(color: BbV5Colors.hair) : null,
-                    boxShadow: useV5 ? BbV5Shadows.pill : null,
+              _OpenProfileMessageTap(
+                enabled: canOpenProfileFromBody,
+                author: author,
+                text: text,
+                onTap: () => handleAuthorTap!(authorId),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width * 0.75,
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (replyTo != null) ...[
-                          _ReplyQuote(
-                            replyTo: replyTo!,
-                            isMine: false,
-                            onTap: onReplyTap == null
-                                ? null
-                                : () => onReplyTap!(replyTo!),
-                          ),
-                          const SizedBox(height: 6),
-                        ],
-                        if (showText)
-                          Text(
-                            text,
-                            style: AppTextStyles.body.copyWith(
-                              color: themForeground,
-                              fontSize: useV5 ? 13.5 : null,
-                              fontWeight: FontWeight.w400,
-                              height: useV5 ? 1.375 : null,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: themBackground,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
+                        bottomLeft: Radius.circular(6),
+                        bottomRight: Radius.circular(20),
+                      ),
+                      border: useV5 ? Border.all(color: BbV5Colors.hair) : null,
+                      boxShadow: useV5 ? BbV5Shadows.pill : null,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (replyTo != null) ...[
+                            _ReplyQuote(
+                              replyTo: replyTo!,
+                              isMine: false,
+                              onTap: onReplyTap == null
+                                  ? null
+                                  : () => onReplyTap!(replyTo!),
                             ),
-                          ),
-                        if (attachments.isNotEmpty) ...[
-                          if (showText) const SizedBox(height: AppSpacing.xs),
-                          ...List<Widget>.generate(
-                            attachments.length,
-                            (index) {
-                              final attachment = attachments[index];
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  bottom: index == attachments.length - 1
-                                      ? 0
-                                      : AppSpacing.xs,
-                                ),
-                                child: _AttachmentTile(
-                                  attachment: attachment,
-                                  isMine: false,
-                                  isPending: isPending,
-                                  onTap: onAttachmentTap,
-                                  onDownloadTap: onAttachmentDownloadTap,
-                                  onImageResolveLocalPath:
-                                      onImageResolveLocalPath,
-                                  onImageResolveRemoteUrl:
-                                      onImageResolveRemoteUrl,
-                                  onVoiceResolvePath: onVoiceResolvePath,
-                                  onVoiceResolveRemoteUrl:
-                                      onVoiceResolveRemoteUrl,
-                                  chatId: chatId,
-                                  messageClientId: messageClientId,
-                                ),
-                              );
-                            },
-                          ),
+                            const SizedBox(height: 6),
+                          ],
+                          if (showText)
+                            Text(
+                              text,
+                              style: AppTextStyles.body.copyWith(
+                                color: themForeground,
+                                fontSize: useV5 ? 13.5 : null,
+                                fontWeight: FontWeight.w400,
+                                height: useV5 ? 1.375 : null,
+                              ),
+                            ),
+                          if (attachments.isNotEmpty) ...[
+                            if (showText) const SizedBox(height: AppSpacing.xs),
+                            ...List<Widget>.generate(
+                              attachments.length,
+                              (index) {
+                                final attachment = attachments[index];
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: index == attachments.length - 1
+                                        ? 0
+                                        : AppSpacing.xs,
+                                  ),
+                                  child: _AttachmentTile(
+                                    attachment: attachment,
+                                    isMine: false,
+                                    isPending: isPending,
+                                    onTap: onAttachmentTap,
+                                    onDownloadTap: onAttachmentDownloadTap,
+                                    onImageResolveLocalPath:
+                                        onImageResolveLocalPath,
+                                    onImageResolveRemoteUrl:
+                                        onImageResolveRemoteUrl,
+                                    onVoiceResolvePath: onVoiceResolvePath,
+                                    onVoiceResolveRemoteUrl:
+                                        onVoiceResolveRemoteUrl,
+                                    chatId: chatId,
+                                    messageClientId: messageClientId,
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -352,6 +364,48 @@ class _AuthorName extends StatelessWidget {
       ),
     );
   }
+}
+
+class _OpenProfileMessageTap extends StatelessWidget {
+  const _OpenProfileMessageTap({
+    required this.enabled,
+    required this.author,
+    required this.text,
+    required this.onTap,
+    required this.child,
+  });
+
+  final bool enabled;
+  final String author;
+  final String text;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) {
+      return child;
+    }
+    return Semantics(
+      container: true,
+      button: true,
+      label: 'Открыть профиль $author из сообщения: ${_semanticSnippet(text)}',
+      onTap: onTap,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: child,
+      ),
+    );
+  }
+}
+
+String _semanticSnippet(String value) {
+  final normalized = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (normalized.length <= 48) {
+    return normalized;
+  }
+  return normalized.substring(0, 48);
 }
 
 class _AuthorAvatar extends StatelessWidget {
@@ -722,14 +776,30 @@ class _AttachmentTile extends StatelessWidget {
                         ),
                         if (_isReady) ...[
                           const SizedBox(width: AppSpacing.xs),
-                          GestureDetector(
+                          Semantics(
+                            container: true,
+                            button: true,
+                            enabled: onDownloadTap != null,
+                            label: 'Скачать ${attachment.fileName}',
                             onTap: onDownloadTap == null
                                 ? null
                                 : () => onDownloadTap!(attachment),
-                            child: Icon(
-                              Icons.download_rounded,
-                              size: 18,
-                              color: foreground,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: onDownloadTap == null
+                                  ? null
+                                  : () => onDownloadTap!(attachment),
+                              child: ExcludeSemantics(
+                                child: SizedBox(
+                                  width: 32,
+                                  height: 32,
+                                  child: Icon(
+                                    Icons.download_rounded,
+                                    size: 18,
+                                    color: foreground,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ],

@@ -13,6 +13,7 @@ import 'package:big_break_mobile/features/dating/presentation/dating_providers.d
 import 'package:big_break_mobile/features/tonight/presentation/tonight_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:big_break_mobile/shared/models/message.dart';
 import 'package:big_break_mobile/shared/models/notification_item.dart';
@@ -227,6 +228,15 @@ void main() {
     );
     addTearDown(container.dispose);
 
+    container.read(manualLocationProvider.notifier).setLocation(
+          const ManualLocation(
+            label: 'Москва · Патрики',
+            latitude: 55.76,
+            longitude: 37.6,
+            city: 'Москва',
+          ),
+        );
+
     await container
         .read(appSessionControllerProvider)
         .replaceAuthenticatedSession(
@@ -240,6 +250,8 @@ void main() {
     expect(container.read(currentUserIdProvider), 'user-two');
     expect(container.read(authTokensProvider)?.accessToken, 'new-access-token');
     expect(container.read(onboardingLocalStateProvider), isNull);
+    expect(container.read(manualLocationProvider), isNull);
+    expect(preferences.getString('location.manual.v1'), isNull);
     expect(attachmentService.clearCalls, 1);
   });
 

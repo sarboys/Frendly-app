@@ -1,5 +1,3 @@
-import 'package:big_break_mobile/app/theme/app_colors.dart';
-import 'package:big_break_mobile/app/theme/app_radii.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -7,6 +5,7 @@ import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/after_party_state.dart';
 import 'package:big_break_mobile/shared/widgets/async_value_view.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,12 +33,11 @@ class _AfterPartyScreenState extends ConsumerState<AfterPartyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
+    final colors = _V5AfterPartyColors.instance;
     final afterPartyAsync = ref.watch(afterPartyProvider(widget.eventId));
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
+    return BbV5Scaffold(
+      child: SafeArea(
         bottom: false,
         child: AsyncValueView<AfterPartyData>(
           value: afterPartyAsync,
@@ -182,7 +180,7 @@ class _AfterPartyScreenState extends ConsumerState<AfterPartyScreen> {
                         ),
                         decoration: BoxDecoration(
                           color: colors.card,
-                          borderRadius: AppRadii.cardBorder,
+                          borderRadius: BorderRadius.circular(BbV5Radii.lg),
                           border: Border.all(color: colors.border),
                         ),
                         child: Row(
@@ -214,7 +212,7 @@ class _AfterPartyScreenState extends ConsumerState<AfterPartyScreen> {
                       Container(
                         decoration: BoxDecoration(
                           color: colors.card,
-                          borderRadius: AppRadii.cardBorder,
+                          borderRadius: BorderRadius.circular(BbV5Radii.lg),
                           border: Border.all(color: colors.border),
                         ),
                         child: Column(
@@ -311,7 +309,7 @@ class _AfterPartyScreenState extends ConsumerState<AfterPartyScreen> {
                         padding: const EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
                           color: colors.card,
-                          borderRadius: AppRadii.cardBorder,
+                          borderRadius: BorderRadius.circular(BbV5Radii.lg),
                           border: Border.all(color: colors.border),
                         ),
                         child: Row(
@@ -440,4 +438,21 @@ class _AfterPartyScreenState extends ConsumerState<AfterPartyScreen> {
       ),
     );
   }
+}
+
+class _V5AfterPartyColors {
+  const _V5AfterPartyColors._();
+
+  static const instance = _V5AfterPartyColors._();
+
+  Color get background => BbV5Colors.paper;
+  Color get border => BbV5Colors.hair;
+  Color get card => BbV5Colors.paperHi;
+  Color get foreground => BbV5Colors.ink;
+  Color get inkMute => BbV5Colors.inkMute;
+  Color get inkSoft => BbV5Colors.inkSoft;
+  Color get primary => BbV5Colors.accent;
+  Color get primaryForeground => BbV5Colors.paperHi;
+  Color get warmEnd => BbV5Colors.accentDeep;
+  Color get warmStart => BbV5Colors.terraSoft;
 }

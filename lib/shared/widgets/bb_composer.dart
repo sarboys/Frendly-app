@@ -444,6 +444,7 @@ class _BbComposerState extends State<BbComposer> {
                           children: [
                             _CircleButton(
                               key: _attachmentButtonKey,
+                              semanticLabel: 'Прикрепить',
                               icon: Icons.add_rounded,
                               size: 44,
                               foreground:
@@ -565,6 +566,7 @@ class _BbComposerState extends State<BbComposer> {
       children: [
         _CircleButton(
           key: _attachmentButtonKey,
+          semanticLabel: 'Прикрепить',
           icon: Icons.add_rounded,
           size: 44,
           foreground: BbV5Colors.ink,
@@ -627,6 +629,7 @@ class _BbComposerState extends State<BbComposer> {
                     padding: const EdgeInsets.only(left: 4),
                     child: _CircleButton(
                       key: const Key('bb-composer-send-button'),
+                      semanticLabel: 'Отправить сообщение',
                       icon: _sending
                           ? Icons.more_horiz_rounded
                           : Icons.send_rounded,
@@ -646,6 +649,7 @@ class _BbComposerState extends State<BbComposer> {
           const SizedBox(width: AppSpacing.xs),
           _CircleButton(
             key: const Key('bb-composer-mic-button'),
+            semanticLabel: 'Голосовое сообщение',
             icon: Icons.mic_rounded,
             size: 44,
             iconSize: 18,
@@ -1155,6 +1159,7 @@ class _CircleButton extends StatelessWidget {
     required this.foreground,
     required this.background,
     required this.onTap,
+    this.semanticLabel,
     this.iconSize = 20,
     this.borderColor,
     this.shadows,
@@ -1166,12 +1171,13 @@ class _CircleButton extends StatelessWidget {
   final Color foreground;
   final Color background;
   final VoidCallback? onTap;
+  final String? semanticLabel;
   final Color? borderColor;
   final List<BoxShadow>? shadows;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    final button = DecoratedBox(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         boxShadow: shadows,
@@ -1191,6 +1197,18 @@ class _CircleButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+    final label = semanticLabel;
+    if (label == null || label.isEmpty) {
+      return button;
+    }
+    return Semantics(
+      container: true,
+      button: true,
+      enabled: onTap != null,
+      label: label,
+      onTap: onTap,
+      child: ExcludeSemantics(child: button),
     );
   }
 }

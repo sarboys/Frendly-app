@@ -460,6 +460,9 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
       });
 
       container.invalidate(datingDiscoverProvider);
+      if (matchedChatId != null) {
+        container.invalidate(matchesProvider);
+      }
       if (!(fromLikes && matchedChatId != null)) {
         container.invalidate(datingLikesProvider);
       }
@@ -472,7 +475,10 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
       }
 
       if (matchedChatId != null && !fromLikes) {
-        _showMatchSnackBar(context, profile.name, matchedChatId);
+        context.pushRoute(
+          AppRoute.match,
+          pathParameters: {'userId': targetUserId},
+        );
       }
     } on DioException catch (error) {
       _rollbackOptimisticAction(
@@ -527,30 +533,6 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         _photoIndexes[targetUserId] = previousPhotoIndex;
       }
     });
-  }
-
-  void _showMatchSnackBar(
-    BuildContext context,
-    String profileName,
-    String chatId,
-  ) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Это match с $profileName'),
-        action: SnackBarAction(
-          label: 'В чат',
-          onPressed: () {
-            if (!context.mounted) {
-              return;
-            }
-            context.pushRoute(
-              AppRoute.personalChat,
-              pathParameters: {'chatId': chatId},
-            );
-          },
-        ),
-      ),
-    );
   }
 
   bool _isDatingPaywallError(DioException error) {

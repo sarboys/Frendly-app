@@ -65,6 +65,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   int? _lastMessageCount;
   String? _lastMessageId;
   bool _bottomScrollScheduled = false;
+  bool _topScrollScheduled = false;
+  bool _hadScrollableTopContent = false;
   bool _showCompactTopContent = false;
   String? _replyTargetMessageId;
   GlobalKey? _replyTargetKey;
@@ -276,18 +278,52 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     final lastId = lastMessage?.id;
     final previousCount = _lastMessageCount;
     final previousLastId = _lastMessageId;
-    final shouldInitialScroll = previousCount == null && messages.isNotEmpty;
-    final shouldScrollAfterMine = previousCount != null &&
+    final topContentInList =
+        widget.scrollTopContent && widget.topContent != null;
+    final topContentAppeared = topContentInList && !_hadScrollableTopContent;
+    final shouldInitialScroll =
+        previousCount == null && messages.isNotEmpty && !topContentInList;
+    final hasNewLastMessage = previousCount != null &&
         messages.length > previousCount &&
-        lastMessage?.mine == true &&
         lastId != previousLastId;
+    final shouldScrollAfterNewMessage =
+        hasNewLastMessage && (lastMessage?.mine == true || _isCloseToBottom());
 
     _lastMessageCount = messages.length;
     _lastMessageId = lastId;
+    _hadScrollableTopContent = _hadScrollableTopContent || topContentInList;
 
-    if (shouldInitialScroll || shouldScrollAfterMine) {
+    if (topContentAppeared) {
+      _scheduleScrollToTop();
+      return;
+    }
+
+    if (shouldInitialScroll || shouldScrollAfterNewMessage) {
       _scheduleScrollToBottom(animated: !shouldInitialScroll);
     }
+  }
+
+  bool _isCloseToBottom() {
+    if (!_scrollController.hasClients) {
+      return true;
+    }
+    final position = _scrollController.position;
+    return position.maxScrollExtent - position.pixels <= 220;
+  }
+
+  void _scheduleScrollToTop() {
+    if (_topScrollScheduled) {
+      return;
+    }
+
+    _topScrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _topScrollScheduled = false;
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      _scrollController.jumpTo(0);
+    });
   }
 
   void _scheduleScrollToBottom({required bool animated}) {

@@ -12,6 +12,7 @@ import 'package:big_break_mobile/features/evening_plan/presentation/evening_edit
 import 'package:big_break_mobile/features/tonight/presentation/tonight_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -109,6 +110,7 @@ class AppSessionController {
     final chatSegment = ref.read(chatSegmentProvider.notifier);
     final shellBottomBarVisible =
         ref.read(shellBottomBarVisibleProvider.notifier);
+    final manualLocation = ref.read(manualLocationProvider.notifier);
 
     if (clearPersistedChatState) {
       await SharedPreferencesChatOutboxStorage.clearStoredCommands(
@@ -128,6 +130,7 @@ class AppSessionController {
     notificationsLocalState.state = null;
     notificationUnreadCountOverride.state = null;
     eveningRouteOverrides.state = const {};
+    manualLocation.clear();
     tonightFilter.state = TonightFilter.nearby;
     chatSegment.state = ChatSegment.meetup;
     shellBottomBarVisible.state = true;

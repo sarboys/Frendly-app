@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:big_break_mobile/app/core/config/backend_config.dart';
 import 'package:big_break_mobile/app/core/device/social_share_service.dart';
-import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -13,6 +12,7 @@ import 'package:big_break_mobile/shared/models/public_share.dart';
 import 'package:big_break_mobile/shared/widgets/async_value_view.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
 import 'package:big_break_mobile/shared/widgets/bb_brand_icon.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -58,12 +58,10 @@ class _EveningShareCardScreenState
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     final sessionAsync = ref.watch(eveningSessionProvider(widget.sessionId));
 
-    return Scaffold(
-      backgroundColor: colors.foreground,
-      body: SafeArea(
+    return BbV5Scaffold(
+      child: SafeArea(
         child: AsyncValueView<EveningSessionDetail>(
           value: sessionAsync,
           data: (session) {
@@ -74,110 +72,97 @@ class _EveningShareCardScreenState
                 final link = share?.url ?? 'Готовим ссылку...';
                 final shareReady = share != null;
 
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                  children: [
-                    Row(
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
                       children: [
-                        IconButton(
-                          onPressed: () => context.pop(),
-                          icon: Icon(
-                            Icons.chevron_left_rounded,
-                            size: 28,
-                            color: colors.primaryForeground,
+                        BbV5TopBar(
+                          kicker: 'ПУБЛИЧНАЯ ССЫЛКА',
+                          title: 'Поделиться вечером',
+                          onBack: () => context.pop(),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        RepaintBoundary(
+                          key: _storyKey,
+                          child: _EveningStoryCard(
+                            session: session,
+                            link: link,
                           ),
                         ),
-                        Text(
-                          'Поделиться вечером',
-                          style: AppTextStyles.itemTitle.copyWith(
-                            color: colors.primaryForeground,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    RepaintBoundary(
-                      key: _storyKey,
-                      child: _EveningStoryCard(
-                        session: session,
-                        link: link,
-                      ),
-                    ),
-                    if (shareSnapshot.hasError) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        'Не удалось создать публичную ссылку',
-                        style: AppTextStyles.meta.copyWith(
-                          color:
-                              colors.primaryForeground.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: AppSpacing.xl),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _ShareAction(
-                          label: 'Telegram',
-                          background: const Color(0xFF2BA7E3),
-                          enabled: shareReady,
-                          onTap: () => _shareTelegram(session, share),
-                        ),
-                        const SizedBox(width: AppSpacing.xl),
-                        _ShareAction(
-                          label: 'Stories',
-                          gradient: const [
-                            Color(0xFF9B45D9),
-                            Color(0xFFE26A52),
-                          ],
-                          enabled: shareReady && !_sharingStory,
-                          busy: _sharingStory,
-                          onTap: () => _shareInstagramStory(share),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    OutlinedButton(
-                      onPressed: shareReady ? () => _copyLink(share.url) : null,
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        side: BorderSide(
-                          color:
-                              colors.primaryForeground.withValues(alpha: 0.15),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _copied ? Icons.check_rounded : Icons.copy_rounded,
-                            color: _copied
-                                ? colors.secondary
-                                : colors.primaryForeground,
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: Text(
-                              link,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.meta.copyWith(
-                                color: colors.primaryForeground,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
+                        if (shareSnapshot.hasError) ...[
+                          const SizedBox(height: AppSpacing.md),
                           Text(
-                            _copied ? 'Скопировано' : 'Копировать',
+                            'Не удалось создать публичную ссылку',
                             style: AppTextStyles.meta.copyWith(
-                              color: colors.primaryForeground
-                                  .withValues(alpha: 0.75),
-                              fontWeight: FontWeight.w600,
+                              color: BbV5Colors.inkMute,
                             ),
                           ),
                         ],
-                      ),
+                        const SizedBox(height: AppSpacing.xl),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _ShareAction(
+                              label: 'Telegram',
+                              background: const Color(0xFF2BA7E3),
+                              enabled: shareReady,
+                              onTap: () => _shareTelegram(session, share),
+                            ),
+                            const SizedBox(width: AppSpacing.xl),
+                            _ShareAction(
+                              label: 'Stories',
+                              gradient: const [
+                                Color(0xFF9B45D9),
+                                Color(0xFFE26A52),
+                              ],
+                              enabled: shareReady && !_sharingStory,
+                              busy: _sharingStory,
+                              onTap: () => _shareInstagramStory(share),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        BbV5Card(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          onTap: shareReady ? () => _copyLink(share.url) : null,
+                          child: Row(
+                            children: [
+                              Icon(
+                                _copied
+                                    ? Icons.check_rounded
+                                    : Icons.copy_rounded,
+                                color:
+                                    _copied ? BbV5Colors.sage : BbV5Colors.ink,
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  link,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.meta.copyWith(
+                                    color: BbV5Colors.ink,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                _copied ? 'Скопировано' : 'Копировать',
+                                style: AppTextStyles.meta.copyWith(
+                                  color: BbV5Colors.inkMute,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 );
               },
             );
@@ -322,7 +307,6 @@ class _EveningStoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     final participantNames = session.participants
         .map((item) => item.name.trim())
         .where((name) => name.isNotEmpty)
@@ -333,15 +317,16 @@ class _EveningStoryCard extends StatelessWidget {
       height: 520,
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           colors: [
-            colors.primary,
-            colors.primary.withValues(alpha: 0.82),
+            BbV5Colors.accent,
+            BbV5Colors.accentDeep,
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(BbV5Radii.lg),
+        boxShadow: BbV5Shadows.ink,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -353,7 +338,7 @@ class _EveningStoryCard extends StatelessWidget {
           Text(
             _sessionTimeLabel(session),
             style: AppTextStyles.caption.copyWith(
-              color: colors.primaryForeground.withValues(alpha: 0.85),
+              color: BbV5Colors.paperHi.withValues(alpha: 0.85),
               letterSpacing: 0,
             ),
           ),
@@ -363,7 +348,7 @@ class _EveningStoryCard extends StatelessWidget {
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.screenTitle.copyWith(
-              color: colors.primaryForeground,
+              color: BbV5Colors.paperHi,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -372,7 +357,7 @@ class _EveningStoryCard extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.bodySoft.copyWith(
-              color: colors.primaryForeground.withValues(alpha: 0.9),
+              color: BbV5Colors.paperHi.withValues(alpha: 0.9),
             ),
           ),
           if (visibleSteps.isNotEmpty) ...[
@@ -402,7 +387,7 @@ class _EveningStoryCard extends StatelessWidget {
                   _participantsLabel(session),
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.meta.copyWith(
-                    color: colors.primaryForeground.withValues(alpha: 0.85),
+                    color: BbV5Colors.paperHi.withValues(alpha: 0.85),
                   ),
                 ),
               ),
@@ -418,7 +403,7 @@ class _EveningStoryCard extends StatelessWidget {
                     Text(
                       'Присоединяйся',
                       style: AppTextStyles.caption.copyWith(
-                        color: colors.primaryForeground.withValues(alpha: 0.72),
+                        color: BbV5Colors.paperHi.withValues(alpha: 0.72),
                         letterSpacing: 0,
                         fontWeight: FontWeight.w600,
                       ),
@@ -429,7 +414,7 @@ class _EveningStoryCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.itemTitle.copyWith(
-                        color: colors.primaryForeground,
+                        color: BbV5Colors.paperHi,
                       ),
                     ),
                   ],
@@ -441,12 +426,12 @@ class _EveningStoryCard extends StatelessWidget {
                 height: 48,
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: colors.primaryForeground,
-                  borderRadius: BorderRadius.circular(12),
+                  color: BbV5Colors.paperHi,
+                  borderRadius: BorderRadius.circular(BbV5Radii.sm),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.link_rounded,
-                  color: colors.foreground,
+                  color: BbV5Colors.ink,
                 ),
               ),
             ],
@@ -468,22 +453,20 @@ class _StoryStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-
     return Row(
       children: [
         Container(
           width: 24,
           height: 24,
           decoration: BoxDecoration(
-            color: colors.primaryForeground.withValues(alpha: 0.14),
+            color: BbV5Colors.paperHi.withValues(alpha: 0.14),
             borderRadius: BorderRadius.circular(8),
           ),
           alignment: Alignment.center,
           child: Text(
             '${index + 1}',
             style: AppTextStyles.caption.copyWith(
-              color: colors.primaryForeground,
+              color: BbV5Colors.paperHi,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -495,7 +478,7 @@ class _StoryStep extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.caption.copyWith(
-              color: colors.primaryForeground.withValues(alpha: 0.82),
+              color: BbV5Colors.paperHi.withValues(alpha: 0.82),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -524,7 +507,6 @@ class _ShareAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     return SizedBox(
       width: 88,
       child: InkWell(
@@ -568,7 +550,7 @@ class _ShareAction extends StatelessWidget {
                 label,
                 textAlign: TextAlign.center,
                 style: AppTextStyles.caption.copyWith(
-                  color: colors.primaryForeground,
+                  color: BbV5Colors.ink,
                   fontWeight: FontWeight.w600,
                 ),
               ),

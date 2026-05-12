@@ -84,6 +84,7 @@ class UserProfileScreen extends ConsumerWidget {
                       color: BbV5Colors.inkMute,
                     ),
                   ),
+            useShortHeroName: isCurrentUser,
             bottomOverlay: isCurrentUser
                 ? null
                 : _PublicProfileBottomBar(

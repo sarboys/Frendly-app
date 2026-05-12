@@ -1,8 +1,5 @@
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/app/theme/app_colors.dart';
-import 'package:big_break_mobile/app/theme/app_radii.dart';
-import 'package:big_break_mobile/app/theme/app_shadows.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
@@ -10,6 +7,7 @@ import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -192,13 +190,12 @@ class _EveningPreviewScreenState extends ConsumerState<EveningPreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
+    final colors = _V5PreviewColors.instance;
     final inviteToken = _inviteTokenFromRoute();
     final sessionAsync = ref.watch(eveningSessionProvider(widget.sessionId));
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: sessionAsync.when(
+    return BbV5Scaffold(
+      child: sessionAsync.when(
         data: (session) {
           final joinState = _effectiveJoinState(session);
           return Stack(
@@ -338,7 +335,7 @@ class _Hero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
+    final colors = _V5PreviewColors.instance;
     final meta = _privacyMeta(session.privacy, colors);
 
     return Padding(
@@ -406,7 +403,7 @@ class _Hero extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: colors.background,
                     borderRadius: BorderRadius.circular(18),
-                    boxShadow: AppShadows.soft,
+                    boxShadow: BbV5Shadows.pill,
                   ),
                   alignment: Alignment.center,
                   child: Text(
@@ -477,7 +474,7 @@ class _HostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
+    final colors = _V5PreviewColors.instance;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
       child: Column(
@@ -598,7 +595,7 @@ class _TimelineTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
+    final colors = _V5PreviewColors.instance;
     return Opacity(
       opacity: isPast ? 0.55 : 1,
       child: Container(
@@ -610,7 +607,7 @@ class _TimelineTile extends StatelessWidget {
             color: isCurrent ? colors.primary : colors.border,
             width: isCurrent ? 2 : 1,
           ),
-          boxShadow: isCurrent ? AppShadows.soft : null,
+          boxShadow: isCurrent ? BbV5Shadows.pill : null,
         ),
         child: Column(
           children: [
@@ -700,7 +697,7 @@ class _PrivacyHint extends StatelessWidget {
     if (privacy == EveningPrivacy.open || joinState != _JoinState.idle) {
       return const SizedBox.shrink();
     }
-    final colors = AppColors.of(context);
+    final colors = _V5PreviewColors.instance;
     final isRequest = privacy == EveningPrivacy.request;
 
     return Padding(
@@ -767,7 +764,7 @@ class _StickyCta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
+    final colors = _V5PreviewColors.instance;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final hasInviteToken = inviteToken != null && inviteToken!.isNotEmpty;
     final alreadyJoined = joinState == _JoinState.joined || session.isJoined;
@@ -869,7 +866,7 @@ class _HeroStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
+    final colors = _V5PreviewColors.instance;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -911,7 +908,7 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
+    final colors = _V5PreviewColors.instance;
     return Row(
       children: [
         Icon(icon, size: 13, color: colors.inkMute),
@@ -948,7 +945,7 @@ class _Badge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: AppRadii.pillBorder,
+        borderRadius: BorderRadius.circular(BbV5Radii.pill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -980,7 +977,7 @@ class _CircleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
+    final colors = _V5PreviewColors.instance;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1001,7 +998,7 @@ class _CircleButton extends StatelessWidget {
   }
 }
 
-_PrivacyMeta _privacyMeta(EveningPrivacy privacy, BigBreakThemeColors colors) {
+_PrivacyMeta _privacyMeta(EveningPrivacy privacy, _V5PreviewColors colors) {
   switch (privacy) {
     case EveningPrivacy.request:
       return _PrivacyMeta(
@@ -1062,6 +1059,26 @@ String _stepsCountLabel(int count) {
           ? 'шага'
           : 'шагов';
   return '$count $word';
+}
+
+class _V5PreviewColors {
+  const _V5PreviewColors._();
+
+  static const instance = _V5PreviewColors._();
+
+  Color get background => BbV5Colors.paper;
+  Color get card => BbV5Colors.paperHi;
+  Color get border => BbV5Colors.hair;
+  Color get foreground => BbV5Colors.ink;
+  Color get inkMute => BbV5Colors.inkMute;
+  Color get inkSoft => BbV5Colors.inkSoft;
+  Color get muted => BbV5Colors.paperDeep;
+  Color get primary => BbV5Colors.accent;
+  Color get primaryForeground => BbV5Colors.paperHi;
+  Color get primarySoft => BbV5Colors.terraSoft;
+  Color get secondary => BbV5Colors.sage;
+  Color get secondarySoft => BbV5Colors.brandSoft;
+  Color get warmStart => BbV5Colors.terraSoft;
 }
 
 class _PrivacyMeta {

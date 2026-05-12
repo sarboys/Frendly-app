@@ -3,6 +3,7 @@ import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/core/device/app_permission_service.dart';
 import 'package:big_break_mobile/app/core/device/app_reverse_geocoding_service.dart';
+import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_router.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/features/onboarding/presentation/onboarding_screen.dart';
@@ -13,6 +14,7 @@ import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/onboarding_data.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
@@ -269,6 +271,56 @@ void main() {
         findsOneWidget);
     expect(find.text('Укажи телефон'), findsOneWidget);
     expect(find.text('Дата рождения'), findsNothing);
+  });
+
+  testWidgets('onboarding rehydrates contact fields after account switch',
+      (tester) async {
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        onboardingProvider.overrideWith((ref) async {
+          final userId = ref.watch(currentUserIdProvider);
+          return OnboardingData(
+            intent: null,
+            gender: null,
+            city: null,
+            area: null,
+            interests: const [],
+            vibe: null,
+            email: userId == 'user-one' ? 'first@example.com' : null,
+            requiredContact: OnboardingContactRequirement.email,
+          );
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(currentUserIdProvider.notifier).state = 'user-one';
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: OnboardingScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<TextField>(
+        find.byKey(const Key('onboarding-email-field')),
+      ).controller?.text,
+      'first@example.com',
+    );
+
+    container.read(currentUserIdProvider.notifier).state = 'user-two';
+    container.invalidate(onboardingProvider);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<TextField>(
+        find.byKey(const Key('onboarding-email-field')),
+      ).controller?.text,
+      isEmpty,
+    );
   });
 
   testWidgets('onboarding birthday step opens date picker', (tester) async {
@@ -605,6 +657,74 @@ void main() {
     expect(find.text('tonight-opened'), findsOneWidget);
   });
 
+  testWidgets('onboarding saves manual city when yandex search fails',
+      (tester) async {
+    late _RecordingOnboardingRepository repository;
+
+    await tester.pumpWidget(
+      _wrapOnboardingFlow(
+        (ref) => repository = _RecordingOnboardingRepository(ref: ref),
+        extraOverrides: [
+          onboardingProvider.overrideWith(
+            (ref) async => const OnboardingData(
+              intent: null,
+              gender: null,
+              city: null,
+              area: null,
+              interests: [],
+              vibe: null,
+            ),
+          ),
+          yandexMapServiceProvider.overrideWithValue(
+            _FailingYandexMapService(),
+          ),
+          appPermissionServiceProvider.overrideWithValue(
+            const _AllowPermissionService(),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _completeFirstOnboardingStep(tester);
+    await tester.enterText(find.byType(TextField), 'Москва');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Кофе'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Кино'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Спокойно'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('onboarding-birth-date-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('birth-date-sheet-submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('onboarding-email-field')),
+      'user@example.com',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Дальше'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Разрешить').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Войти в Frendly'));
+    await tester.pumpAndSettle();
+
+    expect(repository.saved?.city, 'Москва');
+    expect(repository.saved?.area, isNull);
+    expect(find.text('tonight-opened'), findsOneWidget);
+  });
+
   testWidgets('onboarding requires gender selection before continuing',
       (tester) async {
     await tester.pumpWidget(
@@ -727,6 +847,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('AI'), findsOneWidget);
+    expect(find.byIcon(LucideIcons.search), findsNothing);
+    expect(find.byIcon(LucideIcons.shield_alert), findsNothing);
     expect(
       find.byKey(const ValueKey('tonight-notification-dot')),
       findsNothing,
@@ -1052,6 +1174,24 @@ class _FakeYandexMapService extends YandexMapService {
       address: 'Россия, Москва, улица Покровка, 17',
       point: Point(latitude: 55.757, longitude: 37.648),
     );
+  }
+}
+
+class _FailingYandexMapService extends YandexMapService {
+  _FailingYandexMapService() : super(bootstrap: const _NoopMapkitBootstrap());
+
+  @override
+  Future<List<ResolvedAddress>> searchPlaces(
+    String query, {
+    Point? near,
+    bool geocodeFirst = false,
+  }) {
+    throw StateError('map search unavailable');
+  }
+
+  @override
+  Future<ResolvedAddress?> reverseGeocode(Point point) {
+    throw StateError('reverse geocode unavailable');
   }
 }
 

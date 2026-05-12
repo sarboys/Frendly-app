@@ -474,6 +474,46 @@ void main() {
     expect(border.left.width, 0);
   });
 
+  testWidgets('incoming reply quote tap stays separate from body profile tap',
+      (tester) async {
+    var openedProfile = 0;
+    var openedReply = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BbChatBubble(
+            authorId: 'user-liza',
+            author: 'Лиза П',
+            text: 'Оке',
+            time: '10:53',
+            replyTo: const MessageReplyPreview(
+              id: 'p1',
+              authorId: 'user-me',
+              author: 'Дима Р',
+              text: 'Голосовое сообщение',
+              isVoice: true,
+              mine: true,
+            ),
+            onAuthorAvatarTap: (_) => openedProfile++,
+            onReplyTap: (_) => openedReply++,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('bb-chat-reply-quote-mine')));
+    expect(openedReply, 1);
+    expect(openedProfile, 0);
+
+    await tester.tap(find.text('Оке'));
+    expect(openedProfile, 1);
+    expect(
+      find.bySemanticsLabel('Открыть профиль Лиза П из сообщения: Оке'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('incoming bubble uses dark incoming surface in dark theme', (
     tester,
   ) async {

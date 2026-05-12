@@ -61,6 +61,16 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       return;
                     }
 
+                    if (event.joined) {
+                      if (context.mounted) {
+                        context.pushRoute(
+                          AppRoute.eveningFlow,
+                          pathParameters: {'eventId': event.id},
+                        );
+                      }
+                      return;
+                    }
+
                     if (!event.joined && requiresRequest) {
                       if (context.mounted) {
                         context.pushRoute(
@@ -94,10 +104,10 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       container.invalidate(eventsProvider('newcomers'));
                       container.invalidate(eventsProvider('date'));
                       container.invalidate(meetupChatsProvider);
-                      if (context.mounted && detail.chatId != null) {
+                      if (context.mounted) {
                         context.pushRoute(
-                          AppRoute.meetupChat,
-                          pathParameters: {'chatId': detail.chatId!},
+                          AppRoute.eveningFlow,
+                          pathParameters: {'eventId': detail.id},
                         );
                       }
                     } catch (_) {
@@ -422,7 +432,7 @@ class _EventDetailBody extends StatelessWidget {
                                     : event.isHost
                                         ? 'Открыть хост-панель'
                                         : event.joined
-                                            ? 'Открыть чат встречи'
+                                            ? 'Начать вечер'
                                             : hasPendingJoinRequest
                                                 ? 'Заявка отправлена'
                                                 : requiresRequest

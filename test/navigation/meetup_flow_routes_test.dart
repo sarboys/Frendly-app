@@ -36,6 +36,14 @@ void main() {
       '/after-party/e1',
     );
 
+    expect(
+      appRouter.namedLocation(
+        AppRoute.eveningFlow.name,
+        pathParameters: const {'eventId': 'e1'},
+      ),
+      '/evening/e1',
+    );
+
     expect(appRouter.namedLocation(AppRoute.hostDashboard.name), '/host');
     expect(
       appRouter.namedLocation(

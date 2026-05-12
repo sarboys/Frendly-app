@@ -127,6 +127,7 @@ class _PersonalChatScreenState extends ConsumerState<PersonalChatScreen> {
 
     final attachmentService = ref.read(appAttachmentServiceProvider);
     try {
+      _showSnackBar('Сохраняем файл...');
       await attachmentService.saveAttachmentToDevice(attachment);
       _showSnackBar('Файл сохранён на устройство');
     } catch (_) {
@@ -137,6 +138,7 @@ class _PersonalChatScreenState extends ConsumerState<PersonalChatScreen> {
   Future<void> _downloadAttachment(MessageAttachment attachment) async {
     final attachmentService = ref.read(appAttachmentServiceProvider);
     try {
+      _showSnackBar('Сохраняем файл...');
       await attachmentService.saveAttachmentToDevice(attachment);
       _showSnackBar('Файл сохранён на устройство');
     } catch (_) {
@@ -446,7 +448,9 @@ class _PersonalChatScreenState extends ConsumerState<PersonalChatScreen> {
     if (!mounted || !context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.removeCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(content: Text(message)),
     );
   }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
@@ -10,7 +11,6 @@ import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_gallery.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -53,6 +53,7 @@ class ProfileV5Content extends StatelessWidget {
     this.bottomOverlay,
     this.bottomPadding = 132,
     this.locationFallback = 'Москва · Чистые пруды',
+    this.useShortHeroName = true,
     super.key,
   });
 
@@ -67,6 +68,7 @@ class ProfileV5Content extends StatelessWidget {
   final Widget? bottomOverlay;
   final double bottomPadding;
   final String? locationFallback;
+  final bool useShortHeroName;
 
   @override
   Widget build(BuildContext context) {
@@ -84,6 +86,7 @@ class ProfileV5Content extends StatelessWidget {
                     header ??
                         _ProfileHeader(
                           onBack: () => context.goRoute(AppRoute.tonight),
+                          onSos: () => context.pushRoute(AppRoute.sos),
                           onSettings: () =>
                               context.pushRoute(AppRoute.settings),
                         ),
@@ -92,6 +95,7 @@ class ProfileV5Content extends StatelessWidget {
                       profile: profile,
                       photoPreviews: photoPreviews,
                       locationFallback: locationFallback,
+                      useShortName: useShortHeroName,
                       action: heroAction ??
                           (showOwnerCards ? _ownerHeroAction(context) : null),
                       signalRow: heroSignalRow,
@@ -200,10 +204,12 @@ class ProfileV5Content extends StatelessWidget {
 class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({
     required this.onBack,
+    required this.onSos,
     required this.onSettings,
   });
 
   final VoidCallback onBack;
+  final VoidCallback onSos;
   final VoidCallback onSettings;
 
   @override
@@ -227,6 +233,8 @@ class _ProfileHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: AppSpacing.xs),
+        _ProfileHeaderSosButton(onTap: onSos),
+        const SizedBox(width: AppSpacing.xs),
         BbV5IconButton(
           icon: LucideIcons.settings,
           iconSize: 16,
@@ -237,11 +245,55 @@ class _ProfileHeader extends StatelessWidget {
   }
 }
 
+class _ProfileHeaderSosButton extends StatelessWidget {
+  const _ProfileHeaderSosButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'SOS',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: const ValueKey('profile-header-sos'),
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(BbV5Radii.pill),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFFD85B4A),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFB5443B)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x99B5443B),
+                  blurRadius: 18,
+                  spreadRadius: -8,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: const Icon(
+              LucideIcons.shield_alert,
+              size: 17,
+              color: BbV5Colors.paperHi,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ProfileHeroCard extends StatelessWidget {
   const _ProfileHeroCard({
     required this.profile,
     required this.photoPreviews,
     required this.locationFallback,
+    required this.useShortName,
     this.action,
     this.signalRow,
   });
@@ -249,14 +301,15 @@ class _ProfileHeroCard extends StatelessWidget {
   final ProfileData profile;
   final Map<String, Uint8List> photoPreviews;
   final String? locationFallback;
+  final bool useShortName;
   final Widget? action;
   final Widget? signalRow;
 
   @override
   Widget build(BuildContext context) {
-    final shortName = _shortName(profile.displayName);
-    final title =
-        profile.age == null ? shortName : '$shortName, ${profile.age}';
+    final name =
+        useShortName ? _shortName(profile.displayName) : profile.displayName;
+    final title = profile.age == null ? name : '$name, ${profile.age}';
     final location = composeLocationLabel(profile.city, profile.area);
     final locationLabel =
         location.isEmpty ? locationFallback?.trim() ?? '' : location;
@@ -448,50 +501,6 @@ class _MetricTile extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _ProfileSignalRow extends StatelessWidget {
-  const _ProfileSignalRow({required this.profile});
-
-  final ProfileData profile;
-
-  @override
-  Widget build(BuildContext context) {
-    final social = profile.social;
-
-    return Row(
-      children: [
-        Expanded(
-          child: BbV5PillButton(
-            label: social.iFollow ? 'Подписан' : 'Подписаться',
-            icon:
-                social.iFollow ? LucideIcons.user_check : LucideIcons.user_plus,
-            dark: !social.iFollow,
-            height: 44,
-            fontSize: 12.5,
-            iconSize: 14,
-            expanded: true,
-            onPressed: () => _showOwnProfileSnack(context),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        BbV5PillButton(
-          label: _formatCount(social.likes),
-          icon: LucideIcons.heart,
-          height: 44,
-          fontSize: 12.5,
-          iconSize: 14,
-          onPressed: () => _showOwnProfileSnack(context),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        BbV5IconButton(
-          icon: LucideIcons.share_2,
-          iconSize: 16,
-          onPressed: () => _copyProfilePath(context, profile),
-        ),
-      ],
     );
   }
 }
@@ -1233,24 +1242,6 @@ class _ProfileErrorState extends StatelessWidget {
       ),
     );
   }
-}
-
-Future<void> _copyProfilePath(BuildContext context, ProfileData profile) async {
-  await Clipboard.setData(
-    ClipboardData(text: '/user/${Uri.encodeComponent(profile.id)}'),
-  );
-  if (!context.mounted) {
-    return;
-  }
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Ссылка скопирована')),
-  );
-}
-
-void _showOwnProfileSnack(BuildContext context) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Это твой профиль')),
-  );
 }
 
 String _shortName(String value) {
