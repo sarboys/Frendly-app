@@ -660,7 +660,8 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                             runSpacing: 6,
                             children: _datingAreaFilters
                                 .map(
-                                  (area) => BbV5Chip(
+                                  (area) => _DatingFilterChip(
+                                    group: 'Район',
                                     label: area,
                                     active: _filterArea == area,
                                     onTap: () => update(() {
@@ -678,7 +679,8 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                             runSpacing: 6,
                             children: _datingTimeFilters
                                 .map(
-                                  (time) => BbV5Chip(
+                                  (time) => _DatingFilterChip(
+                                    group: 'Когда',
                                     label: time,
                                     active: _filterTime == time,
                                     onTap: () => update(() {
@@ -696,8 +698,10 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                             runSpacing: 6,
                             children: _datingInterestFilters
                                 .map(
-                                  (interest) => BbV5Chip(
-                                    label: '#$interest',
+                                  (interest) => _DatingFilterChip(
+                                    group: 'Интерес',
+                                    label: interest,
+                                    visualLabel: '#$interest',
                                     active: _filterInterests.contains(interest),
                                     onTap: () => update(() {
                                       if (_filterInterests.contains(interest)) {
@@ -913,26 +917,30 @@ class _DatingHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            BbV5IconButton(
-              icon: LucideIcons.list_filter,
-              onPressed: onFilter,
-            ),
-            if (filtersActive)
-              const Positioned(
-                top: 7,
-                right: 7,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: BbV5Colors.terra,
-                    shape: BoxShape.circle,
-                  ),
-                  child: SizedBox(width: 8, height: 8),
-                ),
+        Semantics(
+          button: true,
+          label: 'Фильтры дейтинга',
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              BbV5IconButton(
+                icon: LucideIcons.list_filter,
+                onPressed: onFilter,
               ),
-          ],
+              if (filtersActive)
+                const Positioned(
+                  top: 7,
+                  right: 7,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: BbV5Colors.terra,
+                      shape: BoxShape.circle,
+                    ),
+                    child: SizedBox(width: 8, height: 8),
+                  ),
+                ),
+            ],
+          ),
         ),
       ],
     );
@@ -1094,6 +1102,39 @@ class _DatingPlusLockedState extends StatelessWidget {
               fontSize: 13,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DatingFilterChip extends StatelessWidget {
+  const _DatingFilterChip({
+    required this.group,
+    required this.label,
+    required this.active,
+    required this.onTap,
+    this.visualLabel,
+  });
+
+  final String group;
+  final String label;
+  final String? visualLabel;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: active,
+      label: '$group $label',
+      onTap: onTap,
+      child: ExcludeSemantics(
+        child: BbV5Chip(
+          label: visualLabel ?? label,
+          active: active,
+          onTap: onTap,
         ),
       ),
     );
@@ -1348,7 +1389,7 @@ class _DatingProfileCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AspectRatio(
-            aspectRatio: 0.78,
+            aspectRatio: 1,
             child: Stack(
               children: [
                 Positioned.fill(

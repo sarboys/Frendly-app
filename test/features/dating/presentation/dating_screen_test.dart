@@ -154,6 +154,59 @@ void main() {
     expect(likesReads, 0);
   });
 
+  testWidgets('dating filter controls expose labels and selected state',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      _wrap(
+        overrides: [
+          subscriptionStateProvider.overrideWith(
+            (ref) async => const SubscriptionStateData(
+              plan: null,
+              status: 'inactive',
+              startedAt: null,
+              renewsAt: null,
+              trialEndsAt: null,
+            ),
+          ),
+          datingDiscoverProvider.overrideWith(
+            (ref) async => const [_sonyaProfile],
+          ),
+          datingLikesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.bySemanticsLabel('Фильтры дейтинга'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Район Все')),
+      matchesSemantics(
+        label: 'Район Все',
+        isButton: true,
+        hasSelectedState: true,
+        isSelected: true,
+        hasTapAction: true,
+      ),
+    );
+
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Интерес кофе')),
+      matchesSemantics(
+        label: 'Интерес кофе',
+        isButton: true,
+        hasSelectedState: true,
+        isSelected: false,
+        hasTapAction: true,
+      ),
+    );
+
+    semantics.dispose();
+  });
+
   testWidgets('dating feed reserves space for bottom actions', (tester) async {
     await tester.pumpWidget(
       _wrap(
@@ -198,6 +251,47 @@ void main() {
     final padding = listView.padding as EdgeInsets;
 
     expect(padding.bottom, greaterThanOrEqualTo(148));
+  });
+
+  testWidgets('dating action row clears bottom navigation on iPhone height',
+      (tester) async {
+    tester.view.physicalSize = const Size(402, 874);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      _wrap(
+        overrides: [
+          subscriptionStateProvider.overrideWith(
+            (ref) async => const SubscriptionStateData(
+              plan: null,
+              status: 'inactive',
+              startedAt: null,
+              renewsAt: null,
+              trialEndsAt: null,
+            ),
+          ),
+          datingDiscoverProvider.overrideWith(
+            (ref) async => const [_sonyaProfile],
+          ),
+          datingLikesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final likeButton = find
+        .ancestor(
+          of: find.text('Лайк'),
+          matching: find.byType(GestureDetector),
+        )
+        .last;
+    final actionBottom = tester.getBottomLeft(likeButton).dy;
+
+    expect(actionBottom, lessThanOrEqualTo(806));
   });
 
   testWidgets('dating state shows discover content', (tester) async {
