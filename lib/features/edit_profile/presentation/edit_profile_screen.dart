@@ -276,6 +276,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         SizedBox(
                           height: 64,
                           child: ListView.separated(
+                            key: const Key('edit-profile-photo-strip'),
                             scrollDirection: Axis.horizontal,
                             itemCount: photos.length + 1,
                             separatorBuilder: (_, __) =>

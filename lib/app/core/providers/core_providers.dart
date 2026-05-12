@@ -219,7 +219,8 @@ class AuthTokensController extends StateNotifier<AuthTokens?> {
       if (error.response?.statusCode == 401) {
         _debugAuthLog('Refresh token rejected, clearing session');
         if (_sameTokens(state, current)) {
-          clear();
+          state = null;
+          await _enqueueTokenStorage(_clearPersistedTokens);
         }
       } else {
         _debugAuthLog('Refresh token request failed: ${error.type}');

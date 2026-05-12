@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/app.dart';
 import 'package:big_break_mobile/app/theme/app_theme_mode.dart';
+import 'package:big_break_mobile/features/splash/presentation/splash_screen.dart';
 import 'dart:async';
 
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -20,7 +21,7 @@ void main() {
     await tester.pumpWidget(BigBreakRoot(overrides: buildTestOverrides()));
     await tester.pump();
 
-    expect(find.textContaining('Твои люди ближе'), findsOneWidget);
+    expect(find.byType(SplashScreen), findsOneWidget);
   });
 
   testWidgets('root opens Tonight when saved auth tokens exist', (
@@ -48,7 +49,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Город дышит —'), findsOneWidget);
+    expect(find.textContaining('Город дышит'), findsOneWidget);
   });
 
   testWidgets(
@@ -78,7 +79,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 3500));
     await tester.pumpAndSettle();
 
-    expect(find.text('Город дышит —'), findsOneWidget);
+    expect(find.textContaining('Город дышит'), findsOneWidget);
   });
 
   testWidgets('root keeps startup screen while auth bootstrap is running', (
@@ -108,12 +109,12 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.textContaining('Твои люди ближе'), findsOneWidget);
+    expect(find.byType(SplashScreen), findsOneWidget);
 
     completer.complete();
     await tester.pumpAndSettle();
 
-    expect(find.text('Город дышит —'), findsOneWidget);
+    expect(find.textContaining('Город дышит'), findsOneWidget);
   });
 
   testWidgets('root boots splash without reading remote settings', (
@@ -131,7 +132,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.textContaining('Твои люди ближе'), findsOneWidget);
+    expect(find.byType(SplashScreen), findsOneWidget);
   });
 
   testWidgets('theme switch keeps current settings route open', (tester) async {

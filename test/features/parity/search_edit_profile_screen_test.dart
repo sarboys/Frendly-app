@@ -89,7 +89,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final thumbnails = find.byType(BbProfilePhotoImage);
+    final thumbnails = find.descendant(
+      of: find.byKey(const Key('edit-profile-photo-strip')),
+      matching: find.byType(BbProfilePhotoImage),
+    );
 
     expect(thumbnails, findsNWidgets(2));
     expect(

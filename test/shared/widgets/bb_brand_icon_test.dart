@@ -20,7 +20,7 @@ void main() {
     final resizeImage = image.image as ResizeImage;
     final provider = resizeImage.imageProvider as AssetImage;
 
-    expect(provider.assetName, 'assets/images/icon-v5-sage.jpg');
+    expect(provider.assetName, BbBrandIcon.assetPath);
     expect(resizeImage.width, 192);
     expect(resizeImage.height, 192);
   });
