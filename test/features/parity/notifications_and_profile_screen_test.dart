@@ -499,4 +499,39 @@ void main() {
     expect(find.text('Написать'), findsNothing);
     expect(find.text('Изменить'), findsOneWidget);
   });
+
+  testWidgets('public user profile ignores stale body for another user',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const UserProfileScreen(userId: 'user-boris'),
+        extraOverrides: [
+          personProfileProvider.overrideWith(
+            (ref, userId) async => const ProfileData(
+              id: 'user-anya',
+              displayName: 'Аня К',
+              verified: true,
+              online: true,
+              age: 27,
+              city: 'Москва',
+              area: 'Чистые пруды',
+              bio: 'Старое тело профиля',
+              vibe: 'Спокойно',
+              rating: 4.9,
+              meetupCount: 23,
+              avatarUrl: null,
+              interests: ['Кофе'],
+              intent: ['Друзья'],
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Аня К'), findsNothing);
+    expect(find.text('Старое тело профиля'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
 }

@@ -37,6 +37,9 @@ class UserProfileScreen extends ConsumerWidget {
       child: AsyncValueView<ProfileData>(
         value: profileAsync,
         data: (profile) {
+          if (profile.id != userId) {
+            return const Center(child: CircularProgressIndicator());
+          }
           _prewarmUserProfilePhotos(ref, profile);
           final isCurrentUser =
               currentUserId != null && (currentUserId == userId);
@@ -47,6 +50,7 @@ class UserProfileScreen extends ConsumerWidget {
                   .toList(growable: false);
 
           return ProfileV5Content(
+            key: ValueKey('user-profile-content-${profile.id}'),
             profile: profile,
             header: _PublicProfileHeader(
               profile: profile,
