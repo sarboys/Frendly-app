@@ -603,6 +603,34 @@ void main() {
     );
   });
 
+  testWidgets('create meetup keeps bottom fields above fixed CTA',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.padding = const FakeViewPadding(bottom: 34);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetPadding);
+
+    await tester.pumpWidget(
+      _wrap(
+        (_) {},
+        initialMode: CreateMeetupMode.dating,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final listView = tester.widget<ListView>(find.byType(ListView).first);
+    final listPadding = listView.padding!.resolve(TextDirection.ltr);
+    expect(listPadding.bottom, greaterThanOrEqualTo(196));
+
+    await scrollTo(tester, find.text('Описание'));
+    await tester.tap(descriptionField);
+    await tester.pump();
+
+    expect(tester.testTextInput.isVisible, isTrue);
+  });
+
   testWidgets('create meetup screen shows meetup plus dating mode segment',
       (tester) async {
     await tester.pumpWidget(_wrap((_) {}));
@@ -779,11 +807,11 @@ void main() {
 
     await enterTitle(tester, 'Ужин');
     await selectTverskayaPlace(tester);
+    await enterDescription(tester, 'Короткое описание');
     final visibilityOption = find.text('По ссылке');
     await scrollTo(tester, visibilityOption);
     await tester.tap(visibilityOption, warnIfMissed: false);
     await tester.pumpAndSettle();
-    await enterDescription(tester, 'Короткое описание');
 
     await tapCreate(tester);
 

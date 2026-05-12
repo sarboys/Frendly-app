@@ -49,6 +49,8 @@ const _dateIdeas = [
   ('coffee', 'Кофе и прогулка', '☕', 'Быстро, легко, без долгого сетапа'),
   ('cinema', 'Кино и разговор', '🎬', 'Сначала фильм, потом обсудить'),
 ];
+const _fixedBottomCtaReserve = 360.0;
+const _fixedBottomCtaGap = 24.0;
 
 IconData _iconForEmoji(String value) {
   for (final item in _createIconChoices) {
@@ -277,63 +279,59 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
-            child: Stack(
+            child: Column(
               children: [
-                Column(
-                  children: [
-                    _buildV5Header(
-                      titleText: titleText,
-                      isEditMode: isEditMode,
-                      isDatingMode: isDatingMode,
-                    ),
-                    Expanded(
-                      child: ListView(
-                        cacheExtent: 1400,
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 154),
-                        children: [
-                          if (!isEditMode) ...[
-                            _buildV5ModeTabs(),
-                            const SizedBox(height: 20),
-                          ],
-                          _buildV5PreviewCard(
-                            isDatingMode: isDatingMode,
-                          ),
-                          _buildV5TitleSection(isDatingMode: isDatingMode),
-                          if (!isDatingMode) _buildV5EmojiSection(),
-                          _buildV5WhenWhereSection(),
-                          if (!isDatingMode) _buildV5AttachSection(),
-                          _buildV5VibeSection(),
-                          _buildV5CapacitySection(
-                            isDatingMode: isDatingMode,
-                          ),
-                          if (!isDatingMode) _buildV5LifestyleSection(),
-                          _buildV5PriceSection(isDatingMode: isDatingMode),
-                          _buildV5AccessSection(
-                            isDatingMode: isDatingMode,
-                          ),
-                          if (!isDatingMode) _buildV5GenderSection(),
-                          if (isDatingMode) _buildV5DateIdeasSection(),
-                          _buildV5DescriptionSection(
-                            isDatingMode: isDatingMode,
-                          ),
-                          _buildV5AiHelper(),
-                          _buildV5VisibilitySection(
-                            isDatingMode: isDatingMode,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                _buildV5Header(
+                  titleText: titleText,
+                  isEditMode: isEditMode,
+                  isDatingMode: isDatingMode,
                 ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: _buildV5BottomCta(
-                    publishText: publishText,
-                    canSubmit: canSubmit,
-                    isDatingMode: isDatingMode,
+                Expanded(
+                  child: ListView(
+                    cacheExtent: 1400,
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      8,
+                      20,
+                      _listBottomPadding(context),
+                    ),
+                    children: [
+                      if (!isEditMode) ...[
+                        _buildV5ModeTabs(),
+                        const SizedBox(height: 20),
+                      ],
+                      _buildV5PreviewCard(
+                        isDatingMode: isDatingMode,
+                      ),
+                      _buildV5TitleSection(isDatingMode: isDatingMode),
+                      if (!isDatingMode) _buildV5EmojiSection(),
+                      _buildV5WhenWhereSection(),
+                      if (!isDatingMode) _buildV5AttachSection(),
+                      _buildV5VibeSection(),
+                      _buildV5CapacitySection(
+                        isDatingMode: isDatingMode,
+                      ),
+                      if (!isDatingMode) _buildV5LifestyleSection(),
+                      _buildV5PriceSection(isDatingMode: isDatingMode),
+                      _buildV5AccessSection(
+                        isDatingMode: isDatingMode,
+                      ),
+                      if (!isDatingMode) _buildV5GenderSection(),
+                      if (isDatingMode) _buildV5DateIdeasSection(),
+                      _buildV5DescriptionSection(
+                        isDatingMode: isDatingMode,
+                      ),
+                      _buildV5AiHelper(),
+                      _buildV5VisibilitySection(
+                        isDatingMode: isDatingMode,
+                      ),
+                    ],
                   ),
+                ),
+                _buildV5BottomCta(
+                  publishText: publishText,
+                  canSubmit: canSubmit,
+                  isDatingMode: isDatingMode,
                 ),
               ],
             ),
@@ -1239,6 +1237,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     required bool isDatingMode,
   }) {
     final accent = BbV5Colors.accent;
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
     return Stack(
       children: [
         Positioned.fill(
@@ -1260,7 +1259,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 26, 20, 20),
+          padding: EdgeInsets.fromLTRB(20, 26, 20, 20 + safeBottom),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1332,6 +1331,12 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
         ),
       ],
     );
+  }
+
+  double _listBottomPadding(BuildContext context) {
+    return _fixedBottomCtaReserve +
+        MediaQuery.paddingOf(context).bottom +
+        _fixedBottomCtaGap;
   }
 
   String _previewTitle({
