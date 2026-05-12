@@ -45,6 +45,9 @@ class _FakeCreateMeetupRepository extends BackendRepository {
   double? lastDistanceKm;
   double? lastLatitude;
   double? lastLongitude;
+  String? lastMode;
+  String? lastDescription;
+  String? lastInviteeUserId;
   var createEventCalls = 0;
   var updateHostedEventCalls = 0;
   String? lastUpdatedEventId;
@@ -98,6 +101,9 @@ class _FakeCreateMeetupRepository extends BackendRepository {
     lastDistanceKm = distanceKm;
     lastLatitude = latitude;
     lastLongitude = longitude;
+    lastMode = mode;
+    lastDescription = description;
+    lastInviteeUserId = inviteeUserId;
     return const EventDetail(
       id: 'e-created',
       title: 'Новая встреча',
@@ -371,6 +377,7 @@ Widget _wrap(
   List<Override> overrides = const [],
   String? communityId,
   String? editEventId,
+  String? inviteeUserId,
   CreateMeetupMode initialMode = CreateMeetupMode.meetup,
   String? afficheEventId,
   bool watchHostDashboard = false,
@@ -379,6 +386,7 @@ Widget _wrap(
     final screen = CreateMeetupScreen(
       communityId: communityId,
       editEventId: editEventId,
+      inviteeUserId: inviteeUserId,
       initialMode: initialMode,
       afficheEventId: afficheEventId,
     );
@@ -417,7 +425,9 @@ Widget _wrap(
       GoRoute(
         path: '/event/:eventId',
         name: 'eventDetail',
-        builder: (context, state) => const SizedBox.shrink(),
+        builder: (context, state) => Text(
+          'event detail ${state.pathParameters['eventId']}',
+        ),
       ),
       GoRoute(
         path: '/paywall',
@@ -490,6 +500,11 @@ void main() {
     await tester.tap(find.text('Дальше · превью'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Опубликовать'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> tapDatingInvite(WidgetTester tester) async {
+    await tester.tap(find.widgetWithText(FilledButton, 'Отправить инвайт'));
     await tester.pumpAndSettle();
   }
 
@@ -781,6 +796,31 @@ void main() {
     expect(repository!.lastUpdatedCapacity, 4);
     expect(repository!.lastUpdatedVisibilityMode, 'public');
     expect(repository!.lastUpdatedJoinMode, EventJoinMode.open);
+  });
+
+  testWidgets('date invite uses fallback description and opens event detail',
+      (tester) async {
+    _FakeCreateMeetupRepository? repository;
+
+    await tester.pumpWidget(
+      _wrap(
+        (value) => repository = value,
+        initialMode: CreateMeetupMode.dating,
+        inviteeUserId: 'user-sonya',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tapDatingInvite(tester);
+
+    expect(repository, isNotNull);
+    expect(repository!.createEventCalls, 1);
+    expect(repository!.lastMode, 'dating');
+    expect(repository!.lastJoinMode, EventJoinMode.request);
+    expect(repository!.lastInviteeUserId, 'user-sonya');
+    expect(repository!.lastDescription, isNotEmpty);
+    expect(repository!.lastDescription, isNot(''));
+    expect(find.text('event detail e-created'), findsOneWidget);
   });
 
   testWidgets('create meetup screen does not show flow explainer cards',

@@ -1540,7 +1540,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
       }
       final event = await repository.createEvent(
         title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
+        description: _submitDescription(submitPlace),
         emoji: emoji,
         vibe: vibe,
         place: _placeLabel(submitPlace),
@@ -1603,6 +1603,21 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
         });
       }
     }
+  }
+
+  String _submitDescription(PlaceSelection submitPlace) {
+    final cleanDescription = _descriptionController.text.trim();
+    if (cleanDescription.isNotEmpty) {
+      return cleanDescription;
+    }
+
+    final cleanPlace = _placeLabel(submitPlace).trim();
+    if (cleanPlace.isNotEmpty) {
+      return 'Встречаемся: $cleanPlace';
+    }
+
+    final cleanTitle = _titleController.text.trim();
+    return cleanTitle.isEmpty ? 'Встреча в Frendly' : cleanTitle;
   }
 
   CreateMeetupDraft _buildPublishDraft() {
