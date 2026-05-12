@@ -1198,6 +1198,70 @@ void main() {
     expect(notifications?.first.payload['chatId'], 'p2');
   });
 
+  test(
+      'chatRealtimeSyncProvider preserves fresh unread state when preview follows unread update',
+      () async {
+    final socket = _FakeGlobalChatSocketClient();
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
+        chatSocketClientProvider.overrideWith((ref) => socket),
+        personalChatsLocalStateProvider.overrideWith(
+          (ref) => const [
+            PersonalChat(
+              id: 'p1',
+              name: 'Соня',
+              lastMessage: 'Старое',
+              lastTime: 'вчера',
+              unread: 1,
+              online: true,
+            ),
+          ],
+        ),
+        meetupChatsLocalStateProvider.overrideWith(
+          (ref) => const <MeetupChat>[],
+        ),
+      ],
+    );
+    addTearDown(() async {
+      await socket.dispose();
+      container.dispose();
+    });
+
+    container.read(chatRealtimeSyncProvider);
+    await container.read(personalChatsProvider.future);
+    await _drain();
+
+    socket.emit({
+      'type': 'unread.updated',
+      'payload': {
+        'chatId': 'p1',
+        'unreadCount': 4,
+      },
+    });
+    socket.emit({
+      'type': 'message.created',
+      'payload': {
+        'id': 'm-new',
+        'chatId': 'p1',
+        'clientMessageId': 'client-m-new',
+        'senderId': 'user-sonya',
+        'senderName': 'Соня',
+        'text': 'Новое',
+        'createdAt': '2026-04-21T12:20:00Z',
+        'attachments': const [],
+      },
+    });
+    await _drain();
+
+    final personalChats = container.read(personalChatsProvider).valueOrNull;
+    expect(personalChats?.single.lastMessage, 'Новое');
+    expect(personalChats?.single.unread, 4);
+  });
+
   test('chat lists stay empty without auth instead of calling backend',
       () async {
     var repositoryBuilt = false;

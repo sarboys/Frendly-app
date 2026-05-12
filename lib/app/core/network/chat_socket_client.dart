@@ -167,18 +167,17 @@ class ChatSocketClient {
         dedupeKey: dedupeKey,
       ),
     );
+    _queueOrSend(
+      'message.send',
+      payload,
+      dedupeKey: dedupeKey,
+    );
 
     try {
       await connect();
     } catch (_) {
       return;
     }
-
-    _queueOrSend(
-      'message.send',
-      payload,
-      dedupeKey: dedupeKey,
-    );
   }
 
   Future<void> editMessage({
@@ -201,18 +200,17 @@ class ChatSocketClient {
         dedupeKey: dedupeKey,
       ),
     );
+    _queueOrSend(
+      'message.edit',
+      payload,
+      dedupeKey: dedupeKey,
+    );
 
     try {
       await connect();
     } catch (_) {
       return;
     }
-
-    _queueOrSend(
-      'message.edit',
-      payload,
-      dedupeKey: dedupeKey,
-    );
   }
 
   Future<void> deleteMessage({
@@ -235,18 +233,17 @@ class ChatSocketClient {
         dedupeKey: deleteDedupeKey,
       ),
     );
+    _queueOrSend(
+      'message.delete',
+      payload,
+      dedupeKey: deleteDedupeKey,
+    );
 
     try {
       await connect();
     } catch (_) {
       return;
     }
-
-    _queueOrSend(
-      'message.delete',
-      payload,
-      dedupeKey: deleteDedupeKey,
-    );
   }
 
   void markRead({

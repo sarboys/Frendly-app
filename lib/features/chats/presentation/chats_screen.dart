@@ -926,7 +926,7 @@ class _V5ChatRow extends StatelessWidget {
                 Row(
                   children: [
                     if (item.promoted) ...[
-                      const BbV5PromoNote(text: 'Продвигается'),
+                      const BbV5PromoBadge(compact: true, dark: false),
                       const SizedBox(width: 8),
                     ],
                     Text(
@@ -952,13 +952,17 @@ class _V5ChatRow extends StatelessWidget {
                         color: BbV5Colors.inkMute,
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        '${item.members}',
-                        style: AppTextStyles.caption.copyWith(
-                          color: BbV5Colors.inkMute,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0,
+                      Flexible(
+                        child: Text(
+                          '${item.members}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.caption.copyWith(
+                            color: BbV5Colors.inkMute,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0,
+                          ),
                         ),
                       ),
                     ],

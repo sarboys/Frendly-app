@@ -53,6 +53,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         }
         state = AsyncValue.data(_decorateMessages(result.items));
         _warmRecentAttachments(result.items);
+        _scheduleMarkRead();
       } catch (_) {
         if (!mounted) {
           return;
@@ -423,20 +424,21 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
       return;
     }
 
-    final lastMessage = messages.last;
-    if (lastMessage.id.startsWith('local-') || lastMessage.mine) {
+    final lastIncomingMessage = _latestVisibleIncomingMessage(messages);
+    if (lastIncomingMessage == null) {
       return;
     }
 
-    if (_lastMarkedReadMessageId == lastMessage.id) {
+    if (_lastMarkedReadMessageId == lastIncomingMessage.id) {
       return;
     }
 
     ref.read(chatSocketClientProvider).markRead(
           chatId: chatId,
-          messageId: lastMessage.id,
+          messageId: lastIncomingMessage.id,
         );
-    _lastMarkedReadMessageId = lastMessage.id;
+    _lastMarkedReadMessageId = lastIncomingMessage.id;
+    _clearChatSummaryUnread();
   }
 
   void _handleEvent(Map<String, dynamic> envelope) {
@@ -863,6 +865,36 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
     return messages != null &&
         messages.isNotEmpty &&
         messages.last.id == messageId;
+  }
+
+  Message? _latestVisibleIncomingMessage(List<Message> messages) {
+    for (final message in messages.reversed) {
+      if (message.id.startsWith('local-') || message.mine || message.isSystem) {
+        continue;
+      }
+      return message;
+    }
+    return null;
+  }
+
+  void _clearChatSummaryUnread() {
+    final localMeetupChats = ref.read(meetupChatsLocalStateProvider);
+    final meetupChats =
+        localMeetupChats ?? ref.read(meetupChatsProvider).valueOrNull;
+    if (meetupChats != null && meetupChats.any((chat) => chat.id == chatId)) {
+      ref.read(meetupChatsLocalStateProvider.notifier).state =
+          setMeetupChatUnread(meetupChats, chatId: chatId, unread: 0);
+      return;
+    }
+
+    final localPersonalChats = ref.read(personalChatsLocalStateProvider);
+    final personalChats =
+        localPersonalChats ?? ref.read(personalChatsProvider).valueOrNull;
+    if (personalChats != null &&
+        personalChats.any((chat) => chat.id == chatId)) {
+      ref.read(personalChatsLocalStateProvider.notifier).state =
+          setPersonalChatUnread(personalChats, chatId: chatId, unread: 0);
+    }
   }
 
   void _markLocalAttachmentReady(

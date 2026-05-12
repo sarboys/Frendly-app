@@ -1323,7 +1323,7 @@ class _ChatRealtimeSyncCoordinator {
     final message = Message.fromJson(payload, currentUserId: currentUserId);
     final preview = _buildMessagePreview(message);
 
-    final meetupChats = ref.read(meetupChatsProvider).valueOrNull ?? const [];
+    final meetupChats = _currentMeetupChats();
     final meetupChat =
         meetupChats.where((chat) => chat.id == chatId).firstOrNull;
     if (meetupChat != null) {
@@ -1339,8 +1339,7 @@ class _ChatRealtimeSyncCoordinator {
       return;
     }
 
-    final personalChats =
-        ref.read(personalChatsProvider).valueOrNull ?? const [];
+    final personalChats = _currentPersonalChats();
     final personalChat =
         personalChats.where((chat) => chat.id == chatId).firstOrNull;
     if (personalChat != null) {
@@ -1367,7 +1366,7 @@ class _ChatRealtimeSyncCoordinator {
       return;
     }
 
-    final meetupChats = ref.read(meetupChatsProvider).valueOrNull ?? const [];
+    final meetupChats = _currentMeetupChats();
     if (meetupChats.any((chat) => chat.id == chatId)) {
       ref.read(meetupChatsLocalStateProvider.notifier).state =
           setMeetupChatTyping(
@@ -1385,7 +1384,7 @@ class _ChatRealtimeSyncCoordinator {
       return;
     }
 
-    final meetupChats = ref.read(meetupChatsProvider).valueOrNull ?? const [];
+    final meetupChats = _currentMeetupChats();
     if (meetupChats.any((chat) => chat.id == chatId)) {
       ref.read(meetupChatsLocalStateProvider.notifier).state =
           setMeetupChatUnread(
@@ -1396,8 +1395,7 @@ class _ChatRealtimeSyncCoordinator {
       return;
     }
 
-    final personalChats =
-        ref.read(personalChatsProvider).valueOrNull ?? const [];
+    final personalChats = _currentPersonalChats();
     if (personalChats.any((chat) => chat.id == chatId)) {
       ref.read(personalChatsLocalStateProvider.notifier).state =
           setPersonalChatUnread(
@@ -1421,7 +1419,7 @@ class _ChatRealtimeSyncCoordinator {
     final currentPlace = payload['currentPlace'] as String?;
     final endTime = payload['endTime'] as String?;
 
-    final meetupChats = ref.read(meetupChatsProvider).valueOrNull ?? const [];
+    final meetupChats = _currentMeetupChats();
     if (meetupChats.any((chat) => chat.id == chatId)) {
       ref.read(meetupChatsLocalStateProvider.notifier).state =
           updateMeetupChatFromRealtime(
@@ -1498,6 +1496,18 @@ class _ChatRealtimeSyncCoordinator {
     }
     ref.invalidate(eveningSessionsProvider);
     ref.invalidate(eveningSessionProvider(sessionId));
+  }
+
+  List<MeetupChat> _currentMeetupChats() {
+    return ref.read(meetupChatsLocalStateProvider) ??
+        ref.read(meetupChatsProvider).valueOrNull ??
+        const <MeetupChat>[];
+  }
+
+  List<PersonalChat> _currentPersonalChats() {
+    return ref.read(personalChatsLocalStateProvider) ??
+        ref.read(personalChatsProvider).valueOrNull ??
+        const <PersonalChat>[];
   }
 
   NotificationItem? _mapRealtimeNotification(Map<String, dynamic> payload) {

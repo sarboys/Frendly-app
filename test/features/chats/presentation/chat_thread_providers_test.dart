@@ -824,6 +824,71 @@ void main() {
     expect(repository.markReadCalls, 0);
   });
 
+  test('chat thread marks latest visible incoming message after initial load',
+      () async {
+    final socket = _ControllableChatSocketClient();
+    final fetchedMessages = [
+      Message.fromJson(
+        {
+          'id': 'server-incoming-1',
+          'chatId': 'mc1',
+          'clientMessageId': 'incoming-1',
+          'senderId': 'user-anya',
+          'senderName': 'Аня',
+          'text': 'Нужно прочитать',
+          'createdAt': '2026-04-21T12:10:00Z',
+          'attachments': const [],
+        },
+        currentUserId: 'user-me',
+      ),
+      Message.fromJson(
+        {
+          'id': 'server-mine-1',
+          'chatId': 'mc1',
+          'clientMessageId': 'mine-1',
+          'senderId': 'user-me',
+          'senderName': 'Ты',
+          'text': 'Мой ответ',
+          'createdAt': '2026-04-21T12:11:00Z',
+          'attachments': const [],
+        },
+        currentUserId: 'user-me',
+      ),
+    ];
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        backendRepositoryProvider.overrideWith(
+          (ref) => _FakeChatThreadRepository(
+            ref: ref,
+            dio: Dio(),
+            fetchedMessages: fetchedMessages,
+          ),
+        ),
+        appAttachmentServiceProvider
+            .overrideWith((ref) => _FakeAttachmentService()),
+        chatSocketClientProvider.overrideWith((ref) => socket),
+      ],
+    );
+    addTearDown(() async {
+      await socket.dispose();
+      container.dispose();
+    });
+
+    final subscription = container.listen(
+      chatThreadProvider('mc1'),
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(subscription.close);
+
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    expect(socket.lastReadChatId, 'mc1');
+    expect(socket.lastReadMessageId, 'server-incoming-1');
+  });
+
   test('chat thread remembers latest sync cursor from snapshot and live events',
       () async {
     final socket = _ControllableChatSocketClient();

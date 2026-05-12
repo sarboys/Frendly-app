@@ -151,7 +151,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('ТОП'), findsOneWidget);
+    expect(find.text('ТОП'), findsAtLeastNWidgets(1));
     final promotedLeft = tester.getTopLeft(find.text('Промо')).dx;
     final regularLeft = tester.getTopLeft(find.text('Обычная')).dx;
     expect(promotedLeft, lessThan(regularLeft));

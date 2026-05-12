@@ -234,6 +234,59 @@ void main() {
     },
   );
 
+  test(
+    'sendMessage connects, flushes persisted command once and clears it on echo',
+    () async {
+      final storage = _FakeChatOutboxStorage();
+      final channel = _FakeWebSocketChannel();
+      final client = ChatSocketClient(
+        accessTokenProvider: () async => 'token',
+        channelFactory: () => channel,
+        reconnectDelay: Duration.zero,
+        outboxStorage: storage,
+      );
+      addTearDown(client.dispose);
+
+      final sendFuture = client.sendMessage(
+        chatId: 'chat-1',
+        text: 'Привет',
+        clientMessageId: 'message-1',
+      );
+
+      await _waitFor(() => channel.decodedOutbound.isNotEmpty);
+      expect(storage.commands, hasLength(1));
+
+      channel.serverSend({
+        'type': 'session.authenticated',
+        'payload': {'userId': 'user-me'},
+      });
+
+      await expectLater(sendFuture, completes);
+      await _drainMicrotasks();
+
+      final outboundTypes =
+          channel.decodedOutbound.map((event) => event['type']).toList();
+      expect(outboundTypes, [
+        'session.authenticate',
+        'message.send',
+      ]);
+      expect(
+        channel.decodedOutbound.last['payload']['clientMessageId'],
+        'message-1',
+      );
+
+      channel.serverSend({
+        'type': 'message.created',
+        'payload': {
+          'chatId': 'chat-1',
+          'clientMessageId': 'message-1',
+        },
+      });
+
+      await _waitFor(() => storage.commands.isEmpty);
+    },
+  );
+
   test('sends edit and delete message commands over websocket', () async {
     final channel = _FakeWebSocketChannel();
     final client = ChatSocketClient(
