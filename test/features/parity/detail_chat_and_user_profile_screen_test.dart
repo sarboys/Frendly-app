@@ -789,7 +789,7 @@ void main() {
     expect(find.text('Что прикрепить'), findsOneWidget);
     expect(find.text('Фото'), findsOneWidget);
     expect(find.text('Файл'), findsOneWidget);
-    expect(find.text('Локацию'), findsOneWidget);
+    expect(find.text('Геолокация'), findsOneWidget);
   });
 
   testWidgets('meetup chat shows older messages above newer ones',

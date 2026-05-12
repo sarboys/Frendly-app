@@ -1037,7 +1037,7 @@ class _AttachmentActionsSheet extends StatelessWidget {
     _AttachmentActionItem(
       action: BbComposerAttachmentAction.location,
       icon: Icons.place_outlined,
-      label: 'Локацию',
+      label: 'Геолокация',
     ),
   ];
 
