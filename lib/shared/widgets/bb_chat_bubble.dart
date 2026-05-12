@@ -207,8 +207,10 @@ class BbChatBubble extends StatelessWidget {
                     left: useV5 ? 4 : AppSpacing.sm,
                     bottom: 4,
                   ),
-                  child: Text(
-                    author,
+                  child: _AuthorName(
+                    authorId: authorId,
+                    author: author,
+                    onTap: onAuthorAvatarTap,
                     style: AppTextStyles.caption.copyWith(
                       color: useV5 ? BbV5Colors.inkSoft : colors.inkSoft,
                       fontFamily: 'Sora',
@@ -315,6 +317,39 @@ class BbChatBubble extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AuthorName extends StatelessWidget {
+  const _AuthorName({
+    required this.authorId,
+    required this.author,
+    required this.style,
+    required this.onTap,
+  });
+
+  final String authorId;
+  final String author;
+  final TextStyle style;
+  final void Function(String userId)? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final handleTap = onTap;
+    final text = Text(author, style: style);
+    if (handleTap == null || authorId.isEmpty) {
+      return text;
+    }
+
+    return Semantics(
+      button: true,
+      label: 'Открыть профиль $author',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => handleTap(authorId),
+        child: text,
+      ),
     );
   }
 }

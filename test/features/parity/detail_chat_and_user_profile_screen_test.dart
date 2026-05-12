@@ -15,6 +15,7 @@ import 'package:big_break_mobile/shared/models/message.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
+import 'package:big_break_mobile/shared/widgets/bb_chat_bubble.dart';
 import 'package:big_break_mobile/shared/widgets/bb_social_actions.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:dio/dio.dart';
@@ -654,6 +655,53 @@ void main() {
 
     expect(find.text('Выбрать'), findsNothing);
     expect(find.textContaining('прочитано'), findsNothing);
+  });
+
+  testWidgets('incoming direct message author action opens public profile',
+      (tester) async {
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => Scaffold(
+            body: BbChatBubble(
+              authorId: 'user-304f0edb-76db-439c-ae10-5b9a52f76da6',
+              author: 'Пользователь 1111',
+              text: 'stage50 incoming unread',
+              time: '21:09',
+              showAuthor: true,
+              onAuthorAvatarTap: (userId) {
+                context.pushRoute(
+                  AppRoute.userProfile,
+                  pathParameters: {'userId': userId},
+                );
+              },
+            ),
+          ),
+        ),
+        GoRoute(
+          path: AppRoute.userProfile.path,
+          name: AppRoute.userProfile.name,
+          builder: (context, state) => Text(
+            'opened ${state.pathParameters['userId']}',
+            key: const Key('opened-user-profile'),
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Пользователь 1111'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('opened-user-profile')), findsOneWidget);
+    expect(
+      find.text('opened user-304f0edb-76db-439c-ae10-5b9a52f76da6'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('personal chat opens attachment action sheet from plus button',

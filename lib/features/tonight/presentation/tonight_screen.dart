@@ -17,7 +17,6 @@ import 'package:big_break_mobile/shared/models/affiche_event.dart';
 import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
-import 'package:big_break_mobile/features/tonight/presentation/v5_search_modal.dart';
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_brand_icon.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
@@ -439,7 +438,7 @@ class _TonightHomeHero extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            _todayHeaderLabel(),
+            formatTonightHeaderLabel(DateTime.now()),
             style: AppTextStyles.meta.copyWith(
               fontSize: 12,
               height: 1.2,
@@ -463,8 +462,34 @@ class _TonightHomeHero extends StatelessWidget {
   }
 }
 
-String _todayHeaderLabel() {
-  return 'Среда · 06 мая';
+String formatTonightHeaderLabel(DateTime currentDate) {
+  const weekdays = <int, String>{
+    DateTime.monday: 'Понедельник',
+    DateTime.tuesday: 'Вторник',
+    DateTime.wednesday: 'Среда',
+    DateTime.thursday: 'Четверг',
+    DateTime.friday: 'Пятница',
+    DateTime.saturday: 'Суббота',
+    DateTime.sunday: 'Воскресенье',
+  };
+  const months = <int, String>{
+    DateTime.january: 'января',
+    DateTime.february: 'февраля',
+    DateTime.march: 'марта',
+    DateTime.april: 'апреля',
+    DateTime.may: 'мая',
+    DateTime.june: 'июня',
+    DateTime.july: 'июля',
+    DateTime.august: 'августа',
+    DateTime.september: 'сентября',
+    DateTime.october: 'октября',
+    DateTime.november: 'ноября',
+    DateTime.december: 'декабря',
+  };
+
+  final weekday = weekdays[currentDate.weekday] ?? '';
+  final month = months[currentDate.month] ?? '';
+  return '$weekday · ${currentDate.day} $month';
 }
 
 class _TonightRadarCard extends StatelessWidget {
@@ -2232,18 +2257,9 @@ class _TonightHeader extends ConsumerWidget {
           ),
         ),
         const SizedBox(width: AppSpacing.xs),
-        BbV5IconButton(
-          icon: LucideIcons.search,
-          size: 40,
-          iconSize: 16,
-          onPressed: () => showV5SearchModal(context),
-        ),
-        const SizedBox(width: AppSpacing.xs),
         const _HeaderAfterDarkButton(),
         const SizedBox(width: AppSpacing.xs),
         const _HeaderNotificationsButton(),
-        const SizedBox(width: AppSpacing.xs),
-        const _HeaderSosButton(),
         const SizedBox(width: AppSpacing.xs),
         _HeaderAiButton(
           onTap: () => unawaited(
@@ -2256,43 +2272,6 @@ class _TonightHeader extends ConsumerWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _HeaderSosButton extends StatelessWidget {
-  const _HeaderSosButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => context.pushRoute(AppRoute.sos),
-        borderRadius: BorderRadius.circular(BbV5Radii.pill),
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: const Color(0xFFD85B4A),
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFFB5443B)),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x99B5443B),
-                blurRadius: 18,
-                spreadRadius: -8,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: const Icon(
-            LucideIcons.shield_alert,
-            size: 16,
-            color: BbV5Colors.paperHi,
-          ),
-        ),
-      ),
     );
   }
 }

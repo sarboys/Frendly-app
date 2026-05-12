@@ -55,6 +55,7 @@ class _FakeBackendRepository extends BackendRepository {
   Future<PhoneAuthSession> loginWithTestPhoneShortcut(
       String phoneNumber) async {
     const supportedShortcuts = <String>{
+      '+70000000000',
       '+71111111111',
       '+72222222222',
       '+73333333333',
@@ -62,6 +63,8 @@ class _FakeBackendRepository extends BackendRepository {
       '+75555555555',
       '+76666666666',
       '+77777777777',
+      '+78888888888',
+      '+79999999999',
     };
     shortcutPhoneNumber = phoneNumber;
     if (!supportedShortcuts.contains(phoneNumber)) {
@@ -225,6 +228,60 @@ void main() {
 
       expect(verifyCalls, 1);
       expect(find.text('tonight-opened'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'seeded repeated digit test phone shortcuts skip otp',
+    (tester) async {
+      for (final entry in const <String, String>{
+        '000 000 00 00': '+70000000000',
+        '111 111 11 11': '+71111111111',
+        '999 999 99 99': '+79999999999',
+      }.entries) {
+        _FakeBackendRepository? repository;
+
+        await tester.pumpWidget(
+          _wrap(
+            onVerify: () {},
+            isNewUser: false,
+            onReady: (value) => repository = value,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byType(TextField).first, entry.key);
+        await tester.tap(find.text('Получить код'));
+        await tester.pumpAndSettle();
+
+        expect(repository?.shortcutPhoneNumber, entry.value);
+        expect(repository?.requestedPhoneNumber, isNull);
+        expect(find.text('tonight-opened'), findsOneWidget);
+      }
+    },
+  );
+
+  testWidgets(
+    'non seeded russian phone falls back to otp',
+    (tester) async {
+      _FakeBackendRepository? repository;
+
+      await tester.pumpWidget(
+        _wrap(
+          onVerify: () {},
+          isNewUser: false,
+          onReady: (value) => repository = value,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, '123 456 78 90');
+      await tester.tap(find.text('Получить код'));
+      await tester.pumpAndSettle();
+
+      expect(repository?.shortcutPhoneNumber, isNull);
+      expect(repository?.requestedPhoneNumber, '+71234567890');
+      expect(find.textContaining('+71234567890'), findsOneWidget);
     },
   );
 

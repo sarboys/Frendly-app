@@ -69,6 +69,18 @@ void main() {
     expect(find.text('Билеты на эту неделю'), findsNothing);
   });
 
+  testWidgets('tonight header does not use stale hardcoded date', (
+    tester,
+  ) async {
+    await _pumpTonightDirect(tester);
+
+    expect(
+      formatTonightHeaderLabel(DateTime(2026, 5, 12)),
+      'Вторник · 12 мая',
+    );
+    expect(find.text('Среда · 06 мая'), findsNothing);
+  });
+
   testWidgets('tonight routes section uses backend route templates', (
     tester,
   ) async {

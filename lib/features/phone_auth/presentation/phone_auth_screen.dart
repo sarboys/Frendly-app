@@ -24,6 +24,7 @@ class PhoneAuthScreen extends ConsumerStatefulWidget {
 
 class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
   static const _seededTestPhoneShortcutNumbers = <String>{
+    '+70000000000',
     '+71111111111',
     '+72222222222',
     '+73333333333',
@@ -31,6 +32,8 @@ class _PhoneAuthScreenState extends ConsumerState<PhoneAuthScreen> {
     '+75555555555',
     '+76666666666',
     '+77777777777',
+    '+78888888888',
+    '+79999999999',
   };
 
   final _phoneController = TextEditingController();
