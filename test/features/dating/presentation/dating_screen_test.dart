@@ -297,7 +297,7 @@ void main() {
 
     final likeButton = find
         .ancestor(
-          of: find.text('Лайк'),
+          of: find.bySemanticsLabel('Лайк'),
           matching: find.byType(GestureDetector),
         )
         .last;
@@ -394,9 +394,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Подпис'), findsNothing);
-    expect(find.text('Пропустить'), findsOneWidget);
-    expect(find.text('Супер'), findsOneWidget);
-    expect(find.text('Лайк'), findsOneWidget);
+    expect(find.bySemanticsLabel('Пропустить'), findsOneWidget);
+    expect(find.bySemanticsLabel('Супер'), findsOneWidget);
+    expect(find.bySemanticsLabel('Лайк'), findsOneWidget);
   });
 
   testWidgets('dating can start on the requested profile', (tester) async {
@@ -545,9 +545,9 @@ void main() {
 
     expect(find.text('Соня, 26'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Лайк'));
+    await tester.ensureVisible(find.bySemanticsLabel('Лайк'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Лайк'));
+    await tester.tap(find.bySemanticsLabel('Лайк'));
     await tester.pump();
 
     expect(repository.actionTargets, ['user-sonya']);
@@ -591,9 +591,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Лайк'));
+    await tester.ensureVisible(find.bySemanticsLabel('Лайк'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Лайк'));
+    await tester.tap(find.bySemanticsLabel('Лайк'));
     await tester.pumpAndSettle();
 
     expect(find.text('match-user-sonya'), findsOneWidget);
@@ -632,9 +632,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Лайк'));
+    await tester.ensureVisible(find.bySemanticsLabel('Лайк'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Лайк'));
+    await tester.tap(find.bySemanticsLabel('Лайк'));
     await tester.pump();
 
     expect(find.text('Лиза, 27'), findsOneWidget);
@@ -756,9 +756,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Супер'));
+    await tester.ensureVisible(find.bySemanticsLabel('Супер'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Супер'));
+    await tester.tap(find.bySemanticsLabel('Супер'));
     await tester.pumpAndSettle();
 
     expect(fakeRepository.actionTargets, ['user-sonya']);
@@ -808,9 +808,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Супер'));
+    await tester.ensureVisible(find.bySemanticsLabel('Супер'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Супер'));
+    await tester.tap(find.bySemanticsLabel('Супер'));
     await tester.pumpAndSettle();
 
     expect(find.text('paywall-opened'), findsOneWidget);

@@ -74,6 +74,7 @@ class UserProfileScreen extends ConsumerWidget {
                 : BbSocialActions(
                     userId: userId,
                     initialSocial: profile.social,
+                    variant: BbSocialActionsVariant.compact,
                   ),
             interestHighlights: commonInterests.toSet(),
             interestFooter: commonInterests.isEmpty

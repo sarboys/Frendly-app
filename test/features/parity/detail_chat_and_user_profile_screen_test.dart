@@ -1005,38 +1005,24 @@ void main() {
     );
   });
 
-  testWidgets('user profile renders social actions from profile snapshot',
+  testWidgets('user profile keeps compact social actions without duplicate stats',
       (tester) async {
     await tester.pumpWidget(
       _wrap(const UserProfileScreen(userId: 'user-anya')),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Подписчики'), findsOneWidget);
-    expect(find.text('Лайков'), findsOneWidget);
-    expect(find.text('Супер'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byType(BbSocialActions),
-        matching: find.text('248'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byType(BbSocialActions),
-        matching: find.text('1.3k'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byType(BbSocialActions),
-        matching: find.text('32'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Подписчики'), findsNothing);
+    expect(find.text('Лайков'), findsNothing);
+    expect(find.text('Супер'), findsNothing);
     expect(find.text('Подписаться'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(BbSocialActions),
+        matching: find.byIcon(LucideIcons.heart),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('user profile bottom actions match front button styles',

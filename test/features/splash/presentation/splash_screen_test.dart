@@ -15,16 +15,25 @@ Widget _wrap() {
 }
 
 void main() {
-  testWidgets('splash runs the v5 Frendly intro', (tester) async {
+  testWidgets('splash runs the v5 circle intro', (tester) async {
     await tester.pumpWidget(_wrap());
 
     expect(find.byType(SplashScreen), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 1600));
 
-    expect(find.text('F'), findsOneWidget);
-    expect(find.text('r'), findsAtLeastNWidgets(1));
+    expect(find.text('❤'), findsOneWidget);
+    expect(find.text('👋'), findsOneWidget);
+    expect(find.text('✨'), findsOneWidget);
+    expect(find.text('🍷'), findsOneWidget);
+    expect(find.text('💛'), findsOneWidget);
+    expect(find.text('🎷'), findsOneWidget);
+    expect(find.text('☕'), findsOneWidget);
 
     expect(find.text('Fr'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 900));
+
+    expect(find.text('ГОРОД · ЛЮДИ · ВЕЧЕР'), findsOneWidget);
   });
 }

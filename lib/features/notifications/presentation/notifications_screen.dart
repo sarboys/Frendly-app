@@ -9,8 +9,28 @@ import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 enum _NotificationTab { all, invites, chats }
+
+String? notificationDestinationLocation(NotificationItem item) {
+  if (item.payload['source'] != 'dating') {
+    return null;
+  }
+  if (item.payload['action'] != 'super_like') {
+    return null;
+  }
+
+  final userId = item.payload['userId'];
+  if (userId is! String || userId.trim().isEmpty) {
+    return null;
+  }
+
+  return Uri(
+    path: AppRoute.dating.path,
+    queryParameters: {'profileId': userId.trim()},
+  ).toString();
+}
 
 class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
@@ -475,6 +495,13 @@ class _NotificationTileState extends ConsumerState<_NotificationTile> {
       await _markNotificationRead(item.id);
     }
     if (!mounted || !context.mounted) {
+      return;
+    }
+    final destination = notificationDestinationLocation(item);
+    if (item.payload['source'] == 'dating') {
+      if (destination != null) {
+        context.push(destination);
+      }
       return;
     }
     final chatId = item.payload['chatId'] as String?;

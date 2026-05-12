@@ -82,6 +82,7 @@ class CreateMeetupScreen extends ConsumerStatefulWidget {
   const CreateMeetupScreen({
     super.key,
     this.inviteeUserId,
+    this.sourceChatId,
     this.afficheEventId,
     this.communityId,
     this.editEventId,
@@ -89,6 +90,7 @@ class CreateMeetupScreen extends ConsumerStatefulWidget {
   });
 
   final String? inviteeUserId;
+  final String? sourceChatId;
   final String? afficheEventId;
   final String? communityId;
   final String? editEventId;
@@ -414,14 +416,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
           active: _mode == CreateMeetupMode.meetup,
           onTap: () => setState(() {
             _mode = CreateMeetupMode.meetup;
-            _applyModeDefaults(_mode);
-          }),
-        ),
-        _V5TabItem(
-          label: 'Свидание',
-          active: _mode == CreateMeetupMode.dating,
-          onTap: () => setState(() {
-            _mode = CreateMeetupMode.dating;
             _applyModeDefaults(_mode);
           }),
         ),
@@ -1583,6 +1577,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                 ? EventJoinMode.request
                 : EventJoinMode.open,
         inviteeUserId: widget.inviteeUserId,
+        sourceChatId: isDatingMode ? widget.sourceChatId : null,
         afficheEventId: _afficheEvent?.id,
         routeId:
             _routeSelection?.custom == true ? null : _routeSelection?.routeId,

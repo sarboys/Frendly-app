@@ -48,6 +48,7 @@ class _FakeCreateMeetupRepository extends BackendRepository {
   String? lastMode;
   String? lastDescription;
   String? lastInviteeUserId;
+  String? lastSourceChatId;
   var createEventCalls = 0;
   var updateHostedEventCalls = 0;
   String? lastUpdatedEventId;
@@ -77,6 +78,7 @@ class _FakeCreateMeetupRepository extends BackendRepository {
     String visibilityMode = 'public',
     EventJoinMode joinMode = EventJoinMode.open,
     String? inviteeUserId,
+    String? sourceChatId,
     String? afficheEventId,
     String? routeId,
     CreateEventRoutePayload? route,
@@ -104,6 +106,7 @@ class _FakeCreateMeetupRepository extends BackendRepository {
     lastMode = mode;
     lastDescription = description;
     lastInviteeUserId = inviteeUserId;
+    lastSourceChatId = sourceChatId;
     return const EventDetail(
       id: 'e-created',
       title: 'Новая встреча',
@@ -378,6 +381,7 @@ Widget _wrap(
   String? communityId,
   String? editEventId,
   String? inviteeUserId,
+  String? sourceChatId,
   CreateMeetupMode initialMode = CreateMeetupMode.meetup,
   String? afficheEventId,
   bool watchHostDashboard = false,
@@ -387,6 +391,7 @@ Widget _wrap(
       communityId: communityId,
       editEventId: editEventId,
       inviteeUserId: inviteeUserId,
+      sourceChatId: sourceChatId,
       initialMode: initialMode,
       afficheEventId: afficheEventId,
     );
@@ -656,13 +661,13 @@ void main() {
     expect(tester.testTextInput.isVisible, isTrue);
   });
 
-  testWidgets('create meetup screen shows meetup dating and After Dark segment',
+  testWidgets('create meetup screen hides dating segment in normal creation',
       (tester) async {
     await tester.pumpWidget(_wrap((_) {}));
     await tester.pumpAndSettle();
 
     expect(find.text('Обычная'), findsOneWidget);
-    expect(find.text('Свидание'), findsOneWidget);
+    expect(find.text('Свидание'), findsNothing);
     expect(find.text('After Dark'), findsOneWidget);
   });
 
@@ -817,6 +822,7 @@ void main() {
         (value) => repository = value,
         initialMode: CreateMeetupMode.dating,
         inviteeUserId: 'user-sonya',
+        sourceChatId: 'chat-sonya',
       ),
     );
     await tester.pumpAndSettle();
@@ -828,6 +834,7 @@ void main() {
     expect(repository!.lastMode, 'dating');
     expect(repository!.lastJoinMode, EventJoinMode.request);
     expect(repository!.lastInviteeUserId, 'user-sonya');
+    expect(repository!.lastSourceChatId, 'chat-sonya');
     expect(repository!.lastDescription, isNotEmpty);
     expect(repository!.lastDescription, isNot(''));
     expect(find.text('event detail e-created'), findsOneWidget);
@@ -840,9 +847,6 @@ void main() {
 
     expect(find.text('Обычный flow'), findsNothing);
     expect(find.text('Встреча для людей рядом'), findsNothing);
-
-    await tester.tap(find.text('Свидание'));
-    await tester.pumpAndSettle();
 
     expect(find.text('Frendly+ date flow'), findsNothing);
     expect(find.text('Отдельный сценарий свидания'), findsNothing);

@@ -532,6 +532,7 @@ GoRouter buildAppRouter({
         pageBuilder: (context, state) => _slidePage(
           CreateMeetupScreen(
             inviteeUserId: state.uri.queryParameters['inviteeUserId'],
+            sourceChatId: state.uri.queryParameters['sourceChatId'],
             afficheEventId: state.uri.queryParameters['afficheEventId'],
             communityId: state.uri.queryParameters['communityId'],
             editEventId: state.uri.queryParameters['editEventId'],

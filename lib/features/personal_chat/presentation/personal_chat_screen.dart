@@ -528,6 +528,7 @@ class _PersonalChatScreenState extends ConsumerState<PersonalChatScreen> {
                   queryParameters: {
                     'mode': 'dating',
                     'inviteeUserId': chat!.peerUserId!,
+                    'sourceChatId': chat.id,
                   },
                 ),
                 borderRadius: BorderRadius.circular(20),

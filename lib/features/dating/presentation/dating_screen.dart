@@ -1371,7 +1371,7 @@ class _DatingProfileCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AspectRatio(
-            aspectRatio: 1,
+            aspectRatio: 0.74,
             child: Stack(
               children: [
                 Positioned.fill(
@@ -1504,64 +1504,85 @@ class _DatingProfileCard extends StatelessWidget {
                 Positioned(
                   left: 20,
                   right: 20,
-                  bottom: 20,
+                  bottom: 96,
                   child: _DatingPhotoInfoOverlay(profile: profile),
+                ),
+                Positioned(
+                  left: 20,
+                  right: 20,
+                  bottom: 16,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _CircleActionButton(
+                        semanticsLabel: 'Пропустить',
+                        icon: LucideIcons.x,
+                        onTap: actionsEnabled ? onSkip : null,
+                      ),
+                      const SizedBox(width: 12),
+                      _CircleActionButton(
+                        semanticsLabel: 'Супер',
+                        icon: LucideIcons.star,
+                        size: _CircleActionSize.large,
+                        tone: _CircleActionTone.gold,
+                        onTap: actionsEnabled ? onSuper : null,
+                      ),
+                      const SizedBox(width: 12),
+                      _CircleActionButton(
+                        semanticsLabel: 'Лайк',
+                        icon: LucideIcons.heart,
+                        size: _CircleActionSize.extraLarge,
+                        tone: _CircleActionTone.like,
+                        fillIcon: true,
+                        onTap: actionsEnabled ? onLike : null,
+                      ),
+                      const SizedBox(width: 12),
+                      _CircleActionButton(
+                        semanticsLabel: 'Сохранить',
+                        icon: saved
+                            ? Icons.bookmark_rounded
+                            : LucideIcons.bookmark,
+                        fillIcon: saved,
+                        onTap: actionsEnabled ? onSaveToggle : null,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const BbV5Kicker('Prompt'),
-                const SizedBox(height: 6),
-                Text(
-                  '«${profile.prompt}»',
-                  style: AppTextStyles.bodySoft.copyWith(
-                    color: BbV5Colors.inkSoft,
-                    fontSize: 14,
-                    height: 1.45,
-                  ),
-                ),
-                if (profile.tags.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: profile.tags
-                        .map((tag) => _DatingTag(label: '#$tag'))
-                        .toList(growable: false),
-                  ),
-                ],
-                const SizedBox(height: 16),
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _CardActionButton(
-                        label: 'Пропустить',
-                        icon: LucideIcons.x,
-                        onTap: actionsEnabled ? onSkip : null,
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Text(
+                        '“',
+                        style: bbV5DisplayStyle(
+                          fontSize: 16,
+                          color: BbV5Colors.terra,
+                          height: 1,
+                          letterSpacing: 1.8,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Expanded(
-                      child: _CardActionButton(
-                        label: 'Супер',
-                        icon: LucideIcons.star,
-                        accent: true,
-                        onTap: actionsEnabled ? onSuper : null,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _CardActionButton(
-                        label: 'Лайк',
-                        icon: LucideIcons.heart,
-                        positive: true,
-                        onTap: actionsEnabled ? onLike : null,
+                      child: Text(
+                        profile.prompt,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySoft.copyWith(
+                          color: BbV5Colors.inkSoft,
+                          fontSize: 12.5,
+                          height: 1.28,
+                        ),
                       ),
                     ),
                   ],
@@ -1626,56 +1647,7 @@ class _DatingPhotoInfoOverlay extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _GlassPill(
-              height: 32,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    LucideIcons.languages,
-                    size: 14,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _languageLabel(visibleLanguages, extraLanguages),
-                    style: AppTextStyles.meta.copyWith(
-                      color: Colors.white,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _GlassPill(
-              height: 32,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(LucideIcons.user, size: 14, color: Colors.white),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${nationality.flag} ${nationality.label}'.trim(),
-                    style: AppTextStyles.meta.copyWith(
-                      color: Colors.white,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 6),
         Text(
           profile.age == null
               ? profile.name
@@ -1701,6 +1673,62 @@ class _DatingPhotoInfoOverlay extends StatelessWidget {
             fontSize: 12.5,
             height: 1.375,
           ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            _GlassPill(
+              height: 26,
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    LucideIcons.languages,
+                    size: 12,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _languageLabel(visibleLanguages, extraLanguages),
+                    style: AppTextStyles.meta.copyWith(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _GlassPill(
+              height: 26,
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              child: Text(
+                '${nationality.flag} ${nationality.label}'.trim(),
+                style: AppTextStyles.meta.copyWith(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ...profile.tags.take(2).map(
+                  (tag) => _GlassPill(
+                    height: 26,
+                    padding: const EdgeInsets.symmetric(horizontal: 9),
+                    child: Text(
+                      '#$tag',
+                      style: AppTextStyles.meta.copyWith(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+          ],
         ),
       ],
     );
@@ -1773,99 +1801,111 @@ class _GlassPill extends StatelessWidget {
   }
 }
 
-class _DatingTag extends StatelessWidget {
-  const _DatingTag({required this.label});
+enum _CircleActionTone { ghost, gold, like }
 
-  final String label;
+enum _CircleActionSize { medium, large, extraLarge }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 28,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: BbV5Colors.paper,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: BbV5Colors.hair),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        label,
-        style: AppTextStyles.meta.copyWith(
-          color: BbV5Colors.inkSoft,
-          fontSize: 10.5,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.42,
-        ),
-      ),
-    );
-  }
-}
-
-class _CardActionButton extends StatelessWidget {
-  const _CardActionButton({
-    required this.label,
+class _CircleActionButton extends StatelessWidget {
+  const _CircleActionButton({
+    required this.semanticsLabel,
     required this.icon,
     required this.onTap,
-    this.accent = false,
-    this.positive = false,
+    this.tone = _CircleActionTone.ghost,
+    this.size = _CircleActionSize.medium,
+    this.fillIcon = false,
   });
 
-  final String label;
+  final String semanticsLabel;
   final IconData icon;
   final VoidCallback? onTap;
-  final bool accent;
-  final bool positive;
+  final _CircleActionTone tone;
+  final _CircleActionSize size;
+  final bool fillIcon;
 
   @override
   Widget build(BuildContext context) {
-    final background = positive
-        ? BbV5Colors.accent
-        : accent
-            ? BbV5Colors.paperHi
-            : BbV5Colors.paperHi;
-    final border = positive
-        ? BbV5Colors.accent
-        : accent
-            ? BbV5Colors.hair
-            : BbV5Colors.hair;
-    final foreground = positive
-        ? BbV5Colors.paperHi
-        : accent
-            ? BbV5Colors.gold
-            : BbV5Colors.inkSoft;
+    final dimension = switch (size) {
+      _CircleActionSize.medium => 48.0,
+      _CircleActionSize.large => 56.0,
+      _CircleActionSize.extraLarge => 68.0,
+    };
+    final iconSize = switch (size) {
+      _CircleActionSize.medium => 20.0,
+      _CircleActionSize.large => 21.0,
+      _CircleActionSize.extraLarge => 25.0,
+    };
+    final background = switch (tone) {
+      _CircleActionTone.ghost => BbV5Colors.paperHi.withValues(alpha: 0.95),
+      _CircleActionTone.gold => BbV5Colors.paperHi,
+      _CircleActionTone.like => BbV5Colors.accent,
+    };
+    final foreground = switch (tone) {
+      _CircleActionTone.ghost => BbV5Colors.ink,
+      _CircleActionTone.gold => BbV5Colors.gold,
+      _CircleActionTone.like => BbV5Colors.paperHi,
+    };
+    final border = switch (tone) {
+      _CircleActionTone.ghost => BbV5Colors.hair,
+      _CircleActionTone.gold => BbV5Colors.gold.withValues(alpha: 0.35),
+      _CircleActionTone.like => Colors.white.withValues(alpha: 0.4),
+    };
+    final shadows = switch (tone) {
+      _CircleActionTone.ghost => const [
+          BoxShadow(
+            color: Color(0x66000000),
+            blurRadius: 28,
+            spreadRadius: -8,
+            offset: Offset(0, 12),
+          ),
+        ],
+      _CircleActionTone.gold => [
+          BoxShadow(
+            color: BbV5Colors.gold.withValues(alpha: 0.55),
+            blurRadius: 28,
+            spreadRadius: -8,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      _CircleActionTone.like => const [
+          BoxShadow(
+            color: Color(0xCCB26F4A),
+            blurRadius: 32,
+            spreadRadius: -8,
+            offset: Offset(0, 16),
+          ),
+        ],
+    };
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        height: 48,
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(BbV5Radii.pill),
-          border: Border.all(color: border),
-          boxShadow: positive ? BbV5Shadows.ink : BbV5Shadows.pill,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 15, color: foreground),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.meta.copyWith(
-                  color: foreground,
-                  fontFamily: 'Sora',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0,
-                ),
-              ),
-            ),
-          ],
+    return Semantics(
+      button: true,
+      label: semanticsLabel,
+      enabled: onTap != null,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: dimension,
+          height: dimension,
+          decoration: BoxDecoration(
+            color: background,
+            shape: BoxShape.circle,
+            border: Border.all(color: border),
+            boxShadow: shadows,
+            gradient: tone == _CircleActionTone.like
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [BbV5Colors.terra, BbV5Colors.accentDeep],
+                  )
+                : null,
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            icon,
+            size: iconSize,
+            color: foreground,
+            fill: fillIcon ? 1 : 0,
+          ),
         ),
       ),
     );

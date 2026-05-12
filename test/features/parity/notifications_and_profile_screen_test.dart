@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/features/notifications/presentation/notifications_screen.dart';
 import 'package:big_break_mobile/features/user_profile/presentation/user_profile_screen.dart';
 import 'package:big_break_mobile/features/profile/presentation/profile_screen.dart';
+import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -82,6 +83,46 @@ Widget _wrap(
 }
 
 void main() {
+  test('super like notification opens dating on the sender profile', () {
+    final location = notificationDestinationLocation(
+      NotificationItem(
+        id: 'n-super-like',
+        kind: 'like',
+        title: 'Суперлайк',
+        body: 'Никита поставил суперлайк',
+        payload: {
+          'source': 'dating',
+          'action': 'super_like',
+          'userId': 'user-nikita',
+          'userName': 'Никита',
+        },
+        readAt: null,
+        createdAt: DateTime(2026, 5, 12),
+      ),
+    );
+
+    expect(location, '${AppRoute.dating.path}?profileId=user-nikita');
+  });
+
+  test('plain dating like notification has no person destination', () {
+    final location = notificationDestinationLocation(
+      NotificationItem(
+        id: 'n-like',
+        kind: 'like',
+        title: 'Новый лайк',
+        body: 'лайкнул тебя в дейтинге',
+        payload: {
+          'source': 'dating',
+          'action': 'like',
+        },
+        readAt: null,
+        createdAt: DateTime(2026, 5, 12),
+      ),
+    );
+
+    expect(location, isNull);
+  });
+
   testWidgets(
     'notifications screen groups by day and shows relative time',
     (tester) async {
