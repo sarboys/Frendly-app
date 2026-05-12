@@ -915,6 +915,52 @@ class BackendRepository {
     return EventDetail.fromJson(response.data!);
   }
 
+  Future<void> updateHostedEvent(
+    String eventId, {
+    required String title,
+    required String description,
+    required String emoji,
+    required String vibe,
+    required String place,
+    required DateTime startsAt,
+    required int capacity,
+    String lifestyle = 'neutral',
+    String priceMode = 'free',
+    int? priceAmountFrom,
+    int? priceAmountTo,
+    String accessMode = 'open',
+    String genderMode = 'all',
+    String visibilityMode = 'public',
+    EventJoinMode joinMode = EventJoinMode.open,
+    double? distanceKm,
+    double? latitude,
+    double? longitude,
+  }) async {
+    await dio.patch<Map<String, dynamic>>(
+      '/host/events/$eventId',
+      data: {
+        'title': title,
+        'description': description,
+        'emoji': emoji,
+        'vibe': vibe,
+        'place': place,
+        'startsAt': _eventWallClockIso(startsAt),
+        'capacity': capacity,
+        'lifestyle': lifestyle,
+        'priceMode': priceMode,
+        if (priceAmountFrom != null) 'priceAmountFrom': priceAmountFrom,
+        if (priceAmountTo != null) 'priceAmountTo': priceAmountTo,
+        'accessMode': accessMode,
+        'genderMode': genderMode,
+        'visibilityMode': visibilityMode,
+        'joinMode': joinMode == EventJoinMode.request ? 'request' : 'open',
+        if (distanceKm != null) 'distanceKm': distanceKm,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+      },
+    );
+  }
+
   Future<void> createJoinRequest(String eventId, {required String note}) async {
     await dio.post<Map<String, dynamic>>(
       '/events/$eventId/join-request',

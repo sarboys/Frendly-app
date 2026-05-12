@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/communities/domain/community.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
@@ -791,6 +792,78 @@ void main() {
     );
 
     expect(requestBody, containsPair('startsAt', '2026-05-12T17:00:00.000Z'));
+  });
+
+  test('host event update sends edited fields to host endpoint', () async {
+    Object? requestBody;
+    final apiRequests = <_CapturedRequest>[];
+    final apiDio = Dio(
+      BaseOptions(baseUrl: 'http://api.example.com'),
+    )..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            apiRequests.add(
+              _CapturedRequest(
+                method: options.method,
+                path: options.path,
+                headers: Map<String, dynamic>.from(options.headers),
+              ),
+            );
+            requestBody = options.data;
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 200,
+                data: const {'ok': true},
+              ),
+            );
+          },
+        ),
+      );
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final repository = container.read(
+      Provider(
+        (ref) => BackendRepository(ref: ref, dio: apiDio),
+      ),
+    );
+
+    await repository.updateHostedEvent(
+      'e-edit',
+      title: 'Ужин после правки',
+      description: 'Новое описание',
+      emoji: '☕',
+      vibe: 'Спокойно',
+      place: 'Покровка 8',
+      startsAt: DateTime(2026, 5, 12, 19, 15),
+      capacity: 8,
+      priceMode: 'fixed',
+      priceAmountFrom: 900,
+      priceAmountTo: 1200,
+      accessMode: 'request',
+      genderMode: 'female',
+      visibilityMode: 'friends',
+      joinMode: EventJoinMode.request,
+      distanceKm: 1.2,
+      latitude: 55.7605,
+      longitude: 37.6442,
+    );
+
+    expect(apiRequests.single.method, 'PATCH');
+    expect(apiRequests.single.path, '/host/events/e-edit');
+    expect(requestBody, containsPair('title', 'Ужин после правки'));
+    expect(requestBody, containsPair('startsAt', '2026-05-12T19:15:00.000Z'));
+    expect(requestBody, containsPair('capacity', 8));
+    expect(requestBody, containsPair('priceMode', 'fixed'));
+    expect(requestBody, containsPair('priceAmountFrom', 900));
+    expect(requestBody, containsPair('priceAmountTo', 1200));
+    expect(requestBody, containsPair('accessMode', 'request'));
+    expect(requestBody, containsPair('genderMode', 'female'));
+    expect(requestBody, containsPair('visibilityMode', 'friends'));
+    expect(requestBody, containsPair('joinMode', 'request'));
+    expect(requestBody, containsPair('latitude', 55.7605));
+    expect(requestBody, containsPair('longitude', 37.6442));
   });
 
   test('event creation sends resolved place coordinates when provided',

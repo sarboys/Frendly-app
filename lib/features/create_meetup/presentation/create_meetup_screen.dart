@@ -1436,9 +1436,65 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
         _showSubmitError('Выбери место встречи.');
         return;
       }
+      setState(() {
+        _creating = true;
+      });
+      final repository = ref.read(backendRepositoryProvider);
+      final submitPlace = placeSelection;
+      try {
+        await repository.updateHostedEvent(
+          widget.editEventId!,
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          emoji: emoji,
+          vibe: vibe,
+          place: _placeLabel(submitPlace),
+          startsAt: startsAt,
+          capacity: capacity.round(),
+          distanceKm: submitPlace.distanceKm,
+          latitude: submitPlace.latitude,
+          longitude: submitPlace.longitude,
+          lifestyle: lifestyle,
+          priceMode: priceMode,
+          priceAmountFrom: _priceAmountFrom(),
+          priceAmountTo: _priceAmountTo(),
+          accessMode: accessMode,
+          genderMode: genderMode,
+          visibilityMode: visibility,
+          joinMode: visibility == 'friends' || accessMode == 'request'
+              ? EventJoinMode.request
+              : EventJoinMode.open,
+        );
+      } catch (_) {
+        if (!mounted) {
+          return;
+        }
+        _showSubmitError('Не получилось сохранить встречу.');
+        return;
+      } finally {
+        if (mounted) {
+          setState(() {
+            _creating = false;
+          });
+        }
+      }
+      if (!mounted) {
+        return;
+      }
       ref.invalidate(eventDetailProvider(widget.editEventId!));
+      ref.invalidate(eventsProvider('nearby'));
+      ref.invalidate(mapEventsProvider);
+      ref.invalidate(meetupChatsProvider);
+      ref.invalidate(hostDashboardProvider);
       if (mounted) {
-        context.pop();
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.goNamed(
+            AppRoute.eventDetail.name,
+            pathParameters: {'eventId': widget.editEventId!},
+          );
+        }
       }
       return;
     }

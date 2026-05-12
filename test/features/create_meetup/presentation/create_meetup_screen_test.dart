@@ -46,6 +46,14 @@ class _FakeCreateMeetupRepository extends BackendRepository {
   double? lastLatitude;
   double? lastLongitude;
   var createEventCalls = 0;
+  var updateHostedEventCalls = 0;
+  String? lastUpdatedEventId;
+  String? lastUpdatedTitle;
+  String? lastUpdatedPlace;
+  DateTime? lastUpdatedStartsAt;
+  int? lastUpdatedCapacity;
+  String? lastUpdatedVisibilityMode;
+  EventJoinMode? lastUpdatedJoinMode;
 
   @override
   Future<EventDetail> createEvent({
@@ -122,6 +130,38 @@ class _FakeCreateMeetupRepository extends BackendRepository {
         ),
       ],
     );
+  }
+
+  @override
+  Future<void> updateHostedEvent(
+    String eventId, {
+    required String title,
+    required String description,
+    required String emoji,
+    required String vibe,
+    required String place,
+    required DateTime startsAt,
+    required int capacity,
+    String lifestyle = 'neutral',
+    String priceMode = 'free',
+    int? priceAmountFrom,
+    int? priceAmountTo,
+    String accessMode = 'open',
+    String genderMode = 'all',
+    String visibilityMode = 'public',
+    EventJoinMode joinMode = EventJoinMode.open,
+    double? distanceKm,
+    double? latitude,
+    double? longitude,
+  }) async {
+    updateHostedEventCalls += 1;
+    lastUpdatedEventId = eventId;
+    lastUpdatedTitle = title;
+    lastUpdatedPlace = place;
+    lastUpdatedStartsAt = startsAt;
+    lastUpdatedCapacity = capacity;
+    lastUpdatedVisibilityMode = visibilityMode;
+    lastUpdatedJoinMode = joinMode;
   }
 
   @override
@@ -641,6 +681,78 @@ void main() {
       tester.widget<TextField>(descriptionField).controller?.text,
       'Легкий темп и кофе после.',
     );
+  });
+
+  testWidgets('create meetup edit mode saves through repository',
+      (tester) async {
+    _FakeCreateMeetupRepository? repository;
+
+    await tester.pumpWidget(
+      _wrap(
+        (value) => repository = value,
+        editEventId: 'e-edit',
+        overrides: [
+          eventDetailProvider.overrideWith((ref, eventId) async {
+            return const EventDetail(
+              id: 'e-edit',
+              title: 'Вечерняя пробежка',
+              emoji: '🏃',
+              time: 'Сегодня · 20:00',
+              place: 'Парк Горького',
+              distance: '1.4 км',
+              vibe: 'Активно',
+              description: 'Легкий темп и кофе после.',
+              hostNote: null,
+              joined: true,
+              partnerName: null,
+              partnerOffer: null,
+              capacity: 4,
+              going: 2,
+              chatId: 'mc-edit',
+              startsAtIso: '2026-05-04T17:00:00.000Z',
+              lifestyle: 'zozh',
+              priceMode: 'free',
+              accessMode: 'open',
+              genderMode: 'all',
+              visibilityMode: 'public',
+              isHost: true,
+              host: EventHost(
+                id: 'user-me',
+                displayName: 'Никита М',
+                verified: true,
+                rating: 4.9,
+                meetupCount: 10,
+                avatarUrl: null,
+              ),
+              attendees: [
+                EventAttendee(
+                  id: 'user-me',
+                  displayName: 'Никита М',
+                  avatarUrl: null,
+                ),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.byType(TextField).first, 'Пробежка после правки');
+    await scrollTo(tester, find.text('Сохранить'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Сохранить'));
+    await tester.pumpAndSettle();
+
+    expect(repository, isNotNull);
+    expect(repository!.createEventCalls, 0);
+    expect(repository!.updateHostedEventCalls, 1);
+    expect(repository!.lastUpdatedEventId, 'e-edit');
+    expect(repository!.lastUpdatedTitle, 'Пробежка после правки');
+    expect(repository!.lastUpdatedPlace, contains('Парк Горького'));
+    expect(repository!.lastUpdatedCapacity, 4);
+    expect(repository!.lastUpdatedVisibilityMode, 'public');
+    expect(repository!.lastUpdatedJoinMode, EventJoinMode.open);
   });
 
   testWidgets('create meetup screen does not show flow explainer cards',
