@@ -418,6 +418,24 @@ void main() {
         find.byKey(const Key('community-detail-manage-button')), findsNothing);
   });
 
+  testWidgets('community detail hides chat until membership is active', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _routerApp(
+        overrides: _communityDetailOverrides(
+          _communityJson(joined: false, isOwner: false),
+        ),
+        initialLocation: '/community/c-owned',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Owner Club'), findsWidgets);
+    expect(find.text('Вступить'), findsOneWidget);
+    expect(find.text('Открыть чат'), findsNothing);
+  });
+
   testWidgets('community members tab does not duplicate preview names', (
     tester,
   ) async {

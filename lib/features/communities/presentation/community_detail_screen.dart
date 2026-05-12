@@ -286,6 +286,7 @@ class _CommunityHeroCard extends StatelessWidget {
         : private && !joined || isBusy
             ? null
             : onToggleJoin;
+    final canOpenChat = community.isOwner || joined;
 
     return BbV5Card(
       tint: tone,
@@ -388,18 +389,20 @@ class _CommunityHeroCard extends StatelessWidget {
                   onPressed: primaryAction,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: BbV5PillButton(
-                  label: 'Открыть чат',
-                  icon: LucideIcons.message_circle,
-                  height: 48,
-                  fontSize: 13,
-                  expanded: true,
-                  dark: true,
-                  onPressed: onOpenChat,
+              if (canOpenChat) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: BbV5PillButton(
+                    label: 'Открыть чат',
+                    icon: LucideIcons.message_circle,
+                    height: 48,
+                    fontSize: 13,
+                    expanded: true,
+                    dark: true,
+                    onPressed: onOpenChat,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
           if (private && !joined) ...[
