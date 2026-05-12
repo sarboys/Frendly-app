@@ -201,6 +201,42 @@ void main() {
     expect(sentVoice!.waveform, isNotEmpty);
   });
 
+  testWidgets('composer does not start voice recording while text exists', (
+    tester,
+  ) async {
+    final recorder = _FakeVoiceRecorderService();
+    var permissionRequests = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: BbComposer(
+              onSend: _noopSend,
+              onSendVoice: (_) async {},
+              onRequestMicrophonePermission: () async {
+                permissionRequests += 1;
+                return true;
+              },
+              voiceRecorderService: recorder,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), 'Привет');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('bb-composer-mic-button')));
+    await tester.pump();
+
+    expect(permissionRequests, 0);
+    expect(recorder.startCalls, 0);
+    expect(find.byKey(const Key('bb-composer-voice-recording-pill')),
+        findsNothing);
+  });
+
   testWidgets('v5 composer matches front heights and keeps mic as side action',
       (
     tester,

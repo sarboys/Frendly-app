@@ -185,6 +185,7 @@ class _BbComposerState extends State<BbComposer> {
         _sending ||
         _voiceProcessing ||
         _recording ||
+        _hasText ||
         !_canRecordVoice) {
       return;
     }
