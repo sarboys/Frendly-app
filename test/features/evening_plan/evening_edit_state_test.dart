@@ -1,7 +1,8 @@
 import 'package:big_break_mobile/features/evening_plan/presentation/evening_edit_state.dart';
-import 'package:big_break_mobile/features/evening_plan/presentation/evening_plan_data.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'evening_test_routes.dart';
 
 void main() {
   test('edit policy allows everything before live', () {
@@ -34,7 +35,7 @@ void main() {
   });
 
   test('diff lists meta and step changes for chat system message', () {
-    final previous = eveningRoutes.first;
+    const previous = testCozyEveningRoute;
     final next = previous.copyWith(
       title: 'Новый тёплый круг',
       area: 'Покровка',
@@ -49,7 +50,7 @@ void main() {
     );
 
     final diff = buildEveningEditDiff(
-      previous: EveningEditSnapshot(
+      previous: const EveningEditSnapshot(
         route: previous,
         privacy: EveningPrivacy.open,
         maxGuests: 8,

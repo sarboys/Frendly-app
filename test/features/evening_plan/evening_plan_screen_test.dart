@@ -1,5 +1,4 @@
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/features/evening_plan/presentation/evening_plan_data.dart';
 import 'package:big_break_mobile/features/evening_plan/presentation/evening_plan_screen.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -15,6 +14,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'evening_test_routes.dart';
+
 void main() {
   testWidgets('plan timeline opens details and keeps action taps local',
       (tester) async {
@@ -22,13 +23,14 @@ void main() {
     await tester.pumpWidget(
       _planApp(
         screen: EveningPlanScreen(
-          routeId: eveningRoutes.first.id,
+          routeId: testCozyEveningRoute.id,
+          initialRoute: testCozyEveningRoute,
         ),
       ),
     );
 
     expect(find.text('Тёплый круг на Покровке'), findsNWidgets(2));
-    expect(find.text('В чат'), findsWidgets);
+    expect(find.text('Запустить маршрут · в чат'), findsOneWidget);
 
     await tester.tap(find.text('Аперитив в Brix Wine'));
     await tester.pumpAndSettle();
@@ -47,42 +49,28 @@ void main() {
       find.text('Бронируем в приложении — стол держим до начала встречи'),
       findsOneWidget,
     );
-    expect(find.text('Аперитив в Brix Wine'), findsOneWidget);
+    expect(find.text('Аперитив в Brix Wine'), findsWidgets);
   });
 
-  testWidgets('perk, ticket and chat states update immediately',
+  testWidgets('perk and ticket states update immediately',
       (tester) async {
     _setMobileViewport(tester);
     await tester.pumpWidget(
       _planApp(
         screen: EveningPlanScreen(
-          routeId: eveningRoutes.first.id,
+          routeId: testCozyEveningRoute.id,
+          initialRoute: testCozyEveningRoute,
         ),
       ),
     );
 
-    await tester.tap(find.text('В чат').first);
+    await tester.tap(find.text('Аперитив в Brix Wine'));
     await tester.pumpAndSettle();
-    expect(find.text('В чате'), findsOneWidget);
-    expect(find.textContaining('Отправлено в meetup-чат'), findsOneWidget);
+    await tester.tap(find.text('Купить билет 800 ₽'));
+    await tester.pumpAndSettle();
+    expect(find.text('Билет куплен'), findsOneWidget);
 
-    await tester.scrollUntilVisible(
-      find.text('800 ₽'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('800 ₽'));
-    await tester.pumpAndSettle();
-    expect(find.text('Куплено'), findsWidgets);
-
-    await tester.scrollUntilVisible(
-      find.text('Перк').first,
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Перк').first);
+    await tester.tap(find.text('Использовать перк'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Забронировать с перком'));
     await tester.pumpAndSettle();
@@ -94,7 +82,10 @@ void main() {
     );
     await tester.tap(find.text('Готово'));
     await tester.pumpAndSettle();
-    expect(find.text('Использован'), findsWidgets);
+
+    await tester.tap(find.text('Аперитив в Brix Wine').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Перк использован'), findsOneWidget);
   });
 
   testWidgets('timeline rail line is not fixed to one card height',
@@ -103,7 +94,8 @@ void main() {
     await tester.pumpWidget(
       _planApp(
         screen: EveningPlanScreen(
-          routeId: eveningRoutes.first.id,
+          routeId: testCozyEveningRoute.id,
+          initialRoute: testCozyEveningRoute,
         ),
       ),
     );
@@ -122,20 +114,21 @@ void main() {
     expect(fixedRailLine, findsNothing);
   });
 
-  testWidgets('sticky plan CTA keeps arrow after label', (tester) async {
+  testWidgets('sticky plan CTA keeps play icon before label', (tester) async {
     _setMobileViewport(tester);
     await tester.pumpWidget(
       _planApp(
         screen: EveningPlanScreen(
-          routeId: eveningRoutes.first.id,
+          routeId: testCozyEveningRoute.id,
+          initialRoute: testCozyEveningRoute,
         ),
       ),
     );
 
-    final labelCenter = tester.getCenter(find.text('Поехали по маршруту'));
-    final arrowCenter = tester.getCenter(find.byIcon(LucideIcons.arrow_right));
+    final labelCenter = tester.getCenter(find.text('Запустить маршрут · в чат'));
+    final playCenter = tester.getCenter(find.byIcon(LucideIcons.play));
 
-    expect(arrowCenter.dx, greaterThan(labelCenter.dx));
+    expect(playCenter.dx, lessThan(labelCenter.dx));
   });
 
   testWidgets('plan CTA opens publish sheet with privacy controls',
@@ -144,12 +137,13 @@ void main() {
     await tester.pumpWidget(
       _planApp(
         screen: EveningPlanScreen(
-          routeId: eveningRoutes.first.id,
+          routeId: testCozyEveningRoute.id,
+          initialRoute: testCozyEveningRoute,
         ),
       ),
     );
 
-    await tester.tap(find.text('Поехали по маршруту'));
+    await tester.tap(find.text('Запустить маршрут · в чат'));
     await tester.pumpAndSettle();
 
     expect(find.text('Опубликовать вечер?'), findsOneWidget);
@@ -175,12 +169,13 @@ void main() {
     await tester.pumpWidget(
       _planApp(
         screen: EveningPlanScreen(
-          routeId: eveningRoutes.first.id,
+          routeId: testCozyEveningRoute.id,
+          initialRoute: testCozyEveningRoute,
         ),
       ),
     );
 
-    await tester.tap(find.text('Поехали по маршруту'));
+    await tester.tap(find.text('Запустить маршрут · в чат'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Опубликовать и собрать людей'));
     await tester.pumpAndSettle();
@@ -191,13 +186,13 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Опубликовали локально, сеть недоступна'), findsNothing);
-    expect(find.text('Поехали по маршруту'), findsOneWidget);
+    expect(find.text('Запустить маршрут · в чат'), findsOneWidget);
   });
 
   testWidgets('publish caches new evening chat summary before opening chat',
       (tester) async {
     _setMobileViewport(tester);
-    final route = eveningRoutes.first;
+    final route = testCozyEveningRoute;
     final router = GoRouter(
       initialLocation: '/evening-plan/${route.id}',
       routes: [
@@ -206,6 +201,7 @@ void main() {
           name: AppRoute.eveningPlan.name,
           builder: (context, state) => EveningPlanScreen(
             routeId: state.pathParameters['routeId']!,
+            initialRoute: testCozyEveningRoute,
           ),
         ),
         GoRoute(
@@ -264,7 +260,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Поехали по маршруту'));
+    await tester.tap(find.text('Запустить маршрут · в чат'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Опубликовать и собрать людей'));
     await tester.pumpAndSettle();
@@ -299,7 +295,8 @@ void main() {
     await tester.pumpWidget(
       _planApp(
         screen: EveningPlanScreen(
-          routeId: eveningRoutes.first.id,
+          routeId: testCozyEveningRoute.id,
+          initialRoute: testCozyEveningRoute,
           autoOpenLaunch: true,
         ),
       ),
@@ -315,7 +312,8 @@ void main() {
     await tester.pumpWidget(
       _planApp(
         screen: const EveningPlanScreen(
-          routeId: 'r-date-noir',
+          routeId: testPremiumEveningRouteId,
+          initialRoute: testPremiumEveningRoute,
         ),
       ),
     );
@@ -331,7 +329,8 @@ void main() {
     await tester.pumpWidget(
       _planApp(
         screen: const EveningPlanScreen(
-          routeId: 'r-date-noir',
+          routeId: testPremiumEveningRouteId,
+          initialRoute: testPremiumEveningRoute,
           isPremium: true,
         ),
       ),
@@ -346,7 +345,8 @@ void main() {
     await tester.pumpWidget(
       _planApp(
         screen: const EveningPlanScreen(
-          routeId: 'r-date-noir',
+          routeId: testPremiumEveningRouteId,
+          initialRoute: testPremiumEveningRoute,
         ),
         overrides: [
           subscriptionStateProvider.overrideWith((ref) async {

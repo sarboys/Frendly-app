@@ -7,6 +7,8 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'evening_test_routes.dart';
+
 void main() {
   testWidgets('builder follows front question flow and returns matched route',
       (tester) async {
@@ -15,6 +17,11 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          backendRepositoryProvider.overrideWith(
+            (ref) => _DefaultEveningBuilderRepository(ref),
+          ),
+        ],
         child: MaterialApp(
           home: EveningBuilderScreen(
             onReady: (route) {
@@ -48,7 +55,7 @@ void main() {
       findsOneWidget,
     );
 
-    await _pickOption(tester, 'Бары и вино');
+    await _pickOption(tester, 'Бар');
     expect(find.text('Где удобнее стартовать?'), findsOneWidget);
 
     await _pickOption(tester, 'Центр');
@@ -107,7 +114,7 @@ void main() {
 
     await _pickOption(tester, 'Backend Social');
     await _pickOption(tester, 'Средне');
-    await _pickOption(tester, 'Бары и вино');
+    await _pickOption(tester, 'Бар');
     await _pickOption(tester, 'Центр');
     await tester.pump(const Duration(milliseconds: 1200));
 
@@ -208,7 +215,7 @@ void main() {
     await _pickOption(tester, 'Новые друзья');
     await _pickOption(tester, 'Backend Social');
     await _pickOption(tester, 'Средне');
-    await _pickOption(tester, 'Бары и вино');
+    await _pickOption(tester, 'Бар');
     await _pickOption(tester, 'Центр');
     await tester.pump(const Duration(milliseconds: 1200));
 
@@ -310,4 +317,61 @@ class _FakeEveningBuilderRepository extends BackendRepository {
       ],
     };
   }
+}
+
+class _DefaultEveningBuilderRepository extends BackendRepository {
+  _DefaultEveningBuilderRepository(Ref ref) : super(ref: ref, dio: Dio());
+
+  @override
+  Future<Map<String, dynamic>> fetchEveningOptions({
+    CancelToken? cancelToken,
+  }) async {
+    return const {};
+  }
+
+  @override
+  Future<Map<String, dynamic>> resolveEveningRoute({
+    CancelToken? cancelToken,
+    String? goal,
+    String? mood,
+    String? budget,
+    String? format,
+    String? area,
+    String? prompt,
+  }) async {
+    return _routeJson(testCozyEveningRoute);
+  }
+}
+
+Map<String, dynamic> _routeJson(EveningRouteData route) {
+  return {
+    'id': route.id,
+    'title': route.title,
+    'vibe': route.vibe,
+    'blurb': route.blurb,
+    'totalPriceFrom': route.totalPriceFrom,
+    'totalSavings': route.totalSavings,
+    'durationLabel': route.durationLabel,
+    'area': route.area,
+    'goal': 'newfriends',
+    'mood': 'chill',
+    'budget': 'mid',
+    'premium': route.premium,
+    'hostsCount': route.hostsCount,
+    'steps': route.steps
+        .map((step) => {
+              'id': step.id,
+              'time': step.time,
+              'endTime': step.endTime,
+              'kind': 'bar',
+              'title': step.title,
+              'venue': step.venue,
+              'address': step.address,
+              'emoji': step.emoji,
+              'distance': step.distance,
+              'lat': step.lat,
+              'lng': step.lng,
+            })
+        .toList(growable: false),
+  };
 }

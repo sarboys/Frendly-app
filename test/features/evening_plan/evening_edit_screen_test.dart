@@ -1,10 +1,12 @@
 import 'package:big_break_mobile/features/evening_plan/presentation/evening_edit_screen.dart';
-import 'package:big_break_mobile/features/evening_plan/presentation/evening_plan_data.dart';
+import 'package:big_break_mobile/features/evening_plan/presentation/evening_edit_state.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'evening_test_routes.dart';
 
 void main() {
   testWidgets('edit screen mirrors front edit structure and mini fields', (
@@ -34,14 +36,14 @@ void main() {
     await tester.tap(find.text('Аперитив в Brix Wine'));
     await tester.pumpAndSettle();
 
-    expect(find.text('СТАРТ'), findsOneWidget);
-    expect(find.text('КОНЕЦ'), findsOneWidget);
-    expect(find.text('НАЗВАНИЕ'), findsOneWidget);
-    expect(find.text('МЕСТО'), findsOneWidget);
-    expect(find.text('АДРЕС'), findsOneWidget);
-    expect(find.text('ПЕРК'), findsOneWidget);
-    expect(find.text('БИЛЕТ, ₽'), findsOneWidget);
-    expect(find.text('ЭМОДЗИ'), findsOneWidget);
+    expect(find.text('Старт'), findsOneWidget);
+    expect(find.text('Конец'), findsOneWidget);
+    expect(find.text('Название'), findsWidgets);
+    expect(find.text('Место'), findsOneWidget);
+    expect(find.text('Адрес'), findsOneWidget);
+    expect(find.text('Перк'), findsOneWidget);
+    expect(find.text('Билет, ₽'), findsOneWidget);
+    expect(find.text('Эмодзи'), findsOneWidget);
     expect(find.text('Удалить'), findsOneWidget);
   });
 
@@ -69,7 +71,7 @@ void main() {
     await tester.tap(find.text('Аперитив в Brix Wine'));
     await tester.pumpAndSettle();
 
-    expect(find.text('СТАРТ'), findsNothing);
+    expect(find.text('Старт'), findsNothing);
 
     await tester.scrollUntilVisible(
       find.text('After-chat в Кафе Заря'),
@@ -79,13 +81,16 @@ void main() {
     await tester.tap(find.text('After-chat в Кафе Заря'));
     await tester.pumpAndSettle();
 
-    expect(find.text('СТАРТ'), findsOneWidget);
+    expect(find.text('Старт'), findsOneWidget);
   });
 }
 
 Widget _wrap({required MeetupChat chat}) {
   return ProviderScope(
     overrides: [
+      eveningRouteOverridesProvider.overrideWith(
+        (ref) => {testCozyEveningRoute.id: testCozyEveningRoute},
+      ),
       meetupChatsProvider.overrideWith((ref) async => [chat]),
     ],
     child: const MaterialApp(
@@ -110,7 +115,7 @@ MeetupChat _chat({
   required MeetupPhase phase,
   int? currentStep,
 }) {
-  final route = eveningRoutes.first;
+  const route = testCozyEveningRoute;
   return MeetupChat(
     id: 'chat-route',
     eventId: null,

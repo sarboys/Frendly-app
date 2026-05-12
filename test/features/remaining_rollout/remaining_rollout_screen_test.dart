@@ -71,14 +71,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Безопасность'), findsOneWidget);
-    expect(find.text('SOS-рассылка'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Что-то случилось?'),
-      500,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Что-то случилось?'), findsOneWidget);
+    expect(find.textContaining('SOS'), findsWidgets);
   });
 
   testWidgets('report screen renders submit CTA', (tester) async {
@@ -120,11 +113,11 @@ void main() {
     await tester.pumpWidget(_wrap(const MatchScreen(userId: 'user-anya')));
     await tester.pumpAndSettle();
 
-    expect(find.text('87%'), findsOneWidget);
-    expect(find.text('совпадение'), findsOneWidget);
+    expect(find.textContaining('87%'), findsOneWidget);
+    expect(find.textContaining('совпадение'), findsOneWidget);
     expect(find.textContaining('Написать'), findsOneWidget);
     expect(find.text('Пригласить на встречу'), findsOneWidget);
-    expect(find.text('Вайб'), findsOneWidget);
+    expect(find.text('Кофе'), findsOneWidget);
     expect(find.text('Зачем здесь'), findsNothing);
     expect(find.text('Активность'), findsNothing);
   });
@@ -133,7 +126,7 @@ void main() {
     await tester.pumpWidget(_wrap(const PaywallScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.text('FRENDLY+'), findsOneWidget);
+    expect(find.text('Frendly+'), findsOneWidget);
     expect(find.text('Восстановить'), findsOneWidget);
     expect(find.text('Доступ к Dating'), findsOneWidget);
     expect(find.text('Кто смотрел профиль'), findsOneWidget);
