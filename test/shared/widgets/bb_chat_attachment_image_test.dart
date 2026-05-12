@@ -83,4 +83,40 @@ void main() {
     expect(image.maxHeightDiskCache, 360);
     expect(image.cacheManager, isA<ImageCacheManager>());
   });
+
+  testWidgets('private backend media is not loaded without signed url', (
+    tester,
+  ) async {
+    const attachment = MessageAttachment(
+      id: 'private-image',
+      kind: 'chat_attachment',
+      status: 'ready',
+      url: 'https://api.frendly.tech/media/private-image',
+      mimeType: 'image/jpeg',
+      byteSize: 1200,
+      fileName: 'private.jpg',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BbChatAttachmentImage(
+            attachment: attachment,
+            width: 160,
+            height: 120,
+            fit: BoxFit.cover,
+            borderRadius: const BorderRadius.all(Radius.circular(16)),
+            placeholderColor: Colors.black12,
+            foregroundColor: Colors.white,
+            resolveRemoteUrl: (_) async => null,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(CachedNetworkImage), findsNothing);
+    expect(find.byIcon(Icons.image_not_supported_outlined), findsOneWidget);
+  });
 }

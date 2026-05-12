@@ -140,6 +140,7 @@ class _MeetupChatScreenState extends ConsumerState<MeetupChatScreen> {
     final attachmentService = ref.read(appAttachmentServiceProvider);
     try {
       await attachmentService.saveAttachmentToDevice(attachment);
+      _showSnackBar('Файл сохранён на устройство');
     } catch (_) {
       _showSnackBar('Не получилось сохранить файл');
     }
@@ -234,10 +235,17 @@ class _MeetupChatScreenState extends ConsumerState<MeetupChatScreen> {
       return;
     }
 
-    await chatController.sendAttachment(
-      file,
-      replyTo: replyTo,
-    );
+    try {
+      await chatController.sendAttachment(
+        file,
+        replyTo: replyTo,
+      );
+    } catch (_) {
+      if (mounted) {
+        _showSnackBar('Не получилось отправить файл');
+      }
+      return;
+    }
     if (!mounted) {
       return;
     }

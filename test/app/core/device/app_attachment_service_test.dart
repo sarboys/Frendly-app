@@ -299,6 +299,56 @@ void main() {
     expect(requestCount, 1);
   });
 
+  test('attachment service refreshes expired signed download urls', () async {
+    var requestCount = 0;
+    final apiDio = Dio(
+      BaseOptions(baseUrl: BackendConfig.apiBaseUrl),
+    )..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requestCount += 1;
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'url': 'https://storage.example.com/signed-$requestCount',
+                },
+              ),
+            );
+          },
+        ),
+      );
+
+    final cachedFile = MemoryFileSystem().file('/photo.jpg');
+    await cachedFile.writeAsString('photo');
+    final service = DefaultAppAttachmentService(
+      cacheManager: _FakeCacheManager(cachedFile),
+      apiDio: apiDio,
+      downloadUrlTtl: Duration.zero,
+    );
+
+    const attachment = MessageAttachment(
+      id: 'asset-1',
+      kind: 'chat_attachment',
+      status: 'ready',
+      url: '${BackendConfig.apiBaseUrl}/media/asset-1',
+      mimeType: 'image/jpeg',
+      byteSize: 1024,
+      fileName: 'photo.jpg',
+    );
+
+    expect(
+      await service.getDownloadUrl(attachment),
+      'https://storage.example.com/signed-1',
+    );
+    expect(
+      await service.getDownloadUrl(attachment),
+      'https://storage.example.com/signed-2',
+    );
+    expect(requestCount, 2);
+  });
+
   test('attachment service adds auth header for protected backend media',
       () async {
     final cachedFile = MemoryFileSystem().file('/voice.m4a');

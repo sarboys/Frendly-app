@@ -34,22 +34,25 @@ class DefaultAppAttachmentService implements AppAttachmentService {
     Future<String?> Function()? accessTokenProvider,
     Dio? apiDio,
     VoiceMetricReporter? voiceMetricReporter,
+    Duration downloadUrlTtl = _defaultDownloadUrlTtl,
   })  : _cacheManager = cacheManager ?? chatAttachmentCacheManager,
         _accessTokenProvider = accessTokenProvider,
         _apiDio = apiDio,
-        _voiceMetricReporter = voiceMetricReporter;
+        _voiceMetricReporter = voiceMetricReporter,
+        _downloadUrlTtl = downloadUrlTtl;
 
   final Future<String?> Function()? _accessTokenProvider;
   final CacheManager _cacheManager;
   final Dio? _apiDio;
   final VoiceMetricReporter? _voiceMetricReporter;
+  final Duration _downloadUrlTtl;
   final Map<String, _CachedDownloadUrl> _downloadUrlCache =
       <String, _CachedDownloadUrl>{};
   final Map<String, Future<String?>> _downloadUrlRequests =
       <String, Future<String?>>{};
   var _downloadUrlCacheGeneration = 0;
 
-  static const _downloadUrlTtl = Duration(minutes: 4);
+  static const _defaultDownloadUrlTtl = Duration(minutes: 4);
 
   @override
   Future<String?> getDownloadUrl(MessageAttachment attachment) async {

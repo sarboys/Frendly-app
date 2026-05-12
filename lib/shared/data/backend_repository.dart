@@ -1793,6 +1793,8 @@ class BackendRepository {
     if (lower.endsWith('.gif')) return 'image/gif';
     if (lower.endsWith('.webp')) return 'image/webp';
     if (lower.endsWith('.pdf')) return 'application/pdf';
+    if (lower.endsWith('.txt')) return 'text/plain';
+    if (lower.endsWith('.zip')) return 'application/zip';
     if (lower.endsWith('.m4a')) return 'audio/mp4';
     if (lower.endsWith('.aac')) return 'audio/aac';
     if (lower.endsWith('.mp3')) return 'audio/mpeg';

@@ -114,6 +114,7 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
     final attachmentService = ref.read(appAttachmentServiceProvider);
     try {
       await attachmentService.saveAttachmentToDevice(attachment);
+      _showSnackBar('Файл сохранён на устройство');
     } catch (_) {
       _showSnackBar('Не получилось сохранить файл');
     }
@@ -237,10 +238,17 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       return;
     }
 
-    await chatController.sendAttachment(
-      files.first,
-      replyTo: replyTo,
-    );
+    try {
+      await chatController.sendAttachment(
+        files.first,
+        replyTo: replyTo,
+      );
+    } catch (_) {
+      if (mounted) {
+        _showSnackBar('Не получилось отправить файл');
+      }
+      return;
+    }
     if (!mounted) {
       return;
     }

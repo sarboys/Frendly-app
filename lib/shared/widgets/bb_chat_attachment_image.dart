@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:big_break_mobile/app/core/config/backend_config.dart';
 import 'package:big_break_mobile/app/core/device/app_attachment_service.dart';
 import 'package:big_break_mobile/shared/models/message.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -138,6 +139,9 @@ class _BbChatAttachmentImageState extends State<BbChatAttachmentImage> {
         ? resolvedUrl!.trim()
         : widget.attachment.url?.trim();
     if (url != null && url.isNotEmpty) {
+      if (_isProtectedBackendMediaUrl(url)) {
+        return const _ChatAttachmentImageSource.missing();
+      }
       return _ChatAttachmentImageSource.network(url);
     }
 
@@ -185,6 +189,23 @@ class _BbChatAttachmentImageState extends State<BbChatAttachmentImage> {
       ),
     );
   }
+}
+
+bool _isProtectedBackendMediaUrl(String url) {
+  if (url.startsWith('/media/')) {
+    return true;
+  }
+
+  final targetUri = Uri.tryParse(url);
+  final backendUri = Uri.tryParse(BackendConfig.apiBaseUrl);
+  if (targetUri == null || backendUri == null) {
+    return false;
+  }
+
+  return targetUri.scheme == backendUri.scheme &&
+      targetUri.host == backendUri.host &&
+      targetUri.port == backendUri.port &&
+      targetUri.path.startsWith('/media/');
 }
 
 _ChatAttachmentCacheSize _chatAttachmentCacheSize({

@@ -871,6 +871,7 @@ void main() {
 
     expect(attachmentService.saveCalls, 1);
     expect(attachmentService.openCalls, 0);
+    expect(find.text('Файл сохранён на устройство'), findsOneWidget);
   });
 
   testWidgets('user profile renders common interests count', (tester) async {

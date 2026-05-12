@@ -1216,6 +1216,105 @@ void main() {
     expect(uploadRequests.single.headers['content-length'], 4096);
   });
 
+  test('chat attachment upload maps txt and zip mime types', () async {
+    final uploadedContentTypes = <String>[];
+    final completedMimeTypes = <String>[];
+
+    final apiDio = Dio(
+      BaseOptions(baseUrl: 'http://api.example.com'),
+    )..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (options.path == '/uploads/chat-attachment/upload-url') {
+              final data = Map<String, dynamic>.from(options.data as Map);
+              final contentType = data['contentType'] as String;
+              uploadedContentTypes.add(contentType);
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  statusCode: 201,
+                  data: {
+                    'uploadUrl':
+                        'https://storage.example.com/${data['fileName']}',
+                    'objectKey': 'chat-attachments/user-me/${data['fileName']}',
+                    'headers': {
+                      'content-type': contentType,
+                    },
+                  },
+                ),
+              );
+              return;
+            }
+
+            if (options.path == '/uploads/chat-attachment/complete') {
+              final data = Map<String, dynamic>.from(options.data as Map);
+              completedMimeTypes.add(data['mimeType'] as String);
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  statusCode: 201,
+                  data: {
+                    'assetId': 'asset-${data['fileName']}',
+                    'status': 'ready',
+                  },
+                ),
+              );
+              return;
+            }
+
+            fail('Unexpected API request: ${options.method} ${options.path}');
+          },
+        ),
+      );
+
+    final uploadDio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: '',
+              ),
+            );
+          },
+        ),
+      );
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final repository = container.read(
+      Provider(
+        (ref) => BackendRepository(
+          ref: ref,
+          dio: apiDio,
+          createUploadDio: () => uploadDio,
+        ),
+      ),
+    );
+
+    await repository.uploadChatAttachment(
+      PlatformFile(
+        name: 'note.txt',
+        size: 4,
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+      ),
+      chatId: 'p1',
+    );
+    await repository.uploadChatAttachment(
+      PlatformFile(
+        name: 'archive.zip',
+        size: 4,
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+      ),
+      chatId: 'p1',
+    );
+
+    expect(uploadedContentTypes, ['text/plain', 'application/zip']);
+    expect(completedMimeTypes, ['text/plain', 'application/zip']);
+  });
+
   test(
       'profile photo upload streams path file through generic direct media upload',
       () async {
