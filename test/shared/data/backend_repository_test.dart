@@ -727,6 +727,72 @@ void main() {
     expect(requestBody, containsPair('afficheEventId', 'affiche-1'));
   });
 
+  test('event creation sends selected local clock time without timezone shift',
+      () async {
+    Object? requestBody;
+    final apiDio = Dio(
+      BaseOptions(baseUrl: 'http://api.example.com'),
+    )..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requestBody = options.data;
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 201,
+                data: {
+                  'id': 'event-created',
+                  'title': 'Вечер в Москве',
+                  'emoji': '🍷',
+                  'time': 'Сегодня · 17:00',
+                  'place': 'Brix',
+                  'distance': '1.0 км',
+                  'vibe': 'Спокойно',
+                  'description': 'Без сдвига времени',
+                  'hostNote': null,
+                  'joined': false,
+                  'partnerName': null,
+                  'partnerOffer': null,
+                  'capacity': 6,
+                  'going': 1,
+                  'chatId': 'event-created-chat',
+                  'host': {
+                    'id': 'user-me',
+                    'displayName': 'Никита',
+                    'verified': true,
+                    'rating': 4.9,
+                    'meetupCount': 10,
+                    'avatarUrl': null,
+                  },
+                  'attendees': [],
+                },
+              ),
+            );
+          },
+        ),
+      );
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final repository = container.read(
+      Provider(
+        (ref) => BackendRepository(ref: ref, dio: apiDio),
+      ),
+    );
+
+    await repository.createEvent(
+      title: 'Вечер в Москве',
+      description: 'Без сдвига времени',
+      emoji: '🍷',
+      vibe: 'Спокойно',
+      place: 'Brix',
+      startsAt: DateTime(2026, 5, 12, 17),
+      capacity: 6,
+    );
+
+    expect(requestBody, containsPair('startsAt', '2026-05-12T17:00:00.000Z'));
+  });
+
   test('event creation sends resolved place coordinates when provided',
       () async {
     final apiRequests = <_CapturedRequest>[];

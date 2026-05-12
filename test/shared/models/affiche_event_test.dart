@@ -41,6 +41,43 @@ void main() {
     expect(event.hasCoords, isFalse);
   });
 
+  test('parses startsAt using backend time label for create prefill', () {
+    final event = AfficheEvent.fromJson({
+      'id': 'event-moscow-time',
+      'title': 'Концерт',
+      'description': 'Описание',
+      'city': 'Москва',
+      'startsAt': '2026-05-11T12:00:00.000Z',
+      'dateLabel': '11 мая',
+      'timeLabel': '15:00',
+      'category': 'concert',
+      'priceMode': 'paid',
+      'priceFrom': 1500,
+      'isAffiliate': true,
+      'tags': [],
+    });
+
+    expect(event.startsAt, DateTime(2026, 5, 11, 15));
+  });
+
+  test('keeps affiche startsAt date when time label crosses UTC midnight', () {
+    final event = AfficheEvent.fromJson({
+      'id': 'event-midnight',
+      'title': 'Ночной концерт',
+      'city': 'Москва',
+      'startsAt': '2026-05-10T21:30:00.000Z',
+      'dateLabel': '11 мая',
+      'timeLabel': '00:30',
+      'category': 'concert',
+      'priceMode': 'paid',
+      'priceFrom': 1500,
+      'isAffiliate': true,
+      'tags': [],
+    });
+
+    expect(event.startsAt, DateTime(2026, 5, 11, 0, 30));
+  });
+
   test('cleans escaped html from external description', () {
     final event = AfficheEvent.fromJson({
       'id': 'event-html',

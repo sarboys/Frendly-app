@@ -887,7 +887,7 @@ class BackendRepository {
         'emoji': emoji,
         'vibe': vibe,
         'place': place,
-        'startsAt': startsAt.toUtc().toIso8601String(),
+        'startsAt': _eventWallClockIso(startsAt),
         'capacity': capacity,
         'distanceKm': distanceKm ?? 1.0,
         if (latitude != null) 'latitude': latitude,
@@ -1217,7 +1217,7 @@ class BackendRepository {
     final response = await dio.post<Map<String, dynamic>>(
       '/evening/route-templates/$templateId/sessions',
       data: {
-        'startsAt': startsAt.toUtc().toIso8601String(),
+        'startsAt': _eventWallClockIso(startsAt),
         'privacy': eveningPrivacyToJson(privacy),
         'capacity': capacity,
         if (hostNote != null && hostNote.trim().isNotEmpty)
@@ -1706,6 +1706,19 @@ class BackendRepository {
     );
 
     return completeResponse.data!['assetId'] as String;
+  }
+
+  String _eventWallClockIso(DateTime value) {
+    return DateTime.utc(
+      value.year,
+      value.month,
+      value.day,
+      value.hour,
+      value.minute,
+      value.second,
+      value.millisecond,
+      value.microsecond,
+    ).toIso8601String();
   }
 
   static Dio _defaultUploadDio() {

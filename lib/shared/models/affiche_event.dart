@@ -100,7 +100,10 @@ class AfficheEvent {
       address: json['address'] as String?,
       latitude: (json['lat'] as num?)?.toDouble(),
       longitude: (json['lng'] as num?)?.toDouble(),
-      startsAt: _parseDate(json['startsAt'] as String?),
+      startsAt: _parseStartsAt(
+        json['startsAt'] as String?,
+        json['timeLabel'] as String?,
+      ),
       endsAt: _parseDate(json['endsAt'] as String?),
       dateLabel: json['dateLabel'] as String?,
       timeLabel: json['timeLabel'] as String?,
@@ -131,6 +134,40 @@ DateTime? _parseDate(String? value) {
     return null;
   }
   return DateTime.tryParse(value)?.toLocal();
+}
+
+DateTime? _parseStartsAt(String? value, String? timeLabel) {
+  final parsed = DateTime.tryParse(value ?? '');
+  if (parsed == null) {
+    return null;
+  }
+
+  final timeMatch = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(timeLabel ?? '');
+  if (timeMatch == null) {
+    return parsed.toLocal();
+  }
+
+  final hour = int.tryParse(timeMatch.group(1)!);
+  final minute = int.tryParse(timeMatch.group(2)!);
+  if (hour == null || minute == null || hour > 23 || minute > 59) {
+    return parsed.toLocal();
+  }
+
+  final utc = parsed.toUtc();
+  var offsetMinutes = (hour * 60 + minute) - (utc.hour * 60 + utc.minute);
+  if (offsetMinutes < -12 * 60) {
+    offsetMinutes += 24 * 60;
+  } else if (offsetMinutes > 14 * 60) {
+    offsetMinutes -= 24 * 60;
+  }
+  final shiftedDate = utc.add(Duration(minutes: offsetMinutes));
+  return DateTime(
+    shiftedDate.year,
+    shiftedDate.month,
+    shiftedDate.day,
+    hour,
+    minute,
+  );
 }
 
 AffichePriceMode _parsePriceMode(String? value) {
