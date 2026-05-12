@@ -94,10 +94,7 @@ class ProfileV5Content extends StatelessWidget {
                       locationFallback: locationFallback,
                       action: heroAction ??
                           (showOwnerCards ? _ownerHeroAction(context) : null),
-                      signalRow: heroSignalRow ??
-                          (showOwnerCards
-                              ? _ProfileSignalRow(profile: profile)
-                              : null),
+                      signalRow: heroSignalRow,
                     ),
                     if (showOwnerCards) ...[
                       const SizedBox(height: AppSpacing.md),

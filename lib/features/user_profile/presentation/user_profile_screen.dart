@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
+import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
@@ -30,12 +31,15 @@ class UserProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(personProfileProvider(userId));
     final currentProfile = ref.watch(profileProvider).valueOrNull;
+    final currentUserId = ref.watch(currentUserIdProvider);
 
     return BbV5Scaffold(
       child: AsyncValueView<ProfileData>(
         value: profileAsync,
         data: (profile) {
           _prewarmUserProfilePhotos(ref, profile);
+          final isCurrentUser =
+              currentUserId != null && (currentUserId == userId);
           final commonInterests = currentProfile == null
               ? <String>[]
               : profile.interests
@@ -49,13 +53,24 @@ class UserProfileScreen extends ConsumerWidget {
               userId: userId,
             ),
             showOwnerCards: false,
-            heroAction: null,
+            heroAction: isCurrentUser
+                ? BbV5PillButton(
+                    label: 'Изменить',
+                    icon: LucideIcons.pen_line,
+                    height: 34,
+                    fontSize: 11.5,
+                    iconSize: 12,
+                    padding: const EdgeInsets.symmetric(horizontal: 13),
+                    onPressed: () => context.pushRoute(AppRoute.editProfile),
+                  )
+                : const SizedBox.shrink(),
             locationFallback: null,
-            heroSignalRow: BbSocialActions(
-              userId: userId,
-              initialSocial: profile.social,
-              enabled: currentProfile?.id != userId,
-            ),
+            heroSignalRow: isCurrentUser
+                ? null
+                : BbSocialActions(
+                    userId: userId,
+                    initialSocial: profile.social,
+                  ),
             interestHighlights: commonInterests.toSet(),
             interestFooter: commonInterests.isEmpty
                 ? null
@@ -65,10 +80,12 @@ class UserProfileScreen extends ConsumerWidget {
                       color: BbV5Colors.inkMute,
                     ),
                   ),
-            bottomOverlay: _PublicProfileBottomBar(
-              userId: userId,
-              profile: profile,
-            ),
+            bottomOverlay: isCurrentUser
+                ? null
+                : _PublicProfileBottomBar(
+                    userId: userId,
+                    profile: profile,
+                  ),
           );
         },
       ),

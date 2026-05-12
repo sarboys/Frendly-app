@@ -2,6 +2,7 @@ import 'package:big_break_mobile/features/notifications/presentation/notificatio
 import 'package:big_break_mobile/features/user_profile/presentation/user_profile_screen.dart';
 import 'package:big_break_mobile/features/profile/presentation/profile_screen.dart';
 import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
+import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/notification_item.dart';
@@ -166,6 +167,7 @@ void main() {
     expect(find.text('1 240'), findsOneWidget);
     expect(find.text('Подписчиков'), findsNothing);
     expect(find.text('Лайков'), findsNothing);
+    expect(find.text('Подписаться'), findsNothing);
     expect(find.text('Рейтинг'), findsNothing);
     expect(find.text('Встреч'), findsNothing);
     expect(find.text('Никита, 28'), findsOneWidget);
@@ -451,5 +453,50 @@ void main() {
     expect(find.text('История'), findsOneWidget);
     expect(find.text('Позвать на встречу'), findsOneWidget);
     expect(find.text('Написать'), findsOneWidget);
+  });
+
+  testWidgets('public route for current user hides social actions and CTAs',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const UserProfileScreen(userId: 'user-me'),
+        extraOverrides: [
+          currentUserIdProvider.overrideWith((ref) => 'user-me'),
+          personProfileProvider.overrideWith(
+            (ref, userId) async => const ProfileData(
+              id: 'user-me',
+              displayName: 'Никита М',
+              verified: true,
+              online: true,
+              age: 28,
+              city: 'Москва',
+              area: 'Чистые пруды',
+              bio: 'bio',
+              vibe: 'Спокойно',
+              rating: 4.8,
+              meetupCount: 12,
+              avatarUrl: null,
+              interests: ['Кофе'],
+              intent: ['Друзья'],
+              social: ProfileSocialData(
+                followers: 12,
+                likes: 5,
+                superLikes: 1,
+                iFollow: false,
+                iLike: false,
+                iSuper: false,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Подписчики'), findsNothing);
+    expect(find.text('Подписаться'), findsNothing);
+    expect(find.text('Позвать на встречу'), findsNothing);
+    expect(find.text('Написать'), findsNothing);
+    expect(find.text('Изменить'), findsOneWidget);
   });
 }
