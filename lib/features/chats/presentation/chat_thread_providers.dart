@@ -424,20 +424,21 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
       return;
     }
 
-    final lastIncomingMessage = _latestVisibleIncomingMessage(messages);
-    if (lastIncomingMessage == null) {
+    final messageId =
+        _latestUnreadSummaryMessageId() ?? _latestIncomingMessageId(messages);
+    if (messageId == null) {
       return;
     }
 
-    if (_lastMarkedReadMessageId == lastIncomingMessage.id) {
+    if (_lastMarkedReadMessageId == messageId) {
       return;
     }
 
     ref.read(chatSocketClientProvider).markRead(
           chatId: chatId,
-          messageId: lastIncomingMessage.id,
+          messageId: messageId,
         );
-    _lastMarkedReadMessageId = lastIncomingMessage.id;
+    _lastMarkedReadMessageId = messageId;
     _clearChatSummaryUnread();
   }
 
@@ -671,6 +672,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         lastAuthor: message.author,
         lastTime: message.time,
         unread: 0,
+        lastMessageId: message.id,
       );
       return;
     }
@@ -685,6 +687,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         lastMessage: preview,
         lastTime: message.time,
         unread: 0,
+        lastMessageId: message.id,
       );
       return;
     }
@@ -867,12 +870,42 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         messages.last.id == messageId;
   }
 
-  Message? _latestVisibleIncomingMessage(List<Message> messages) {
+  String? _latestUnreadSummaryMessageId() {
+    final localMeetupChats = ref.read(meetupChatsLocalStateProvider);
+    final meetupChats =
+        localMeetupChats ?? ref.read(meetupChatsProvider).valueOrNull;
+    if (meetupChats != null) {
+      for (final chat in meetupChats) {
+        if (chat.id == chatId &&
+            chat.unread > 0 &&
+            chat.lastMessageId != null) {
+          return chat.lastMessageId;
+        }
+      }
+    }
+
+    final localPersonalChats = ref.read(personalChatsLocalStateProvider);
+    final personalChats =
+        localPersonalChats ?? ref.read(personalChatsProvider).valueOrNull;
+    if (personalChats != null) {
+      for (final chat in personalChats) {
+        if (chat.id == chatId &&
+            chat.unread > 0 &&
+            chat.lastMessageId != null) {
+          return chat.lastMessageId;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  String? _latestIncomingMessageId(List<Message> messages) {
     for (final message in messages.reversed) {
       if (message.id.startsWith('local-') || message.mine || message.isSystem) {
         continue;
       }
-      return message;
+      return message.id;
     }
     return null;
   }

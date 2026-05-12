@@ -58,6 +58,7 @@ class MeetupChat {
     required this.lastTime,
     required this.unread,
     required this.members,
+    this.lastMessageId,
     this.memberProfiles = const [],
     this.status,
     this.isPinned = false,
@@ -93,6 +94,7 @@ class MeetupChat {
   final String title;
   final String emoji;
   final String time;
+  final String? lastMessageId;
   final String lastMessage;
   final String lastAuthor;
   final String lastTime;
@@ -149,6 +151,7 @@ class MeetupChat {
       title: json['title'] as String? ?? '',
       emoji: json['emoji'] as String? ?? '💬',
       time: json['time'] as String? ?? '',
+      lastMessageId: json['lastMessageId'] as String?,
       lastMessage: json['lastMessage'] as String? ?? '',
       lastAuthor: json['lastAuthor'] as String? ?? '',
       lastTime: json['lastTime'] as String? ?? '',
@@ -198,6 +201,7 @@ class MeetupChat {
     String? title,
     String? emoji,
     String? time,
+    String? lastMessageId,
     String? lastMessage,
     String? lastAuthor,
     String? lastTime,
@@ -239,6 +243,7 @@ class MeetupChat {
       title: title ?? this.title,
       emoji: emoji ?? this.emoji,
       time: time ?? this.time,
+      lastMessageId: lastMessageId ?? this.lastMessageId,
       lastMessage: lastMessage ?? this.lastMessage,
       lastAuthor: lastAuthor ?? this.lastAuthor,
       lastTime: lastTime ?? this.lastTime,

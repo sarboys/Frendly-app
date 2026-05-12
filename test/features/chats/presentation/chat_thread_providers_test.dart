@@ -889,6 +889,77 @@ void main() {
     expect(socket.lastReadMessageId, 'server-incoming-1');
   });
 
+  test('chat thread marks summary latest unread message when history is stale',
+      () async {
+    final socket = _ControllableChatSocketClient();
+    final fetchedMessages = [
+      Message.fromJson(
+        {
+          'id': 'server-incoming-old',
+          'chatId': 'mc1',
+          'clientMessageId': 'incoming-old',
+          'senderId': 'user-anya',
+          'senderName': 'Аня',
+          'text': 'Старое сообщение',
+          'createdAt': '2026-04-21T12:10:00Z',
+          'attachments': const [],
+        },
+        currentUserId: 'user-me',
+      ),
+    ];
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        meetupChatsLocalStateProvider.overrideWith(
+          (ref) => const [
+            MeetupChat(
+              id: 'mc1',
+              eventId: 'event-1',
+              title: 'Встреча',
+              emoji: '🍷',
+              time: '20:00',
+              lastMessageId: 'server-incoming-fresh',
+              lastMessage: 'Свежий unread',
+              lastAuthor: 'Аня',
+              lastTime: '1 мин',
+              unread: 8,
+              members: ['Аня', 'Ты'],
+            ),
+          ],
+        ),
+        backendRepositoryProvider.overrideWith(
+          (ref) => _FakeChatThreadRepository(
+            ref: ref,
+            dio: Dio(),
+            fetchedMessages: fetchedMessages,
+          ),
+        ),
+        appAttachmentServiceProvider
+            .overrideWith((ref) => _FakeAttachmentService()),
+        chatSocketClientProvider.overrideWith((ref) => socket),
+      ],
+    );
+    addTearDown(() async {
+      await socket.dispose();
+      container.dispose();
+    });
+
+    final subscription = container.listen(
+      chatThreadProvider('mc1'),
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(subscription.close);
+
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    expect(socket.lastReadChatId, 'mc1');
+    expect(socket.lastReadMessageId, 'server-incoming-fresh');
+    final meetupChats = container.read(meetupChatsLocalStateProvider);
+    expect(meetupChats?.single.unread, 0);
+  });
+
   test('chat thread remembers latest sync cursor from snapshot and live events',
       () async {
     final socket = _ControllableChatSocketClient();

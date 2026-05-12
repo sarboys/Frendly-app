@@ -1010,12 +1010,14 @@ List<MeetupChat> upsertMeetupChatSummary(
   required String lastAuthor,
   required String lastTime,
   required int unread,
+  String? lastMessageId,
 }) {
   final updated = chats
       .map(
         (chat) => chat.id == chatId
             ? chat.copyWith(
                 lastMessage: lastMessage,
+                lastMessageId: lastMessageId,
                 lastAuthor: lastAuthor,
                 lastTime: lastTime,
                 unread: unread,
@@ -1071,12 +1073,14 @@ List<PersonalChat> upsertPersonalChatSummary(
   required String lastMessage,
   required String lastTime,
   required int unread,
+  String? lastMessageId,
 }) {
   final updated = chats
       .map(
         (chat) => chat.id == chatId
             ? chat.copyWith(
                 lastMessage: lastMessage,
+                lastMessageId: lastMessageId,
                 lastTime: lastTime,
                 unread: unread,
               )
@@ -1170,6 +1174,7 @@ List<MeetupChat> updateMeetupChatFromRealtime(
                 emoji: chat.emoji,
                 time: chat.time,
                 lastMessage: chat.lastMessage,
+                lastMessageId: chat.lastMessageId,
                 lastAuthor: chat.lastAuthor,
                 lastTime: chat.lastTime,
                 unread: chat.unread,
@@ -1335,6 +1340,7 @@ class _ChatRealtimeSyncCoordinator {
         lastAuthor: message.author,
         lastTime: message.time,
         unread: meetupChat.unread,
+        lastMessageId: message.id,
       );
       return;
     }
@@ -1350,6 +1356,7 @@ class _ChatRealtimeSyncCoordinator {
         lastMessage: preview,
         lastTime: message.time,
         unread: personalChat.unread,
+        lastMessageId: message.id,
       );
       return;
     }
