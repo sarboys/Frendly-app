@@ -49,7 +49,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Город дышит'), findsOneWidget);
+    expect(find.textContaining('Город дышит'), findsNothing);
+    expect(find.text('Радар вечера'), findsOneWidget);
   });
 
   testWidgets(
@@ -79,7 +80,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 3500));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Город дышит'), findsOneWidget);
+    expect(find.textContaining('Город дышит'), findsNothing);
+    expect(find.text('Радар вечера'), findsOneWidget);
   });
 
   testWidgets('root keeps startup screen while auth bootstrap is running', (
@@ -114,7 +116,8 @@ void main() {
     completer.complete();
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Город дышит'), findsOneWidget);
+    expect(find.textContaining('Город дышит'), findsNothing);
+    expect(find.text('Радар вечера'), findsOneWidget);
   });
 
   testWidgets('root boots splash without reading remote settings', (

@@ -431,7 +431,7 @@ class _NotificationTileState extends ConsumerState<_NotificationTile> {
                           ),
                           const SizedBox(width: AppSpacing.xs),
                           _ActionPill(
-                            label: 'Не сейчас',
+                            label: 'Отказаться',
                             enabled: !_submitting,
                             onTap: _declineInvite,
                           ),
@@ -579,6 +579,10 @@ class _NotificationTileState extends ConsumerState<_NotificationTile> {
       refreshHandles.container.invalidate(notificationUnreadCountProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Приглашение принято')),
+      );
+      context.pushRoute(
+        AppRoute.eventDetail,
+        pathParameters: {'eventId': eventId},
       );
     } catch (_) {
       if (mounted) {

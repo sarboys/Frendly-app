@@ -1,4 +1,3 @@
-import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +12,35 @@ class AfterDarkScreen extends StatefulWidget {
 
 class _AfterDarkScreenState extends State<AfterDarkScreen> {
   bool _notifyEnabled = false;
+
+  void _toggleNotify() {
+    setState(() => _notifyEnabled = !_notifyEnabled);
+    if (_notifyEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Сообщим, как только запустим After Dark'),
+          backgroundColor: BbV5AfterDarkColors.magenta,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _showRestoreMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Раздел закрыт. Откроется после анонса.'),
+        backgroundColor: BbV5AfterDarkColors.violetDeep,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,114 +57,67 @@ class _AfterDarkScreenState extends State<AfterDarkScreen> {
                 child: CustomScrollView(
                   slivers: [
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-                      sliver: SliverToBoxAdapter(
-                        child: _AfterDarkHeader(
-                          onBack: () => Navigator.of(context).maybePop(),
-                        ),
-                      ),
-                    ),
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 30, 20, 0),
-                      sliver: SliverToBoxAdapter(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const _AfterDarkBadge(),
-                            const SizedBox(height: 18),
-                            Text(
-                              'Ночные встречи\nс мягкими правилами.',
-                              style: bbV5DisplayStyle(
-                                fontSize: 34,
-                                height: 0.98,
-                                color: BbV5AfterDarkColors.foreground,
-                                letterSpacing: -1,
-                              ),
+                      padding: const EdgeInsets.fromLTRB(20, 32, 20, 128),
+                      sliver: SliverList.list(
+                        children: [
+                          _AfterDarkHeader(
+                            onBack: () => Navigator.of(context).maybePop(),
+                            onRestore: _showRestoreMessage,
+                          ),
+                          const SizedBox(height: 24),
+                          const Center(child: _AfterDarkBadge()),
+                          const SizedBox(height: 20),
+                          Text(
+                            'Ночной круг для тех,\nкто живёт интенсивнее.',
+                            textAlign: TextAlign.center,
+                            style: bbV5DisplayStyle(
+                              fontSize: 34,
+                              height: 1.05,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -1.02,
+                              color: BbV5AfterDarkColors.foreground,
                             ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Приватный режим 18+ для событий, где важны consent, безопасность и понятные границы.',
+                          ),
+                          const SizedBox(height: 16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              'Свидания, найтлайф, wellness и closed play — в защищённом, верифицированном кругу.',
+                              textAlign: TextAlign.center,
                               style: AppTextStyles.bodySoft.copyWith(
                                 color: BbV5AfterDarkColors.foregroundSoft,
+                                fontSize: 14,
                                 height: 1.45,
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SliverPadding(
-                      padding: EdgeInsets.fromLTRB(20, 26, 20, 0),
-                      sliver: SliverToBoxAdapter(
-                        child: _LockedTeaserCard(),
-                      ),
-                    ),
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 26, 20, 0),
-                      sliver: SliverGrid.count(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 1.2,
-                        children: const [
-                          _AfterDarkFeature(
-                            icon: LucideIcons.shield_check,
-                            title: 'Consent first',
-                            subtitle: 'Кодекс до входа',
                           ),
-                          _AfterDarkFeature(
-                            icon: LucideIcons.lock,
-                            title: 'Закрытый адрес',
-                            subtitle: 'Локация после подтверждения',
+                          const SizedBox(height: 28),
+                          const _LockedTeaserCard(),
+                          const SizedBox(height: 24),
+                          const _AfterDarkFeatureList(),
+                          const SizedBox(height: 28),
+                          _AfterDarkNotifyRow(
+                            notifyEnabled: _notifyEnabled,
+                            onNotify: _toggleNotify,
                           ),
-                          _AfterDarkFeature(
-                            icon: LucideIcons.moon,
-                            title: 'Ночной радар',
-                            subtitle: 'Только 18+ события',
-                          ),
-                          _AfterDarkFeature(
-                            icon: LucideIcons.sparkles,
-                            title: 'Inner Circle',
-                            subtitle: 'Малые группы',
-                          ),
-                          _AfterDarkFeature(
-                            icon: LucideIcons.eye_off,
-                            title: 'Без съемки',
-                            subtitle: 'Приватность по умолчанию',
-                          ),
-                          _AfterDarkFeature(
-                            icon: LucideIcons.bell,
-                            title: 'Ранний доступ',
-                            subtitle: 'Сначала уведомление',
+                          const SizedBox(height: 12),
+                          const _AfterDarkDisabledCta(),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Запуск ограниченным составом · по приглашениям',
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.caption.copyWith(
+                              color: BbV5AfterDarkColors.foregroundMute,
+                              fontSize: 10.5,
+                              height: 1.2,
+                            ),
                           ),
                         ],
-                      ),
-                    ),
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 26, 20, 132),
-                      sliver: SliverToBoxAdapter(
-                        child: _AfterDarkCodeCard(
-                          notifyEnabled: _notifyEnabled,
-                          onNotify: () {
-                            setState(() => _notifyEnabled = true);
-                          },
-                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _AfterDarkBottomBar(
-              notifyEnabled: _notifyEnabled,
-              onNotify: () {
-                setState(() => _notifyEnabled = true);
-              },
             ),
           ),
         ],
@@ -146,9 +127,13 @@ class _AfterDarkScreenState extends State<AfterDarkScreen> {
 }
 
 class _AfterDarkHeader extends StatelessWidget {
-  const _AfterDarkHeader({required this.onBack});
+  const _AfterDarkHeader({
+    required this.onBack,
+    required this.onRestore,
+  });
 
   final VoidCallback onBack;
+  final VoidCallback onRestore;
 
   @override
   Widget build(BuildContext context) {
@@ -159,7 +144,20 @@ class _AfterDarkHeader extends StatelessWidget {
           onTap: onBack,
         ),
         const Spacer(),
-        const _AfterDarkCircleButton(icon: LucideIcons.shield_check),
+        TextButton(
+          onPressed: onRestore,
+          style: TextButton.styleFrom(
+            foregroundColor: BbV5AfterDarkColors.foregroundSoft,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            textStyle: AppTextStyles.caption.copyWith(
+              fontFamily: 'Sora',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          child: const Text('Восстановить'),
+        ),
       ],
     );
   }
@@ -168,11 +166,11 @@ class _AfterDarkHeader extends StatelessWidget {
 class _AfterDarkCircleButton extends StatelessWidget {
   const _AfterDarkCircleButton({
     required this.icon,
-    this.onTap,
+    required this.onTap,
   });
 
   final IconData icon;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -181,14 +179,13 @@ class _AfterDarkCircleButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
-        child: Container(
+        child: Ink(
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: BbV5AfterDarkColors.surface.withValues(alpha: 0.82),
+            color: BbV5AfterDarkColors.surfaceHi,
             shape: BoxShape.circle,
             border: Border.all(color: BbV5AfterDarkColors.border),
-            boxShadow: BbV5AfterDarkColors.glowShadow,
           ),
           child: Icon(icon, size: 18, color: BbV5AfterDarkColors.foreground),
         ),
@@ -204,29 +201,37 @@ class _AfterDarkBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        gradient: BbV5AfterDarkColors.neonGradient,
+        gradient: const LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            BbV5AfterDarkColors.magenta,
+            BbV5AfterDarkColors.violet,
+          ],
+        ),
         borderRadius: BorderRadius.circular(999),
         boxShadow: BbV5AfterDarkColors.neonShadow,
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(
-              LucideIcons.moon,
+              LucideIcons.sparkles,
               size: 14,
-              color: BbV5AfterDarkColors.foreground,
+              color: Colors.white,
             ),
-            const SizedBox(width: 7),
+            const SizedBox(width: 8),
             Text(
-              'After Dark',
+              'FRENDLY+ 18 · AFTER DARK',
               style: AppTextStyles.caption.copyWith(
                 fontFamily: 'Sora',
-                color: BbV5AfterDarkColors.foreground,
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
-                letterSpacing: 1.7,
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                height: 1,
+                letterSpacing: 1.1,
               ),
             ),
           ],
@@ -242,59 +247,58 @@ class _LockedTeaserCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: BbV5AfterDarkColors.surface,
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            BbV5AfterDarkColors.surfaceHi,
+            BbV5AfterDarkColors.surface,
+          ],
+        ),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: BbV5AfterDarkColors.border),
-        boxShadow: BbV5AfterDarkColors.cardShadow,
       ),
-      child: Stack(
+      child: Column(
         children: [
-          Positioned(
-            right: -30,
-            top: -34,
-            child: Icon(
-              LucideIcons.moon,
-              size: 124,
-              color: BbV5AfterDarkColors.magenta.withValues(alpha: 0.13),
+          const _BlurredPreviewDots(),
+          const SizedBox(height: 16),
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: BbV5AfterDarkColors.magenta.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: BbV5AfterDarkColors.magenta.withValues(alpha: 0.33),
+              ),
+            ),
+            child: const Icon(
+              LucideIcons.lock,
+              color: BbV5AfterDarkColors.magenta,
+              size: 24,
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  gradient: BbV5AfterDarkColors.neonGradient,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: BbV5AfterDarkColors.neonShadow,
-                ),
-                child: const Icon(
-                  Icons.lock_rounded,
-                  color: BbV5AfterDarkColors.foreground,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Тизер закрыт до запуска',
-                style: bbV5DisplayStyle(
-                  fontSize: 22,
-                  color: BbV5AfterDarkColors.foreground,
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Мы откроем подборку ночных форматов после модерации, проверки safety и настройки доступа.',
-                style: AppTextStyles.bodySoft.copyWith(
-                  color: BbV5AfterDarkColors.foregroundSoft,
-                  height: 1.42,
-                ),
-              ),
-            ],
+          const SizedBox(height: 12),
+          Text(
+            '8 событий сегодня ночью',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.itemTitle.copyWith(
+              color: BbV5AfterDarkColors.foreground,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Открой раздел, чтобы увидеть детали',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.caption.copyWith(
+              color: BbV5AfterDarkColors.foregroundMute,
+              fontSize: 12,
+            ),
           ),
         ],
       ),
@@ -302,8 +306,104 @@ class _LockedTeaserCard extends StatelessWidget {
   }
 }
 
-class _AfterDarkFeature extends StatelessWidget {
-  const _AfterDarkFeature({
+class _BlurredPreviewDots extends StatelessWidget {
+  const _BlurredPreviewDots();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _PreviewDot(color: Color(0xFFE94BB8)),
+        SizedBox(width: 8),
+        _PreviewDot(color: Color(0xFFF59E0B)),
+        SizedBox(width: 8),
+        _PreviewDot(color: Color(0xFF8B5CF6)),
+      ],
+    );
+  }
+}
+
+class _PreviewDot extends StatelessWidget {
+  const _PreviewDot({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [color, BbV5AfterDarkColors.violetDeep],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.45),
+            blurRadius: 16,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AfterDarkFeatureList extends StatelessWidget {
+  const _AfterDarkFeatureList();
+
+  static const _features = [
+    _AfterDarkFeatureData(
+      icon: LucideIcons.eye,
+      title: 'Закрытая лента After Dark',
+      subtitle: 'Найтлайф, свидания, wellness и Inner Circle',
+    ),
+    _AfterDarkFeatureData(
+      icon: LucideIcons.shield_check,
+      title: 'Только верифицированные',
+      subtitle: 'Все участники прошли проверку возраста и фото',
+    ),
+    _AfterDarkFeatureData(
+      icon: LucideIcons.lock,
+      title: 'Скрытые локации',
+      subtitle: 'Адрес открывается за 4 часа до старта',
+    ),
+    _AfterDarkFeatureData(
+      icon: LucideIcons.key_round,
+      title: 'NDA · кодекс молчания',
+      subtitle: 'Что было ночью — остаётся в круге',
+    ),
+    _AfterDarkFeatureData(
+      icon: LucideIcons.heart,
+      title: 'Безопасность 360°',
+      subtitle: 'SOS, сопровождение, доверенные лица — всегда под рукой',
+    ),
+    _AfterDarkFeatureData(
+      icon: LucideIcons.file_text,
+      title: 'Кодекс After Dark',
+      subtitle: 'Согласие, уважение, никакого harassment. Жёстко.',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (final feature in _features) ...[
+          _AfterDarkFeatureRow(feature: feature),
+          if (feature != _features.last) const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _AfterDarkFeatureData {
+  const _AfterDarkFeatureData({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -312,172 +412,88 @@ class _AfterDarkFeature extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: BbV5AfterDarkColors.surface.withValues(alpha: 0.76),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: BbV5AfterDarkColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: BbV5AfterDarkColors.cyan),
-          const Spacer(),
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.itemTitle.copyWith(
-              color: BbV5AfterDarkColors.foreground,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.caption.copyWith(
-              color: BbV5AfterDarkColors.foregroundMute,
-              letterSpacing: 0,
-              height: 1.25,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
-class _AfterDarkCodeCard extends StatelessWidget {
-  const _AfterDarkCodeCard({
-    required this.notifyEnabled,
-    required this.onNotify,
-  });
+class _AfterDarkFeatureRow extends StatelessWidget {
+  const _AfterDarkFeatureRow({required this.feature});
 
-  final bool notifyEnabled;
-  final VoidCallback onNotify;
+  final _AfterDarkFeatureData feature;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: BbV5AfterDarkColors.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: BbV5AfterDarkColors.border),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(
-                LucideIcons.shield_check,
-                size: 18,
-                color: BbV5AfterDarkColors.cyan,
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  BbV5AfterDarkColors.violet.withValues(alpha: 0.27),
+                  BbV5AfterDarkColors.magenta.withValues(alpha: 0.13),
+                ],
               ),
-              const SizedBox(width: 8),
-              Text(
-                'Кодекс After Dark',
-                style: AppTextStyles.itemTitle.copyWith(
-                  color: BbV5AfterDarkColors.foreground,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Consent first. Без съемки. Один репорт сразу уходит в safety очередь.',
-            style: AppTextStyles.bodySoft.copyWith(
-              color: BbV5AfterDarkColors.foregroundSoft,
-              height: 1.45,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: BbV5AfterDarkColors.border),
+            ),
+            child: Icon(
+              feature.icon,
+              size: 16,
+              color: BbV5AfterDarkColors.magenta,
             ),
           ),
-          const SizedBox(height: 14),
-          _AfterDarkNotifyButton(
-            notifyEnabled: notifyEnabled,
-            onNotify: onNotify,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AfterDarkBottomBar extends StatelessWidget {
-  const _AfterDarkBottomBar({
-    required this.notifyEnabled,
-    required this.onNotify,
-  });
-
-  final bool notifyEnabled;
-  final VoidCallback onNotify;
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            BbV5AfterDarkColors.background.withValues(alpha: 0),
-            BbV5AfterDarkColors.background.withValues(alpha: 0.96),
-            BbV5AfterDarkColors.background,
-          ],
-        ),
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(20, 18, 20, 18 + bottom),
-            child: Row(
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: _AfterDarkNotifyButton(
-                    notifyEnabled: notifyEnabled,
-                    onNotify: onNotify,
+                Text(
+                  feature.title,
+                  style: AppTextStyles.itemTitle.copyWith(
+                    color: BbV5AfterDarkColors.foreground,
+                    fontSize: 13.5,
+                    height: 1.15,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: SizedBox(
-                    height: 52,
-                    child: FilledButton(
-                      onPressed: null,
-                      style: FilledButton.styleFrom(
-                        disabledBackgroundColor:
-                            BbV5AfterDarkColors.surface.withValues(alpha: 0.7),
-                        disabledForegroundColor:
-                            BbV5AfterDarkColors.foregroundMute,
-                        shape: const StadiumBorder(),
-                      ),
-                      child: Text(
-                        'Скоро',
-                        style: AppTextStyles.button.copyWith(fontSize: 14),
-                      ),
-                    ),
+                const SizedBox(height: 4),
+                Text(
+                  feature.subtitle,
+                  style: AppTextStyles.caption.copyWith(
+                    color: BbV5AfterDarkColors.foregroundMute,
+                    fontSize: 11.5,
+                    height: 1.45,
                   ),
                 ),
               ],
             ),
           ),
-        ),
+          const SizedBox(width: 10),
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Icon(
+              LucideIcons.sparkles,
+              size: 14,
+              color: BbV5AfterDarkColors.magenta,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _AfterDarkNotifyButton extends StatelessWidget {
-  const _AfterDarkNotifyButton({
+class _AfterDarkNotifyRow extends StatelessWidget {
+  const _AfterDarkNotifyRow({
     required this.notifyEnabled,
     required this.onNotify,
   });
@@ -487,22 +503,135 @@ class _AfterDarkNotifyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: FilledButton.icon(
-        onPressed: notifyEnabled ? null : onNotify,
-        icon: Icon(
-          notifyEnabled ? LucideIcons.check : LucideIcons.bell,
-          size: 16,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onNotify,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: notifyEnabled
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      BbV5AfterDarkColors.violet.withValues(alpha: 0.2),
+                      BbV5AfterDarkColors.magenta.withValues(alpha: 0.13),
+                    ],
+                  )
+                : null,
+            color: notifyEnabled ? null : BbV5AfterDarkColors.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: notifyEnabled
+                  ? BbV5AfterDarkColors.magenta.withValues(alpha: 0.47)
+                  : BbV5AfterDarkColors.border,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: notifyEnabled
+                      ? BbV5AfterDarkColors.magenta
+                      : BbV5AfterDarkColors.surfaceHi,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  notifyEnabled ? LucideIcons.check : LucideIcons.bell,
+                  size: 16,
+                  color: notifyEnabled
+                      ? Colors.white
+                      : BbV5AfterDarkColors.foregroundSoft,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      notifyEnabled ? 'Уведомим первым' : 'Уведомить о запуске',
+                      style: AppTextStyles.itemTitle.copyWith(
+                        color: BbV5AfterDarkColors.foreground,
+                        fontSize: 13,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Без спама. Только когда откроем доступ.',
+                      style: AppTextStyles.caption.copyWith(
+                        color: BbV5AfterDarkColors.foregroundMute,
+                        fontSize: 11,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-        label: Text(notifyEnabled ? 'Ждем запуск' : 'Уведомить'),
-        style: FilledButton.styleFrom(
-          backgroundColor: BbV5AfterDarkColors.magenta,
-          foregroundColor: BbV5AfterDarkColors.foreground,
-          disabledBackgroundColor: BbV5AfterDarkColors.violet,
-          disabledForegroundColor: BbV5AfterDarkColors.foreground,
-          shape: const StadiumBorder(),
-          textStyle: AppTextStyles.button.copyWith(fontSize: 14),
+      ),
+    );
+  }
+}
+
+class _AfterDarkDisabledCta extends StatelessWidget {
+  const _AfterDarkDisabledCta();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              BbV5AfterDarkColors.violet.withValues(alpha: 0.4),
+              BbV5AfterDarkColors.magenta.withValues(alpha: 0.4),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: BbV5AfterDarkColors.neonShadow,
+        ),
+        child: Opacity(
+          opacity: 0.7,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      LucideIcons.moon,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Скоро · следите за обновлениями',
+                      style: AppTextStyles.button.copyWith(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.84,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -514,43 +643,65 @@ class _AfterDarkBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Stack(
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        DecoratedBox(
+        const DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
               colors: [
-                Color(0xFF160D24),
-                Color(0xFF2B143A),
-                Color(0xFF3A1230),
+                BbV5AfterDarkColors.background,
+                BbV5AfterDarkColors.backgroundDeep,
               ],
             ),
           ),
         ),
         Positioned(
-          right: -80,
-          top: -86,
-          width: 260,
+          right: -120,
+          top: -120,
+          width: 320,
           height: 260,
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: RadialGradient(
-                colors: [Color(0x66FF3EA5), Color(0x00FF3EA5)],
+                colors: [
+                  BbV5AfterDarkColors.magenta.withValues(alpha: 0.2),
+                  BbV5AfterDarkColors.magenta.withValues(alpha: 0),
+                ],
               ),
             ),
           ),
         ),
         Positioned(
-          left: -100,
-          top: 260,
-          width: 320,
-          height: 320,
+          left: -150,
+          top: 180,
+          width: 360,
+          height: 300,
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: RadialGradient(
-                colors: [Color(0x552FE3FF), Color(0x002FE3FF)],
+                colors: [
+                  BbV5AfterDarkColors.violet.withValues(alpha: 0.2),
+                  BbV5AfterDarkColors.violet.withValues(alpha: 0),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: -40,
+          right: -40,
+          bottom: -170,
+          height: 420,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                colors: [
+                  BbV5AfterDarkColors.violetDeep.withValues(alpha: 0.33),
+                  BbV5AfterDarkColors.violetDeep.withValues(alpha: 0),
+                ],
               ),
             ),
           ),

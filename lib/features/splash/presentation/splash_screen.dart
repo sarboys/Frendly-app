@@ -4,7 +4,6 @@ import 'package:big_break_mobile/app/core/device/app_haptic_service.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_router.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
@@ -107,12 +106,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 child: SizedBox(
                   width: 320,
                   height: 320,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      _PeopleCircleScene(value: value, stage: stage),
-                    ],
-                  ),
+                  child: _FrendlySplashMark(value: value),
                 ),
               ),
               Positioned(
@@ -173,229 +167,72 @@ class _CircleSplashWash extends StatelessWidget {
   }
 }
 
-class _PeopleCircleScene extends StatelessWidget {
-  const _PeopleCircleScene({
-    required this.value,
-    required this.stage,
-  });
+class _FrendlySplashMark extends StatelessWidget {
+  const _FrendlySplashMark({required this.value});
 
   final double value;
-  final int stage;
 
   @override
   Widget build(BuildContext context) {
-    final ring = _interval(value, 0.34, 0.56, curve: Curves.easeOutBack);
-    final logo = _interval(value, 0.58, 0.78, curve: Curves.easeOutCubic);
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.center,
+    final tile = _interval(value, 0.08, 0.36, curve: Curves.easeOutCubic);
+    final word = _interval(value, 0.28, 0.56, curve: Curves.easeOutCubic);
+    final caption = _interval(value, 0.46, 0.72, curve: Curves.easeOutCubic);
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (stage >= 2)
-          Transform.scale(
-            scale: 0.18 + ring * 0.82,
+        Opacity(
+          opacity: tile,
+          child: Transform.scale(
+            scale: 0.86 + 0.14 * tile,
             child: Container(
-              width: 210,
-              height: 210,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    BbV5Colors.paperHi,
-                    BbV5Colors.terraSoft.withValues(alpha: 0.22),
-                    Colors.transparent,
-                  ],
-                  stops: const [0, 0.62, 1],
-                ),
-              ),
-            ),
-          ),
-        if (stage >= 1)
-          Transform.rotate(
-            angle: value * 1.1,
-            child: Opacity(
-              opacity: stage >= 2 ? 1 : 0,
-              child: Container(
-                width: 192,
-                height: 192,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: BbV5Colors.terra.withValues(alpha: 0.34),
-                    width: 1.5,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        if (stage >= 2) _Sparkles(value: value),
-        if (stage >= 2)
-          Transform.scale(
-            scale: 0.72 + 0.09 * _pulse(value),
-            child: Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [BbV5Colors.accent, BbV5Colors.accentDeep],
-                ),
-                boxShadow: [
-                  ...BbV5Shadows.ink,
-                  BoxShadow(
-                    color: BbV5Colors.terra.withValues(alpha: 0.22),
-                    blurRadius: 28 + 18 * _pulse(value),
-                    spreadRadius: 2 + 8 * _pulse(value),
-                  ),
-                ],
-              ),
+              width: 72,
+              height: 72,
               alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: BbV5Colors.accent,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: BbV5Shadows.ink,
+              ),
               child: const Text(
-                '❤',
+                'Fr',
                 style: TextStyle(
                   color: BbV5Colors.paperHi,
-                  fontSize: 24,
+                  fontFamily: 'Sora',
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
                   height: 1,
                 ),
               ),
             ),
           ),
-        for (var i = 0; i < _splashPeople.length; i++)
-          _FlyingPerson(
-            data: _splashPeople[i],
-            index: i,
-            value: value,
-            bob: stage >= 2,
-          ),
-        Positioned(
-          left: 0,
-          right: 0,
-          top: 276,
-          child: Opacity(
-            opacity: logo,
-            child: Transform.translate(
-              offset: Offset(0, 14 * (1 - logo)),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _CircleSplashWord(value: value),
-                  const SizedBox(height: 12),
-                  Text(
-                    'ГОРОД · ЛЮДИ · ВЕЧЕР',
-                    style: AppTextStyles.caption.copyWith(
-                      color: BbV5Colors.inkMute,
-                      fontFamily: 'Sora',
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 2.76,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+        ),
+        const SizedBox(height: 22),
+        Opacity(
+          opacity: word,
+          child: Transform.translate(
+            offset: Offset(0, 12 * (1 - word)),
+            child: _CircleSplashWord(value: value),
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _FlyingPerson extends StatelessWidget {
-  const _FlyingPerson({
-    required this.data,
-    required this.index,
-    required this.value,
-    required this.bob,
-  });
-
-  final _SplashPerson data;
-  final int index;
-  final double value;
-  final bool bob;
-
-  @override
-  Widget build(BuildContext context) {
-    final start = 0.04 + index * 0.035;
-    final fly =
-        _interval(value, start, start + 0.28, curve: Curves.easeOutBack);
-    final from = Offset(data.offset.dx * 5, data.offset.dy * 5);
-    final bobDy = bob ? -4 * _pulse(value + index * 0.08) : 0.0;
-    final current = Offset.lerp(from, data.offset, fly)! + Offset(0, bobDy);
-    return Transform.translate(
-      offset: current,
-      child: Opacity(
-        opacity: fly,
-        child: Transform.scale(
-          scale: 0.42 + 0.58 * fly,
-          child: Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: data.color,
-              shape: BoxShape.circle,
-              border: Border.all(color: BbV5Colors.paperHi, width: 3),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x591F241D),
-                  blurRadius: 24,
-                  spreadRadius: -8,
-                  offset: Offset(0, 12),
-                ),
-              ],
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              data.emoji,
-              style: const TextStyle(
+        const SizedBox(height: 12),
+        Opacity(
+          opacity: caption,
+          child: Transform.translate(
+            offset: Offset(0, 10 * (1 - caption)),
+            child: const Text(
+              'ГОРОД  ЛЮДИ  ВЕЧЕР',
+              style: TextStyle(
+                color: BbV5Colors.inkMute,
                 fontFamily: 'Sora',
-                fontSize: 20,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 2.2,
                 height: 1,
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _Sparkles extends StatelessWidget {
-  const _Sparkles({required this.value});
-
-  final double value;
-
-  @override
-  Widget build(BuildContext context) {
-    const sparkOffsets = [
-      Offset(0, -48),
-      Offset(42, -24),
-      Offset(42, 24),
-      Offset(0, 48),
-      Offset(-42, 24),
-      Offset(-42, -24),
-    ];
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        for (var i = 0; i < sparkOffsets.length; i++)
-          Transform.translate(
-            offset: sparkOffsets[i],
-            child: Transform.rotate(
-              angle: value * 5 + i * 0.35,
-              child: Opacity(
-                opacity: (0.35 + 0.65 * _pulse(value + i * 0.12)).clamp(0, 1),
-                child: const Text(
-                  '✦',
-                  style: TextStyle(
-                    color: BbV5Colors.gold,
-                    fontSize: 14,
-                    height: 1,
-                  ),
-                ),
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -477,23 +314,6 @@ class _CircleSplashProgress extends StatelessWidget {
   }
 }
 
-class _SplashPerson {
-  const _SplashPerson(this.offset, this.color, this.emoji);
-
-  final Offset offset;
-  final Color color;
-  final String emoji;
-}
-
-const _splashPeople = [
-  _SplashPerson(Offset(0, -90), BbV5Colors.terra, '👋'),
-  _SplashPerson(Offset(78, -45), BbV5Colors.brand, '✨'),
-  _SplashPerson(Offset(78, 45), BbV5Colors.gold, '🍷'),
-  _SplashPerson(Offset(0, 90), BbV5Colors.rose, '💛'),
-  _SplashPerson(Offset(-78, 45), BbV5Colors.brandDeep, '🎷'),
-  _SplashPerson(Offset(-78, -45), BbV5Colors.accent, '☕'),
-];
-
 int _stageFromValue(double value) {
   if (value < 0.22) {
     return 0;
@@ -510,11 +330,6 @@ int _stageFromValue(double value) {
   return 4;
 }
 
-double _pulse(double value) {
-  final loop = (value * 2.4) % 1;
-  return loop < 0.5 ? loop * 2 : (1 - loop) * 2;
-}
-
 double _interval(
   double value,
   double begin,
@@ -525,4 +340,4 @@ double _interval(
   return curve.transform(normalized);
 }
 
-const _splashIntroDuration = Duration(milliseconds: 3200);
+const _splashIntroDuration = Duration(milliseconds: 1600);

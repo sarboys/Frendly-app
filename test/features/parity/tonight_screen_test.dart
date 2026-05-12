@@ -50,7 +50,7 @@ void main() {
     await _pumpTonightApp(tester);
 
     expect(find.text('FRENDLY'), findsOneWidget);
-    expect(find.textContaining('Город дышит'), findsOneWidget);
+    expect(find.textContaining('Город дышит'), findsNothing);
     expect(find.text('Радар вечера'), findsOneWidget);
     expect(find.text('Сейчас собираются'), findsOneWidget);
 
@@ -69,15 +69,13 @@ void main() {
     expect(find.text('Билеты на эту неделю'), findsNothing);
   });
 
-  testWidgets('tonight header does not use stale hardcoded date', (
+  testWidgets('tonight home hero title is hidden', (
     tester,
   ) async {
     await _pumpTonightDirect(tester);
 
-    expect(
-      formatTonightHeaderLabel(DateTime(2026, 5, 12)),
-      'Вторник · 12 мая',
-    );
+    expect(find.textContaining('Город дышит'), findsNothing);
+    expect(find.textContaining('подключайся'), findsNothing);
     expect(find.text('Среда · 06 мая'), findsNothing);
   });
 

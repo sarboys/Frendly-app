@@ -452,7 +452,8 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         return;
       }
 
-      final matchedChatId = result.matched ? result.chatId : null;
+      final isMatched = result.matched;
+      final matchedChatId = isMatched ? result.chatId : null;
       setState(() {
         if (matchedChatId != null) {
           _matchedChatIds[targetUserId] = matchedChatId;
@@ -460,7 +461,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
       });
 
       container.invalidate(datingDiscoverProvider);
-      if (matchedChatId != null) {
+      if (isMatched) {
         container.invalidate(matchesProvider);
       }
       if (!(fromLikes && matchedChatId != null)) {
@@ -474,7 +475,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         );
       }
 
-      if (matchedChatId != null && !fromLikes) {
+      if (isMatched && !fromLikes) {
         context.pushRoute(
           AppRoute.match,
           pathParameters: {'userId': targetUserId},

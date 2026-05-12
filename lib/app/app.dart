@@ -8,7 +8,6 @@ import 'package:big_break_mobile/app/theme/app_theme_mode.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
-import 'package:big_break_mobile/shared/widgets/bb_brand_icon.dart';
 import 'package:big_break_mobile/shared/widgets/bb_system_overlays.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -150,42 +149,6 @@ class _RootAppViewState extends ConsumerState<_RootAppView> {
         clearPersistedChatState: shouldClearPersistedChatState,
       );
     });
-  }
-}
-
-// ignore: unused_element
-class _AppStartupScreen extends StatelessWidget {
-  const _AppStartupScreen();
-
-  static const _brandGreen = Color(0xFF88A28C);
-  static const _brandWhite = Color(0xFFF8F5EF);
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      key: Key('app-startup-screen'),
-      backgroundColor: _brandGreen,
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            BbBrandIcon(
-              size: 112,
-              radius: 32,
-            ),
-            SizedBox(height: 24),
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.4,
-                valueColor: AlwaysStoppedAnimation<Color>(_brandWhite),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

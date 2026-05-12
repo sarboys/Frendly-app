@@ -120,7 +120,7 @@ void main() {
     );
   });
 
-  test('map viewport fit requires an explicit pending fit', () {
+  test('map viewport fit does not repeat without an explicit pending fit', () {
     expect(
       shouldScheduleMapViewportFit(
         supportsNativeMap: true,
@@ -140,6 +140,21 @@ void main() {
         autoFitPending: true,
         fitKey: 'all|map-1:55.75000,37.61000',
         lastFitKey: 'all|map-2:55.76000,37.62000',
+      ),
+      isTrue,
+    );
+  });
+
+  test('initial map viewport fit can use event points without user location',
+      () {
+    expect(
+      shouldScheduleMapViewportFit(
+        supportsNativeMap: true,
+        hasMapController: true,
+        hasInitialEvent: false,
+        autoFitPending: false,
+        fitKey: 'all|map-1:55.75000,37.61000',
+        lastFitKey: '',
       ),
       isTrue,
     );
@@ -494,8 +509,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Рядом сегодня'), findsOneWidget);
-      expect(find.text('2 точек · 50 км'), findsOneWidget);
+      expect(find.text('Рядом сегодня'), findsNothing);
+      expect(find.text('2 точек · 50 км'), findsNothing);
+      expect(find.text('AI подбор'), findsNothing);
       expect(find.text('Первая точка'), findsOneWidget);
       expect(find.text('Вторая точка'), findsOneWidget);
       expect(find.text('Открыть →'), findsNothing);
@@ -504,6 +520,18 @@ void main() {
       final pageView = tester.widget<PageView>(find.byType(PageView));
       expect(pageView.padEnds, isTrue);
       expect(pageView.controller?.viewportFraction, greaterThan(0.70));
+
+      await tester.tap(find.byTooltip('Свернуть список'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Первая точка'), findsNothing);
+      expect(find.byTooltip('Открыть список'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Открыть список'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Первая точка'), findsOneWidget);
+      expect(find.byTooltip('Свернуть список'), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
@@ -578,7 +606,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('2 точек · 50 км'), findsOneWidget);
+      expect(find.text('2 точек · 50 км'), findsNothing);
       expect(find.text('Рядом'), findsOneWidget);
       expect(find.text('Далеко'), findsOneWidget);
     } finally {

@@ -1,5 +1,7 @@
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_screen.dart';
+import 'package:big_break_mobile/features/communities/domain/community.dart';
+import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
@@ -86,7 +88,7 @@ void main() {
     expect(find.text('Найти людей, клубы, места...'), findsOneWidget);
   });
 
-  testWidgets('chats active rail uses v5 live label and search icons',
+  testWidgets('chats active rail uses v5 live label and search launcher',
       (tester) async {
     await tester.pumpWidget(
       _wrapWithRouter(
@@ -98,7 +100,7 @@ void main() {
 
     expect(find.text('LIVE'), findsOneWidget);
     expect(find.text('Live'), findsNothing);
-    expect(find.byIcon(LucideIcons.search), findsNWidgets(2));
+    expect(find.byIcon(LucideIcons.search), findsOneWidget);
   });
 
   testWidgets('chats active rail highlights promoted meetup bubbles',
@@ -249,6 +251,113 @@ void main() {
     expect(annaTop, lessThan(standupTop));
   });
 
+  testWidgets('all chats include joined community chats', (tester) async {
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        child: const ChatsScreen(),
+        targetText: 'unused',
+        extraOverrides: [
+          meetupChatsProvider.overrideWith((ref) async => const []),
+          personalChatsProvider.overrideWith((ref) async => const []),
+          communitiesProvider.overrideWith(
+            (ref) async => const [
+              Community(
+                id: 'club-1',
+                chatId: 'community-chat-1',
+                name: 'Книжный клуб',
+                avatar: '📚',
+                description: 'Читаем вместе',
+                privacy: CommunityPrivacy.public,
+                members: 12,
+                online: 3,
+                tags: ['books'],
+                joinRule: 'Открытое вступление',
+                joined: true,
+                premiumOnly: false,
+                unread: 2,
+                mood: 'Спокойно',
+                sharedMediaLabel: '0 медиа',
+                news: [],
+                meetups: [],
+                media: [],
+                chatPreview: [
+                  CommunityChatPreview(
+                    author: 'Ты',
+                    text: 'Всем привет',
+                    time: 'сейчас',
+                  ),
+                ],
+                chatMessages: [],
+                socialLinks: [],
+                memberNames: ['Ты', 'Аня'],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Клубный чат'), findsNothing);
+    expect(find.text('Книжный клуб'), findsOneWidget);
+    expect(find.text('Ты: Всем привет'), findsOneWidget);
+    expect(find.text('клуб'), findsOneWidget);
+  });
+
+  testWidgets('clubs tab shows joined community chats', (tester) async {
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        child: const ChatsScreen(),
+        targetText: 'unused',
+        extraOverrides: [
+          meetupChatsProvider.overrideWith((ref) async => const []),
+          personalChatsProvider.overrideWith((ref) async => const []),
+          communitiesProvider.overrideWith(
+            (ref) async => const [
+              Community(
+                id: 'club-1',
+                chatId: 'community-chat-1',
+                name: 'Книжный клуб',
+                avatar: '📚',
+                description: 'Читаем вместе',
+                privacy: CommunityPrivacy.public,
+                members: 12,
+                online: 3,
+                tags: ['books'],
+                joinRule: 'Открытое вступление',
+                joined: true,
+                premiumOnly: false,
+                unread: 2,
+                mood: 'Спокойно',
+                sharedMediaLabel: '0 медиа',
+                news: [],
+                meetups: [],
+                media: [],
+                chatPreview: [
+                  CommunityChatPreview(
+                    author: 'Ты',
+                    text: 'Всем привет',
+                    time: 'сейчас',
+                  ),
+                ],
+                chatMessages: [],
+                socialLinks: [],
+                memberNames: ['Ты', 'Аня'],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Клубы'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Книжный клуб'), findsOneWidget);
+    expect(find.text('Ты: Всем привет'), findsOneWidget);
+  });
+
   testWidgets('personal tab with one chat hides empty hint', (tester) async {
     await tester.pumpWidget(
       _wrapWithRouter(
@@ -274,6 +383,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(-260, 0),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Личные'));
     await tester.pumpAndSettle();
 

@@ -10,6 +10,8 @@ import 'package:big_break_mobile/app/theme/app_radii.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_providers.dart';
+import 'package:big_break_mobile/features/communities/domain/community.dart';
+import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/features/tonight/presentation/v5_search_modal.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -32,6 +34,7 @@ class ChatsScreen extends ConsumerWidget {
     final currentUserId = ref.watch(currentUserIdProvider);
     final meetupChatsAsync = ref.watch(meetupChatsProvider);
     final personalChatsAsync = ref.watch(personalChatsProvider);
+    final communitiesAsync = ref.watch(communitiesProvider);
     final knownPersonalChats = ref.watch(knownPersonalChatsProvider);
     final wallet = ref.watch(tokenWalletProvider);
     final promotedIds = wallet.promoted.keys
@@ -43,6 +46,12 @@ class ChatsScreen extends ConsumerWidget {
       personalChatsAsync.valueOrNull ?? const [],
       knownPersonalChats.values,
     );
+    final communityChats = (communitiesAsync.valueOrNull ?? const <Community>[])
+        .where(_isJoinedCommunityChat)
+        .toList(growable: false);
+    final allChatListHasRows = meetupChats.isNotEmpty ||
+        personalChats.isNotEmpty ||
+        communityChats.isNotEmpty;
     final liveChats = meetupChats
         .where((chat) => chat.phase == MeetupPhase.live)
         .toList(growable: false);
@@ -71,10 +80,6 @@ class ChatsScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 40, 20, 128),
               children: [
-                _V5ChatsHeader(
-                  onSearch: () => showV5SearchModal(context),
-                ),
-                const SizedBox(height: 24),
                 InkWell(
                   onTap: () => showV5SearchModal(context),
                   borderRadius: BorderRadius.circular(BbV5Radii.pill),
@@ -104,17 +109,22 @@ class ChatsScreen extends ConsumerWidget {
                   onPersonal: () => ref
                       .read(chatSegmentProvider.notifier)
                       .state = ChatSegment.personal,
+                  onClubs: () => ref.read(chatSegmentProvider.notifier).state =
+                      ChatSegment.clubs,
                 ),
                 const SizedBox(height: 14),
                 if (segment == ChatSegment.all)
                   _V5AllChatList(
                     meetupChats: meetupChats,
                     personalChats: personalChats,
+                    communityChats: communityChats,
                     promotedIds: promotedIds,
                     loading: meetupChatsAsync.isLoading ||
-                        personalChatsAsync.isLoading,
+                        personalChatsAsync.isLoading ||
+                        (communitiesAsync.isLoading && !allChatListHasRows),
                     error: meetupChatsAsync.hasError ||
-                        personalChatsAsync.hasError,
+                        personalChatsAsync.hasError ||
+                        (communitiesAsync.hasError && !allChatListHasRows),
                     onMeetupOpen: (chat) => _openMeetupChat(context, chat),
                     onMeetupPinToggle: (chat) {
                       unawaited(_toggleMeetupChatPinned(ref, chat));
@@ -126,6 +136,10 @@ class ChatsScreen extends ConsumerWidget {
                     onPersonalPinToggle: (chat) {
                       unawaited(_togglePersonalChatPinned(ref, chat));
                     },
+                    onCommunityOpen: (community) => context.pushRoute(
+                      AppRoute.communityChat,
+                      pathParameters: {'communityId': community.id},
+                    ),
                   )
                 else if (segment == ChatSegment.meetup)
                   meetupChatsAsync.when(
@@ -147,6 +161,23 @@ class ChatsScreen extends ConsumerWidget {
                     ),
                     error: (_, __) => const _V5ChatState(
                       text: 'Не получилось загрузить чаты встреч',
+                    ),
+                  )
+                else if (segment == ChatSegment.clubs)
+                  communitiesAsync.when(
+                    data: (_) => _V5CommunityChatList(
+                      communities: communityChats,
+                      onOpen: (community) => context.pushRoute(
+                        AppRoute.communityChat,
+                        pathParameters: {'communityId': community.id},
+                      ),
+                    ),
+                    loading: () => const _V5ChatState(
+                      text: 'Загружаем клубы',
+                      loading: true,
+                    ),
+                    error: (_, __) => const _V5ChatState(
+                      text: 'Не получилось загрузить клубы',
                     ),
                   )
                 else
@@ -231,45 +262,6 @@ Future<void> _togglePersonalChatPinned(WidgetRef ref, PersonalChat chat) async {
     ref.invalidate(personalChatsProvider);
   } catch (_) {
     ref.read(personalChatsLocalStateProvider.notifier).state = previous;
-  }
-}
-
-class _V5ChatsHeader extends StatelessWidget {
-  const _V5ChatsHeader({
-    required this.onSearch,
-  });
-
-  final VoidCallback onSearch;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const BbV5Kicker('Чаты'),
-              const SizedBox(height: 8),
-              Text(
-                'Что обсуждаем\nсегодня?',
-                style: bbV5DisplayStyle(
-                  fontSize: 34,
-                  height: 0.95,
-                  letterSpacing: -1.02,
-                ),
-              ),
-            ],
-          ),
-        ),
-        BbV5IconButton(
-          icon: LucideIcons.search,
-          iconSize: 16,
-          onPressed: onSearch,
-        ),
-      ],
-    );
   }
 }
 
@@ -489,6 +481,7 @@ class _V5ChatSegments extends StatelessWidget {
     required this.onMeetups,
     required this.onDating,
     required this.onPersonal,
+    required this.onClubs,
   });
 
   final ChatSegment segment;
@@ -496,6 +489,7 @@ class _V5ChatSegments extends StatelessWidget {
   final VoidCallback onMeetups;
   final VoidCallback onDating;
   final VoidCallback onPersonal;
+  final VoidCallback onClubs;
 
   @override
   Widget build(BuildContext context) {
@@ -509,6 +503,12 @@ class _V5ChatSegments extends StatelessWidget {
               label: 'Все',
               active: segment == ChatSegment.all,
               onTap: onAll,
+            ),
+            const SizedBox(width: 6),
+            _V5ChatSegmentChip(
+              label: 'Клубы',
+              active: segment == ChatSegment.clubs,
+              onTap: onClubs,
             ),
             const SizedBox(width: 6),
             _V5ChatSegmentChip(
@@ -598,6 +598,7 @@ class _V5AllChatList extends StatelessWidget {
   const _V5AllChatList({
     required this.meetupChats,
     required this.personalChats,
+    required this.communityChats,
     required this.promotedIds,
     required this.loading,
     required this.error,
@@ -605,10 +606,12 @@ class _V5AllChatList extends StatelessWidget {
     required this.onMeetupPinToggle,
     required this.onPersonalOpen,
     required this.onPersonalPinToggle,
+    required this.onCommunityOpen,
   });
 
   final List<MeetupChat> meetupChats;
   final List<PersonalChat> personalChats;
+  final List<Community> communityChats;
   final Set<String> promotedIds;
   final bool loading;
   final bool error;
@@ -616,6 +619,7 @@ class _V5AllChatList extends StatelessWidget {
   final ValueChanged<MeetupChat> onMeetupPinToggle;
   final ValueChanged<PersonalChat> onPersonalOpen;
   final ValueChanged<PersonalChat> onPersonalPinToggle;
+  final ValueChanged<Community> onCommunityOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -629,7 +633,9 @@ class _V5AllChatList extends StatelessWidget {
       return const _V5ChatState(text: 'Не получилось загрузить чаты');
     }
 
-    if (meetupChats.isEmpty && personalChats.isEmpty) {
+    if (meetupChats.isEmpty &&
+        personalChats.isEmpty &&
+        communityChats.isEmpty) {
       return const _V5ChatState(
         text: 'Пока нет чатов. Они появятся после встреч и мэтчей.',
       );
@@ -641,6 +647,11 @@ class _V5AllChatList extends StatelessWidget {
       for (var index = 0; index < personalChats.length; index++)
         _V5AllChatEntry.personal(
             personalChats[index], meetupChats.length + index),
+      for (var index = 0; index < communityChats.length; index++)
+        _V5AllChatEntry.community(
+          communityChats[index],
+          meetupChats.length + personalChats.length + index,
+        ),
     ];
     entries.sort(_compareAllChatEntries);
     final visibleEntries = entries.take(9).toList(growable: false);
@@ -657,6 +668,7 @@ class _V5AllChatList extends StatelessWidget {
               onMeetupPinToggle: onMeetupPinToggle,
               onPersonalOpen: onPersonalOpen,
               onPersonalPinToggle: onPersonalPinToggle,
+              onCommunityOpen: onCommunityOpen,
             ),
             if (index < visibleEntries.length - 1) const _V5RowDivider(),
           ],
@@ -667,15 +679,25 @@ class _V5AllChatList extends StatelessWidget {
 }
 
 class _V5AllChatEntry {
-  const _V5AllChatEntry.meetup(this.meetup, this.order) : personal = null;
+  const _V5AllChatEntry.meetup(this.meetup, this.order)
+      : personal = null,
+        community = null;
 
-  const _V5AllChatEntry.personal(this.personal, this.order) : meetup = null;
+  const _V5AllChatEntry.personal(this.personal, this.order)
+      : meetup = null,
+        community = null;
+
+  const _V5AllChatEntry.community(this.community, this.order)
+      : meetup = null,
+        personal = null;
 
   final MeetupChat? meetup;
   final PersonalChat? personal;
+  final Community? community;
   final int order;
 
-  String get time => meetup?.lastTime ?? personal?.lastTime ?? '';
+  String get time =>
+      meetup?.lastTime ?? personal?.lastTime ?? _communityLastTime(community);
 
   Widget buildRow({
     required Set<String> promotedIds,
@@ -683,6 +705,7 @@ class _V5AllChatEntry {
     required ValueChanged<MeetupChat> onMeetupPinToggle,
     required ValueChanged<PersonalChat> onPersonalOpen,
     required ValueChanged<PersonalChat> onPersonalPinToggle,
+    required ValueChanged<Community> onCommunityOpen,
   }) {
     final meetupChat = meetup;
     if (meetupChat != null) {
@@ -707,22 +730,30 @@ class _V5AllChatEntry {
       );
     }
 
-    final personalChat = personal!;
-    return _V5ChatRow(
-      item: _V5ChatRowItem(
-        id: personalChat.id,
-        title: personalChat.name,
-        initials: _initials(personalChat.name),
-        color: personalChat.online ? BbV5Colors.brand : BbV5Colors.rose,
-        last: personalChat.lastMessage,
-        time: personalChat.lastTime,
-        unread: personalChat.unread,
-        pinned: personalChat.isPinned,
-        kind: personalChat.fromMeetup == null ? 'дейтинг' : 'личные',
-        dot: personalChat.online || personalChat.unread > 0,
-      ),
-      onTap: () => onPersonalOpen(personalChat),
-      onPinToggle: () => onPersonalPinToggle(personalChat),
+    final personalChat = personal;
+    if (personalChat != null) {
+      return _V5ChatRow(
+        item: _V5ChatRowItem(
+          id: personalChat.id,
+          title: personalChat.name,
+          initials: _initials(personalChat.name),
+          color: personalChat.online ? BbV5Colors.brand : BbV5Colors.rose,
+          last: personalChat.lastMessage,
+          time: personalChat.lastTime,
+          unread: personalChat.unread,
+          pinned: personalChat.isPinned,
+          kind: personalChat.fromMeetup == null ? 'дейтинг' : 'личные',
+          dot: personalChat.online || personalChat.unread > 0,
+        ),
+        onTap: () => onPersonalOpen(personalChat),
+        onPinToggle: () => onPersonalPinToggle(personalChat),
+      );
+    }
+
+    final communityChat = community!;
+    return _V5CommunityChatRow(
+      community: communityChat,
+      onTap: () => onCommunityOpen(communityChat),
     );
   }
 }
@@ -806,6 +837,41 @@ int? _meetupMembersCount(MeetupChat chat) {
           ? chat.memberProfiles.length
           : chat.members.length);
   return count > 0 ? count : null;
+}
+
+bool _isJoinedCommunityChat(Community community) {
+  return community.chatId.trim().isNotEmpty &&
+      (community.joined || community.isOwner);
+}
+
+CommunityChatPreview? _communityLastPreview(Community? community) {
+  final previews = community?.chatPreview ?? const <CommunityChatPreview>[];
+  if (previews.isEmpty) {
+    return null;
+  }
+  return previews.last;
+}
+
+String _communityLastTime(Community? community) {
+  return _communityLastPreview(community)?.time ?? '';
+}
+
+String _communityPreview(Community community) {
+  final preview = _communityLastPreview(community);
+  if (preview == null) {
+    final description = community.description.trim();
+    return description.isEmpty ? 'Чат клуба' : description;
+  }
+
+  final author = preview.author.trim();
+  final text = preview.text.trim();
+  if (author.isEmpty) {
+    return text;
+  }
+  if (text.isEmpty) {
+    return author;
+  }
+  return '$author: $text';
 }
 
 class _V5ChatRowItem {
@@ -1129,6 +1195,41 @@ class _V5PersonalChatList extends StatelessWidget {
   }
 }
 
+class _V5CommunityChatList extends StatelessWidget {
+  const _V5CommunityChatList({
+    required this.communities,
+    required this.onOpen,
+  });
+
+  final List<Community> communities;
+  final ValueChanged<Community> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    if (communities.isEmpty) {
+      return const _V5ChatState(
+        text: 'Клубные чаты появятся после вступления в клуб.',
+      );
+    }
+
+    return BbV5Card(
+      radius: BbV5Radii.lg,
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          for (var index = 0; index < communities.length; index++) ...[
+            _V5CommunityChatRow(
+              community: communities[index],
+              onTap: () => onOpen(communities[index]),
+            ),
+            if (index < communities.length - 1) const _V5RowDivider(),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _V5MeetupChatRow extends StatelessWidget {
   const _V5MeetupChatRow({
     required this.chat,
@@ -1312,6 +1413,35 @@ class _V5MeetupChatRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _V5CommunityChatRow extends StatelessWidget {
+  const _V5CommunityChatRow({
+    required this.community,
+    required this.onTap,
+  });
+
+  final Community community;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _V5ChatRow(
+      item: _V5ChatRowItem(
+        id: community.chatId,
+        title: community.name,
+        initials: _initials(community.name),
+        color: _toneColor(community.name.hashCode),
+        last: _communityPreview(community),
+        time: _communityLastTime(community),
+        unread: community.unread,
+        kind: 'клуб',
+        members: community.members > 0 ? community.members : null,
+        dot: community.unread > 0 || community.online > 0,
+      ),
+      onTap: onTap,
     );
   }
 }

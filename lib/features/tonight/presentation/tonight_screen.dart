@@ -298,12 +298,6 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
                 child: _TonightHeader(),
               ),
             ),
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(20, 28, 20, 0),
-                child: _TonightHomeHero(),
-              ),
-            ),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
@@ -425,71 +419,6 @@ Future<void> _openCityLimitedFeature(
   }
 
   showCityLimitToast(ref, featureName);
-}
-
-class _TonightHomeHero extends StatelessWidget {
-  const _TonightHomeHero();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            formatTonightHeaderLabel(DateTime.now()),
-            style: AppTextStyles.meta.copyWith(
-              fontSize: 12,
-              height: 1.2,
-              letterSpacing: 0,
-              color: BbV5Colors.inkMute,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Город дышит —\nподключайся.',
-            style: bbV5DisplayStyle(
-              fontSize: 44,
-              height: 0.95,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -1.54,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-String formatTonightHeaderLabel(DateTime currentDate) {
-  const weekdays = <int, String>{
-    DateTime.monday: 'Понедельник',
-    DateTime.tuesday: 'Вторник',
-    DateTime.wednesday: 'Среда',
-    DateTime.thursday: 'Четверг',
-    DateTime.friday: 'Пятница',
-    DateTime.saturday: 'Суббота',
-    DateTime.sunday: 'Воскресенье',
-  };
-  const months = <int, String>{
-    DateTime.january: 'января',
-    DateTime.february: 'февраля',
-    DateTime.march: 'марта',
-    DateTime.april: 'апреля',
-    DateTime.may: 'мая',
-    DateTime.june: 'июня',
-    DateTime.july: 'июля',
-    DateTime.august: 'августа',
-    DateTime.september: 'сентября',
-    DateTime.october: 'октября',
-    DateTime.november: 'ноября',
-    DateTime.december: 'декабря',
-  };
-
-  final weekday = weekdays[currentDate.weekday] ?? '';
-  final month = months[currentDate.month] ?? '';
-  return '$weekday · ${currentDate.day} $month';
 }
 
 class _TonightRadarCard extends StatelessWidget {

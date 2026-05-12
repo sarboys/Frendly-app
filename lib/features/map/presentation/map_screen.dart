@@ -65,6 +65,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _didPrimeInitialLocation = false;
   bool _triedInitialLocation = false;
   bool _autoFitPending = false;
+  bool _isRadarListExpanded = true;
   String _lastViewportFitKey = '';
   List<Event> _visibleMapEvents = const [];
 
@@ -219,9 +220,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 right: 0,
                 bottom: 96,
                 child: _RadarBottomSheet(
-                  count: filteredEvents.length,
                   events: filteredEvents,
-                  radiusKm: nearbyRadiusKm,
+                  isExpanded: _isRadarListExpanded,
                   pageController: _eventPageController,
                   onPageChanged: (index) {
                     final eventIndex = radarCarouselEventIndex(
@@ -236,6 +236,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       filteredEvents,
                       animatePager: false,
                     );
+                  },
+                  onToggleExpanded: () {
+                    setState(() {
+                      _isRadarListExpanded = !_isRadarListExpanded;
+                    });
                   },
                   onEventTap: (event) => context.pushRoute(
                     AppRoute.eventDetail,
@@ -1433,9 +1438,9 @@ bool shouldScheduleMapViewportFit({
   return supportsNativeMap &&
       hasMapController &&
       !hasInitialEvent &&
-      autoFitPending &&
       fitKey.isNotEmpty &&
-      fitKey != lastFitKey;
+      fitKey != lastFitKey &&
+      (autoFitPending || lastFitKey.isEmpty);
 }
 
 @visibleForTesting
@@ -1851,25 +1856,25 @@ double _distanceKm(ym.Point from, ym.Point to) {
 
 class _RadarBottomSheet extends StatelessWidget {
   const _RadarBottomSheet({
-    required this.count,
     required this.events,
-    required this.radiusKm,
+    required this.isExpanded,
     required this.pageController,
     required this.onPageChanged,
+    required this.onToggleExpanded,
     required this.onEventTap,
   });
 
-  final int count;
   final List<Event> events;
-  final double radiusKm;
+  final bool isExpanded;
   final PageController pageController;
   final ValueChanged<int> onPageChanged;
+  final VoidCallback onToggleExpanded;
   final ValueChanged<Event> onEventTap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: EdgeInsets.fromLTRB(20, 10, 20, isExpanded ? 16 : 10),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topCenter,
@@ -1893,64 +1898,74 @@ class _RadarBottomSheet extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: BbV5Colors.hair,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const BbV5Kicker('Рядом сегодня'),
-                        const SizedBox(height: 6),
-                        Text(
-                          '$count точек · ${radiusKm.toStringAsFixed(0)} км',
-                          style: bbV5DisplayStyle(fontSize: 18),
-                        ),
-                      ],
-                    ),
-                  ),
-                  BbV5PillButton(
-                    label: 'AI подбор',
-                    icon: LucideIcons.sparkles,
-                    height: 36,
-                    fontSize: 11.5,
-                    onPressed: () {},
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
               SizedBox(
-                width: double.infinity,
-                height: 148,
-                child: PageView.builder(
-                  controller: pageController,
-                  padEnds: true,
-                  onPageChanged: onPageChanged,
-                  itemCount: events.length <= 2 ? events.length : null,
-                  itemBuilder: (context, index) {
-                    final event = events[radarCarouselEventIndex(
-                      index,
-                      events.length,
-                    )];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: _RadarEventCard(
-                        event: event,
-                        onTap: () => onEventTap(event),
+                height: 34,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: BbV5Colors.hair,
+                        borderRadius: BorderRadius.circular(999),
                       ),
-                    );
-                  },
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Tooltip(
+                        message:
+                            isExpanded ? 'Свернуть список' : 'Открыть список',
+                        child: Material(
+                          color: BbV5Colors.paperHi,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            onTap: onToggleExpanded,
+                            customBorder: const CircleBorder(),
+                            child: SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: Icon(
+                                isExpanded
+                                    ? LucideIcons.chevron_down
+                                    : LucideIcons.chevron_up,
+                                size: 17,
+                                color: BbV5Colors.ink,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              if (isExpanded) ...[
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: double.infinity,
+                  height: 120,
+                  child: PageView.builder(
+                    controller: pageController,
+                    padEnds: true,
+                    onPageChanged: onPageChanged,
+                    itemCount: events.length <= 2 ? events.length : null,
+                    itemBuilder: (context, index) {
+                      final event = events[radarCarouselEventIndex(
+                        index,
+                        events.length,
+                      )];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: _RadarEventCard(
+                          event: event,
+                          onTap: () => onEventTap(event),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -1980,13 +1995,13 @@ class _RadarEventCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: BbV5Colors.paperHi,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(color: BbV5Colors.hair),
             boxShadow: BbV5Shadows.pill,
           ),
@@ -1994,8 +2009,8 @@ class _RadarEventCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 32,
+                height: 32,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: BbV5Colors.paper,
@@ -2004,28 +2019,28 @@ class _RadarEventCard extends StatelessWidget {
                 ),
                 child: Text(
                   event.emoji,
-                  style: const TextStyle(fontSize: 20),
+                  style: const TextStyle(fontSize: 17),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 7),
               Text(
                 event.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.itemTitle.copyWith(
                   fontFamily: 'Sora',
-                  fontSize: 13.5,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w600,
                   color: BbV5Colors.ink,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 1),
               Text(
                 '${event.vibe} · ${event.distance}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.caption.copyWith(
-                  fontSize: 10.5,
+                  fontSize: 10,
                   color: BbV5Colors.inkMute,
                 ),
               ),

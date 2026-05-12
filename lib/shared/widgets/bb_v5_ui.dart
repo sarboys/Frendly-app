@@ -34,14 +34,17 @@ class BbV5Colors {
 class BbV5AfterDarkColors {
   const BbV5AfterDarkColors._();
 
-  static const background = Color(0xFF160D24);
-  static const surface = Color(0xCC241735);
-  static const border = Color(0x3DFFFFFF);
-  static const foreground = Color(0xFFFFF6FC);
-  static const foregroundSoft = Color(0xFFD9C5DC);
-  static const foregroundMute = Color(0xFF9D84A7);
-  static const magenta = Color(0xFFFF3EA5);
-  static const violet = Color(0xFF8D5BFF);
+  static const background = Color(0xFF0E0817);
+  static const backgroundDeep = Color(0xFF070310);
+  static const surface = Color(0x0AFFFFFF);
+  static const surfaceHi = Color(0x12FFFFFF);
+  static const border = Color(0x1AFFFFFF);
+  static const foreground = Color(0xFFF2EAFE);
+  static const foregroundSoft = Color(0xFFC8B8DC);
+  static const foregroundMute = Color(0xFF7E6E94);
+  static const magenta = Color(0xFFE94BB8);
+  static const violet = Color(0xFF8B5CF6);
+  static const violetDeep = Color(0xFF5B21B6);
   static const cyan = Color(0xFF2FE3FF);
 
   static const neonGradient = LinearGradient(
@@ -61,8 +64,8 @@ class BbV5AfterDarkColors {
 
   static const neonShadow = [
     BoxShadow(
-      color: Color(0x80FF3EA5),
-      blurRadius: 24,
+      color: Color(0x808B5CF6),
+      blurRadius: 32,
       spreadRadius: -8,
       offset: Offset(0, 12),
     ),

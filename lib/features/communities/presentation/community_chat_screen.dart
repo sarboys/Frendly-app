@@ -347,7 +347,14 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
       text,
       replyTo: _replyTo,
     );
+    _refreshCommunityChatPreview();
     _clearReply();
+  }
+
+  void _refreshCommunityChatPreview() {
+    ref.invalidate(communityProvider(widget.communityId));
+    ref.invalidate(communitiesProvider);
+    ref.invalidate(communitiesFeedProvider);
   }
 
   MessageReplyPreview _toReplyPreview(Message message) {
@@ -527,7 +534,10 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
                     voice,
                     replyTo: replyTo,
                   )
-                  .then((_) => _clearReplyIfUnchanged(replyTo));
+                  .then((_) {
+                _refreshCommunityChatPreview();
+                _clearReplyIfUnchanged(replyTo);
+              });
             },
             onRequestMicrophonePermission: _requestMicrophonePermission,
             voiceRecorderService: ref.read(appVoiceRecorderServiceProvider),

@@ -599,6 +599,41 @@ void main() {
     expect(find.text('match-user-sonya'), findsOneWidget);
   });
 
+  testWidgets('dating mutual like opens match screen without chat id', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        overrides: [
+          backendRepositoryProvider.overrideWith(
+            (ref) => _MatchDatingRepository(ref: ref, dio: Dio(), chatId: null),
+          ),
+          subscriptionStateProvider.overrideWith(
+            (ref) async => SubscriptionStateData(
+              plan: 'year',
+              status: 'active',
+              startedAt: DateTime(2026, 4, 18),
+              renewsAt: DateTime(2027, 4, 18),
+              trialEndsAt: null,
+            ),
+          ),
+          datingDiscoverProvider.overrideWith(
+            (ref) async => const [_sonyaProfile],
+          ),
+          datingLikesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.bySemanticsLabel('Лайк'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Лайк'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('match-user-sonya'), findsOneWidget);
+  });
+
   testWidgets('dating action rolls back profile on backend error', (
     tester,
   ) async {
@@ -1127,7 +1162,10 @@ class _MatchDatingRepository extends BackendRepository {
   _MatchDatingRepository({
     required super.ref,
     required super.dio,
+    this.chatId = 'chat-sonya',
   });
+
+  final String? chatId;
 
   @override
   Future<DatingActionResult> sendDatingAction({
@@ -1138,7 +1176,7 @@ class _MatchDatingRepository extends BackendRepository {
       ok: true,
       action: action,
       matched: true,
-      chatId: 'chat-sonya',
+      chatId: chatId,
       peer: null,
     );
   }

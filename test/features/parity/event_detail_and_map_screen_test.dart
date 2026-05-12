@@ -325,13 +325,12 @@ void main() {
     await tester.pumpWidget(_wrap(const MapScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.text('5 точек · 50 км'), findsOneWidget);
+    expect(find.text('50 км'), findsOneWidget);
     expect(find.text('Винный вечер на крыше'), findsOneWidget);
 
     await tester.tap(find.text('Популярные'));
     await tester.pumpAndSettle();
 
-    expect(find.text('2 точек · 50 км'), findsOneWidget);
     expect(find.text('Настолки и кофе'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;

@@ -14,6 +14,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../test_overrides.dart';
 
@@ -22,15 +23,34 @@ class _FakeNotificationsRepository extends BackendRepository {
     required super.ref,
     required super.dio,
     this.onMarkAllRead,
+    this.onAcceptInvite,
   });
 
   int markAllReadCalls = 0;
+  int acceptInviteCalls = 0;
+  int declineInviteCalls = 0;
+  String? acceptedEventId;
+  String? acceptedRequestId;
   final VoidCallback? onMarkAllRead;
+  final void Function(String eventId, String requestId)? onAcceptInvite;
 
   @override
   Future<void> markAllNotificationsRead() async {
     markAllReadCalls += 1;
     onMarkAllRead?.call();
+  }
+
+  @override
+  Future<void> acceptInvite(String eventId, String requestId) async {
+    acceptInviteCalls += 1;
+    acceptedEventId = eventId;
+    acceptedRequestId = requestId;
+    onAcceptInvite?.call(eventId, requestId);
+  }
+
+  @override
+  Future<void> declineInvite(String eventId, String requestId) async {
+    declineInviteCalls += 1;
   }
 }
 
@@ -79,6 +99,39 @@ Widget _wrap(
       ...extraOverrides,
     ],
     child: MaterialApp(home: child),
+  );
+}
+
+Widget _wrapNotificationsRouter({
+  required List<Override> extraOverrides,
+  required ValueChanged<String> onOpenedEvent,
+}) {
+  final router = GoRouter(
+    initialLocation: AppRoute.notifications.path,
+    routes: [
+      GoRoute(
+        path: AppRoute.notifications.path,
+        name: AppRoute.notifications.name,
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.eventDetail.path,
+        name: AppRoute.eventDetail.name,
+        builder: (context, state) {
+          final eventId = state.pathParameters['eventId']!;
+          onOpenedEvent(eventId);
+          return Scaffold(body: Text('event:$eventId'));
+        },
+      ),
+    ],
+  );
+
+  return ProviderScope(
+    overrides: [
+      ...buildTestOverrides(),
+      ...extraOverrides,
+    ],
+    child: MaterialApp.router(routerConfig: router),
   );
 }
 
@@ -185,7 +238,7 @@ void main() {
       expect(find.text('5 мин'), findsOneWidget);
       expect(find.text('вчера'), findsOneWidget);
       expect(find.text('Принять'), findsOneWidget);
-      expect(find.text('Не сейчас'), findsOneWidget);
+      expect(find.text('Отказаться'), findsOneWidget);
 
       await tester.tap(find.text('Чаты'));
       await tester.pumpAndSettle();
@@ -456,6 +509,59 @@ void main() {
       findsNothing,
     );
     expect(fakeRepository.markAllReadCalls, 1);
+  });
+
+  testWidgets('accept invite opens event detail after backend accepts', (
+    tester,
+  ) async {
+    late _FakeNotificationsRepository fakeRepository;
+    String? openedEventId;
+    var notifications = [
+      NotificationItem(
+        id: 'n-invite',
+        kind: 'event_invite',
+        title: 'Приглашение',
+        body: 'приглашает тебя на встречу',
+        payload: const {
+          'invite': true,
+          'eventId': 'event-accepted',
+          'requestId': 'request-accepted',
+        },
+        readAt: null,
+        createdAt: DateTime.now(),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      _wrapNotificationsRouter(
+        onOpenedEvent: (eventId) => openedEventId = eventId,
+        extraOverrides: [
+          backendRepositoryProvider.overrideWith(
+            (ref) => fakeRepository = _FakeNotificationsRepository(
+              ref: ref,
+              dio: Dio(),
+              onAcceptInvite: (eventId, requestId) {
+                notifications = const [];
+              },
+            ),
+          ),
+          notificationsProvider.overrideWith((ref) async => notifications),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Принять'), findsOneWidget);
+    expect(find.text('Отказаться'), findsOneWidget);
+
+    await tester.tap(find.text('Принять'));
+    await tester.pumpAndSettle();
+
+    expect(fakeRepository.acceptInviteCalls, 1);
+    expect(fakeRepository.acceptedEventId, 'event-accepted');
+    expect(fakeRepository.acceptedRequestId, 'request-accepted');
+    expect(openedEventId, 'event-accepted');
+    expect(find.text('event:event-accepted'), findsOneWidget);
   });
 
   testWidgets('user profile more button opens moderation actions', (
