@@ -456,6 +456,16 @@ Widget _wrap(
 }
 
 void main() {
+  test('edit startsAt parser keeps backend wall clock time', () {
+    final parsed = parseCreateMeetupEventStartsAtForTest(
+      '2026-05-12T15:23:00.000Z',
+    );
+
+    expect(parsed, isNotNull);
+    expect(parsed!.hour, 15);
+    expect(parsed.minute, 23);
+  });
+
   final descriptionField = find.byWidgetPredicate(
     (widget) => widget is TextField && widget.maxLines == 3,
     description: 'description text field',
@@ -646,14 +656,14 @@ void main() {
     expect(tester.testTextInput.isVisible, isTrue);
   });
 
-  testWidgets('create meetup screen shows meetup plus dating mode segment',
+  testWidgets('create meetup screen shows meetup dating and After Dark segment',
       (tester) async {
     await tester.pumpWidget(_wrap((_) {}));
     await tester.pumpAndSettle();
 
     expect(find.text('Обычная'), findsOneWidget);
     expect(find.text('Свидание'), findsOneWidget);
-    expect(find.text('After Dark'), findsNothing);
+    expect(find.text('After Dark'), findsOneWidget);
   });
 
   testWidgets('create meetup edit mode prefills event fields', (tester) async {

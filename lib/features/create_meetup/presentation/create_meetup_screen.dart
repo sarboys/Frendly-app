@@ -98,6 +98,27 @@ class CreateMeetupScreen extends ConsumerStatefulWidget {
   ConsumerState<CreateMeetupScreen> createState() => _CreateMeetupScreenState();
 }
 
+@visibleForTesting
+DateTime? parseCreateMeetupEventStartsAtForTest(String? value) {
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) {
+    return null;
+  }
+  return DateTime(
+    parsed.year,
+    parsed.month,
+    parsed.day,
+    parsed.hour,
+    parsed.minute,
+    parsed.second,
+    parsed.millisecond,
+    parsed.microsecond,
+  );
+}
+
 class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -231,10 +252,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
   }
 
   DateTime? _parseEventStartsAt(String? value) {
-    if (value == null || value.isEmpty) {
-      return null;
-    }
-    return DateTime.tryParse(value)?.toLocal();
+    return parseCreateMeetupEventStartsAtForTest(value);
   }
 
   double _parseDistanceKm(String value) {

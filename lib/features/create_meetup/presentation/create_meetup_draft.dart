@@ -1,4 +1,3 @@
-import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
@@ -241,21 +240,10 @@ Future<MeetupCoordinates?> _resolveCreateMeetupCoordinates(
   WidgetRef ref,
   CreateMeetupDraft draft,
 ) async {
-  final knownCoordinates = _createMeetupPublishCoordinates(
+  return _createMeetupPublishCoordinates(
     draft,
     ref.read(manualLocationProvider),
   );
-  if (knownCoordinates != null) {
-    return knownCoordinates;
-  }
-
-  try {
-    final position =
-        await ref.read(appLocationServiceProvider).getCurrentPosition();
-    return _validCoordinates(position?.latitude, position?.longitude);
-  } catch (_) {
-    return null;
-  }
 }
 
 MeetupCoordinates? _createMeetupPublishCoordinates(
