@@ -19,6 +19,8 @@ class DatingProfileData {
     required this.premium,
     required this.vibe,
     required this.area,
+    this.latitude,
+    this.longitude,
     required this.verified,
     required this.online,
     this.languages = const [],
@@ -41,6 +43,8 @@ class DatingProfileData {
   final bool premium;
   final String? vibe;
   final String? area;
+  final double? latitude;
+  final double? longitude;
   final bool verified;
   final bool online;
   final List<DatingLanguageData> languages;
@@ -80,6 +84,8 @@ class DatingProfileData {
       premium: (json['premium'] as bool?) ?? false,
       vibe: json['vibe'] as String?,
       area: json['area'] as String?,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
       verified: (json['verified'] as bool?) ?? false,
       online: (json['online'] as bool?) ?? false,
       languages: ((json['languages'] as List?) ?? const [])

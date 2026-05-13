@@ -10,9 +10,11 @@ import 'package:big_break_mobile/app/theme/app_radii.dart';
 import 'package:big_break_mobile/app/theme/app_shadows.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
 import 'package:big_break_mobile/features/tonight/presentation/v5_search_modal.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
+import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/widgets/bb_bottom_nav.dart';
@@ -60,6 +62,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   ym.Point? _searchPoint;
   ym.Point? _userPoint;
   String selected = '';
+  String selectedDatingUserId = '';
   String filter = 'all';
   bool _primingInitialLocation = false;
   bool _didPrimeInitialLocation = false;
@@ -110,6 +113,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   Widget build(BuildContext context) {
     final nearbyRadiusKm = ref.watch(nearbyEventsRadiusKmProvider);
     final mapEventsAsync = ref.watch(mapEventsProvider(_mapQuery));
+    final datingProfilesAsync = ref.watch(datingDiscoverProvider);
     final events = visibleMapEventsForRadar(
       eventsAsync: mapEventsAsync,
       previousEvents: _lastMapEvents,
@@ -117,12 +121,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     if (mapEventsAsync.hasValue) {
       _lastMapEvents = events;
     }
-    final filteredEvents = _filteredEvents(events, filter);
+    final datingProfiles = datingProfilesWithMapPoints(
+      datingProfilesAsync.valueOrNull ?? const <DatingProfileData>[],
+    );
+    final filteredEvents =
+        filter == 'dating' ? const <Event>[] : _filteredEvents(events, filter);
     final liveEvenings =
         (ref.watch(eveningSessionsProvider).valueOrNull ?? const [])
             .where((session) => session.phase == EveningSessionPhase.live)
             .take(4)
             .toList(growable: false);
+    final activeDatingProfile = filter == 'dating'
+        ? datingProfiles
+                .where((item) => item.userId == selectedDatingUserId)
+                .cast<DatingProfileData?>()
+                .firstOrNull ??
+            (datingProfiles.isNotEmpty ? datingProfiles.first : null)
+        : null;
     final activeEvent = filteredEvents
             .where((item) => item.id == selected)
             .cast<Event?>()
@@ -133,14 +148,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final mapObjects = _mapObjectCache.objectsFor(
       events: filteredEvents,
       selectedId: selectedId,
+      datingProfiles: filter == 'dating' ? datingProfiles : const [],
+      selectedDatingUserId: activeDatingProfile?.userId ?? selectedDatingUserId,
       liveEvenings: liveEvenings,
       userPoint: _userPoint,
       searchPoint: _searchPoint,
       onEventTap: _handleEventTap,
+      onDatingProfileTap: _handleDatingProfileTap,
       onSessionTap: _openEveningPreview,
     );
-    _syncPagerToSelected(filteredEvents, selectedId);
-    _scheduleViewportFit(filteredEvents);
+    if (filter == 'dating') {
+      _syncPagerToSelectedDatingProfile(
+        datingProfiles,
+        activeDatingProfile?.userId ?? selectedDatingUserId,
+      );
+      _scheduleDatingViewportFit(datingProfiles);
+    } else {
+      _syncPagerToSelected(filteredEvents, selectedId);
+      _scheduleViewportFit(filteredEvents);
+    }
     final topInset = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
@@ -174,12 +200,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             top: topInset + 12,
             child: _RadarTopControls(
               events: events,
+              datingProfileCount: datingProfiles.length,
               filter: filter,
               radiusKm: nearbyRadiusKm,
               onBack: _handleBack,
               onSelectFilter: (nextFilter) => _selectFilter(
                 nextFilter,
                 events,
+                datingProfiles,
               ),
               onRadiusChanged: (value) => unawaited(_changeNearbyRadius(value)),
             ),
@@ -207,7 +235,43 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ),
             ),
           ),
-          if (filteredEvents.isNotEmpty)
+          if (filter == 'dating' && datingProfiles.isNotEmpty)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 96,
+              child: _RadarDatingBottomSheet(
+                profiles: datingProfiles,
+                isExpanded: _isRadarListExpanded,
+                pageController: _eventPageController,
+                onPageChanged: (index) {
+                  final profileIndex = radarCarouselEventIndex(
+                    index,
+                    datingProfiles.length,
+                  );
+                  if (profileIndex < 0 ||
+                      profileIndex >= datingProfiles.length) {
+                    return;
+                  }
+                  _selectDatingProfile(
+                    datingProfiles[profileIndex],
+                    datingProfiles,
+                    animatePager: false,
+                    keepCurrentZoom: true,
+                  );
+                },
+                onExpandedChanged: (expanded) {
+                  setState(() {
+                    _isRadarListExpanded = expanded;
+                  });
+                },
+                onProfileTap: (profile) => context.pushRoute(
+                  AppRoute.userProfile,
+                  pathParameters: {'userId': profile.userId},
+                ),
+              ),
+            )
+          else if (filteredEvents.isNotEmpty)
             Positioned(
               left: 0,
               right: 0,
@@ -839,6 +903,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
+  void _handleDatingProfileTap(String userId) {
+    final profiles = datingProfilesWithMapPoints(
+      ref.read(datingDiscoverProvider).valueOrNull ??
+          const <DatingProfileData>[],
+    );
+    final profile = profiles.where((item) => item.userId == userId).firstOrNull;
+    if (profile == null) {
+      return;
+    }
+    _selectDatingProfile(
+      profile,
+      profiles,
+      animatePager: true,
+      keepCurrentZoom: false,
+    );
+  }
+
   void _selectEvent(
     Event event,
     List<Event> events, {
@@ -879,6 +960,47 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
+  void _selectDatingProfile(
+    DatingProfileData profile,
+    List<DatingProfileData> profiles, {
+    required bool animatePager,
+    required bool keepCurrentZoom,
+  }) {
+    setState(() {
+      selectedDatingUserId = profile.userId;
+    });
+
+    final point = _pointForDatingProfile(profile);
+    if (point != null) {
+      unawaited(
+        _moveToEventPoint(
+          point,
+          keepCurrentZoom: keepCurrentZoom,
+        ),
+      );
+    }
+
+    if (animatePager) {
+      final index =
+          profiles.indexWhere((item) => item.userId == profile.userId);
+      if (index >= 0 && _eventPageController.hasClients) {
+        final currentPage =
+            _eventPageController.page?.round() ?? _radarCarouselInitialPage;
+        unawaited(
+          _eventPageController.animateToPage(
+            nearestRadarCarouselPage(
+              currentPage,
+              targetIndex: index,
+              eventCount: profiles.length,
+            ),
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          ),
+        );
+      }
+    }
+  }
+
   void _syncPagerToSelected(List<Event> events, String selectedId) {
     if (selectedId.isEmpty) {
       return;
@@ -902,6 +1024,37 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           currentPage,
           targetIndex: index,
           eventCount: events.length,
+        ),
+      );
+    });
+  }
+
+  void _syncPagerToSelectedDatingProfile(
+    List<DatingProfileData> profiles,
+    String selectedUserId,
+  ) {
+    if (selectedUserId.isEmpty) {
+      return;
+    }
+    final index = profiles.indexWhere((item) => item.userId == selectedUserId);
+    if (index < 0) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_eventPageController.hasClients) {
+        return;
+      }
+      final currentPage =
+          _eventPageController.page?.round() ?? _radarCarouselInitialPage;
+      if (radarCarouselEventIndex(currentPage, profiles.length) == index) {
+        return;
+      }
+      _eventPageController.jumpToPage(
+        nearestRadarCarouselPage(
+          currentPage,
+          targetIndex: index,
+          eventCount: profiles.length,
         ),
       );
     });
@@ -936,7 +1089,113 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
-  void _selectFilter(String nextFilter, List<Event> events) {
+  void _scheduleDatingViewportFit(List<DatingProfileData> profiles) {
+    final fitKey = buildDatingProfilesViewportFitKey(profiles);
+    if (!shouldScheduleMapViewportFit(
+      supportsNativeMap: _supportsNativeMap,
+      hasMapController: _mapController != null,
+      hasInitialEvent: (widget.initialEventId ?? '').isNotEmpty,
+      autoFitPending: _autoFitPending,
+      fitKey: fitKey,
+      lastFitKey: _lastViewportFitKey,
+    )) {
+      return;
+    }
+    _autoFitPending = false;
+    _lastViewportFitKey = fitKey;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _mapController == null) {
+        return;
+      }
+      final fitGeneration = ++_viewportFitGeneration;
+      unawaited(
+        _fitViewportForPoints(
+          datingProfilePoints(profiles),
+          fitGeneration: fitGeneration,
+        ),
+      );
+    });
+  }
+
+  Future<void> _fitViewportForPoints(
+    List<ym.Point> points, {
+    bool animated = true,
+    required int fitGeneration,
+  }) async {
+    if (points.isEmpty) {
+      return;
+    }
+
+    final userPoint = await _resolveViewportUserPoint();
+    if (!mounted || fitGeneration != _viewportFitGeneration) {
+      return;
+    }
+
+    final bounds = buildMapViewportBounds(
+      userPoint: userPoint,
+      eventPoints: points,
+    );
+    if (bounds == null) {
+      return;
+    }
+    if (fitGeneration != _viewportFitGeneration) {
+      return;
+    }
+
+    await _moveToBounds(bounds, animated: animated);
+  }
+
+  void _selectFilter(
+    String nextFilter,
+    List<Event> events,
+    List<DatingProfileData> datingProfiles,
+  ) {
+    if (nextFilter == 'dating') {
+      setState(() {
+        filter = nextFilter;
+        if (datingProfiles.isNotEmpty &&
+            !datingProfiles
+                .any((item) => item.userId == selectedDatingUserId)) {
+          selectedDatingUserId = datingProfiles.first.userId;
+        }
+      });
+
+      if (datingProfiles.isNotEmpty) {
+        final activeProfile = datingProfiles
+                .where((item) => item.userId == selectedDatingUserId)
+                .cast<DatingProfileData?>()
+                .firstOrNull ??
+            datingProfiles.first;
+        final index = datingProfiles.indexWhere(
+          (item) => item.userId == activeProfile.userId,
+        );
+        if (index >= 0 && _eventPageController.hasClients) {
+          final currentPage =
+              _eventPageController.page?.round() ?? _radarCarouselInitialPage;
+          unawaited(
+            _eventPageController.animateToPage(
+              nearestRadarCarouselPage(
+                currentPage,
+                targetIndex: index,
+                eventCount: datingProfiles.length,
+              ),
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+            ),
+          );
+        }
+        final fitGeneration = ++_viewportFitGeneration;
+        unawaited(
+          _fitViewportForPoints(
+            datingProfilePoints(datingProfiles),
+            fitGeneration: fitGeneration,
+          ),
+        );
+      }
+      return;
+    }
+
     final filtered = _filteredEvents(events, nextFilter);
     setState(() {
       filter = nextFilter;
@@ -982,6 +1241,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   ym.Point? _pointForEvent(Event event) {
     return _pointForEventModel(event);
+  }
+
+  ym.Point? _pointForDatingProfile(DatingProfileData profile) {
+    return _pointForDatingProfileModel(profile);
   }
 
   List<Event> _filteredEvents(List<Event> events, String currentFilter) {
@@ -1174,6 +1437,7 @@ class _RadarUserPulse extends StatelessWidget {
 class _RadarTopControls extends StatelessWidget {
   const _RadarTopControls({
     required this.events,
+    required this.datingProfileCount,
     required this.filter,
     required this.radiusKm,
     required this.onBack,
@@ -1182,6 +1446,7 @@ class _RadarTopControls extends StatelessWidget {
   });
 
   final List<Event> events;
+  final int datingProfileCount;
   final String filter;
   final double radiusKm;
   final VoidCallback onBack;
@@ -1190,7 +1455,10 @@ class _RadarTopControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final categoryCounts = buildRadarCategoryCounts(events);
+    final categoryCounts = buildRadarCategoryCounts(
+      events,
+      datingProfileCount: datingProfileCount,
+    );
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440),
@@ -1449,15 +1717,22 @@ const _radarFilters = [
 ];
 
 @visibleForTesting
-Map<String, int> buildRadarCategoryCounts(List<Event> events) {
+Map<String, int> buildRadarCategoryCounts(
+  List<Event> events, {
+  int datingProfileCount = 0,
+}) {
   final counts = <String, int>{
     for (final filter in _radarFilters) filter.key: 0,
   };
-  counts['all'] = events.length;
+  counts['all'] = events.length + datingProfileCount;
   for (final event in events) {
     final category = radarCategoryForEvent(event);
+    if (category == 'dating') {
+      continue;
+    }
     counts[category] = (counts[category] ?? 0) + 1;
   }
+  counts['dating'] = datingProfileCount;
   return counts;
 }
 
@@ -1708,6 +1983,22 @@ String buildMapViewportFitKey(List<Event> events, String filter) {
 }
 
 @visibleForTesting
+String buildDatingProfilesViewportFitKey(List<DatingProfileData> profiles) {
+  final parts = profiles
+      .where((profile) => profile.latitude != null && profile.longitude != null)
+      .map(
+        (profile) =>
+            '${profile.userId}:${profile.latitude!.toStringAsFixed(5)},${profile.longitude!.toStringAsFixed(5)}',
+      )
+      .toList(growable: false);
+  if (parts.isEmpty) {
+    return '';
+  }
+
+  return 'dating|${parts.join('|')}';
+}
+
+@visibleForTesting
 class MapObjectCache {
   String _key = '';
   List<ym.MapObject> _objects = const [];
@@ -1715,15 +2006,20 @@ class MapObjectCache {
   List<ym.MapObject> objectsFor({
     required List<Event> events,
     required String selectedId,
+    List<DatingProfileData> datingProfiles = const [],
+    String selectedDatingUserId = '',
     required List<EveningSessionSummary> liveEvenings,
     required ym.Point? userPoint,
     required ym.Point? searchPoint,
     required void Function(String eventId) onEventTap,
+    void Function(String userId)? onDatingProfileTap,
     required void Function(String sessionId) onSessionTap,
   }) {
     final nextKey = buildMapObjectsCacheKey(
       events: events,
       selectedId: selectedId,
+      datingProfiles: datingProfiles,
+      selectedDatingUserId: selectedDatingUserId,
       liveEvenings: liveEvenings,
       userPoint: userPoint,
       searchPoint: searchPoint,
@@ -1737,6 +2033,11 @@ class MapObjectCache {
         events: events,
         selectedId: selectedId,
         onEventTap: onEventTap,
+      ),
+      ...buildDatingProfilePlacemarks(
+        profiles: datingProfiles,
+        selectedUserId: selectedDatingUserId,
+        onProfileTap: onDatingProfileTap ?? (_) {},
       ),
       ...buildLiveEveningPlacemarks(
         sessions: liveEvenings,
@@ -1756,12 +2057,15 @@ class MapObjectCache {
 String buildMapObjectsCacheKey({
   required List<Event> events,
   required String selectedId,
+  List<DatingProfileData> datingProfiles = const [],
+  String selectedDatingUserId = '',
   required List<EveningSessionSummary> liveEvenings,
   required ym.Point? userPoint,
   required ym.Point? searchPoint,
 }) {
   final parts = <String>[
     'selected:$selectedId',
+    'selectedDating:$selectedDatingUserId',
     'user:${_pointCacheKey(userPoint)}',
     'search:${_pointCacheKey(searchPoint)}',
     for (final event in events)
@@ -1772,6 +2076,15 @@ String buildMapObjectsCacheKey({
           _roundGeo(event.latitude!).toStringAsFixed(5),
           _roundGeo(event.longitude!).toStringAsFixed(5),
           event.emoji,
+        ].join(':'),
+    for (final profile in datingProfiles)
+      if (profile.latitude != null && profile.longitude != null)
+        [
+          'dating',
+          profile.userId,
+          _roundGeo(profile.latitude!).toStringAsFixed(5),
+          _roundGeo(profile.longitude!).toStringAsFixed(5),
+          profile.photoEmoji,
         ].join(':'),
     for (final session in liveEvenings)
       if (session.lat != null && session.lng != null)
@@ -1819,6 +2132,65 @@ List<ym.PlacemarkMapObject> buildEventPlacemarks({
             text: event.emoji,
             style: ym.PlacemarkTextStyle(
               size: event.id == selectedId ? 15 : 13,
+              color: const Color(0xFF2A2A2A),
+              outlineColor: Colors.white,
+              placement: ym.TextStylePlacement.center,
+              offsetFromIcon: false,
+            ),
+          ),
+        ),
+  ];
+}
+
+@visibleForTesting
+List<DatingProfileData> datingProfilesWithMapPoints(
+  List<DatingProfileData> profiles,
+) {
+  return profiles
+      .where((profile) => _pointForDatingProfileModel(profile) != null)
+      .toList(growable: false);
+}
+
+@visibleForTesting
+List<ym.Point> datingProfilePoints(List<DatingProfileData> profiles) {
+  return profiles
+      .map(_pointForDatingProfileModel)
+      .whereType<ym.Point>()
+      .toList(growable: false);
+}
+
+@visibleForTesting
+List<ym.PlacemarkMapObject> buildDatingProfilePlacemarks({
+  required List<DatingProfileData> profiles,
+  required String selectedUserId,
+  required void Function(String userId) onProfileTap,
+}) {
+  return [
+    for (final profile in profiles)
+      if (profile.latitude != null && profile.longitude != null)
+        ym.PlacemarkMapObject(
+          mapId: ym.MapObjectId('dating_${profile.userId}'),
+          point: ym.Point(
+            latitude: profile.latitude!,
+            longitude: profile.longitude!,
+          ),
+          zIndex: profile.userId == selectedUserId ? 6 : 5,
+          consumeTapEvents: true,
+          opacity: 1,
+          icon: ym.PlacemarkIcon.single(
+            ym.PlacemarkIconStyle(
+              image: ym.BitmapDescriptor.fromBytes(
+                _eventPinBytes(),
+              ),
+              scale: profile.userId == selectedUserId ? 0.72 : 0.62,
+              anchor: const Offset(0.5, 0.5),
+            ),
+          ),
+          onTap: (_, __) => onProfileTap(profile.userId),
+          text: ym.PlacemarkText(
+            text: profile.photoEmoji,
+            style: ym.PlacemarkTextStyle(
+              size: profile.userId == selectedUserId ? 15 : 13,
               color: const Color(0xFF2A2A2A),
               outlineColor: Colors.white,
               placement: ym.TextStylePlacement.center,
@@ -1921,6 +2293,28 @@ ym.Point? _pointForEventModel(Event event) {
   final latitude = event.latitude;
   final longitude = event.longitude;
   if (latitude == null || longitude == null) {
+    return null;
+  }
+
+  return ym.Point(
+    latitude: latitude,
+    longitude: longitude,
+  );
+}
+
+ym.Point? _pointForDatingProfileModel(DatingProfileData profile) {
+  final latitude = profile.latitude;
+  final longitude = profile.longitude;
+  if (latitude == null || longitude == null) {
+    return null;
+  }
+  if (!latitude.isFinite ||
+      !longitude.isFinite ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180 ||
+      (latitude == 0 && longitude == 0)) {
     return null;
   }
 
@@ -2160,6 +2554,217 @@ class _RadarBottomSheet extends StatelessWidget {
                 ],
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RadarDatingBottomSheet extends StatelessWidget {
+  const _RadarDatingBottomSheet({
+    required this.profiles,
+    required this.isExpanded,
+    required this.pageController,
+    required this.onPageChanged,
+    required this.onExpandedChanged,
+    required this.onProfileTap,
+  });
+
+  final List<DatingProfileData> profiles;
+  final bool isExpanded;
+  final PageController pageController;
+  final ValueChanged<int> onPageChanged;
+  final ValueChanged<bool> onExpandedChanged;
+  final ValueChanged<DatingProfileData> onProfileTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      key: const Key('radar-dating-bottom-sheet-drag-area'),
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity > 20) {
+          onExpandedChanged(false);
+        } else if (velocity < -20) {
+          onExpandedChanged(true);
+        }
+      },
+      child: Container(
+        padding: EdgeInsets.fromLTRB(20, 10, 20, isExpanded ? 16 : 10),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [BbV5Colors.paperHi, BbV5Colors.paper],
+          ),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(color: BbV5Colors.hair),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x2E1F241D),
+              blurRadius: 40,
+              spreadRadius: -12,
+              offset: Offset(0, -16),
+            ),
+          ],
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: 34,
+                  child: Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: BbV5Colors.hair,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                ),
+                if (isExpanded) ...[
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 136,
+                    child: PageView.builder(
+                      controller: pageController,
+                      padEnds: true,
+                      onPageChanged: onPageChanged,
+                      itemCount: profiles.length <= 2 ? profiles.length : null,
+                      itemBuilder: (context, index) {
+                        final profile = profiles[radarCarouselEventIndex(
+                          index,
+                          profiles.length,
+                        )];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 5),
+                          child: _RadarDatingProfileCard(
+                            profile: profile,
+                            onTap: () => onProfileTap(profile),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RadarDatingProfileCard extends StatelessWidget {
+  const _RadarDatingProfileCard({
+    required this.profile,
+    required this.onTap,
+  });
+
+  final DatingProfileData profile;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final title =
+        profile.age == null ? profile.name : '${profile.name}, ${profile.age}';
+    final area = (profile.area?.trim().isNotEmpty ?? false)
+        ? profile.area!.trim()
+        : (profile.city?.trim().isNotEmpty ?? false)
+            ? profile.city!.trim()
+            : 'Рядом';
+    final distance = profile.distance.trim();
+    final details = distance.isEmpty ? area : '$area · $distance';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: BbV5Colors.paperHi,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: BbV5Colors.hair),
+            boxShadow: BbV5Shadows.pill,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: BbV5Colors.paper,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: BbV5Colors.hair),
+                ),
+                child: Text(
+                  profile.photoEmoji,
+                  style: const TextStyle(fontSize: 17),
+                ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.itemTitle.copyWith(
+                  fontFamily: 'Sora',
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: BbV5Colors.ink,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                details,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(
+                  fontSize: 10,
+                  color: BbV5Colors.inkMute,
+                ),
+              ),
+              const Spacer(),
+              Row(
+                children: [
+                  Icon(
+                    profile.online ? LucideIcons.radio : LucideIcons.heart,
+                    size: 10,
+                    color: BbV5Colors.inkSoft,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      profile.online ? 'сейчас рядом' : 'профиль дейтинга',
+                      style: AppTextStyles.caption.copyWith(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: BbV5Colors.inkSoft,
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    LucideIcons.arrow_up_right,
+                    size: 12,
+                    color: BbV5Colors.inkMute,
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),

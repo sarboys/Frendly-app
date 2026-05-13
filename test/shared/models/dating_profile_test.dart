@@ -67,11 +67,15 @@ void main() {
       'premium': true,
       'vibe': 'Спокойно',
       'area': 'Патрики',
+      'latitude': 55.764,
+      'longitude': 37.592,
       'verified': true,
       'online': true,
     });
 
     expect(profile.city, 'Москва');
+    expect(profile.latitude, 55.764);
+    expect(profile.longitude, 37.592);
     expect(profile.languages, hasLength(2));
     expect(profile.languages.first.label, 'Русский');
     expect(profile.nationality?.label, 'Россия');

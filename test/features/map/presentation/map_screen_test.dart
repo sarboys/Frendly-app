@@ -4,6 +4,7 @@ import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
 import 'package:big_break_mobile/features/map/presentation/map_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
+import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
@@ -392,13 +393,69 @@ void main() {
       ),
     ];
 
-    final counts = buildRadarCategoryCounts(events);
+    final counts = buildRadarCategoryCounts(events, datingProfileCount: 2);
 
-    expect(counts['all'], 4);
+    expect(counts['all'], 6);
     expect(counts['bars'], 1);
     expect(counts['routes'], 1);
-    expect(counts['dating'], 1);
+    expect(counts['dating'], 2);
     expect(counts['affiche'], 1);
+  });
+
+  test('radar dating category uses profile coordinates for map pins', () {
+    const profiles = [
+      DatingProfileData(
+        userId: 'user-anya',
+        name: 'Аня',
+        age: 27,
+        city: 'Москва',
+        distance: '1.2 км',
+        about: '',
+        tags: ['вино'],
+        prompt: '',
+        photoEmoji: '🍷',
+        avatarUrl: null,
+        likedYou: false,
+        premium: true,
+        vibe: 'Спокойно',
+        area: 'Патрики',
+        latitude: 55.764,
+        longitude: 37.592,
+        verified: true,
+        online: true,
+      ),
+      DatingProfileData(
+        userId: 'user-no-point',
+        name: 'Без точки',
+        age: 25,
+        distance: 'Рядом',
+        about: '',
+        tags: [],
+        prompt: '',
+        photoEmoji: '✨',
+        avatarUrl: null,
+        likedYou: false,
+        premium: true,
+        vibe: null,
+        area: null,
+        verified: false,
+        online: false,
+      ),
+    ];
+
+    final points = datingProfilesWithMapPoints(profiles);
+    final placemarks = buildDatingProfilePlacemarks(
+      profiles: points,
+      selectedUserId: 'user-anya',
+      onProfileTap: (_) {},
+    );
+
+    expect(points, hasLength(1));
+    expect(placemarks, hasLength(1));
+    expect(placemarks.single.mapId.value, 'dating_user-anya');
+    expect(placemarks.single.point.latitude, 55.764);
+    expect(placemarks.single.point.longitude, 37.592);
+    expect(placemarks.single.text?.text, '🍷');
   });
 
   test('map prefers manual location over device GPS', () {
