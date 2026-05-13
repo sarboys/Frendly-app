@@ -39,11 +39,14 @@ class YandexMapService {
   YandexMapService({
     required MapkitBootstrap bootstrap,
     YandexGeosearchCache? cache,
+    Duration searchTimeout = const Duration(seconds: 8),
   })  : _bootstrap = bootstrap,
-        _cache = cache ?? YandexGeosearchCache();
+        _cache = cache ?? YandexGeosearchCache(),
+        _searchTimeout = searchTimeout;
 
   final MapkitBootstrap _bootstrap;
   final YandexGeosearchCache _cache;
+  final Duration _searchTimeout;
 
   Future<ResolvedAddress?> searchAddress(
     String query, {
@@ -152,6 +155,24 @@ class YandexMapService {
     required SearchType searchType,
     required int resultPageSize,
   }) async {
+    try {
+      return await _runSearchByText(
+        query,
+        near: near,
+        searchType: searchType,
+        resultPageSize: resultPageSize,
+      ).timeout(_searchTimeout);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<ResolvedAddress>> _runSearchByText(
+    String query, {
+    Point? near,
+    required SearchType searchType,
+    required int resultPageSize,
+  }) async {
     await _bootstrap.ensureInitialized();
 
     final (session, resultFuture) = await YandexSearch.searchByText(
@@ -168,9 +189,7 @@ class YandexMapService {
     );
 
     try {
-      final response = await resultFuture.timeout(
-        const Duration(seconds: 8),
-      );
+      final response = await resultFuture.timeout(_searchTimeout);
       return _extractResolvedAddresses(response);
     } catch (_) {
       return const [];

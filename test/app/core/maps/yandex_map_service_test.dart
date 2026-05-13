@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
 import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart';
@@ -76,4 +79,23 @@ void main() {
 
     expect(cache.get(lookupKey)!.single.name, 'Кофемания');
   });
+
+  test('yandex text search returns empty when mapkit bootstrap hangs', () async {
+    final service = YandexMapService(
+      bootstrap: _HangingMapkitBootstrap(),
+      searchTimeout: const Duration(milliseconds: 10),
+    );
+
+    final results = await service.searchPlaces(
+      'Москва, Кетчерская улица',
+      geocodeFirst: true,
+    );
+
+    expect(results, isEmpty);
+  });
+}
+
+class _HangingMapkitBootstrap implements MapkitBootstrap {
+  @override
+  Future<void> ensureInitialized() => Completer<void>().future;
 }
