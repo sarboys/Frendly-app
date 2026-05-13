@@ -1,12 +1,15 @@
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/payments/application/payment_return_controller.dart';
 import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
+import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/widgets/bb_bottom_nav.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const _tokenBalance = 1240;
 
@@ -19,11 +22,31 @@ class WalletScreen extends ConsumerStatefulWidget {
 
 class _WalletScreenState extends ConsumerState<WalletScreen> {
   var _pickedPackId = 'p2';
+  String? _lastOrderId;
+  bool _busy = false;
 
   @override
   Widget build(BuildContext context) {
     final wallet = ref.watch(tokenWalletProvider);
-    final picked = tokenPacks.firstWhere((pack) => pack.id == _pickedPackId);
+    final packs = ref.watch(tokenPacksProvider);
+    ref.listen<PaymentReturnState?>(paymentReturnStateProvider,
+        (previous, next) {
+      if (next == null || previous == next || !context.mounted) {
+        return;
+      }
+      final message = next.confirmed
+          ? 'Токены начислены'
+          : next.failed
+              ? 'Оплата не прошла'
+              : 'Платеж еще обрабатывается';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    });
+    final picked = packs.firstWhere(
+      (pack) => pack.id == _pickedPackId,
+      orElse: () => packs.first,
+    );
 
     return _TokensPageScaffold(
       bottomNavLocation: AppRoute.wallet.path,
@@ -47,7 +70,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
               ),
               const SizedBox(height: 12),
               GridView.builder(
-                itemCount: tokenPacks.length,
+                itemCount: packs.length,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -57,7 +80,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                   childAspectRatio: 1.08,
                 ),
                 itemBuilder: (context, index) {
-                  final pack = tokenPacks[index];
+                  final pack = packs[index];
                   return _WalletPackCard(
                     pack: pack,
                     active: pack.id == _pickedPackId,
@@ -69,32 +92,26 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
               ),
               const SizedBox(height: 16),
               BbV5PillButton(
-                label: 'Купить пакет',
+                label: _busy ? 'Открываем оплату...' : 'Купить пакет',
                 icon: LucideIcons.sparkles,
                 dark: true,
                 height: 52,
                 expanded: true,
-                onPressed: () async {
-                  await ref.read(tokenWalletProvider.notifier).topUp(picked);
-                  if (!context.mounted) {
-                    return;
-                  }
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('+${picked.total} токенов на счёте'),
+                onPressed: _busy ? null : () => _buyPack(picked),
+              ),
+              if (_lastOrderId != null) ...[
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _busy ? null : _checkPayment,
+                  child: Text(
+                    'Проверить оплату',
+                    style: AppTextStyles.button.copyWith(
+                      fontSize: 12,
+                      color: BbV5Colors.inkSoft,
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Демо · оплата не списывается',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.caption.copyWith(
-                  fontSize: 10.5,
-                  color: BbV5Colors.inkMute,
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 24),
               const _WalletSpendCard(),
               if (wallet.history.isNotEmpty) ...[
@@ -111,6 +128,87 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _buyPack(TokenPack pack) async {
+    setState(() => _busy = true);
+    try {
+      final order =
+          await ref.read(tokenWalletProvider.notifier).createTopUpPayment(pack);
+      final paymentUrl = order.paymentUrl;
+      if (paymentUrl == null || paymentUrl.isEmpty) {
+        throw StateError('Payment URL is empty');
+      }
+      if (!mounted || !context.mounted) {
+        return;
+      }
+      setState(() => _lastOrderId = order.orderId);
+      final opened = await launchUrl(
+        Uri.parse(paymentUrl),
+        mode: LaunchMode.inAppBrowserView,
+      );
+      if (!opened) {
+        throw StateError('Payment URL was not opened');
+      }
+      if (!mounted || !context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Вернись сюда после оплаты')),
+      );
+    } catch (_) {
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не получилось открыть оплату')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _checkPayment() async {
+    final orderId = _lastOrderId;
+    if (orderId == null) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final order =
+          await ref.read(backendRepositoryProvider).checkPayment(orderId);
+      if (!mounted || !context.mounted) {
+        return;
+      }
+      if (order.isConfirmed) {
+        await ref.read(tokenWalletProvider.notifier).refresh();
+        if (!mounted || !context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Токены начислены')),
+        );
+      } else if (order.isFailed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Оплата не прошла')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Платеж еще обрабатывается')),
+        );
+      }
+    } catch (_) {
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Платеж еще обрабатывается')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
   }
 }
 
@@ -613,37 +711,35 @@ class _TokensFocusScreenState extends State<TokensFocusScreen> {
   }
 }
 
-class TokensTopUpScreen extends StatefulWidget {
+class TokensTopUpScreen extends ConsumerStatefulWidget {
   const TokensTopUpScreen({super.key});
 
   @override
-  State<TokensTopUpScreen> createState() => _TokensTopUpScreenState();
+  ConsumerState<TokensTopUpScreen> createState() => _TokensTopUpScreenState();
 }
 
-class _TokensTopUpScreenState extends State<TokensTopUpScreen> {
+class _TokensTopUpScreenState extends ConsumerState<TokensTopUpScreen> {
   int _selectedPlan = 2;
-  int _payment = 0;
-
-  static const _plans = [
-    _TokenPlan(tokens: 300, price: '299 ₽', bonus: null, badge: null),
-    _TokenPlan(tokens: 700, price: '649 ₽', bonus: '+50 бонусом', badge: null),
-    _TokenPlan(
-      tokens: 1500,
-      price: '1 390 ₽',
-      bonus: '+150 бонусом',
-      badge: 'выгодно',
-    ),
-    _TokenPlan(
-      tokens: 3000,
-      price: '2 690 ₽',
-      bonus: '+250 бонусом',
-      badge: 'лучший выбор',
-    ),
-  ];
+  bool _busy = false;
+  String? _lastOrderId;
 
   @override
   Widget build(BuildContext context) {
-    final selected = _plans[_selectedPlan];
+    final packs = ref.watch(tokenPacksProvider);
+    if (_selectedPlan >= packs.length) {
+      _selectedPlan = 0;
+    }
+    final selected = packs[_selectedPlan];
+    final plans = packs
+        .map(
+          (pack) => _TokenPlan(
+            tokens: pack.total,
+            price: '${pack.price} ₽',
+            bonus: pack.bonus > 0 ? '+${pack.bonus} бонус' : null,
+            badge: pack.best ? 'выгодно' : null,
+          ),
+        )
+        .toList(growable: false);
 
     return _TokensPageScaffold(
       child: Stack(
@@ -667,11 +763,11 @@ class _TokensTopUpScreenState extends State<TokensTopUpScreen> {
                       const SizedBox(height: 24),
                       const _TokenIntroCard(),
                       const SizedBox(height: AppSpacing.lg),
-                      ...List.generate(_plans.length, (index) {
-                        final plan = _plans[index];
+                      ...List.generate(plans.length, (index) {
+                        final plan = plans[index];
                         return Padding(
                           padding: EdgeInsets.only(
-                            bottom: index == _plans.length - 1 ? 0 : 8,
+                            bottom: index == plans.length - 1 ? 0 : 8,
                           ),
                           child: _TokenPlanCard(
                             plan: plan,
@@ -685,14 +781,22 @@ class _TokensTopUpScreenState extends State<TokensTopUpScreen> {
                         );
                       }),
                       const SizedBox(height: AppSpacing.lg),
-                      _PaymentCard(
-                        selected: _payment,
-                        onChanged: (value) {
-                          setState(() {
-                            _payment = value;
-                          });
-                        },
-                      ),
+                      const _PaymentCard(),
+                      if (_lastOrderId != null) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Center(
+                          child: TextButton(
+                            onPressed: _busy ? null : _checkPayment,
+                            child: Text(
+                              'Проверить оплату',
+                              style: AppTextStyles.button.copyWith(
+                                fontSize: 12,
+                                color: BbV5Colors.inkSoft,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: AppSpacing.lg),
                       const _PaymentHint(),
                     ],
@@ -706,13 +810,96 @@ class _TokensTopUpScreenState extends State<TokensTopUpScreen> {
             right: 20,
             bottom: 20,
             child: _FixedPrimaryButton(
-              label: 'Оплатить ${selected.price}',
-              onTap: () {},
+              label: _busy
+                  ? 'Открываем оплату...'
+                  : 'Оплатить ${selected.price} ₽',
+              onTap: _busy ? () {} : () => _buyPack(selected),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _buyPack(TokenPack pack) async {
+    setState(() => _busy = true);
+    try {
+      final order =
+          await ref.read(tokenWalletProvider.notifier).createTopUpPayment(pack);
+      final paymentUrl = order.paymentUrl;
+      if (paymentUrl == null || paymentUrl.isEmpty) {
+        throw StateError('Payment URL is empty');
+      }
+      if (!mounted || !context.mounted) {
+        return;
+      }
+      setState(() => _lastOrderId = order.orderId);
+      final opened = await launchUrl(
+        Uri.parse(paymentUrl),
+        mode: LaunchMode.inAppBrowserView,
+      );
+      if (!opened) {
+        throw StateError('Payment URL was not opened');
+      }
+      if (!mounted || !context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Вернись сюда после оплаты')),
+      );
+    } catch (_) {
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не получилось открыть оплату')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _checkPayment() async {
+    final orderId = _lastOrderId;
+    if (orderId == null) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final order =
+          await ref.read(backendRepositoryProvider).checkPayment(orderId);
+      if (!mounted || !context.mounted) {
+        return;
+      }
+      if (order.isConfirmed) {
+        await ref.read(tokenWalletProvider.notifier).refresh();
+        if (!mounted || !context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Токены начислены')),
+        );
+      } else if (order.isFailed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Оплата не прошла')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Платеж еще обрабатывается')),
+        );
+      }
+    } catch (_) {
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Платеж еще обрабатывается')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
   }
 }
 
@@ -1440,13 +1627,7 @@ class _TokenPlanCard extends StatelessWidget {
 }
 
 class _PaymentCard extends StatelessWidget {
-  const _PaymentCard({
-    required this.selected,
-    required this.onChanged,
-  });
-
-  final int selected;
-  final ValueChanged<int> onChanged;
+  const _PaymentCard();
 
   @override
   Widget build(BuildContext context) {
@@ -1461,26 +1642,10 @@ class _PaymentCard extends StatelessWidget {
             style: AppTextStyles.itemTitle.copyWith(fontSize: 14.5),
           ),
           const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: _PaymentMethodPill(
-                  active: selected == 0,
-                  label: 'Apple Pay',
-                  icon: LucideIcons.apple,
-                  onTap: () => onChanged(0),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: _PaymentMethodPill(
-                  active: selected == 1,
-                  label: 'Банковская карта',
-                  icon: LucideIcons.credit_card,
-                  onTap: () => onChanged(1),
-                ),
-              ),
-            ],
+          const _PaymentMethodPill(
+            active: true,
+            label: 'T-Bank Checkout',
+            icon: LucideIcons.credit_card,
           ),
         ],
       ),
@@ -2712,52 +2877,46 @@ class _PaymentMethodPill extends StatelessWidget {
     required this.active,
     required this.label,
     required this.icon,
-    required this.onTap,
   });
 
   final bool active;
   final String label;
   final IconData icon;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        height: 44,
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: active ? BbV5Colors.ink : BbV5Colors.paperHi,
-          borderRadius: BorderRadius.circular(BbV5Radii.pill),
-          border: Border.all(color: active ? BbV5Colors.ink : BbV5Colors.hair),
-          boxShadow: active ? BbV5Shadows.ink : BbV5Shadows.pill,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: active ? BbV5Colors.paperHi : BbV5Colors.ink,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.meta.copyWith(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  color: active ? BbV5Colors.paperHi : BbV5Colors.ink,
-                ),
+    return Container(
+      height: 44,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: active ? BbV5Colors.ink : BbV5Colors.paperHi,
+        borderRadius: BorderRadius.circular(BbV5Radii.pill),
+        border: Border.all(color: active ? BbV5Colors.ink : BbV5Colors.hair),
+        boxShadow: active ? BbV5Shadows.ink : BbV5Shadows.pill,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 18,
+            color: active ? BbV5Colors.paperHi : BbV5Colors.ink,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.meta.copyWith(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: active ? BbV5Colors.paperHi : BbV5Colors.ink,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

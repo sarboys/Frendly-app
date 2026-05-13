@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:big_break_mobile/app/core/device/payment_link_service.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_router.dart';
 import 'package:big_break_mobile/app/session/app_session_controller.dart';
@@ -7,6 +10,7 @@ import 'package:big_break_mobile/app/theme/app_theme.dart';
 import 'package:big_break_mobile/app/theme/app_theme_mode.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/features/payments/application/payment_return_controller.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
 import 'package:big_break_mobile/shared/widgets/bb_system_overlays.dart';
 import 'package:flutter/foundation.dart';
@@ -61,6 +65,11 @@ class _RootAppViewState extends ConsumerState<_RootAppView> {
       isAuthenticated: () => _authenticatedNotifier.value,
       pendingSetupPath: () => _pendingSetupNotifier.value,
     );
+    Future<void>.microtask(() {
+      final service = ref.read(paymentLinkServiceProvider);
+      final controller = ref.read(paymentReturnControllerProvider);
+      unawaited(service.start(controller.handleUri));
+    });
   }
 
   @override

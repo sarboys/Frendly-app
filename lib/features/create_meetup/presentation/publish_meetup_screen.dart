@@ -181,6 +181,7 @@ class _PublishMeetupScreenState extends ConsumerState<PublishMeetupScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Недостаточно токенов')),
       );
+      context.pushRoute(AppRoute.wallet);
       return;
     }
 
@@ -198,13 +199,22 @@ class _PublishMeetupScreenState extends ConsumerState<PublishMeetupScreen> {
       final event = await submitCreateMeetupDraft(ref, publishDraft);
       if (_promo > 0) {
         final option = PromoOption(
-          id: _promo == 50 ? 'publish-top-4' : 'publish-top-24',
-          title: _promo == 50 ? 'ТОП 4ч' : 'ТОП 24ч',
+          id: _promo == 80 ? 'boost-24' : 'boost-72',
+          title: _promo == 80 ? 'Буст · 24 часа' : 'Буст · 3 дня',
           subtitle: 'Промо встречи',
           cost: _promo,
-          durationHours: _promo == 50 ? 4 : 24,
+          durationHours: _promo == 80 ? 24 : 72,
         );
-        await ref.read(tokenWalletProvider.notifier).promote(event.id, option);
+        final promoted = await ref
+            .read(tokenWalletProvider.notifier)
+            .promote(event.id, option);
+        if (!promoted && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Недостаточно токенов')),
+          );
+          context.pushRoute(AppRoute.wallet);
+          return;
+        }
       }
       if (!mounted) {
         return;
@@ -214,7 +224,7 @@ class _PublishMeetupScreenState extends ConsumerState<PublishMeetupScreen> {
         SnackBar(
           content: Text(
             _promo > 0
-                ? 'Встреча опубликована. + ТОП ${_promo == 50 ? '4ч' : '24ч'}'
+                ? 'Встреча опубликована. + ТОП ${_promo == 80 ? '24ч' : '3 дня'}'
                 : 'Встреча опубликована',
           ),
         ),
@@ -483,8 +493,8 @@ class _PromoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const options = [
       (0, 'Без промо', 'обычно'),
-      (50, 'ТОП 4ч', '50 токенов'),
-      (150, 'ТОП 24ч', '150 токенов'),
+      (80, 'ТОП 24ч', '80 токенов'),
+      (200, 'ТОП 3 дня', '200 токенов'),
     ];
 
     return BbV5Card(

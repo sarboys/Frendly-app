@@ -23,12 +23,14 @@ import 'package:big_break_mobile/shared/models/paginated_response.dart';
 import 'package:big_break_mobile/shared/models/partner_offer_code.dart';
 import 'package:big_break_mobile/shared/models/person_summary.dart';
 import 'package:big_break_mobile/shared/models/personal_chat.dart';
+import 'package:big_break_mobile/shared/models/payments.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/models/public_share.dart';
 import 'package:big_break_mobile/shared/models/safety_hub.dart';
 import 'package:big_break_mobile/shared/models/search_results.dart';
 import 'package:big_break_mobile/shared/models/story.dart';
 import 'package:big_break_mobile/shared/models/subscription.dart';
+import 'package:big_break_mobile/shared/models/token_wallet.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
 import 'package:big_break_mobile/shared/models/user_settings.dart';
 import 'package:big_break_mobile/shared/models/verification_state.dart';
@@ -1748,12 +1750,59 @@ class BackendRepository {
     return SubscriptionStateData.fromJson(response.data!);
   }
 
-  Future<SubscriptionStateData> subscribe(String plan) async {
+  Future<PaymentOrderData> subscribe(String plan) async {
     final response = await dio.post<Map<String, dynamic>>(
       '/subscription/subscribe',
       data: {'plan': plan},
     );
-    return SubscriptionStateData.fromJson(response.data!);
+    return PaymentOrderData.fromJson(response.data!);
+  }
+
+  Future<PaymentCatalog> fetchPaymentCatalog() async {
+    final response = await dio.get<Map<String, dynamic>>('/payments/catalog');
+    return PaymentCatalog.fromJson(response.data!);
+  }
+
+  Future<PaymentOrderData> initPayment({
+    required String productKind,
+    required String productId,
+  }) async {
+    final response = await dio.post<Map<String, dynamic>>(
+      '/payments/init',
+      data: {
+        'productKind': productKind,
+        'productId': productId,
+      },
+    );
+    return PaymentOrderData.fromJson(response.data!);
+  }
+
+  Future<PaymentOrderData> checkPayment(String orderId) async {
+    final response = await dio.post<Map<String, dynamic>>(
+      '/payments/$orderId/check',
+    );
+    return PaymentOrderData.fromJson(response.data!);
+  }
+
+  Future<TokenWalletData> fetchTokenWallet() async {
+    final response = await dio.get<Map<String, dynamic>>('/tokens/wallet');
+    return TokenWalletData.fromJson(response.data!);
+  }
+
+  Future<TokenWalletData> promoteWithTokens({
+    required String targetKind,
+    required String targetId,
+    required String optionId,
+  }) async {
+    final response = await dio.post<Map<String, dynamic>>(
+      '/tokens/promotions',
+      data: {
+        'targetKind': targetKind,
+        'targetId': targetId,
+        'optionId': optionId,
+      },
+    );
+    return TokenWalletData.fromJson(response.data!);
   }
 
   Future<Map<String, dynamic>> restoreSubscription() async {

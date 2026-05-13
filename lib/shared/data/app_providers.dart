@@ -25,6 +25,7 @@ import 'package:big_break_mobile/shared/models/onboarding_data.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
 import 'package:big_break_mobile/shared/models/person_summary.dart';
 import 'package:big_break_mobile/shared/models/personal_chat.dart';
+import 'package:big_break_mobile/shared/models/payments.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/models/safety_hub.dart';
 import 'package:big_break_mobile/shared/models/subscription.dart';
@@ -561,12 +562,23 @@ final matchesProvider =
   return repository.fetchMatches(cancelToken: cancelToken);
 });
 
+final paymentCatalogProvider = FutureProvider<PaymentCatalog>((ref) async {
+  final authBootstrap = ref.watch(authBootstrapProvider.future);
+  final repository = ref.read(backendRepositoryProvider);
+  await authBootstrap;
+  return repository.fetchPaymentCatalog();
+});
+
 final subscriptionPlansProvider =
     FutureProvider<List<SubscriptionPlanData>>((ref) async {
   final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
   await authBootstrap;
-  return repository.fetchSubscriptionPlans();
+  try {
+    return (await repository.fetchPaymentCatalog()).subscriptions;
+  } catch (_) {
+    return repository.fetchSubscriptionPlans();
+  }
 });
 
 final subscriptionStateProvider =
