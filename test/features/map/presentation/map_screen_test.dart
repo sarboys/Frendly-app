@@ -763,7 +763,7 @@ void main() {
   test('map object cache uses cluster collection for dense event sets', () {
     final cache = MapObjectCache();
     final events = List<Event>.generate(
-      81,
+      50,
       (index) => Event(
         id: 'dense-$index',
         title: 'Точка $index',
@@ -798,7 +798,7 @@ void main() {
     );
     final collection =
         objects.whereType<ym.ClusterizedPlacemarkCollection>().single;
-    expect(collection.placemarks, hasLength(81));
+    expect(collection.placemarks, hasLength(50));
     expect(collection.radius, 48);
     expect(collection.minZoom, 13);
     expect(collection.onClusterTap, isNotNull);
@@ -903,6 +903,28 @@ void main() {
     expect(decoded, isNotEmpty);
   });
 
+  test('radarMapStyleJson keeps native map readable', () {
+    final decoded = (jsonDecode(radarMapStyleJson) as List<dynamic>)
+        .cast<Map<String, dynamic>>();
+    final styledTags = decoded
+        .map((entry) => entry['tags'] as Map<String, dynamic>)
+        .expand((tags) => tags.values)
+        .whereType<List<dynamic>>()
+        .expand((value) => value)
+        .toSet();
+
+    expect(styledTags, containsAll(['poi', 'road', 'landscape']));
+    for (final entry in decoded) {
+      final stylers = entry['stylers'] as Map<String, dynamic>;
+      final saturation = stylers['saturation'] as num;
+      final lightness = stylers['lightness'] as num;
+      expect(saturation, greaterThanOrEqualTo(-0.35));
+      expect(saturation, lessThanOrEqualTo(0));
+      expect(lightness, greaterThanOrEqualTo(0));
+      expect(lightness, lessThanOrEqualTo(0.12));
+    }
+  });
+
   test('map viewport query is built from bounds and camera target', () {
     final query = buildMapEventsQuery(
       bounds: const ym.BoundingBox(
@@ -970,6 +992,48 @@ void main() {
     expect(query.centerLatitude, 55.75399);
     expect(query.centerLongitude, 37.62001);
     expect(query.radiusKm, 50);
+  });
+
+  testWidgets('map uses manual location for the first events query', (
+    tester,
+  ) async {
+    final queries = <MapEventsQuery>[];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ..._mapTestOverrides(
+            [
+              manualLocationProvider.overrideWith((ref) {
+                return ManualLocationController(null)
+                  ..setLocation(
+                    const ManualLocation(
+                      label: 'Москва, Покровка 12',
+                      latitude: 55.757,
+                      longitude: 37.648,
+                      city: 'Москва',
+                    ),
+                  );
+              }),
+              mapEventsProvider.overrideWith((ref, query) async {
+                queries.add(query);
+                return const <Event>[];
+              }),
+            ],
+          ),
+        ],
+        child: const MaterialApp(
+          home: MapScreen(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(queries, isNotEmpty);
+    expect(queries.first.centerLatitude, 55.757);
+    expect(queries.first.centerLongitude, 37.648);
+    expect(queries.first.radiusKm, 50);
   });
 
   test('radar carousel maps infinite pages to event indexes', () {

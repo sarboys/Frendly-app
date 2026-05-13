@@ -36,7 +36,7 @@ const _maxMapZoom = 19.0;
 const _radarCarouselInitialPage = 0;
 const _nativeMapPoiLimit = 80;
 const _manualRadiusViewportFitKey = 'manual-radius-fit';
-const _radarClusterPointThreshold = 80;
+const _radarClusterPointThreshold = 40;
 const _radarClusterRadius = 48.0;
 const _radarClusterMinZoom = 13;
 
@@ -158,6 +158,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final initialEventId = widget.initialEventId;
     if (initialEventId != null && initialEventId.isNotEmpty) {
       selected = initialEventId;
+    }
+    final initialManualPoint = resolvePreferredMapPoint(
+      manualLocation: ref.read(manualLocationProvider),
+    );
+    if (initialManualPoint != null && (initialEventId ?? '').isEmpty) {
+      _userPoint = initialManualPoint;
+      _mapQuery = buildInitialMapEventsQuery(initialManualPoint);
+      _didPrimeInitialLocation = true;
+      _triedInitialLocation = true;
+      _autoFitPending = true;
     }
     _mapBootstrapFuture = _supportsNativeMap
         ? ref.read(mapkitBootstrapProvider).ensureInitialized()
