@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
@@ -11,6 +10,7 @@ import 'package:big_break_mobile/app/theme/app_shadows.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
+import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/features/tonight/presentation/v5_search_modal.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
@@ -36,6 +36,75 @@ const _maxMapZoom = 19.0;
 const _radarCarouselInitialPage = 0;
 const _nativeMapPoiLimit = 80;
 const _manualRadiusViewportFitKey = 'manual-radius-fit';
+const _radarClusterPointThreshold = 80;
+const _radarClusterRadius = 48.0;
+const _radarClusterMinZoom = 13;
+
+@visibleForTesting
+enum RadarMapPinKind {
+  bars,
+  routes,
+  dating,
+  affiche,
+  live,
+  user,
+  search,
+  cluster,
+  promoted,
+}
+
+const _radarPinAssetByKind = <RadarMapPinKind, String>{
+  RadarMapPinKind.bars: 'assets/map/pins/radar_pin_bars.png',
+  RadarMapPinKind.routes: 'assets/map/pins/radar_pin_routes.png',
+  RadarMapPinKind.dating: 'assets/map/pins/radar_pin_dating.png',
+  RadarMapPinKind.affiche: 'assets/map/pins/radar_pin_affiche.png',
+  RadarMapPinKind.live: 'assets/map/pins/radar_pin_live.png',
+  RadarMapPinKind.user: 'assets/map/pins/radar_pin_user.png',
+  RadarMapPinKind.cluster: 'assets/map/pins/radar_pin_cluster.png',
+  RadarMapPinKind.promoted: 'assets/map/pins/radar_pin_promoted.png',
+};
+
+const _radarSelectedPinAssetByKind = <RadarMapPinKind, String>{
+  RadarMapPinKind.bars: 'assets/map/pins/radar_pin_bars_selected.png',
+  RadarMapPinKind.routes: 'assets/map/pins/radar_pin_routes_selected.png',
+  RadarMapPinKind.dating: 'assets/map/pins/radar_pin_dating_selected.png',
+  RadarMapPinKind.affiche: 'assets/map/pins/radar_pin_affiche_selected.png',
+  RadarMapPinKind.live: 'assets/map/pins/radar_pin_live_selected.png',
+  RadarMapPinKind.promoted: 'assets/map/pins/radar_pin_promoted_selected.png',
+};
+
+@visibleForTesting
+const radarMapStyleJson = '''
+[
+  {
+    "tags": {
+      "all": ["poi"]
+    },
+    "stylers": {
+      "saturation": -0.30,
+      "lightness": 0.10
+    }
+  },
+  {
+    "tags": {
+      "all": ["road"]
+    },
+    "stylers": {
+      "saturation": -0.25,
+      "lightness": 0.08
+    }
+  },
+  {
+    "tags": {
+      "all": ["landscape"]
+    },
+    "stylers": {
+      "saturation": -0.20,
+      "lightness": 0.06
+    }
+  }
+]
+''';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({
@@ -114,6 +183,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final nearbyRadiusKm = ref.watch(nearbyEventsRadiusKmProvider);
     final mapEventsAsync = ref.watch(mapEventsProvider(_mapQuery));
     final datingProfilesAsync = ref.watch(datingDiscoverProvider);
+    final wallet = ref.watch(tokenWalletProvider);
+    final promotedIds = wallet.promoted.keys
+        .where((eventId) => wallet.isPromoted(eventId))
+        .toSet();
     final events = visibleMapEventsForRadar(
       eventsAsync: mapEventsAsync,
       previousEvents: _lastMapEvents,
@@ -148,12 +221,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final mapObjects = _mapObjectCache.objectsFor(
       events: filteredEvents,
       selectedId: selectedId,
+      promotedIds: promotedIds,
       datingProfiles: filter == 'dating' ? datingProfiles : const [],
       selectedDatingUserId: activeDatingProfile?.userId ?? selectedDatingUserId,
       liveEvenings: liveEvenings,
       userPoint: _userPoint,
       searchPoint: _searchPoint,
       onEventTap: _handleEventTap,
+      onEventClusterTap: _handleEventClusterTap,
       onDatingProfileTap: _handleDatingProfileTap,
       onSessionTap: _openEveningPreview,
     );
@@ -393,6 +468,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   ) {
     _mapControllerGeneration += 1;
     _mapController = controller;
+    unawaited(controller.setMapStyle(radarMapStyleJson));
     if (mapAutoNativeUserLayerEnabled) {
       unawaited(controller.toggleUserLayer(visible: true));
     }
@@ -901,6 +977,40 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       animatePager: true,
       keepCurrentZoom: false,
     );
+  }
+
+  Future<void> _handleEventClusterTap(
+    List<ym.PlacemarkMapObject> placemarks,
+  ) async {
+    final target = clusterCenterPoint(placemarks);
+    final controller = _mapController;
+    final generation = _mapControllerGeneration;
+    if (target == null || controller == null) {
+      return;
+    }
+
+    try {
+      final cameraPosition = await controller.getCameraPosition();
+      if (!_isActiveMapController(controller, generation)) {
+        return;
+      }
+      await controller.moveCamera(
+        ym.CameraUpdate.newCameraPosition(
+          ym.CameraPosition(
+            target: target,
+            zoom: mapZoomForClusterTap(cameraPosition.zoom),
+            azimuth: cameraPosition.azimuth,
+            tilt: cameraPosition.tilt,
+          ),
+        ),
+        animation: const ym.MapAnimation(
+          type: ym.MapAnimationType.smooth,
+          duration: 0.28,
+        ),
+      );
+    } catch (_) {
+      return;
+    }
   }
 
   void _handleDatingProfileTap(String userId) {
@@ -1752,6 +1862,39 @@ String radarCategoryForEvent(Event event) {
 }
 
 @visibleForTesting
+RadarMapPinKind radarPinKindForEvent(Event event) {
+  switch (radarCategoryForEvent(event)) {
+    case 'routes':
+      return RadarMapPinKind.routes;
+    case 'affiche':
+      return RadarMapPinKind.affiche;
+    case 'dating':
+      return RadarMapPinKind.dating;
+    case 'bars':
+    default:
+      return RadarMapPinKind.bars;
+  }
+}
+
+@visibleForTesting
+ym.PlacemarkIconStyle radarPinIconStyle({
+  required RadarMapPinKind kind,
+  required bool selected,
+}) {
+  final selectedAsset = _radarSelectedPinAssetByKind[kind];
+  final asset = selected && selectedAsset != null
+      ? selectedAsset
+      : _radarPinAssetByKind[kind]!;
+  return ym.PlacemarkIconStyle(
+    image: ym.BitmapDescriptor.fromAssetImage(asset),
+    scale: selected ? 2.0 : 1.8,
+    anchor: kind == RadarMapPinKind.user
+        ? const Offset(0.5, 0.5)
+        : const Offset(0.5, 0.82),
+  );
+}
+
+@visibleForTesting
 ym.BoundingBox? buildMapViewportBounds({
   required ym.Point? userPoint,
   required List<ym.Point> eventPoints,
@@ -1942,6 +2085,32 @@ double mapZoomForEventSelection({
 }
 
 @visibleForTesting
+double mapZoomForClusterTap(double currentZoom) {
+  return clampMapZoom(
+    math.max(currentZoom + 2, _radarClusterMinZoom + 1),
+  );
+}
+
+@visibleForTesting
+ym.Point? clusterCenterPoint(List<ym.PlacemarkMapObject> placemarks) {
+  if (placemarks.isEmpty) {
+    return null;
+  }
+
+  var latitude = 0.0;
+  var longitude = 0.0;
+  for (final placemark in placemarks) {
+    latitude += placemark.point.latitude;
+    longitude += placemark.point.longitude;
+  }
+
+  return ym.Point(
+    latitude: latitude / placemarks.length,
+    longitude: longitude / placemarks.length,
+  );
+}
+
+@visibleForTesting
 int radarCarouselEventIndex(int pageIndex, int eventCount) {
   if (eventCount <= 0) {
     return 0;
@@ -2008,10 +2177,12 @@ class MapObjectCache {
     required String selectedId,
     List<DatingProfileData> datingProfiles = const [],
     String selectedDatingUserId = '',
+    Set<String> promotedIds = const {},
     required List<EveningSessionSummary> liveEvenings,
     required ym.Point? userPoint,
     required ym.Point? searchPoint,
     required void Function(String eventId) onEventTap,
+    void Function(List<ym.PlacemarkMapObject> placemarks)? onEventClusterTap,
     void Function(String userId)? onDatingProfileTap,
     required void Function(String sessionId) onSessionTap,
   }) {
@@ -2020,6 +2191,7 @@ class MapObjectCache {
       selectedId: selectedId,
       datingProfiles: datingProfiles,
       selectedDatingUserId: selectedDatingUserId,
+      promotedIds: promotedIds,
       liveEvenings: liveEvenings,
       userPoint: userPoint,
       searchPoint: searchPoint,
@@ -2028,12 +2200,20 @@ class MapObjectCache {
       return _objects;
     }
 
+    final eventPlacemarks = buildEventPlacemarks(
+      events: events,
+      selectedId: selectedId,
+      promotedIds: promotedIds,
+      onEventTap: onEventTap,
+    );
     final objects = <ym.MapObject>[
-      ...buildEventPlacemarks(
-        events: events,
-        selectedId: selectedId,
-        onEventTap: onEventTap,
-      ),
+      if (eventPlacemarks.length > _radarClusterPointThreshold)
+        buildEventClusterCollection(
+          placemarks: eventPlacemarks,
+          onClusterTap: onEventClusterTap ?? (_) {},
+        )
+      else
+        ...eventPlacemarks,
       ...buildDatingProfilePlacemarks(
         profiles: datingProfiles,
         selectedUserId: selectedDatingUserId,
@@ -2059,6 +2239,7 @@ String buildMapObjectsCacheKey({
   required String selectedId,
   List<DatingProfileData> datingProfiles = const [],
   String selectedDatingUserId = '',
+  Set<String> promotedIds = const {},
   required List<EveningSessionSummary> liveEvenings,
   required ym.Point? userPoint,
   required ym.Point? searchPoint,
@@ -2068,6 +2249,7 @@ String buildMapObjectsCacheKey({
     'selectedDating:$selectedDatingUserId',
     'user:${_pointCacheKey(userPoint)}',
     'search:${_pointCacheKey(searchPoint)}',
+    'cluster:${events.length > _radarClusterPointThreshold}',
     for (final event in events)
       if (event.latitude != null && event.longitude != null)
         [
@@ -2076,6 +2258,7 @@ String buildMapObjectsCacheKey({
           _roundGeo(event.latitude!).toStringAsFixed(5),
           _roundGeo(event.longitude!).toStringAsFixed(5),
           event.emoji,
+          promotedIds.contains(event.id) ? 'promoted' : 'regular',
         ].join(':'),
     for (final profile in datingProfiles)
       if (profile.latitude != null && profile.longitude != null)
@@ -2104,42 +2287,95 @@ String buildMapObjectsCacheKey({
 List<ym.PlacemarkMapObject> buildEventPlacemarks({
   required List<Event> events,
   required String selectedId,
+  Set<String> promotedIds = const {},
   required void Function(String eventId) onEventTap,
 }) {
   return [
     for (final event in events)
       if (event.latitude != null && event.longitude != null)
-        ym.PlacemarkMapObject(
-          mapId: ym.MapObjectId('event_${event.id}'),
-          point: ym.Point(
-            latitude: event.latitude!,
-            longitude: event.longitude!,
-          ),
-          zIndex: event.id == selectedId ? 2 : 1,
-          consumeTapEvents: true,
+        _buildEventPlacemark(
+          event: event,
+          selected: event.id == selectedId,
+          promoted: promotedIds.contains(event.id),
+          onEventTap: onEventTap,
+        ),
+  ];
+}
+
+ym.PlacemarkMapObject _buildEventPlacemark({
+  required Event event,
+  required bool selected,
+  required bool promoted,
+  required void Function(String eventId) onEventTap,
+}) {
+  final pinKind =
+      promoted ? RadarMapPinKind.promoted : radarPinKindForEvent(event);
+  return ym.PlacemarkMapObject(
+    mapId: ym.MapObjectId('event_${event.id}'),
+    point: ym.Point(
+      latitude: event.latitude!,
+      longitude: event.longitude!,
+    ),
+    zIndex: selected ? 2 : 1,
+    consumeTapEvents: true,
+    opacity: 1,
+    icon: ym.PlacemarkIcon.single(
+      radarPinIconStyle(
+        kind: pinKind,
+        selected: selected,
+      ),
+    ),
+    text: promoted
+        ? ym.PlacemarkText(
+            text: '🔥',
+            style: ym.PlacemarkTextStyle(
+              size: selected ? 16 : 15,
+              placement: ym.TextStylePlacement.center,
+              offsetFromIcon: false,
+            ),
+          )
+        : null,
+    onTap: (_, __) => onEventTap(event.id),
+  );
+}
+
+@visibleForTesting
+ym.ClusterizedPlacemarkCollection buildEventClusterCollection({
+  required List<ym.PlacemarkMapObject> placemarks,
+  required void Function(List<ym.PlacemarkMapObject> placemarks) onClusterTap,
+}) {
+  return ym.ClusterizedPlacemarkCollection(
+    mapId: const ym.MapObjectId('event_clusters'),
+    placemarks: placemarks,
+    radius: _radarClusterRadius,
+    minZoom: _radarClusterMinZoom,
+    zIndex: 1,
+    consumeTapEvents: true,
+    onClusterAdded: (collection, cluster) async {
+      return cluster.copyWith(
+        appearance: cluster.appearance.copyWith(
           opacity: 1,
           icon: ym.PlacemarkIcon.single(
-            ym.PlacemarkIconStyle(
-              image: ym.BitmapDescriptor.fromBytes(
-                _eventPinBytes(),
-              ),
-              scale: event.id == selectedId ? 0.72 : 0.62,
-              anchor: const Offset(0.5, 0.5),
+            radarPinIconStyle(
+              kind: RadarMapPinKind.cluster,
+              selected: false,
             ),
           ),
-          onTap: (_, __) => onEventTap(event.id),
           text: ym.PlacemarkText(
-            text: event.emoji,
-            style: ym.PlacemarkTextStyle(
-              size: event.id == selectedId ? 15 : 13,
-              color: const Color(0xFF2A2A2A),
+            text: cluster.size.toString(),
+            style: const ym.PlacemarkTextStyle(
+              size: 13,
+              color: Color(0xFF2A2A2A),
               outlineColor: Colors.white,
               placement: ym.TextStylePlacement.center,
               offsetFromIcon: false,
             ),
           ),
         ),
-  ];
+      );
+    },
+    onClusterTap: (_, cluster) => onClusterTap(cluster.placemarks),
+  );
 }
 
 @visibleForTesting
@@ -2168,37 +2404,36 @@ List<ym.PlacemarkMapObject> buildDatingProfilePlacemarks({
   return [
     for (final profile in profiles)
       if (profile.latitude != null && profile.longitude != null)
-        ym.PlacemarkMapObject(
-          mapId: ym.MapObjectId('dating_${profile.userId}'),
-          point: ym.Point(
-            latitude: profile.latitude!,
-            longitude: profile.longitude!,
-          ),
-          zIndex: profile.userId == selectedUserId ? 6 : 5,
-          consumeTapEvents: true,
-          opacity: 1,
-          icon: ym.PlacemarkIcon.single(
-            ym.PlacemarkIconStyle(
-              image: ym.BitmapDescriptor.fromBytes(
-                _eventPinBytes(),
-              ),
-              scale: profile.userId == selectedUserId ? 0.72 : 0.62,
-              anchor: const Offset(0.5, 0.5),
-            ),
-          ),
-          onTap: (_, __) => onProfileTap(profile.userId),
-          text: ym.PlacemarkText(
-            text: profile.photoEmoji,
-            style: ym.PlacemarkTextStyle(
-              size: profile.userId == selectedUserId ? 15 : 13,
-              color: const Color(0xFF2A2A2A),
-              outlineColor: Colors.white,
-              placement: ym.TextStylePlacement.center,
-              offsetFromIcon: false,
-            ),
-          ),
+        _buildDatingProfilePlacemark(
+          profile: profile,
+          selected: profile.userId == selectedUserId,
+          onProfileTap: onProfileTap,
         ),
   ];
+}
+
+ym.PlacemarkMapObject _buildDatingProfilePlacemark({
+  required DatingProfileData profile,
+  required bool selected,
+  required void Function(String userId) onProfileTap,
+}) {
+  return ym.PlacemarkMapObject(
+    mapId: ym.MapObjectId('dating_${profile.userId}'),
+    point: ym.Point(
+      latitude: profile.latitude!,
+      longitude: profile.longitude!,
+    ),
+    zIndex: selected ? 6 : 5,
+    consumeTapEvents: true,
+    opacity: 1,
+    icon: ym.PlacemarkIcon.single(
+      radarPinIconStyle(
+        kind: RadarMapPinKind.dating,
+        selected: selected,
+      ),
+    ),
+    onTap: (_, __) => onProfileTap(profile.userId),
+  );
 }
 
 @visibleForTesting
@@ -2219,25 +2454,12 @@ List<ym.PlacemarkMapObject> buildLiveEveningPlacemarks({
           consumeTapEvents: true,
           opacity: 1,
           icon: ym.PlacemarkIcon.single(
-            ym.PlacemarkIconStyle(
-              image: ym.BitmapDescriptor.fromBytes(
-                _eventPinBytes(),
-              ),
-              scale: 0.62,
-              anchor: const Offset(0.5, 0.5),
+            radarPinIconStyle(
+              kind: RadarMapPinKind.live,
+              selected: false,
             ),
           ),
           onTap: (_, __) => onSessionTap(session.id),
-          text: ym.PlacemarkText(
-            text: session.emoji,
-            style: const ym.PlacemarkTextStyle(
-              size: 14,
-              color: Color(0xFF2A2A2A),
-              outlineColor: Colors.white,
-              placement: ym.TextStylePlacement.center,
-              offsetFromIcon: false,
-            ),
-          ),
         ),
   ];
 }
@@ -2251,22 +2473,9 @@ ym.PlacemarkMapObject buildUserLocationPlacemark(ym.Point point) {
     consumeTapEvents: false,
     opacity: 1,
     icon: ym.PlacemarkIcon.single(
-      ym.PlacemarkIconStyle(
-        image: ym.BitmapDescriptor.fromBytes(
-          _eventPinBytes(),
-        ),
-        scale: 0.54,
-        anchor: const Offset(0.5, 0.5),
-      ),
-    ),
-    text: const ym.PlacemarkText(
-      text: '●',
-      style: ym.PlacemarkTextStyle(
-        size: 15,
-        color: BbV5Colors.accent,
-        outlineColor: Colors.white,
-        placement: ym.TextStylePlacement.center,
-        offsetFromIcon: false,
+      radarPinIconStyle(
+        kind: RadarMapPinKind.user,
+        selected: false,
       ),
     ),
   );
@@ -2419,22 +2628,6 @@ String _pointCacheKey(ym.Point? point) {
 
   return '${_roundGeo(point.latitude).toStringAsFixed(5)},'
       '${_roundGeo(point.longitude).toStringAsFixed(5)}';
-}
-
-final _eventPinCache = <String, Uint8List>{};
-
-Uint8List _eventPinBytes() {
-  const key = 'event-pin-circle-v1';
-  final cached = _eventPinCache[key];
-  if (cached != null) {
-    return cached;
-  }
-
-  final bytes = base64Decode(
-    'iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAACx0lEQVR42u2cr3LCQBDGKxAIRGV9BRJRiaioqMMVyQMgKxDIiDwAAolERCIqIniAvgAPgOhMDdNhppbuznwyuT/NBZLLdzOfYUhy+c3e7t3eXu7u2NjYYmyXy6UnehANRU+isegZGuO3If7T6wKQgWgkmojmokS0Fm1FO1Eu2kM5ftviPwmumeAeg5isRC1hJkpFmehT9DV6e7n4SK/BtRnuNcO9e20Ecy96FS3xQgdfIA7ADrj3Es+6bwOYPjqbYJicQoMpAHXCsxI8u99UOGruC9GH6Fw3mAJQZzxb+/DUNOc7FW1ER5+X+v35dpInqCP6Mr25M5cOPIreNfKEBBICGKKh9u3xlkMqdXHAocD4goIjT68+5DCRW9nCdV1gfEBheqB9HV8TztoUoa4FxhUUIt26dkgYVqsmwnGEtKptuMEhp2XD6tZgXEBhuKXBHTdC+XuZQ24aHAukA95lEBLQtCyUNxWOBZJOAaYh/c6mjXAskDaV/RHWVouyGXLLAR3xbv0qgHTx99FmOBZIunZ7rZKySIoWnm2DUwYJC9zkX6kSWE8eg/VYrCj3tiJkApdFE8K2wjFY0Qnv2vONXFlM1mOxoswroiHfe4gNjsGKdPI485k1pzFaj8WKUqfZNbZVsljhGKxIh9nIBZDuPX12EJBuKU1cAM2LVuwdAKQr/blLeE9i9j8WP5QYwz32wdexwzFYkWYdH0yAtFhg22FAWgswtE0Qdx0GtDNOGJGQzzsMKDcm9lGbs+8wIM00PhNQBUAcYpYhRidtcdIM85Ywz4miZaLIpYYts8jFKtMdldMdTJgx5Voh5cqkPbd9gmz7cOOQW88Vtp5ZvMDyl+rlLyygYgneJlhJMIs4WQbMQvJaC8l5FIGHWXgc6mpweKCORzJ5qJfHwpt0LJwfFuCnKWoFxY+beDpzfh7H07r4gSU2tm63PwhRxsGm70hUAAAAAElFTkSuQmCC',
-  );
-  _eventPinCache[key] = bytes;
-  return bytes;
 }
 
 double _roundGeo(double value) => double.parse(value.toStringAsFixed(5));

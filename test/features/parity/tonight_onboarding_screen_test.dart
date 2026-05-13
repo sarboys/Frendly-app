@@ -109,6 +109,7 @@ void main() {
       _wrap(
         const OnboardingScreen(),
         extraOverrides: [
+          yandexMapServiceProvider.overrideWithValue(_FakeYandexMapService()),
           onboardingProvider.overrideWith(
             (ref) async => const OnboardingData(
               intent: null,
@@ -160,6 +161,7 @@ void main() {
       _wrap(
         const OnboardingScreen(),
         extraOverrides: [
+          yandexMapServiceProvider.overrideWithValue(_FakeYandexMapService()),
           onboardingProvider.overrideWith(
             (ref) async => const OnboardingData(
               intent: null,
@@ -205,6 +207,7 @@ void main() {
       _wrapOnboardingFlow(
         (ref) => repository = _DuplicateContactRepository(ref: ref),
         extraOverrides: [
+          yandexMapServiceProvider.overrideWithValue(_FakeYandexMapService()),
           onboardingProvider.overrideWith(
             (ref) async => const OnboardingData(
               intent: null,
@@ -307,9 +310,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.widget<TextField>(
-        find.byKey(const Key('onboarding-email-field')),
-      ).controller?.text,
+      tester
+          .widget<TextField>(
+            find.byKey(const Key('onboarding-email-field')),
+          )
+          .controller
+          ?.text,
       'first@example.com',
     );
 
@@ -318,9 +324,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.widget<TextField>(
-        find.byKey(const Key('onboarding-email-field')),
-      ).controller?.text,
+      tester
+          .widget<TextField>(
+            find.byKey(const Key('onboarding-email-field')),
+          )
+          .controller
+          ?.text,
       isEmpty,
     );
   });
@@ -330,6 +339,7 @@ void main() {
       _wrap(
         const OnboardingScreen(),
         extraOverrides: [
+          yandexMapServiceProvider.overrideWithValue(_FakeYandexMapService()),
           onboardingProvider.overrideWith(
             (ref) async => const OnboardingData(
               intent: null,
@@ -372,6 +382,7 @@ void main() {
       _wrap(
         const OnboardingScreen(),
         extraOverrides: [
+          yandexMapServiceProvider.overrideWithValue(_FakeYandexMapService()),
           onboardingProvider.overrideWith(
             (ref) async => const OnboardingData(
               intent: null,
@@ -437,6 +448,7 @@ void main() {
       _wrapGuardedOnboardingFlow(
         (ref) => repository = _RecordingOnboardingRepository(ref: ref),
         extraOverrides: [
+          yandexMapServiceProvider.overrideWithValue(_FakeYandexMapService()),
           onboardingProvider.overrideWith(
             (ref) async {
               final localValue = ref.watch(onboardingLocalStateProvider);

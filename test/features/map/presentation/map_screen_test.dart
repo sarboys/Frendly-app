@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
@@ -306,6 +308,12 @@ void main() {
     expect(clampMapZoom(22), 19);
   });
 
+  test('cluster tap zoom opens grouped points quickly', () {
+    expect(mapZoomForClusterTap(7), 14);
+    expect(mapZoomForClusterTap(13), 15);
+    expect(mapZoomForClusterTap(18.5), 19);
+  });
+
   test('map card swipe keeps the current camera zoom for event selection', () {
     expect(
       mapZoomForEventSelection(
@@ -455,7 +463,7 @@ void main() {
     expect(placemarks.single.mapId.value, 'dating_user-anya');
     expect(placemarks.single.point.latitude, 55.764);
     expect(placemarks.single.point.longitude, 37.592);
-    expect(placemarks.single.text?.text, '🍷');
+    expect(placemarks.single.text, isNull);
   });
 
   test('map prefers manual location over device GPS', () {
@@ -578,8 +586,114 @@ void main() {
     expect(placemarks, hasLength(2));
     expect(placemarks.first.icon, isNotNull);
     expect(placemarks.first.opacity, 1);
-    expect(placemarks.first.text?.text, '☕');
-    expect(placemarks.last.text?.text, '🎙️');
+    expect(placemarks.first.text, isNull);
+    expect(placemarks.last.text, isNull);
+    final selectedStyle =
+        placemarks.first.icon!.toJson()['style'] as Map<String, dynamic>;
+    final selectedImage = selectedStyle['image'] as Map<String, dynamic>;
+    expect(
+      selectedImage['assetName'],
+      'assets/map/pins/radar_pin_bars_selected.png',
+    );
+  });
+
+  test('promoted event map objects use orange fire pins', () {
+    const events = [
+      Event(
+        id: 'map-1',
+        title: 'Продвигаемая точка',
+        emoji: '☕',
+        time: 'Сегодня · 18:00',
+        place: 'Москва',
+        distance: '0.5 км',
+        attendees: ['Аня'],
+        going: 1,
+        capacity: 4,
+        vibe: 'Спокойно',
+        tone: EventTone.warm,
+        latitude: 55.75,
+        longitude: 37.61,
+        joined: false,
+      ),
+      Event(
+        id: 'map-2',
+        title: 'Обычная точка',
+        emoji: '🍷',
+        time: 'Сегодня · 20:00',
+        place: 'Москва',
+        distance: '1.0 км',
+        attendees: ['Ира'],
+        going: 2,
+        capacity: 8,
+        vibe: 'Активно',
+        tone: EventTone.evening,
+        latitude: 55.7601,
+        longitude: 37.6401,
+        joined: false,
+      ),
+    ];
+
+    final placemarks = buildEventPlacemarks(
+      events: events,
+      selectedId: 'map-1',
+      promotedIds: const {'map-1'},
+      onEventTap: (_) {},
+    );
+
+    final promotedStyle =
+        placemarks.first.icon!.toJson()['style'] as Map<String, dynamic>;
+    final promotedImage = promotedStyle['image'] as Map<String, dynamic>;
+
+    expect(placemarks.first.text?.text, '🔥');
+    expect(
+      promotedImage['assetName'],
+      'assets/map/pins/radar_pin_promoted_selected.png',
+    );
+    expect(placemarks.last.text, isNull);
+  });
+
+  test('radarPinKindForEvent maps route events to route pins', () {
+    const event = Event(
+      id: 'route-1',
+      title: 'Маршрут',
+      emoji: '🚶',
+      time: 'Сегодня',
+      place: 'Москва',
+      distance: '1 км',
+      attendees: [],
+      going: 0,
+      capacity: 8,
+      vibe: 'Маршрут',
+      tone: EventTone.sage,
+      routeId: 'route-template-1',
+      latitude: 55.75,
+      longitude: 37.61,
+      joined: false,
+    );
+
+    expect(radarPinKindForEvent(event), RadarMapPinKind.routes);
+  });
+
+  test('radarPinKindForEvent maps ticket events to affiche pins', () {
+    const event = Event(
+      id: 'affiche-1',
+      title: 'Концерт',
+      emoji: '🎟️',
+      time: 'Сегодня',
+      place: 'Москва',
+      distance: '1 км',
+      attendees: [],
+      going: 0,
+      capacity: 8,
+      vibe: 'Афиша',
+      tone: EventTone.warm,
+      ticketUrl: 'https://example.com/tickets',
+      latitude: 55.75,
+      longitude: 37.61,
+      joined: false,
+    );
+
+    expect(radarPinKindForEvent(event), RadarMapPinKind.affiche);
   });
 
   test('map object cache reuses unchanged object lists', () {
@@ -630,9 +744,113 @@ void main() {
       onEventTap: (_) {},
       onSessionTap: (_) {},
     );
+    final changedPromotion = cache.objectsFor(
+      events: events,
+      selectedId: '',
+      promotedIds: const {'map-1'},
+      liveEvenings: const [],
+      userPoint: null,
+      searchPoint: null,
+      onEventTap: (_) {},
+      onSessionTap: (_) {},
+    );
 
     expect(identical(second, first), isTrue);
     expect(identical(changedSelection, first), isFalse);
+    expect(identical(changedPromotion, changedSelection), isFalse);
+  });
+
+  test('map object cache uses cluster collection for dense event sets', () {
+    final cache = MapObjectCache();
+    final events = List<Event>.generate(
+      81,
+      (index) => Event(
+        id: 'dense-$index',
+        title: 'Точка $index',
+        emoji: '☕',
+        time: 'Сегодня',
+        place: 'Москва',
+        distance: '1 км',
+        attendees: const [],
+        going: 0,
+        capacity: 8,
+        vibe: 'Спокойно',
+        tone: EventTone.warm,
+        latitude: 55.75 + index * 0.0001,
+        longitude: 37.61 + index * 0.0001,
+        joined: false,
+      ),
+    );
+
+    final objects = cache.objectsFor(
+      events: events,
+      selectedId: 'dense-0',
+      liveEvenings: const [],
+      userPoint: null,
+      searchPoint: null,
+      onEventTap: (_) {},
+      onSessionTap: (_) {},
+    );
+
+    expect(
+      objects.whereType<ym.ClusterizedPlacemarkCollection>(),
+      hasLength(1),
+    );
+    final collection =
+        objects.whereType<ym.ClusterizedPlacemarkCollection>().single;
+    expect(collection.placemarks, hasLength(81));
+    expect(collection.radius, 48);
+    expect(collection.minZoom, 13);
+    expect(collection.onClusterTap, isNotNull);
+  });
+
+  test('clusterCenterPoint averages clustered placemark points', () {
+    const events = [
+      Event(
+        id: 'cluster-a',
+        title: 'A',
+        emoji: '☕',
+        time: 'Сегодня',
+        place: 'Москва',
+        distance: '1 км',
+        attendees: [],
+        going: 0,
+        capacity: 8,
+        vibe: 'Спокойно',
+        tone: EventTone.warm,
+        latitude: 55,
+        longitude: 37,
+        joined: false,
+      ),
+      Event(
+        id: 'cluster-b',
+        title: 'B',
+        emoji: '☕',
+        time: 'Сегодня',
+        place: 'Москва',
+        distance: '1 км',
+        attendees: [],
+        going: 0,
+        capacity: 8,
+        vibe: 'Спокойно',
+        tone: EventTone.warm,
+        latitude: 57,
+        longitude: 39,
+        joined: false,
+      ),
+    ];
+    final placemarks = buildEventPlacemarks(
+      events: events,
+      selectedId: '',
+      onEventTap: (_) {},
+    );
+
+    final center = clusterCenterPoint(placemarks);
+
+    expect(center, isNotNull);
+    expect(center!.latitude, 56);
+    expect(center.longitude, 38);
+    expect(clusterCenterPoint(const []), isNull);
   });
 
   test('map live evening objects use session coordinates', () {
@@ -672,11 +890,17 @@ void main() {
     expect(placemarks.single.mapId.value, 'evening_session_session-live');
     expect(placemarks.single.point.latitude, 55.7601);
     expect(placemarks.single.point.longitude, 37.6401);
-    expect(placemarks.single.text?.text, '🍷');
+    expect(placemarks.single.text, isNull);
   });
 
   test('map does not auto-enable native user layer on create', () {
     expect(mapAutoNativeUserLayerEnabled, isFalse);
+  });
+
+  test('radarMapStyleJson is valid json list', () {
+    final decoded = jsonDecode(radarMapStyleJson);
+    expect(decoded, isA<List<dynamic>>());
+    expect(decoded, isNotEmpty);
   });
 
   test('map viewport query is built from bounds and camera target', () {
@@ -1024,15 +1248,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(_eventPlacemarkScale(tester, 'map-1'), 0.72);
-      expect(_eventPlacemarkScale(tester, 'map-2'), 0.62);
+      expect(_eventPlacemarkScale(tester, 'map-1'), 2.0);
+      expect(_eventPlacemarkScale(tester, 'map-2'), 1.8);
 
       final pageView = tester.widget<PageView>(find.byType(PageView));
       pageView.onPageChanged!(1);
       await tester.pumpAndSettle();
 
-      expect(_eventPlacemarkScale(tester, 'map-1'), 0.62);
-      expect(_eventPlacemarkScale(tester, 'map-2'), 0.72);
+      expect(_eventPlacemarkScale(tester, 'map-1'), 1.8);
+      expect(_eventPlacemarkScale(tester, 'map-2'), 2.0);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

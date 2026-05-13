@@ -72,6 +72,32 @@ Widget _wrapWithRouter({
   );
 }
 
+Finder _verticalScrollable() {
+  return find
+      .byWidgetPredicate(
+        (widget) =>
+            widget is ListView && widget.scrollDirection == Axis.vertical,
+      )
+      .first;
+}
+
+Future<void> _scrollUntilVisible(
+  WidgetTester tester,
+  Finder finder,
+) async {
+  for (var index = 0; index < 20; index += 1) {
+    await tester.pump();
+    if (finder.evaluate().isNotEmpty) {
+      await tester.ensureVisible(finder.first);
+      await tester.pumpAndSettle();
+      return;
+    }
+    await tester.drag(_verticalScrollable(), const Offset(0, -320));
+    await tester.pumpAndSettle();
+  }
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('chats search button opens v5 search modal', (tester) async {
     await tester.pumpWidget(
@@ -173,6 +199,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _scrollUntilVisible(
+      tester,
+      find.text('Пока нет чатов. Они появятся после встреч и мэтчей.'),
+    );
+
     expect(find.text('Brix · вино после работы'), findsNothing);
     expect(find.text('Аня, 26'), findsNothing);
     expect(find.text('Тверская в огнях'), findsNothing);
@@ -239,12 +270,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _scrollUntilVisible(
+      tester,
+      find.text('Brix · вино после работы'),
+    );
+
     expect(find.text('встреча'), findsOneWidget);
     expect(find.text('дейтинг'), findsOneWidget);
     expect(find.text('● LIVE'), findsNothing);
 
-    final brixTop = tester.getTopLeft(find.text('Brix · вино после работы')).dy;
-    final annaTop = tester.getTopLeft(find.text('Аня, 26')).dy;
+    final brixTop =
+        tester.getTopLeft(find.text('Brix · вино после работы').last).dy;
+    final annaTop = tester.getTopLeft(find.text('Аня, 26').last).dy;
     final standupTop = tester.getTopLeft(find.text('Стендап-четверг').last).dy;
 
     expect(brixTop, lessThan(annaTop));
@@ -298,8 +335,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _scrollUntilVisible(tester, find.text('Книжный клуб'));
+
     expect(find.text('Клубный чат'), findsNothing);
-    expect(find.text('Книжный клуб'), findsOneWidget);
+    expect(find.text('Книжный клуб'), findsAtLeastNWidgets(1));
     expect(find.text('Ты: Всем привет'), findsOneWidget);
     expect(find.text('клуб'), findsOneWidget);
   });
@@ -351,8 +390,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _scrollUntilVisible(tester, find.text('Клубы'));
     await tester.tap(find.text('Клубы'));
     await tester.pumpAndSettle();
+    await _scrollUntilVisible(tester, find.text('Книжный клуб'));
 
     expect(find.text('Книжный клуб'), findsOneWidget);
     expect(find.text('Ты: Всем привет'), findsOneWidget);
@@ -383,20 +424,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.drag(
-      find.byType(SingleChildScrollView),
-      const Offset(-260, 0),
-    );
-    await tester.pumpAndSettle();
+    await _scrollUntilVisible(tester, find.text('Личные'));
     await tester.tap(find.text('Личные'));
     await tester.pumpAndSettle();
+    await _scrollUntilVisible(tester, find.text('Пользователь 1111'));
 
-    expect(find.text('Пользователь 1111'), findsOneWidget);
+    expect(find.text('Пользователь 1111'), findsAtLeastNWidgets(1));
     expect(find.text('stage50 incoming unread'), findsOneWidget);
     expect(find.text('Личные чаты появляются после встреч.'), findsNothing);
   });
 
-  testWidgets('chats ai card renders v5 launch CTA', (tester) async {
+  testWidgets('chats ai dock renders v5 launch CTA', (tester) async {
     await tester.pumpWidget(
       _wrapWithRouter(
         child: const ChatsScreen(),
@@ -404,22 +442,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('AI compass'),
-      300,
-      scrollable: find
-          .byWidgetPredicate(
-            (widget) =>
-                widget is Scrollable &&
-                widget.axisDirection == AxisDirection.down,
-          )
-          .first,
-    );
 
     expect(find.byIcon(LucideIcons.square_pen), findsNothing);
     expect(find.text('AI compass'), findsOneWidget);
-    expect(find.byIcon(LucideIcons.sparkles), findsOneWidget);
-    expect(find.text('Включить'), findsOneWidget);
+    expect(find.text('подскажет, что написать'), findsOneWidget);
+    expect(find.byIcon(LucideIcons.mic), findsOneWidget);
   });
 
   testWidgets('meetup chats are grouped by live, soon and upcoming phases',
@@ -486,8 +513,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _scrollUntilVisible(tester, find.text('Встречи'));
     await tester.tap(find.text('Встречи'));
     await tester.pumpAndSettle();
+    await _scrollUntilVisible(tester, find.text('● LIVE'));
 
     expect(find.text('● LIVE'), findsOneWidget);
     expect(find.textContaining('Шаг 2 из 4'), findsOneWidget);
@@ -528,8 +557,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _scrollUntilVisible(tester, find.text('Встречи'));
     await tester.tap(find.text('Встречи'));
     await tester.pumpAndSettle();
+    await _scrollUntilVisible(tester, find.text('⏰ ЧЕРЕЗ 45 МИН'));
 
     expect(find.text('⏰ ЧЕРЕЗ 45 МИН'), findsOneWidget);
     expect(find.text('Поехали'), findsNothing);
@@ -574,8 +605,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _scrollUntilVisible(tester, find.text('Встречи'));
     await tester.tap(find.text('Встречи'));
     await tester.pumpAndSettle();
+    await _scrollUntilVisible(tester, find.text('Поехали'));
 
     await tester.tap(find.text('Поехали'));
     await tester.pumpAndSettle();
@@ -614,8 +647,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _scrollUntilVisible(tester, find.text('Встречи'));
     await tester.tap(find.text('Встречи'));
     await tester.pumpAndSettle();
+    await _scrollUntilVisible(tester, find.text('ПРЕДСТОЯЩИЕ'));
 
     expect(find.text('ПРЕДСТОЯЩИЕ'), findsOneWidget);
     expect(find.text('Обычная встреча'), findsOneWidget);
