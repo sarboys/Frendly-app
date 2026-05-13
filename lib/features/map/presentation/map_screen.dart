@@ -67,6 +67,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _autoFitPending = false;
   bool _isRadarListExpanded = true;
   String _lastViewportFitKey = '';
+  List<Event> _lastMapEvents = const [];
   List<Event> _visibleMapEvents = const [];
 
   bool get _supportsNativeMap =>
@@ -107,9 +108,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   Widget build(BuildContext context) {
     final nearbyRadiusKm = ref.watch(nearbyEventsRadiusKmProvider);
-    final rawEvents =
-        ref.watch(mapEventsProvider(_mapQuery)).valueOrNull ?? const <Event>[];
-    final events = rawEvents;
+    final mapEventsAsync = ref.watch(mapEventsProvider(_mapQuery));
+    final events = visibleMapEventsForRadar(
+      eventsAsync: mapEventsAsync,
+      previousEvents: _lastMapEvents,
+    );
+    if (mapEventsAsync.hasValue) {
+      _lastMapEvents = events;
+    }
     final filteredEvents = _filteredEvents(events, filter);
     final liveEvenings =
         (ref.watch(eveningSessionsProvider).valueOrNull ?? const [])
@@ -1548,6 +1554,18 @@ bool shouldRefreshMapViewportQuery({
   required bool finished,
 }) {
   return finished && reason == ym.CameraUpdateReason.gestures;
+}
+
+@visibleForTesting
+List<Event> visibleMapEventsForRadar({
+  required AsyncValue<List<Event>> eventsAsync,
+  required List<Event> previousEvents,
+}) {
+  if (eventsAsync.hasValue) {
+    return eventsAsync.value ?? const <Event>[];
+  }
+
+  return previousEvents;
 }
 
 @visibleForTesting

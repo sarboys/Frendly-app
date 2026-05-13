@@ -169,6 +169,35 @@ void main() {
     expect(zoom150, lessThan(zoom50 - 1));
   });
 
+  test('map keeps previous event markers while radius request is loading', () {
+    const previousEvents = [
+      Event(
+        id: 'map-1',
+        title: 'Первая точка',
+        emoji: '☕',
+        time: 'Сегодня · 12:00',
+        place: 'Москва',
+        distance: '0.5 км',
+        attendees: ['Аня'],
+        going: 1,
+        capacity: 4,
+        vibe: 'Спокойно',
+        tone: EventTone.warm,
+        latitude: 55.75,
+        longitude: 37.61,
+        joined: false,
+      ),
+    ];
+
+    expect(
+      visibleMapEventsForRadar(
+        eventsAsync: const AsyncLoading<List<Event>>(),
+        previousEvents: previousEvents,
+      ),
+      previousEvents,
+    );
+  });
+
   test('map viewport fit does not repeat without an explicit pending fit', () {
     expect(
       shouldScheduleMapViewportFit(
