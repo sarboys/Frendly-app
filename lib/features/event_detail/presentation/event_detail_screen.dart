@@ -288,6 +288,13 @@ class _EventDetailBody extends StatelessWidget {
                   child: _V5MiniMapCard(event: event),
                 ),
               ),
+              if (event.hasTableBooking)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: _V5BookingCard(event: event),
+                  ),
+                ),
               if (criteria.isNotEmpty)
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
@@ -368,6 +375,11 @@ class _EventDetailBody extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.xs),
                         child: _V5TicketBottomAction(event: event),
+                      ),
+                    if (event.hasTableBooking)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                        child: _V5BookingBottomAction(event: event),
                       ),
                     if (onSecondaryAction != null)
                       Padding(
@@ -772,6 +784,127 @@ class _V5TicketBottomAction extends StatelessWidget {
             dark: true,
             onPressed: () => _openEventTicketUrl(context, event.ticketUrl!),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _V5BookingBottomAction extends StatelessWidget {
+  const _V5BookingBottomAction({required this.event});
+
+  final EventDetail event;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: BbV5Colors.paperHi,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: BbV5Colors.hair),
+        boxShadow: BbV5Shadows.pill,
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            LucideIcons.calendar_check,
+            size: 18,
+            color: BbV5Colors.terra,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              _bookingSubtitle(event),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.caption.copyWith(
+                color: BbV5Colors.inkSoft,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          BbV5PillButton(
+            label: 'Забронировать столик',
+            icon: LucideIcons.calendar_check,
+            height: 40,
+            fontSize: 12,
+            dark: true,
+            onPressed: () => _openEventBookingUrl(context, event.bookingUrl!),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _V5BookingCard extends StatelessWidget {
+  const _V5BookingCard({required this.event});
+
+  final EventDetail event;
+
+  @override
+  Widget build(BuildContext context) {
+    final promos = event.bookingPromos.take(3).toList(growable: false);
+    return BbV5Card(
+      radius: 24,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                LucideIcons.calendar_check,
+                size: 18,
+                color: BbV5Colors.terra,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Бронь столика',
+                  style: bbV5DisplayStyle(fontSize: 18, height: 1.15),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _bookingSubtitle(event),
+            style: AppTextStyles.body.copyWith(
+              color: BbV5Colors.inkSoft,
+              height: 1.35,
+            ),
+          ),
+          if (promos.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            for (final promo in promos)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      LucideIcons.badge_percent,
+                      size: 14,
+                      color: BbV5Colors.terra,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        promo.title,
+                        style: AppTextStyles.caption.copyWith(
+                          color: BbV5Colors.ink,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ],
       ),
     );
@@ -1266,6 +1399,24 @@ Future<void> _openEventTicketUrl(BuildContext context, String url) async {
   );
 }
 
+Future<void> _openEventBookingUrl(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null || !uri.hasScheme) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Не получилось открыть бронь.')),
+    );
+    return;
+  }
+
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (opened || !context.mounted) {
+    return;
+  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Не получилось открыть бронь.')),
+  );
+}
+
 String _ticketSubtitle(EventDetail event) {
   final parts = <String>[];
   final price = event.ticketPriceFrom;
@@ -1277,6 +1428,23 @@ String _ticketSubtitle(EventDetail event) {
     parts.add(venue);
   }
   return parts.isEmpty ? 'Откроется внешний сайт' : parts.join(' · ');
+}
+
+String _bookingSubtitle(EventDetail event) {
+  final parts = <String>[];
+  final averageCheck = event.bookingAverageCheck;
+  if (averageCheck != null && averageCheck > 0) {
+    parts.add('средний чек $averageCheck ${_currencySymbol(event.bookingCurrency)}');
+  }
+  final provider = event.bookingProvider?.trim();
+  if (provider != null && provider.isNotEmpty) {
+    parts.add(provider);
+  }
+  return parts.isEmpty ? 'Откроется внешний сайт бронирования' : parts.join(' · ');
+}
+
+String _currencySymbol(String? currency) {
+  return currency == 'RUB' || currency == null ? '₽' : currency;
 }
 
 class _EventMapOption extends StatelessWidget {

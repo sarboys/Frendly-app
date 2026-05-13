@@ -92,6 +92,98 @@ final backendRepositoryProvider = Provider<BackendRepository>((ref) {
   );
 });
 
+class BackendPlacePromo {
+  const BackendPlacePromo({
+    required this.title,
+    this.description,
+    this.validUntil,
+    this.bookingUrl,
+    this.sourceUrl,
+  });
+
+  final String title;
+  final String? description;
+  final String? validUntil;
+  final String? bookingUrl;
+  final String? sourceUrl;
+
+  factory BackendPlacePromo.fromJson(Map<String, dynamic> json) {
+    return BackendPlacePromo(
+      title: json['title'] as String? ?? '',
+      description: json['description'] as String?,
+      validUntil: json['validUntil'] as String?,
+      bookingUrl: json['bookingUrl'] as String?,
+      sourceUrl: json['sourceUrl'] as String?,
+    );
+  }
+}
+
+class BackendPlaceSearchResult {
+  const BackendPlaceSearchResult({
+    required this.id,
+    required this.name,
+    required this.address,
+    required this.city,
+    this.lat,
+    this.lng,
+    this.category,
+    this.placeKind,
+    this.averageCheck,
+    this.currency,
+    this.rating,
+    this.bookingUrl,
+    this.provider,
+    this.sourceUrl,
+    this.distanceKm,
+    this.promos = const [],
+  });
+
+  final String id;
+  final String name;
+  final String address;
+  final String city;
+  final double? lat;
+  final double? lng;
+  final String? category;
+  final String? placeKind;
+  final int? averageCheck;
+  final String? currency;
+  final double? rating;
+  final String? bookingUrl;
+  final String? provider;
+  final String? sourceUrl;
+  final double? distanceKm;
+  final List<BackendPlacePromo> promos;
+
+  factory BackendPlaceSearchResult.fromJson(Map<String, dynamic> json) {
+    return BackendPlaceSearchResult(
+      id: json['id'] as String,
+      name: json['name'] as String? ?? '',
+      address: json['address'] as String? ?? '',
+      city: json['city'] as String? ?? '',
+      lat: (json['lat'] as num?)?.toDouble(),
+      lng: (json['lng'] as num?)?.toDouble(),
+      category: json['category'] as String?,
+      placeKind: json['placeKind'] as String?,
+      averageCheck: (json['averageCheck'] as num?)?.toInt(),
+      currency: json['currency'] as String?,
+      rating: (json['rating'] as num?)?.toDouble(),
+      bookingUrl: json['bookingUrl'] as String?,
+      provider: json['provider'] as String?,
+      sourceUrl: json['sourceUrl'] as String?,
+      distanceKm: (json['distanceKm'] as num?)?.toDouble(),
+      promos: ((json['promos'] as List?) ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => BackendPlacePromo.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
 class BackendRepository {
   BackendRepository({
     required this.ref,
@@ -105,6 +197,35 @@ class BackendRepository {
   final Dio dio;
   final Dio Function() _createUploadDio;
   final VoiceMetricReporter? _voiceMetricReporter;
+
+  Future<List<BackendPlaceSearchResult>> searchPlaces({
+    required String query,
+    String city = 'Москва',
+    double? latitude,
+    double? longitude,
+    int limit = 10,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await dio.get<List<dynamic>>(
+      '/places/search',
+      queryParameters: {
+        'q': query,
+        'city': city,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+        'limit': limit,
+      },
+      cancelToken: cancelToken,
+    );
+    return (response.data ?? const [])
+        .whereType<Map>()
+        .map(
+          (item) => BackendPlaceSearchResult.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .toList(growable: false);
+  }
 
   Options get _publicAuthOptions => Options(
         extra: const {
@@ -863,6 +984,7 @@ class BackendRepository {
     String? inviteeUserId,
     String? sourceChatId,
     String? afficheEventId,
+    String? externalPlaceId,
     String? routeId,
     CreateEventRoutePayload? route,
     String? communityId,
@@ -904,6 +1026,7 @@ class BackendRepository {
         if (inviteeUserId != null) 'inviteeUserId': inviteeUserId,
         if (sourceChatId != null) 'sourceChatId': sourceChatId,
         if (afficheEventId != null) 'afficheEventId': afficheEventId,
+        if (externalPlaceId != null) 'externalPlaceId': externalPlaceId,
         if (routeId != null) 'routeId': routeId,
         if (route != null) 'route': route.toJson(),
         if (communityId != null) 'communityId': communityId,

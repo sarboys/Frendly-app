@@ -249,6 +249,8 @@ class ProfileData {
         return const ['Свидания'];
       case 'friendship':
         return const ['Друзья'];
+      case 'network':
+        return const ['Нетворк'];
       case 'both':
         return const ['Свидания', 'Друзья'];
       default:

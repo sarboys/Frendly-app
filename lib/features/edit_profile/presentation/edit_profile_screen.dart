@@ -17,7 +17,7 @@ import 'package:go_router/go_router.dart';
 const _allInterests = [
   'Кофе',
   'Бары',
-  'Настолки',
+  'Музыка',
   'Кино',
   'Книги',
   'Велик',
@@ -25,14 +25,42 @@ const _allInterests = [
   'Бег',
   'Театр',
   'Готовка',
-  'Музыка',
   'Выставки',
   'Походы',
   'Фото',
+  'Настолки',
 ];
 
-const _editVibes = ['Спокойно', 'Шумно', 'Активно', 'Уютно'];
+const _editVibes = [
+  _EditVibe('Спокойно', 'Тихие бары, прогулки', '🌿'),
+  _EditVibe('Уютно', 'Кофе, разговоры', '🕯️'),
+  _EditVibe('Активно', 'Спорт, движение', '🚴'),
+  _EditVibe('Громко', 'Тусовки, бары', '🎉'),
+];
+
+const _editIntents = [
+  _EditIntent('Друзья', LucideIcons.users),
+  _EditIntent('Свидания', LucideIcons.heart),
+  _EditIntent('Нетворк', LucideIcons.briefcase),
+];
+
 const _editProfileMaxContentWidth = 390.0;
+const _editProfileBioMaxLength = 280;
+
+class _EditVibe {
+  const _EditVibe(this.label, this.hint, this.emoji);
+
+  final String label;
+  final String hint;
+  final String emoji;
+}
+
+class _EditIntent {
+  const _EditIntent(this.label, this.icon);
+
+  final String label;
+  final IconData icon;
+}
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -52,6 +80,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   int _selectedPhotoIndex = 0;
   bool _photoBusy = false;
   bool _saving = false;
+  bool _hideAge = false;
+  bool _showOnRadar = true;
+  bool _voiceOn = false;
 
   @override
   void dispose() {
@@ -253,7 +284,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 width: contentWidth,
                 height: constraints.maxHeight,
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 40),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
                   children: [
                     _EditTopBar(
                       saving: _saving,
@@ -262,7 +293,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                           ? null
                           : () => _saveProfile(profile),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
+                    const SizedBox(height: AppSpacing.md),
                     Column(
                       children: [
                         _EditHeroPhoto(
@@ -329,174 +360,35 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: BbV5Colors.paperHi,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: BbV5Colors.hair),
-                      ),
-                      child: Column(
-                        children: [
-                          _EditRow(
-                            label: 'Имя',
-                            child: TextField(
-                              key: const Key('edit-profile-name-field'),
-                              controller: _nameController,
-                              onChanged: (_) => setState(() {}),
-                              textAlign: TextAlign.right,
-                              cursorColor: BbV5Colors.terra,
-                              decoration: const InputDecoration(
-                                border: InputBorder.none,
-                                isCollapsed: true,
-                              ),
-                              style: AppTextStyles.body.copyWith(
-                                color: BbV5Colors.ink,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: BbV5Colors.hair,
-                          ),
-                          _EditRow(
-                            label: 'Возраст',
-                            child: TextField(
-                              key: const Key('edit-profile-age-field'),
-                              controller: _ageController,
-                              onChanged: (value) {
-                                final digitsOnly =
-                                    value.replaceAll(RegExp(r'\D'), '');
-                                final sanitized = digitsOnly.length > 2
-                                    ? digitsOnly.substring(0, 2)
-                                    : digitsOnly;
-                                if (_ageController.text != sanitized) {
-                                  _ageController.value = TextEditingValue(
-                                    text: sanitized,
-                                    selection: TextSelection.collapsed(
-                                      offset: sanitized.length,
-                                    ),
-                                  );
-                                }
-                                setState(() {});
-                              },
-                              textAlign: TextAlign.right,
-                              keyboardType: TextInputType.number,
-                              cursorColor: BbV5Colors.terra,
-                              decoration: const InputDecoration(
-                                border: InputBorder.none,
-                                isCollapsed: true,
-                              ),
-                              style: AppTextStyles.body.copyWith(
-                                color: BbV5Colors.ink,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: BbV5Colors.hair,
-                          ),
-                          _EditRow(
-                            label: 'Район',
-                            child: Text(
-                              profile?.area ?? 'Чистые пруды',
-                              textAlign: TextAlign.right,
-                              style: AppTextStyles.body.copyWith(
-                                color: BbV5Colors.inkSoft,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                    _EditSection(
+                      title: 'Основа',
+                      child: _buildBasicsCard(profile),
+                    ),
+                    _EditSection(
+                      title: 'Какое у тебя настроение чаще',
+                      child: _buildVibeGrid(),
+                    ),
+                    _EditSection(
+                      title: 'Зачем ты здесь',
+                      child: _buildIntentRow(),
                     ),
                     _EditSection(
                       title: 'О себе',
-                      child: Container(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: BbV5Colors.paperHi,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: BbV5Colors.hair),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            TextField(
-                              key: const Key('edit-profile-bio-field'),
-                              controller: _bioController,
-                              onChanged: (_) => setState(() {}),
-                              maxLines: 4,
-                              maxLength: 300,
-                              cursorColor: BbV5Colors.terra,
-                              decoration: const InputDecoration(
-                                border: InputBorder.none,
-                                counterText: '',
-                              ),
-                              style: AppTextStyles.bodySoft.copyWith(
-                                color: BbV5Colors.inkSoft,
-                              ),
-                            ),
-                            Text(
-                              '${_bioController.text.length}/300',
-                              style: AppTextStyles.caption.copyWith(
-                                color: BbV5Colors.inkMute,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    _EditSection(
-                      title: 'Настроение',
-                      child: Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        children: _editVibes
-                            .map((item) => _togglePill(item, vibe == item,
-                                () => setState(() => vibe = item)))
-                            .toList(growable: false),
-                      ),
-                    ),
-                    _EditSection(
-                      title: 'Зачем здесь',
-                      child: Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        children: ['Друзья', 'Свидания']
-                            .map(
-                              (item) => _togglePill(
-                                item,
-                                _intent.contains(item),
-                                () => setState(() {
-                                  if (_intent.contains(item)) {
-                                    _intent.remove(item);
-                                  } else {
-                                    _intent.add(item);
-                                  }
-                                }),
-                                selectedBackground:
-                                    BbV5Colors.terraSoft.withValues(
-                                  alpha: 0.52,
-                                ),
-                                selectedForeground: BbV5Colors.ink,
-                              ),
-                            )
-                            .toList(growable: false),
-                      ),
+                      right: _SuggestBioButton(onTap: _suggestBio),
+                      child: _buildBioCard(),
                     ),
                     _EditSection(
                       title: 'Интересы · ${_interests.length}',
+                      right: Text(
+                        'выбери минимум 3',
+                        style: AppTextStyles.caption.copyWith(
+                          color: BbV5Colors.inkMute,
+                          fontSize: 10.5,
+                        ),
+                      ),
                       child: Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
+                        spacing: 6,
+                        runSpacing: 6,
                         children: _allInterests
                             .map(
                               (item) => _togglePill(
@@ -509,10 +401,28 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                     _interests.add(item);
                                   }
                                 }),
+                                selectedBackground: BbV5Colors.ink,
+                                selectedForeground: BbV5Colors.paperHi,
+                                showCheck: true,
                               ),
                             )
                             .toList(growable: false),
                       ),
+                    ),
+                    _EditSection(
+                      title: 'Видимость',
+                      child: _buildVisibilityCard(),
+                    ),
+                    const SizedBox(height: 28),
+                    BbV5PillButton(
+                      label: 'Сохранить профиль',
+                      icon: LucideIcons.check,
+                      dark: true,
+                      height: 52,
+                      expanded: true,
+                      onPressed: _photoBusy || _saving
+                          ? null
+                          : () => _saveProfile(profile),
                     ),
                   ],
                 ),
@@ -524,12 +434,265 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
+  Widget _buildBasicsCard(ProfileData? profile) {
+    final area = profile?.area?.trim();
+    final city = profile?.city?.trim();
+    final location = [
+      if (city != null && city.isNotEmpty) city else 'Москва',
+      if (area != null && area.isNotEmpty) area else 'Чистые пруды',
+    ].join(' · ');
+
+    return BbV5Card(
+      padding: EdgeInsets.zero,
+      radius: 24,
+      child: Column(
+        children: [
+          _EditRow(
+            label: 'Как тебя зовут',
+            child: TextField(
+              key: const Key('edit-profile-name-field'),
+              controller: _nameController,
+              onChanged: (_) => setState(() {}),
+              maxLength: 32,
+              textAlign: TextAlign.right,
+              cursorColor: BbV5Colors.terra,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                counterText: '',
+                isCollapsed: true,
+              ),
+              style: AppTextStyles.body.copyWith(
+                color: BbV5Colors.ink,
+                fontFamily: 'Sora',
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: BbV5Colors.hairSoft),
+          _EditRow(
+            label: 'Возраст',
+            child: TextField(
+              key: const Key('edit-profile-age-field'),
+              controller: _ageController,
+              onChanged: (value) {
+                final digitsOnly = value.replaceAll(RegExp(r'\D'), '');
+                final sanitized = digitsOnly.length > 2
+                    ? digitsOnly.substring(0, 2)
+                    : digitsOnly;
+                if (_ageController.text != sanitized) {
+                  _ageController.value = TextEditingValue(
+                    text: sanitized,
+                    selection: TextSelection.collapsed(
+                      offset: sanitized.length,
+                    ),
+                  );
+                }
+                setState(() {});
+              },
+              textAlign: TextAlign.right,
+              keyboardType: TextInputType.number,
+              cursorColor: BbV5Colors.terra,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                isCollapsed: true,
+              ),
+              style: AppTextStyles.body.copyWith(
+                color: BbV5Colors.ink,
+                fontFamily: 'Sora',
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: BbV5Colors.hairSoft),
+          _EditRow(
+            label: 'Город · район',
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  LucideIcons.map_pin,
+                  size: 14,
+                  color: BbV5Colors.inkMute,
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    location,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: AppTextStyles.body.copyWith(
+                      color: BbV5Colors.ink,
+                      fontFamily: 'Sora',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(
+                  LucideIcons.chevron_down,
+                  size: 14,
+                  color: BbV5Colors.inkMute,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVibeGrid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tileWidth = (constraints.maxWidth - 8) / 2;
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _editVibes
+              .map(
+                (item) => SizedBox(
+                  width: tileWidth,
+                  child: _VibeCard(
+                    vibe: item,
+                    selected: vibe == item.label,
+                    onTap: () => setState(() => vibe = item.label),
+                  ),
+                ),
+              )
+              .toList(growable: false),
+        );
+      },
+    );
+  }
+
+  Widget _buildIntentRow() {
+    return Row(
+      children: [
+        for (var index = 0; index < _editIntents.length; index++) ...[
+          if (index > 0) const SizedBox(width: 8),
+          Expanded(
+            child: _IntentButton(
+              intent: _editIntents[index],
+              selected: _intent.contains(_editIntents[index].label),
+              onTap: () => setState(() {
+                final label = _editIntents[index].label;
+                if (_intent.contains(label)) {
+                  _intent.remove(label);
+                } else {
+                  _intent.add(label);
+                }
+              }),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildBioCard() {
+    return BbV5Card(
+      padding: const EdgeInsets.all(16),
+      radius: 20,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          TextField(
+            key: const Key('edit-profile-bio-field'),
+            controller: _bioController,
+            onChanged: (_) => setState(() {}),
+            maxLines: 4,
+            maxLength: _editProfileBioMaxLength,
+            cursorColor: BbV5Colors.terra,
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              counterText: '',
+              hintText: '2-3 предложения о тебе. Что любишь, чего ищешь.',
+              hintStyle: AppTextStyles.bodySoft.copyWith(
+                color: BbV5Colors.inkMute.withValues(alpha: 0.5),
+                fontSize: 13.5,
+              ),
+            ),
+            style: AppTextStyles.bodySoft.copyWith(
+              color: BbV5Colors.inkSoft,
+              fontSize: 13.5,
+              height: 1.45,
+            ),
+          ),
+          Row(
+            children: [
+              BbV5PillButton(
+                label: _voiceOn ? 'Запись...' : 'Голосом',
+                icon: LucideIcons.mic,
+                dark: _voiceOn,
+                height: 32,
+                fontSize: 11,
+                iconSize: 13,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                onPressed: () => setState(() => _voiceOn = !_voiceOn),
+              ),
+              const Spacer(),
+              Text(
+                '${_bioController.text.length}/$_editProfileBioMaxLength',
+                style: AppTextStyles.caption.copyWith(
+                  color: BbV5Colors.inkMute,
+                  fontSize: 10.5,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVisibilityCard() {
+    return BbV5Card(
+      padding: EdgeInsets.zero,
+      radius: 24,
+      child: Column(
+        children: [
+          _ToggleRow(
+            icon: _hideAge ? LucideIcons.eye_off : LucideIcons.eye,
+            label: 'Скрыть возраст',
+            subtitle: 'Покажем только имя',
+            value: _hideAge,
+            onChanged: (value) => setState(() => _hideAge = value),
+          ),
+          const Divider(height: 1, thickness: 1, color: BbV5Colors.hairSoft),
+          _ToggleRow(
+            icon: LucideIcons.map_pin,
+            label: 'Показывать на радаре',
+            subtitle: 'Тебя смогут найти рядом',
+            value: _showOnRadar,
+            onChanged: (value) => setState(() => _showOnRadar = value),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _suggestBio() {
+    setState(() {
+      _bioController.text =
+          'Легкий на подъем. Кофе с утра, бар вечером, и кто-то рядом.';
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Готовый текст подставлен')),
+    );
+  }
+
   Widget _togglePill(
     String label,
     bool selected,
     VoidCallback onTap, {
     Color? selectedBackground,
     Color? selectedForeground,
+    bool showCheck = false,
   }) {
     final resolvedSelectedBackground = selectedBackground ?? BbV5Colors.accent;
     final resolvedSelectedForeground = selectedForeground ?? BbV5Colors.paperHi;
@@ -539,8 +702,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(BbV5Radii.pill),
         child: Container(
-          height: 36,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             color: selected ? resolvedSelectedBackground : BbV5Colors.paperHi,
             borderRadius: BorderRadius.circular(BbV5Radii.pill),
@@ -549,15 +712,29 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             ),
             boxShadow: selected ? BbV5Shadows.ink : BbV5Shadows.pill,
           ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: AppTextStyles.meta.copyWith(
-              color: selected ? resolvedSelectedForeground : BbV5Colors.inkSoft,
-              fontFamily: 'Sora',
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (selected && showCheck) ...[
+                Icon(
+                  LucideIcons.check,
+                  size: 13,
+                  color: resolvedSelectedForeground,
+                ),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                label,
+                style: AppTextStyles.meta.copyWith(
+                  color: selected
+                      ? resolvedSelectedForeground
+                      : BbV5Colors.inkSoft,
+                  fontFamily: 'Sora',
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -580,11 +757,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       });
       await repository.saveOnboarding(
         OnboardingData(
-          intent: _intent.contains('Свидания') && _intent.contains('Друзья')
-              ? 'both'
-              : _intent.contains('Свидания')
-                  ? 'dating'
-                  : 'friendship',
+          intent: _resolveIntent(),
           gender: profile?.gender,
           city: profile?.city ?? 'Москва',
           area: profile?.area ?? 'Чистые пруды',
@@ -615,6 +788,24 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       }
     }
   }
+
+  String? _resolveIntent() {
+    final wantsDating = _intent.contains('Свидания');
+    final wantsFriends = _intent.contains('Друзья');
+    if (wantsDating && wantsFriends) {
+      return 'both';
+    }
+    if (wantsDating) {
+      return 'dating';
+    }
+    if (wantsFriends) {
+      return 'friendship';
+    }
+    if (_intent.contains('Нетворк')) {
+      return 'network';
+    }
+    return null;
+  }
 }
 
 class _EditTopBar extends StatelessWidget {
@@ -630,66 +821,226 @@ class _EditTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: Row(
-        children: [
-          SizedBox(
-            width: 44,
-            height: 44,
-            child: IconButton(
-              onPressed: onBack,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              icon: const Icon(
-                LucideIcons.chevron_left,
-                size: 26,
-                color: BbV5Colors.ink,
-              ),
+    return BbV5TopBar(
+      onBack: onBack,
+      kicker: 'Профиль',
+      title: 'Расскажи',
+      accent: 'о себе',
+      right: BbV5PillButton(
+        label: saving ? '...' : 'Готово',
+        icon: saving ? null : LucideIcons.check,
+        dark: true,
+        height: 40,
+        fontSize: 12.5,
+        iconSize: 15,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        onPressed: onSave,
+      ),
+    );
+  }
+}
+
+class _SuggestBioButton extends StatelessWidget {
+  const _SuggestBioButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        foregroundColor: BbV5Colors.terra,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      icon: const Icon(LucideIcons.sparkles, size: 13),
+      label: Text(
+        'ПОДСКАЗАТЬ',
+        style: AppTextStyles.caption.copyWith(
+          color: BbV5Colors.terra,
+          fontFamily: 'Sora',
+          fontSize: 10.5,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+}
+
+class _VibeCard extends StatelessWidget {
+  const _VibeCard({
+    required this.vibe,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _EditVibe vibe;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: selected
+                ? BbV5Colors.terraSoft.withValues(alpha: 0.5)
+                : BbV5Colors.paperHi,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? BbV5Colors.accent : BbV5Colors.hair,
+              width: selected ? 1.5 : 1,
             ),
-          ),
-          Expanded(
-            child: Text(
-              'Редактировать',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.itemTitle.copyWith(
-                color: BbV5Colors.inkSoft,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0F1F241D),
+                blurRadius: 1,
+                offset: Offset(0, 1),
               ),
-            ),
+            ],
           ),
-          SizedBox(
-            width: 74,
-            height: 44,
-            child: TextButton(
-              onPressed: onSave,
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.zero,
-                foregroundColor: BbV5Colors.terra,
-                disabledForegroundColor:
-                    BbV5Colors.terra.withValues(alpha: 0.45),
-              ),
-              child: saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: BbV5Colors.terra,
-                      ),
-                    )
-                  : Text(
-                      'Готово',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(vibe.emoji, style: const TextStyle(fontSize: 20)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      vibe.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.meta.copyWith(
-                        color: onSave == null
-                            ? BbV5Colors.terra.withValues(alpha: 0.45)
-                            : BbV5Colors.terra,
-                        fontSize: 14,
+                        color: BbV5Colors.ink,
+                        fontFamily: 'Sora',
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                vibe.hint,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(
+                  color: BbV5Colors.inkMute,
+                  fontSize: 11,
+                  height: 1.25,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IntentButton extends StatelessWidget {
+  const _IntentButton({
+    required this.intent,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _EditIntent intent;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5PillButton(
+      label: intent.label,
+      icon: intent.icon,
+      dark: selected,
+      height: 48,
+      fontSize: 12.5,
+      iconSize: 15,
+      iconGap: 5,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      expanded: true,
+      onPressed: onTap,
+    );
+  }
+}
+
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: BbV5Colors.paper,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: BbV5Colors.hair),
             ),
+            child: Icon(icon, size: 15, color: BbV5Colors.inkSoft),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.meta.copyWith(
+                    color: BbV5Colors.ink,
+                    fontFamily: 'Sora',
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: AppTextStyles.caption.copyWith(
+                    color: BbV5Colors.inkMute,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Switch.adaptive(
+            value: value,
+            activeThumbColor: BbV5Colors.paperHi,
+            activeTrackColor: BbV5Colors.accent,
+            inactiveThumbColor: BbV5Colors.paperHi,
+            inactiveTrackColor: const Color(0x2E3C281C),
+            onChanged: onChanged,
           ),
         ],
       ),
@@ -942,10 +1293,12 @@ class _EditSection extends StatelessWidget {
   const _EditSection({
     required this.title,
     required this.child,
+    this.right,
   });
 
   final String title;
   final Widget child;
+  final Widget? right;
 
   @override
   Widget build(BuildContext context) {
@@ -954,8 +1307,17 @@ class _EditSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          BbV5Kicker(title, color: BbV5Colors.inkSoft),
-          const SizedBox(height: AppSpacing.sm),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(child: BbV5Kicker(title)),
+                if (right != null) right!,
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
           child,
         ],
       ),
@@ -974,19 +1336,19 @@ class _EditRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 54,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 54),
       child: Row(
         children: [
           SizedBox(
-            width: 96,
+            width: 132,
             child: Padding(
               padding: const EdgeInsets.only(left: 16),
               child: Text(
                 label,
                 style: AppTextStyles.bodySoft.copyWith(
                   color: BbV5Colors.inkSoft,
-                  fontSize: 14,
+                  fontSize: 12.5,
                 ),
               ),
             ),

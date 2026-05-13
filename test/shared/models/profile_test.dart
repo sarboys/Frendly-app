@@ -62,6 +62,24 @@ void main() {
         profile.photos.first.url, '${BackendConfig.apiBaseUrl}/media/photo-1');
   });
 
+  test('profile maps network intent label', () {
+    final profile = ProfileData.fromProfileJson(
+      {
+        'id': 'user-me',
+        'displayName': 'Никита М',
+        'verified': true,
+        'online': true,
+        'rating': 4.8,
+        'meetupCount': 12,
+      },
+      onboardingJson: const {
+        'intent': 'network',
+      },
+    );
+
+    expect(profile.intent, ['Нетворк']);
+  });
+
   test('profile photo returns image variant for requested usage', () {
     final photo = ProfilePhoto.fromJson({
       'id': 'ph1',

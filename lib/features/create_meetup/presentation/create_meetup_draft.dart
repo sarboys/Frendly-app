@@ -35,6 +35,7 @@ class CreateMeetupDraft {
     this.priceAmountTo,
     this.inviteeUserId,
     this.afficheEventId,
+    this.externalPlaceId,
     this.routeId,
     this.route,
     this.communityId,
@@ -69,6 +70,7 @@ class CreateMeetupDraft {
   final EventJoinMode joinMode;
   final String? inviteeUserId;
   final String? afficheEventId;
+  final String? externalPlaceId;
   final String? routeId;
   final CreateEventRoutePayload? route;
   final String? communityId;
@@ -153,6 +155,7 @@ class CreateMeetupDraft {
       joinMode: joinMode ?? this.joinMode,
       inviteeUserId: inviteeUserId,
       afficheEventId: afficheEventId,
+      externalPlaceId: externalPlaceId,
       routeId: routeId,
       route: route,
       communityId: communityId,
@@ -200,6 +203,7 @@ Future<EventDetail> submitCreateMeetupDraft(
     joinMode: draft.joinMode,
     inviteeUserId: draft.inviteeUserId,
     afficheEventId: draft.afficheEventId,
+    externalPlaceId: draft.externalPlaceId,
     routeId: draft.routeId,
     route: draft.route,
     communityId: draft.communityId,

@@ -42,6 +42,12 @@ class EventDetail {
     this.ticketPriceFrom,
     this.ticketProvider,
     this.ticketVenue,
+    this.bookingUrl,
+    this.bookingProvider,
+    this.bookingPlaceId,
+    this.bookingAverageCheck,
+    this.bookingCurrency,
+    this.bookingPromos = const [],
   });
 
   final String id;
@@ -83,11 +89,19 @@ class EventDetail {
   final int? ticketPriceFrom;
   final String? ticketProvider;
   final String? ticketVenue;
+  final String? bookingUrl;
+  final String? bookingProvider;
+  final String? bookingPlaceId;
+  final int? bookingAverageCheck;
+  final String? bookingCurrency;
+  final List<EventBookingPromo> bookingPromos;
 
   bool get hasPaidTicket =>
       (ticketUrl ?? '').trim().isNotEmpty &&
       ticketPriceFrom != null &&
       ticketPriceFrom! > 0;
+
+  bool get hasTableBooking => (bookingUrl ?? '').trim().isNotEmpty;
 
   factory EventDetail.fromJson(Map<String, dynamic> json) {
     return EventDetail(
@@ -137,6 +151,19 @@ class EventDetail {
       ticketPriceFrom: (json['ticketPriceFrom'] as num?)?.toInt(),
       ticketProvider: json['ticketProvider'] as String?,
       ticketVenue: json['ticketVenue'] as String?,
+      bookingUrl: json['bookingUrl'] as String?,
+      bookingProvider: json['bookingProvider'] as String?,
+      bookingPlaceId: json['bookingPlaceId'] as String?,
+      bookingAverageCheck: (json['bookingAverageCheck'] as num?)?.toInt(),
+      bookingCurrency: json['bookingCurrency'] as String?,
+      bookingPromos: ((json['bookingPromos'] as List?) ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => EventBookingPromo.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList(growable: false),
     );
   }
 }

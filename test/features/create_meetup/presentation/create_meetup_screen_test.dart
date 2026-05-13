@@ -50,6 +50,7 @@ class _FakeCreateMeetupRepository extends BackendRepository {
   String? lastDescription;
   String? lastInviteeUserId;
   String? lastSourceChatId;
+  String? lastExternalPlaceId;
   var createEventCalls = 0;
   var updateHostedEventCalls = 0;
   String? lastUpdatedEventId;
@@ -81,6 +82,7 @@ class _FakeCreateMeetupRepository extends BackendRepository {
     String? inviteeUserId,
     String? sourceChatId,
     String? afficheEventId,
+    String? externalPlaceId,
     String? routeId,
     CreateEventRoutePayload? route,
     String? dressCode,
@@ -108,6 +110,7 @@ class _FakeCreateMeetupRepository extends BackendRepository {
     lastDescription = description;
     lastInviteeUserId = inviteeUserId;
     lastSourceChatId = sourceChatId;
+    lastExternalPlaceId = externalPlaceId;
     return const EventDetail(
       id: 'e-created',
       title: 'Новая встреча',

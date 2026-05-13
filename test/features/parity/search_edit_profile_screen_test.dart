@@ -19,10 +19,21 @@ Widget _wrap(Widget child, {List<Override> extraOverrides = const []}) {
 }
 
 void main() {
-  testWidgets('edit profile keeps age numeric and updates bio counter',
+  testWidgets('edit profile mirrors v5 edit copy and keeps field constraints',
       (tester) async {
     await tester.pumpWidget(_wrap(const EditProfileScreen()));
     await tester.pumpAndSettle();
+
+    expect(find.textContaining('Расскажи'), findsOneWidget);
+    expect(find.textContaining('о себе'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Основа'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Основа'), findsOneWidget);
 
     final ageField = find.byKey(const Key('edit-profile-age-field'));
     await tester.scrollUntilVisible(
@@ -36,6 +47,22 @@ void main() {
 
     expect(find.text('28'), findsWidgets);
 
+    await tester.scrollUntilVisible(
+      find.text('Какое у тебя настроение чаще'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Какое у тебя настроение чаще'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Зачем ты здесь'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Зачем ты здесь'), findsOneWidget);
+
     final bioField = find.byKey(const Key('edit-profile-bio-field'));
     await tester.scrollUntilVisible(
       bioField,
@@ -46,7 +73,17 @@ void main() {
     await tester.enterText(bioField, 'Привет');
     await tester.pumpAndSettle();
 
-    expect(find.text('6/300'), findsOneWidget);
+    expect(find.text('6/280'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Видимость'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Скрыть возраст'), findsOneWidget);
+    expect(find.text('Показывать на радаре'), findsOneWidget);
   });
 
   testWidgets('edit profile shows photo thumbnails under hero', (tester) async {

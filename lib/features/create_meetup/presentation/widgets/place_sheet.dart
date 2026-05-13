@@ -6,6 +6,7 @@ import 'package:big_break_mobile/app/core/device/app_reverse_geocoding_service.d
 import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +24,12 @@ class PlaceSelection {
     this.longitude,
     this.category,
     this.emoji,
+    this.externalPlaceId,
+    this.bookingUrl,
+    this.averageCheck,
+    this.currency,
+    this.provider,
+    this.promos = const [],
   });
 
   final String name;
@@ -33,6 +40,12 @@ class PlaceSelection {
   final double? longitude;
   final String? category;
   final String? emoji;
+  final String? externalPlaceId;
+  final String? bookingUrl;
+  final int? averageCheck;
+  final String? currency;
+  final String? provider;
+  final List<BackendPlacePromo> promos;
 }
 
 Future<PlaceSelection?> showPlaceSheet(
@@ -321,7 +334,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
     }
 
     setState(() {
-      if (trimmed.isEmpty || trimmed.length < 3) {
+      if (trimmed.isEmpty || trimmed.length < 2) {
         _remoteResults = const [];
         _searching = false;
       } else {
@@ -329,13 +342,14 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
       }
     });
 
-    if (trimmed.isEmpty || trimmed.length < 3) {
+    if (trimmed.isEmpty || trimmed.length < 2) {
       return;
     }
 
     final mapService = ref.read(yandexMapServiceProvider);
     final addressGeocodingService =
         ref.read(appAddressGeocodingServiceProvider);
+    final repository = ref.read(backendRepositoryProvider);
     final near = _manualLocationSearchPoint();
     late final Timer searchTimer;
     searchTimer = Timer(const Duration(milliseconds: 300), () async {
@@ -347,6 +361,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
         trimmed,
         mapService,
         addressGeocodingService,
+        repository: repository,
         near: near,
       );
 
@@ -415,8 +430,18 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
     String query,
     YandexMapService mapService,
     AppAddressGeocodingService addressGeocodingService, {
+    required BackendRepository repository,
     Point? near,
   }) async {
+    final backendPlaces = await _searchBackendPlaces(
+      query,
+      repository,
+      near: near,
+    );
+    if (backendPlaces.isNotEmpty) {
+      return backendPlaces;
+    }
+
     final yandexPlaces = await _searchYandexPlaces(
       query,
       mapService,
@@ -431,6 +456,47 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
       addressGeocodingService,
     );
     return fallbackPlace == null ? const [] : [fallbackPlace];
+  }
+
+  Future<List<PlaceSelection>> _searchBackendPlaces(
+    String query,
+    BackendRepository repository, {
+    Point? near,
+  }) async {
+    try {
+      final places = await repository
+          .searchPlaces(
+            query: query,
+            latitude: near?.latitude,
+            longitude: near?.longitude,
+            limit: 10,
+          )
+          .timeout(const Duration(seconds: 2));
+      return places
+          .map(
+            (place) => PlaceSelection(
+              name: place.name.trim().isEmpty ? place.address : place.name,
+              address: place.address,
+              distance: place.distanceKm == null
+                  ? null
+                  : '${place.distanceKm!.toStringAsFixed(1)} км',
+              distanceKm: place.distanceKm,
+              latitude: place.lat,
+              longitude: place.lng,
+              category: place.placeKind ?? place.category ?? 'ТоМесто',
+              emoji: _emojiForPlace(place.name, place.category ?? ''),
+              externalPlaceId: place.id,
+              bookingUrl: place.bookingUrl,
+              averageCheck: place.averageCheck,
+              currency: place.currency,
+              provider: place.provider,
+              promos: place.promos,
+            ),
+          )
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
   }
 
   Future<List<PlaceSelection>> _searchYandexPlaces(
@@ -683,6 +749,33 @@ class _PlaceRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (place.externalPlaceId != null) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          const _PlaceBadge(label: 'Можно забронировать'),
+                          if (place.averageCheck != null)
+                            _PlaceBadge(
+                              label:
+                                  'Средний чек ${place.averageCheck} ${_currencySymbol(place.currency)}',
+                            ),
+                        ],
+                      ),
+                      if (place.promos.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          place.promos.first.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.caption.copyWith(
+                            color: BbV5Colors.terra,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
                   ],
                 ),
               ),
@@ -723,6 +816,37 @@ class _PlaceRow extends StatelessWidget {
 
     return address;
   }
+}
+
+class _PlaceBadge extends StatelessWidget {
+  const _PlaceBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: BbV5Colors.brandSoft,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: BbV5Colors.hair),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        child: Text(
+          label,
+          style: AppTextStyles.caption.copyWith(
+            color: BbV5Colors.inkSoft,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _currencySymbol(String? currency) {
+  return currency == 'RUB' || currency == null ? '₽' : currency;
 }
 
 class _PlaceSheetCloseButton extends StatelessWidget {

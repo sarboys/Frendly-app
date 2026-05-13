@@ -1579,6 +1579,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
         inviteeUserId: widget.inviteeUserId,
         sourceChatId: isDatingMode ? widget.sourceChatId : null,
         afficheEventId: _afficheEvent?.id,
+        externalPlaceId:
+            _afficheEvent == null ? submitPlace.externalPlaceId : null,
         routeId:
             _routeSelection?.custom == true ? null : _routeSelection?.routeId,
         route: _routeSelection?.toCustomPayload(),
@@ -1658,6 +1660,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
           ? EventJoinMode.request
           : EventJoinMode.open,
       afficheEventId: _afficheEvent?.id,
+      externalPlaceId: _afficheEvent == null ? submitPlace.externalPlaceId : null,
       routeId:
           _routeSelection?.custom == true ? null : _routeSelection?.routeId,
       route: _routeSelection?.toCustomPayload(),
