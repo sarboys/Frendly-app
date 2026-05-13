@@ -60,7 +60,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   ym.Point? _userPoint;
   String selected = '';
   String filter = 'all';
-  bool _locating = false;
   bool _primingInitialLocation = false;
   bool _didPrimeInitialLocation = false;
   bool _triedInitialLocation = false;
@@ -134,64 +133,57 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
     _syncPagerToSelected(filteredEvents, selectedId);
     _scheduleViewportFit(filteredEvents);
+    final topInset = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
       backgroundColor: BbV5Colors.paper,
-      body: SafeArea(
-        bottom: false,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: _buildMapSurface(
-                filteredEvents,
-                mapObjects,
-                selectedId,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: _buildMapSurface(
+              filteredEvents,
+              mapObjects,
+              selectedId,
+            ),
+          ),
+          if (!_supportsNativeMap)
+            const Positioned.fill(
+              child: IgnorePointer(
+                child: _RadarMapVisualOverlay(
+                  showUserPulse: true,
+                ),
               ),
             ),
-            if (!_supportsNativeMap)
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: _RadarMapVisualOverlay(
-                    showUserPulse: true,
-                  ),
-                ),
+          if (!_supportsNativeMap)
+            for (final entry in liveEvenings.asMap().entries)
+              _LiveEveningMapPin(
+                session: entry.value,
+                index: entry.key,
               ),
-            if (!_supportsNativeMap)
-              for (final entry in liveEvenings.asMap().entries)
-                _LiveEveningMapPin(
-                  session: entry.value,
-                  index: entry.key,
-                ),
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 12,
-              child: _RadarTopControls(
-                events: events,
-                filter: filter,
-                radiusKm: nearbyRadiusKm,
-                onBack: _handleBack,
-                onSelectFilter: (nextFilter) => _selectFilter(
-                  nextFilter,
-                  events,
-                ),
-                onRadiusChanged: _changeNearbyRadius,
+          Positioned(
+            left: 0,
+            right: 0,
+            top: topInset + 12,
+            child: _RadarTopControls(
+              events: events,
+              filter: filter,
+              radiusKm: nearbyRadiusKm,
+              onBack: _handleBack,
+              onSelectFilter: (nextFilter) => _selectFilter(
+                nextFilter,
+                events,
               ),
+              onRadiusChanged: _changeNearbyRadius,
             ),
-            Positioned(
-              right: 20,
-              top: MediaQuery.sizeOf(context).height * 0.40,
+          ),
+          Positioned(
+            right: 20,
+            top: 0,
+            bottom: 0,
+            child: Center(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _MapTopButton(
-                    icon: LucideIcons.layers,
-                    tooltip: 'Слои карты',
-                    onTap: () => _selectFilter(
-                      filter == 'all' ? 'calm' : 'all',
-                      events,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
                   _MapTopButton(
                     icon: LucideIcons.plus,
                     tooltip: 'Приблизить',
@@ -203,64 +195,56 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     tooltip: 'Отдалить',
                     onTap: () => _changeZoom(-_mapZoomStep),
                   ),
-                  const SizedBox(height: 8),
-                  _MapTopButton(
-                    icon: _locating
-                        ? LucideIcons.ellipsis
-                        : LucideIcons.locate_fixed,
-                    tooltip: 'Моё место',
-                    onTap: _locating ? null : _moveToCurrentLocation,
-                  ),
                 ],
               ),
             ),
-            if (filteredEvents.isNotEmpty)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 96,
-                child: _RadarBottomSheet(
-                  events: filteredEvents,
-                  isExpanded: _isRadarListExpanded,
-                  pageController: _eventPageController,
-                  onPageChanged: (index) {
-                    final eventIndex = radarCarouselEventIndex(
-                      index,
-                      filteredEvents.length,
-                    );
-                    if (eventIndex < 0 || eventIndex >= filteredEvents.length) {
-                      return;
-                    }
-                    _selectEvent(
-                      filteredEvents[eventIndex],
-                      filteredEvents,
-                      animatePager: false,
-                    );
-                  },
-                  onToggleExpanded: () {
-                    setState(() {
-                      _isRadarListExpanded = !_isRadarListExpanded;
-                    });
-                  },
-                  onEventTap: (event) => context.pushRoute(
-                    AppRoute.eventDetail,
-                    pathParameters: {'eventId': event.id},
-                  ),
-                ),
-              ),
+          ),
+          if (filteredEvents.isNotEmpty)
             Positioned(
               left: 0,
               right: 0,
-              bottom: 0,
-              child: BbV5GlassBottomBar(
-                child: BbBottomNav(
-                  location: AppRoute.tonight.path,
-                  onTap: (tab) => context.goRoute(tab.route),
+              bottom: 96,
+              child: _RadarBottomSheet(
+                events: filteredEvents,
+                isExpanded: _isRadarListExpanded,
+                pageController: _eventPageController,
+                onPageChanged: (index) {
+                  final eventIndex = radarCarouselEventIndex(
+                    index,
+                    filteredEvents.length,
+                  );
+                  if (eventIndex < 0 || eventIndex >= filteredEvents.length) {
+                    return;
+                  }
+                  _selectEvent(
+                    filteredEvents[eventIndex],
+                    filteredEvents,
+                    animatePager: false,
+                  );
+                },
+                onExpandedChanged: (expanded) {
+                  setState(() {
+                    _isRadarListExpanded = expanded;
+                  });
+                },
+                onEventTap: (event) => context.pushRoute(
+                  AppRoute.eventDetail,
+                  pathParameters: {'eventId': event.id},
                 ),
               ),
             ),
-          ],
-        ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: BbV5GlassBottomBar(
+              child: BbBottomNav(
+                location: AppRoute.tonight.path,
+                onTap: (tab) => context.goRoute(tab.route),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -493,38 +477,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  Future<void> _moveToCurrentLocation() async {
-    setState(() {
-      _locating = true;
-    });
-
-    try {
-      final point = await _resolvePreferredMapPoint();
-      if (point == null) {
-        return;
-      }
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _autoFitPending = true;
-        _lastViewportFitKey = '';
-        _searchPoint = point;
-        _userPoint = point;
-        _mapQuery = buildInitialMapEventsQuery(point);
-      });
-      unawaited(_moveToUserPreview(point));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _locating = false;
-        });
-      }
-    }
-  }
-
   void _changeNearbyRadius(double value) {
     final radiusKm = clampNearbyEventsRadiusKm(value);
     ref.read(nearbyEventsRadiusKmProvider.notifier).setRadiusKm(radiusKm);
@@ -537,8 +489,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               );
 
     setState(() {
-      _autoFitPending = true;
-      _lastViewportFitKey = '';
       if (currentCenter == null) {
         _mapQuery = MapEventsQuery(radiusKm: radiusKm);
       } else {
@@ -549,6 +499,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         );
       }
     });
+
+    if (currentCenter != null) {
+      unawaited(_fitViewportForRadius(currentCenter, radiusKm));
+    }
+  }
+
+  Future<void> _fitViewportForRadius(ym.Point center, double radiusKm) {
+    return _moveToBounds(
+      buildMapRadiusBounds(center: center, radiusKm: radiusKm),
+    );
   }
 
   Future<ym.Point?> _resolvePreferredMapPoint() async {
@@ -1427,6 +1387,34 @@ ym.BoundingBox? buildMapViewportBounds({
 }
 
 @visibleForTesting
+ym.BoundingBox buildMapRadiusBounds({
+  required ym.Point center,
+  required double radiusKm,
+}) {
+  const kilometersPerLatitudeDegree = 111.32;
+  final paddedRadiusKm = radiusKm.clamp(0.5, nearbyEventsMaxRadiusKm) * 1.12;
+  final latitudeDelta = paddedRadiusKm / kilometersPerLatitudeDegree;
+  final latitudeRadians = center.latitude * 0.017453292519943295;
+  final longitudeScale =
+      math.cos(latitudeRadians).abs().clamp(0.01, 1).toDouble();
+  final longitudeDelta =
+      paddedRadiusKm / (kilometersPerLatitudeDegree * longitudeScale);
+
+  return ym.BoundingBox(
+    southWest: ym.Point(
+      latitude: (center.latitude - latitudeDelta).clamp(-90, 90).toDouble(),
+      longitude:
+          (center.longitude - longitudeDelta).clamp(-180, 180).toDouble(),
+    ),
+    northEast: ym.Point(
+      latitude: (center.latitude + latitudeDelta).clamp(-90, 90).toDouble(),
+      longitude:
+          (center.longitude + longitudeDelta).clamp(-180, 180).toDouble(),
+    ),
+  );
+}
+
+@visibleForTesting
 bool shouldScheduleMapViewportFit({
   required bool supportsNativeMap,
   required bool hasMapController,
@@ -1791,7 +1779,7 @@ ym.Point? resolvePreferredMapPoint({
   ManualLocation? manualLocation,
   Position? currentPosition,
 }) {
-  if (manualLocation != null) {
+  if (manualLocation != null && isSupportedManualLocation(manualLocation)) {
     return ym.Point(
       latitude: manualLocation.latitude,
       longitude: manualLocation.longitude,
@@ -1860,7 +1848,7 @@ class _RadarBottomSheet extends StatelessWidget {
     required this.isExpanded,
     required this.pageController,
     required this.onPageChanged,
-    required this.onToggleExpanded,
+    required this.onExpandedChanged,
     required this.onEventTap,
   });
 
@@ -1868,42 +1856,51 @@ class _RadarBottomSheet extends StatelessWidget {
   final bool isExpanded;
   final PageController pageController;
   final ValueChanged<int> onPageChanged;
-  final VoidCallback onToggleExpanded;
+  final ValueChanged<bool> onExpandedChanged;
   final ValueChanged<Event> onEventTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(20, 10, 20, isExpanded ? 16 : 10),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [BbV5Colors.paperHi, BbV5Colors.paper],
-        ),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        border: Border.all(color: BbV5Colors.hair),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x2E1F241D),
-            blurRadius: 40,
-            spreadRadius: -12,
-            offset: Offset(0, -16),
+    return GestureDetector(
+      key: const Key('radar-bottom-sheet-drag-area'),
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity > 20) {
+          onExpandedChanged(false);
+        } else if (velocity < -20) {
+          onExpandedChanged(true);
+        }
+      },
+      child: Container(
+        padding: EdgeInsets.fromLTRB(20, 10, 20, isExpanded ? 16 : 10),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [BbV5Colors.paperHi, BbV5Colors.paper],
           ),
-        ],
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                height: 34,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(color: BbV5Colors.hair),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x2E1F241D),
+              blurRadius: 40,
+              spreadRadius: -12,
+              offset: Offset(0, -16),
+            ),
+          ],
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: 34,
+                  child: Center(
+                    child: Container(
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
@@ -1911,62 +1908,36 @@ class _RadarBottomSheet extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Tooltip(
-                        message:
-                            isExpanded ? 'Свернуть список' : 'Открыть список',
-                        child: Material(
-                          color: BbV5Colors.paperHi,
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            onTap: onToggleExpanded,
-                            customBorder: const CircleBorder(),
-                            child: SizedBox(
-                              width: 32,
-                              height: 32,
-                              child: Icon(
-                                isExpanded
-                                    ? LucideIcons.chevron_down
-                                    : LucideIcons.chevron_up,
-                                size: 17,
-                                color: BbV5Colors.ink,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (isExpanded) ...[
-                const SizedBox(height: 6),
-                SizedBox(
-                  width: double.infinity,
-                  height: 120,
-                  child: PageView.builder(
-                    controller: pageController,
-                    padEnds: true,
-                    onPageChanged: onPageChanged,
-                    itemCount: events.length <= 2 ? events.length : null,
-                    itemBuilder: (context, index) {
-                      final event = events[radarCarouselEventIndex(
-                        index,
-                        events.length,
-                      )];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 5),
-                        child: _RadarEventCard(
-                          event: event,
-                          onTap: () => onEventTap(event),
-                        ),
-                      );
-                    },
                   ),
                 ),
+                if (isExpanded) ...[
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 136,
+                    child: PageView.builder(
+                      controller: pageController,
+                      padEnds: true,
+                      onPageChanged: onPageChanged,
+                      itemCount: events.length <= 2 ? events.length : null,
+                      itemBuilder: (context, index) {
+                        final event = events[radarCarouselEventIndex(
+                          index,
+                          events.length,
+                        )];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 5),
+                          child: _RadarEventCard(
+                            event: event,
+                            onTap: () => onEventTap(event),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

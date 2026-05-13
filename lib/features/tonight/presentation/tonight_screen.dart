@@ -432,8 +432,6 @@ class _TonightRadarCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final count = eventsCount == 0 ? 46 : eventsCount;
-
     return BbV5Card(
       tint: BbV5Colors.terraSoft,
       child: Column(
@@ -455,7 +453,7 @@ class _TonightRadarCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '$count встреч и афиш рядом',
+                      '$eventsCount встреч и афиш рядом',
                       style: bbV5DisplayStyle(
                         fontSize: 18,
                         height: 1.1,

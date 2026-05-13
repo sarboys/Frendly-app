@@ -120,6 +120,26 @@ void main() {
     );
   });
 
+  test('map radius bounds cover the selected radius around center', () {
+    const center = ym.Point(latitude: 55.7558, longitude: 37.6173);
+
+    final bounds = buildMapRadiusBounds(center: center, radiusKm: 42);
+
+    expect(bounds.southWest.latitude, lessThan(center.latitude));
+    expect(bounds.southWest.longitude, lessThan(center.longitude));
+    expect(bounds.northEast.latitude, greaterThan(center.latitude));
+    expect(bounds.northEast.longitude, greaterThan(center.longitude));
+    expect(
+      Geolocator.distanceBetween(
+        center.latitude,
+        center.longitude,
+        bounds.northEast.latitude,
+        center.longitude,
+      ),
+      greaterThan(42000),
+    );
+  });
+
   test('map viewport fit does not repeat without an explicit pending fit', () {
     expect(
       shouldScheduleMapViewportFit(
@@ -213,6 +233,31 @@ void main() {
 
     expect(point?.latitude, 55.7558);
     expect(point?.longitude, 37.6173);
+  });
+
+  test('map ignores invalid manual location and falls back to device GPS', () {
+    final point = resolvePreferredMapPoint(
+      manualLocation: const ManualLocation(
+        label: 'Москва',
+        latitude: 0,
+        longitude: 0,
+      ),
+      currentPosition: Position(
+        latitude: 12.2388,
+        longitude: 109.1967,
+        timestamp: DateTime(2026, 5, 5, 12),
+        accuracy: 1,
+        altitude: 0,
+        altitudeAccuracy: 1,
+        heading: 0,
+        headingAccuracy: 1,
+        speed: 0,
+        speedAccuracy: 0,
+      ),
+    );
+
+    expect(point?.latitude, 12.2388);
+    expect(point?.longitude, 109.1967);
   });
 
   test('map viewport fit key changes when event points arrive', () {
@@ -469,7 +514,7 @@ void main() {
               (ref, query) async => const [
                 Event(
                   id: 'map-1',
-                  title: 'Первая точка',
+                  title: 'Спокойный вечер: Kitchen Burger Bar → дом Шурика',
                   emoji: '☕',
                   time: 'Сегодня · 12:00',
                   place: 'Москва',
@@ -512,7 +557,10 @@ void main() {
       expect(find.text('Рядом сегодня'), findsNothing);
       expect(find.text('2 точек · 50 км'), findsNothing);
       expect(find.text('AI подбор'), findsNothing);
-      expect(find.text('Первая точка'), findsOneWidget);
+      expect(
+        find.text('Спокойный вечер: Kitchen Burger Bar → дом Шурика'),
+        findsOneWidget,
+      );
       expect(find.text('Вторая точка'), findsOneWidget);
       expect(find.text('Открыть →'), findsNothing);
       expect(find.text('1 из 4'), findsNothing);
@@ -521,17 +569,65 @@ void main() {
       expect(pageView.padEnds, isTrue);
       expect(pageView.controller?.viewportFraction, greaterThan(0.70));
 
-      await tester.tap(find.byTooltip('Свернуть список'));
+      await tester.fling(
+        find.byKey(const Key('radar-bottom-sheet-drag-area')),
+        const Offset(0, 160),
+        600,
+      );
       await tester.pumpAndSettle();
 
-      expect(find.text('Первая точка'), findsNothing);
-      expect(find.byTooltip('Открыть список'), findsOneWidget);
+      expect(
+        find.text('Спокойный вечер: Kitchen Burger Bar → дом Шурика'),
+        findsNothing,
+      );
+      expect(find.byIcon(LucideIcons.chevron_up), findsNothing);
+      expect(find.byIcon(LucideIcons.chevron_down), findsNothing);
 
-      await tester.tap(find.byTooltip('Открыть список'));
+      await tester.fling(
+        find.byKey(const Key('radar-bottom-sheet-drag-area')),
+        const Offset(0, -160),
+        600,
+      );
       await tester.pumpAndSettle();
 
-      expect(find.text('Первая точка'), findsOneWidget);
-      expect(find.byTooltip('Свернуть список'), findsOneWidget);
+      expect(
+        find.text('Спокойный вечер: Kitchen Burger Bar → дом Шурика'),
+        findsOneWidget,
+      );
+      expect(find.byIcon(LucideIcons.chevron_up), findsNothing);
+      expect(find.byIcon(LucideIcons.chevron_down), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('map surface extends under the phone notch', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ..._mapTestOverrides([
+              mapEventsProvider.overrideWith((ref, query) async => const []),
+            ]),
+          ],
+          child: const MaterialApp(
+            home: MediaQuery(
+              data: MediaQueryData(
+                padding: EdgeInsets.only(top: 47),
+                size: Size(390, 844),
+              ),
+              child: MapScreen(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getTopLeft(find.byKey(const Key('map-fallback-surface'))).dy,
+        0,
+      );
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
@@ -755,8 +851,22 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byIcon(LucideIcons.plus), findsOneWidget);
-      expect(find.byIcon(LucideIcons.minus), findsOneWidget);
+      final plus = find.byIcon(LucideIcons.plus);
+      final minus = find.byIcon(LucideIcons.minus);
+      expect(plus, findsOneWidget);
+      expect(minus, findsOneWidget);
+      expect(find.byIcon(LucideIcons.layers), findsNothing);
+      expect(find.byIcon(LucideIcons.locate_fixed), findsNothing);
+
+      final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+      final plusCenter = tester.getCenter(plus);
+      final minusCenter = tester.getCenter(minus);
+      expect(plusCenter.dx, greaterThan(size.width - 72));
+      expect(minusCenter.dx, greaterThan(size.width - 72));
+      expect(
+        (plusCenter.dy + minusCenter.dy) / 2,
+        moreOrLessEquals(size.height / 2, epsilon: 24),
+      );
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

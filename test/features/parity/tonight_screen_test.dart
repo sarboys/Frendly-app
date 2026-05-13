@@ -69,6 +69,20 @@ void main() {
     expect(find.text('Билеты на эту неделю'), findsNothing);
   });
 
+  testWidgets('tonight radar uses the real nearby event count', (
+    tester,
+  ) async {
+    await _pumpTonightDirect(
+      tester,
+      extraOverrides: [
+        eventsProvider.overrideWith((ref, filter) async => const []),
+      ],
+    );
+
+    expect(find.text('0 встреч и афиш рядом'), findsOneWidget);
+    expect(find.text('46 встреч и афиш рядом'), findsNothing);
+  });
+
   testWidgets('tonight home hero title is hidden', (
     tester,
   ) async {

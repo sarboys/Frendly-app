@@ -62,7 +62,8 @@ bool isSupportedManualLocation(ManualLocation location) {
       location.latitude >= -90 &&
       location.latitude <= 90 &&
       location.longitude >= -180 &&
-      location.longitude <= 180;
+      location.longitude <= 180 &&
+      (location.latitude != 0 || location.longitude != 0);
 }
 
 String _normalizeLocationText(String? value) {
@@ -86,6 +87,10 @@ class ManualLocationController extends StateNotifier<ManualLocation?> {
   final SharedPreferences? _preferences;
 
   void setLocation(ManualLocation location) {
+    if (!isSupportedManualLocation(location)) {
+      clear();
+      return;
+    }
     state = location;
     final preferences = _preferences;
     if (preferences != null) {
@@ -118,10 +123,14 @@ ManualLocation? _restoreLocation(SharedPreferences? preferences) {
     if (decoded is! Map) {
       return null;
     }
+    final json = Map<String, dynamic>.from(decoded);
+    if (json['latitude'] is! num || json['longitude'] is! num) {
+      return null;
+    }
     final location = ManualLocation.fromJson(
-      Map<String, dynamic>.from(decoded),
+      json,
     );
-    if (location.label.trim().isEmpty) {
+    if (!isSupportedManualLocation(location)) {
       return null;
     }
     return location;
