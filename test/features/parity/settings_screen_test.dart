@@ -41,15 +41,25 @@ void main() {
 
     expect(find.text('Управление'), findsOneWidget);
     expect(find.text('Настройки аккаунта'), findsOneWidget);
+    expect(find.text('Никита М'), findsOneWidget);
+    expect(find.text('Frendly+'), findsOneWidget);
+    expect(find.text('Wallet'), findsOneWidget);
+    expect(find.text('Верификация'), findsOneWidget);
+    expect(find.text('SOS'), findsOneWidget);
+    expect(find.text('Вечера и поиск'), findsOneWidget);
+    expect(find.text('Радар рядом'), findsOneWidget);
+    expect(find.text('AI compass'), findsOneWidget);
+    expect(find.text('Авто-вечер'), findsOneWidget);
+    expect(find.text('After Dark'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('Помощь'),
+      find.text('Удаление аккаунта'),
       400,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Поддержка'), findsOneWidget);
-    expect(find.text('Помощь'), findsOneWidget);
-    expect(find.text('Условия и приватность'), findsOneWidget);
+    expect(find.text('Опасная зона'), findsOneWidget);
+    expect(find.text('Поддержка и условия'), findsOneWidget);
+    expect(find.text('Удаление аккаунта'), findsOneWidget);
     expect(find.text('Frendly+ доступ'), findsNothing);
     expect(find.text('After Dark доступ'), findsNothing);
   });
@@ -72,13 +82,20 @@ void main() {
     await tester.pump();
 
     expect(find.text('Настройки аккаунта'), findsOneWidget);
-    expect(find.text('Push-уведомления'), findsOneWidget);
+    expect(find.text('Вечера и поиск'), findsOneWidget);
   });
 
   testWidgets('settings language row opens selector sheet', (tester) async {
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('Язык'),
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -160));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Язык'));
     await tester.pumpAndSettle();
 
@@ -116,6 +133,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('Push-уведомления'),
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Push-уведомления'));
     await tester.pump();
 

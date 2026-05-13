@@ -323,7 +323,7 @@ class _AfficheEventsBrowserState extends ConsumerState<AfficheEventsBrowser> {
       useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _AfficheFilterSheet(
+      builder: (context) => PosterFilterSheetV5(
         date: _date,
         priceMode: _priceMode,
         timeOfDay: _timeOfDay,
@@ -880,14 +880,15 @@ class _AfficheFilterSelection {
   final double radiusKm;
 }
 
-class _AfficheFilterSheet extends StatefulWidget {
-  const _AfficheFilterSheet({
+class PosterFilterSheetV5 extends StatefulWidget {
+  const PosterFilterSheetV5({
     required this.date,
     required this.priceMode,
     required this.timeOfDay,
     required this.categories,
     required this.radiusKm,
     required this.resultsCount,
+    super.key,
   });
 
   final String? date;
@@ -898,10 +899,10 @@ class _AfficheFilterSheet extends StatefulWidget {
   final int resultsCount;
 
   @override
-  State<_AfficheFilterSheet> createState() => _AfficheFilterSheetState();
+  State<PosterFilterSheetV5> createState() => _PosterFilterSheetV5State();
 }
 
-class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
+class _PosterFilterSheetV5State extends State<PosterFilterSheetV5> {
   late String? _date = widget.date;
   late String _priceMode = widget.priceMode;
   late String _timeOfDay = widget.timeOfDay;
@@ -911,172 +912,202 @@ class _AfficheFilterSheetState extends State<_AfficheFilterSheet> {
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.64,
+      initialChildSize: 0.72,
       minChildSize: 0.42,
       maxChildSize: 0.9,
       builder: (context, controller) {
-        return Container(
-          key: const Key('affiche-v5-filter-sheet'),
-          decoration: BoxDecoration(
-            color: BbV5Colors.paper,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border.all(color: BbV5Colors.hair),
-            boxShadow: BbV5Shadows.card,
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(BbV5Radii.lg),
           ),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-                child: Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: BbV5Colors.hair,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
+          child: Material(
+            key: const Key('affiche-v5-filter-sheet'),
+            color: BbV5Colors.paper,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: BbV5Colors.hair),
+                boxShadow: BbV5Shadows.card,
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-                child: Row(
+              child: SafeArea(
+                top: false,
+                child: Column(
                   children: [
+                    const SizedBox(height: 10),
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: BbV5Colors.hair,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 14, 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Фильтры афиши',
+                              style: bbV5DisplayStyle(fontSize: 22),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _reset,
+                            child: Text(
+                              'Сбросить',
+                              style: AppTextStyles.meta.copyWith(
+                                color: BbV5Colors.accent,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Tooltip(
+                            message: 'Закрыть фильтры',
+                            child: InkWell(
+                              onTap: () => Navigator.of(context).pop(),
+                              borderRadius:
+                                  BorderRadius.circular(BbV5Radii.pill),
+                              child: Container(
+                                width: 34,
+                                height: 34,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: BbV5Colors.paperHi,
+                                  borderRadius:
+                                      BorderRadius.circular(BbV5Radii.pill),
+                                  border: Border.all(color: BbV5Colors.hair),
+                                  boxShadow: BbV5Shadows.pill,
+                                ),
+                                child: const Icon(
+                                  LucideIcons.x,
+                                  size: 16,
+                                  color: BbV5Colors.inkSoft,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1, color: BbV5Colors.hairSoft),
                     Expanded(
-                      child: Text(
-                        'Фильтры афиши',
-                        style: bbV5DisplayStyle(
-                          fontSize: 22,
-                        ),
+                      child: ListView(
+                        controller: controller,
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                        children: [
+                          _FilterGroup(
+                            title: 'Когда',
+                            options: _rangeDateOptions(),
+                            activeValue: _date,
+                            onChanged: (value) => setState(() => _date = value),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          _FilterGroup(
+                            title: 'Время суток',
+                            options: _timeOfDayOptions,
+                            activeValue: _timeOfDay,
+                            onChanged: (value) => setState(
+                              () => _timeOfDay = value ?? 'any',
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          _CategoryFilterGroup(
+                            categories: _categories,
+                            onClear: () => setState(() => _categories = {}),
+                            onToggle: (value) {
+                              setState(() {
+                                if (_categories.contains(value)) {
+                                  _categories = {..._categories}..remove(value);
+                                } else {
+                                  _categories = {..._categories, value};
+                                }
+                              });
+                            },
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          _RadiusFilter(
+                            radiusKm: _radiusKm,
+                            onChanged: (value) => setState(() {
+                              _radiusKm = value;
+                            }),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          _FilterGroup(
+                            title: 'Цена',
+                            options: _sheetPriceOptions,
+                            activeValue: _priceMode,
+                            onChanged: (value) => setState(
+                              () => _priceMode = value ?? 'any',
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _date = null;
-                          _priceMode = 'any';
-                          _timeOfDay = 'any';
-                          _categories = {};
-                          _radiusKm = 30;
-                        });
-                      },
-                      child: Text(
-                        'Сбросить',
-                        style: AppTextStyles.meta.copyWith(
-                          color: BbV5Colors.accent,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          height: 1.2,
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                      decoration: const BoxDecoration(
+                        color: BbV5Colors.paper,
+                        border: Border(
+                          top: BorderSide(color: BbV5Colors.hairSoft),
+                        ),
+                      ),
+                      child: FilledButton(
+                        onPressed: _apply,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: BbV5Colors.ink,
+                          foregroundColor: BbV5Colors.paperHi,
+                          minimumSize: const Size.fromHeight(54),
+                          shape: const StadiumBorder(),
+                          elevation: 0,
+                        ).copyWith(
+                          overlayColor: WidgetStatePropertyAll(
+                            BbV5Colors.paperHi.withValues(alpha: 0.08),
+                          ),
+                        ),
+                        child: Text(
+                          'Показать события · ${widget.resultsCount}',
+                          style: AppTextStyles.button.copyWith(
+                            color: BbV5Colors.paperHi,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              Expanded(
-                child: ListView(
-                  controller: controller,
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                  children: [
-                    _FilterGroup(
-                      title: 'Когда',
-                      options: _rangeDateOptions(),
-                      activeValue: _date,
-                      onChanged: (value) => setState(() => _date = value),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    _FilterGroup(
-                      title: 'Время суток',
-                      options: _timeOfDayOptions,
-                      activeValue: _timeOfDay,
-                      onChanged: (value) =>
-                          setState(() => _timeOfDay = value ?? 'any'),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    _MultiFilterGroup(
-                      title: 'Категории',
-                      options: afficheCategoryOptions
-                          .where((option) => option.value != null)
-                          .toList(growable: false),
-                      activeValues: _categories,
-                      onChanged: (value) {
-                        setState(() {
-                          if (_categories.contains(value)) {
-                            _categories = {..._categories}..remove(value);
-                          } else {
-                            _categories = {..._categories, value};
-                          }
-                        });
-                      },
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      'Радиус · ${_radiusKm.round()} км',
-                      style: AppTextStyles.meta.copyWith(
-                        color: BbV5Colors.inkSoft,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        height: 1.2,
-                      ),
-                    ),
-                    Slider(
-                      value: _radiusKm,
-                      min: 0,
-                      max: 30,
-                      divisions: 30,
-                      activeColor: BbV5Colors.accent,
-                      inactiveColor: BbV5Colors.hair,
-                      label: '${_radiusKm.round()} км',
-                      onChanged: (value) => setState(() {
-                        _radiusKm = value;
-                      }),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.only(top: 4),
-                      child: _RadiusScaleLabels(),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    _FilterGroup(
-                      title: 'Цена',
-                      options: affichePriceOptions,
-                      activeValue: _priceMode,
-                      onChanged: (value) =>
-                          setState(() => _priceMode = value ?? 'any'),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                child: FilledButton(
-                  onPressed: () => Navigator.of(context).pop(
-                    _AfficheFilterSelection(
-                      date: _date,
-                      priceMode: _priceMode,
-                      timeOfDay: _timeOfDay,
-                      categories: _categories,
-                      radiusKm: _radiusKm,
-                    ),
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: BbV5Colors.ink,
-                    foregroundColor: BbV5Colors.paperHi,
-                    minimumSize: const Size.fromHeight(48),
-                    shape: const StadiumBorder(),
-                  ),
-                  child: Text(
-                    'Показать события · ${widget.resultsCount}',
-                    style: AppTextStyles.button.copyWith(
-                      color: BbV5Colors.paperHi,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  void _reset() {
+    setState(() {
+      _date = null;
+      _priceMode = 'any';
+      _timeOfDay = 'any';
+      _categories = {};
+      _radiusKm = 30;
+    });
+  }
+
+  void _apply() {
+    Navigator.of(context).pop(
+      _AfficheFilterSelection(
+        date: _date,
+        priceMode: _priceMode,
+        timeOfDay: _timeOfDay,
+        categories: _categories,
+        radiusKm: _radiusKm,
+      ),
     );
   }
 }
@@ -1097,10 +1128,16 @@ List<AfficheFilterOption> _rangeDateOptions() {
 
 const _timeOfDayOptions = [
   AfficheFilterOption(label: 'Любое', value: 'any'),
-  AfficheFilterOption(label: 'Утро', value: 'morning'),
-  AfficheFilterOption(label: 'День', value: 'day'),
-  AfficheFilterOption(label: 'Вечер', value: 'evening'),
-  AfficheFilterOption(label: 'Ночь', value: 'night'),
+  AfficheFilterOption(label: 'Утро · 6–12', value: 'morning'),
+  AfficheFilterOption(label: 'День · 12–17', value: 'day'),
+  AfficheFilterOption(label: 'Вечер · 17–23', value: 'evening'),
+  AfficheFilterOption(label: 'Ночь · 23–6', value: 'night'),
+];
+
+const _sheetPriceOptions = [
+  AfficheFilterOption(label: 'Все', value: 'any'),
+  AfficheFilterOption(label: 'Бесплатно', value: 'free'),
+  AfficheFilterOption(label: 'Платно', value: 'paid'),
 ];
 
 class _RadiusScaleLabels extends StatelessWidget {
@@ -1175,18 +1212,16 @@ class _FilterGroup extends StatelessWidget {
   }
 }
 
-class _MultiFilterGroup extends StatelessWidget {
-  const _MultiFilterGroup({
-    required this.title,
-    required this.options,
-    required this.activeValues,
-    required this.onChanged,
+class _CategoryFilterGroup extends StatelessWidget {
+  const _CategoryFilterGroup({
+    required this.categories,
+    required this.onClear,
+    required this.onToggle,
   });
 
-  final String title;
-  final List<AfficheFilterOption> options;
-  final Set<String> activeValues;
-  final ValueChanged<String> onChanged;
+  final Set<String> categories;
+  final VoidCallback onClear;
+  final ValueChanged<String> onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -1194,7 +1229,7 @@ class _MultiFilterGroup extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          title,
+          categories.isEmpty ? 'Категории' : 'Категории · ${categories.length}',
           style: AppTextStyles.meta.copyWith(
             color: AppColors.of(context).inkSoft,
             fontSize: 13,
@@ -1207,19 +1242,75 @@ class _MultiFilterGroup extends StatelessWidget {
           spacing: AppSpacing.xs,
           runSpacing: AppSpacing.xs,
           children: [
-            for (final option in options)
-              AfficheFilterChip(
-                label: option.label,
-                icon: option.icon,
-                active: activeValues.contains(option.value),
-                onTap: () {
-                  final value = option.value;
-                  if (value != null) {
-                    onChanged(value);
-                  }
-                },
-              ),
+            AfficheFilterChip(
+              label: 'Все',
+              icon: LucideIcons.sparkles,
+              active: categories.isEmpty,
+              onTap: onClear,
+            ),
+            for (final option in afficheCategoryOptions)
+              if (option.value != null)
+                AfficheFilterChip(
+                  label: _categoryChipLabel(option),
+                  active: categories.contains(option.value),
+                  onTap: () => onToggle(option.value!),
+                ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+class _RadiusFilter extends StatelessWidget {
+  const _RadiusFilter({
+    required this.radiusKm,
+    required this.onChanged,
+  });
+
+  final double radiusKm;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Радиус · ${radiusKm.round()} км',
+          style: AppTextStyles.meta.copyWith(
+            color: AppColors.of(context).inkSoft,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            height: 1.2,
+          ),
+        ),
+        const SizedBox(height: 6),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 3,
+            activeTrackColor: BbV5Colors.ink,
+            inactiveTrackColor: BbV5Colors.hair,
+            thumbColor: BbV5Colors.ink,
+            overlayColor: BbV5Colors.ink.withValues(alpha: 0.08),
+            valueIndicatorColor: BbV5Colors.ink,
+            valueIndicatorTextStyle: AppTextStyles.meta.copyWith(
+              color: BbV5Colors.paperHi,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          child: Slider(
+            value: radiusKm,
+            min: 0,
+            max: 30,
+            divisions: 30,
+            label: '${radiusKm.round()} км',
+            onChanged: onChanged,
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 2),
+          child: _RadiusScaleLabels(),
         ),
       ],
     );

@@ -212,7 +212,10 @@ void main() {
     expect(find.descendant(of: sheet, matching: find.text('Неделя')),
         findsOneWidget);
     expect(find.text('Время суток'), findsOneWidget);
-    expect(find.text('Вечер'), findsOneWidget);
+    expect(find.byTooltip('Закрыть фильтры'), findsOneWidget);
+    expect(find.text('Утро · 6–12'), findsOneWidget);
+    expect(find.text('День · 12–17'), findsOneWidget);
+    expect(find.text('Вечер · 17–23'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('Радиус · 30 км'),
@@ -220,6 +223,14 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     expect(find.text('Радиус · 30 км'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Бесплатно'),
+      180,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Бесплатно'), findsOneWidget);
+    expect(find.text('Платно'), findsOneWidget);
   });
 }
 
