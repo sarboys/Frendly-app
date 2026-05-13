@@ -38,9 +38,12 @@ void main() {
       appRouter.namedLocation(
         AppRoute.paymentReturn.name,
         pathParameters: const {'result': 'success'},
-        queryParameters: const {'orderId': 'fr_123'},
+        queryParameters: const {
+          'orderId': 'fr_123',
+          'productKind': 'tokens',
+        },
       ),
-      '/payment/success?orderId=fr_123',
+      '/payment/success?orderId=fr_123&productKind=tokens',
     );
 
     expect(

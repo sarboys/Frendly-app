@@ -107,12 +107,16 @@ class PaymentOrderData {
     required this.paymentId,
     required this.paymentUrl,
     required this.status,
+    required this.productKind,
+    required this.productId,
   });
 
   final String orderId;
   final String? paymentId;
   final String? paymentUrl;
   final String status;
+  final String productKind;
+  final String productId;
 
   bool get isConfirmed => status == 'confirmed';
   bool get isFailed =>
@@ -124,6 +128,8 @@ class PaymentOrderData {
       paymentId: json['paymentId'] as String?,
       paymentUrl: json['paymentUrl'] as String?,
       status: json['status'] as String? ?? 'pending',
+      productKind: json['productKind'] as String? ?? '',
+      productId: json['productId'] as String? ?? '',
     );
   }
 }

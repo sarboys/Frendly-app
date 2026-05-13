@@ -1,4 +1,5 @@
 import 'package:big_break_mobile/app/core/device/payment_link_service.dart';
+import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/payments/application/payment_return_controller.dart';
@@ -36,7 +37,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         return;
       }
       final message = next.confirmed
-          ? 'Frendly+ активирован'
+          ? next.productKind == 'tokens'
+              ? 'Баланс токенов пополнен'
+              : 'Frendly+ активирован'
           : next.failed
               ? 'Оплата не прошла'
               : 'Платеж еще обрабатывается';
@@ -252,7 +255,13 @@ class _PaywallContent extends StatelessWidget {
                         children: [
                           _PaywallHeader(
                             restoring: restoring,
-                            onBack: () => context.pop(),
+                            onBack: () {
+                              if (context.canPop()) {
+                                context.pop();
+                              } else {
+                                context.goRoute(AppRoute.tonight);
+                              }
+                            },
                             onRestore: onRestore,
                           ),
                           const SizedBox(height: 28),

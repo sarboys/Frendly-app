@@ -213,10 +213,13 @@ GoRouter buildAppRouter({
         final result =
             state.uri.pathSegments.isEmpty ? '' : state.uri.pathSegments.first;
         final orderId = state.uri.queryParameters['orderId'];
+        final productKind = state.uri.queryParameters['productKind'];
         return Uri(
           path: '/payment/$result',
           queryParameters: {
             if (orderId != null && orderId.isNotEmpty) 'orderId': orderId,
+            if (productKind != null && productKind.isNotEmpty)
+              'productKind': productKind,
           },
         ).toString();
       }
@@ -687,6 +690,7 @@ GoRouter buildAppRouter({
           PaymentReturnScreen(
             result: state.pathParameters['result'] ?? '',
             orderId: state.uri.queryParameters['orderId'],
+            productKind: state.uri.queryParameters['productKind'],
           ),
         ),
       ),

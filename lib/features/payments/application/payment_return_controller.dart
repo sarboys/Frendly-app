@@ -14,10 +14,12 @@ class PaymentReturnState {
   const PaymentReturnState({
     required this.orderId,
     required this.status,
+    required this.productKind,
   });
 
   final String orderId;
   final String status;
+  final String productKind;
 
   bool get confirmed => status == 'confirmed';
   bool get failed =>
@@ -29,24 +31,19 @@ class PaymentReturnController {
 
   final Ref _ref;
 
-  Future<void> handleUri(Uri uri) async {
+  Future<PaymentReturnState?> handleUri(Uri uri) async {
     if (uri.scheme != 'frendly' || uri.host != 'payment') {
-      return;
+      return null;
     }
     final result = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
     final orderId = uri.queryParameters['orderId'];
+    final returnedProductKind = uri.queryParameters['productKind'] ?? '';
     if (orderId == null || orderId.isEmpty) {
-      return;
+      return null;
     }
 
-    if (result == 'fail') {
-      _ref.read(paymentReturnStateProvider.notifier).state =
-          PaymentReturnState(orderId: orderId, status: 'failed');
-      return;
-    }
-
-    if (result != 'success') {
-      return;
+    if (result != 'success' && result != 'fail') {
+      return null;
     }
 
     try {
@@ -56,11 +53,24 @@ class PaymentReturnController {
       _ref.invalidate(subscriptionStateProvider);
       _ref.invalidate(paymentCatalogProvider);
       _ref.read(tokenWalletProvider.notifier).refresh();
-      _ref.read(paymentReturnStateProvider.notifier).state =
-          PaymentReturnState(orderId: orderId, status: order.status);
+      final state = PaymentReturnState(
+        orderId: orderId,
+        status:
+            result == 'fail' && !order.isConfirmed ? 'failed' : order.status,
+        productKind: order.productKind.isNotEmpty
+            ? order.productKind
+            : returnedProductKind,
+      );
+      _ref.read(paymentReturnStateProvider.notifier).state = state;
+      return state;
     } catch (_) {
-      _ref.read(paymentReturnStateProvider.notifier).state =
-          PaymentReturnState(orderId: orderId, status: 'pending');
+      final state = PaymentReturnState(
+        orderId: orderId,
+        status: result == 'fail' ? 'failed' : 'pending',
+        productKind: returnedProductKind,
+      );
+      _ref.read(paymentReturnStateProvider.notifier).state = state;
+      return state;
     }
   }
 }

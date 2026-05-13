@@ -11,10 +11,12 @@ class PaymentReturnScreen extends ConsumerStatefulWidget {
     super.key,
     required this.result,
     required this.orderId,
+    required this.productKind,
   });
 
   final String result;
   final String? orderId;
+  final String? productKind;
 
   @override
   ConsumerState<PaymentReturnScreen> createState() =>
@@ -29,14 +31,20 @@ class _PaymentReturnScreenState extends ConsumerState<PaymentReturnScreen> {
   }
 
   Future<void> _handleReturn() async {
+    PaymentReturnState? paymentState;
     final orderId = widget.orderId;
     if (orderId != null && orderId.isNotEmpty) {
-      await ref.read(paymentReturnControllerProvider).handleUri(
+      paymentState = await ref.read(paymentReturnControllerProvider).handleUri(
             Uri(
               scheme: 'frendly',
               host: 'payment',
               path: '/${widget.result}',
-              queryParameters: {'orderId': orderId},
+              queryParameters: {
+                'orderId': orderId,
+                if (widget.productKind != null &&
+                    widget.productKind!.isNotEmpty)
+                  'productKind': widget.productKind!,
+              },
             ),
           );
     }
@@ -44,7 +52,11 @@ class _PaymentReturnScreenState extends ConsumerState<PaymentReturnScreen> {
     if (!mounted) {
       return;
     }
-    context.goRoute(AppRoute.paywall);
+    context.goRoute(
+      paymentState?.productKind == 'tokens'
+          ? AppRoute.wallet
+          : AppRoute.paywall,
+    );
   }
 
   @override

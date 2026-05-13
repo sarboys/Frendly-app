@@ -124,6 +124,8 @@ class _FakeBackendRepository extends BackendRepository {
       paymentId: 'payment-1',
       paymentUrl: 'https://pay.test/form',
       status: 'pending',
+      productKind: 'tokens',
+      productId: 'p1',
     );
   }
 }
