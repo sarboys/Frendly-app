@@ -4,6 +4,7 @@ import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/utils/location_label.dart';
@@ -576,7 +577,7 @@ class _FrendlyPlusCard extends StatelessWidget {
   }
 }
 
-class _FriendlyTokensCard extends StatelessWidget {
+class _FriendlyTokensCard extends ConsumerWidget {
   const _FriendlyTokensCard({
     required this.onBalance,
     required this.onFocus,
@@ -590,7 +591,9 @@ class _FriendlyTokensCard extends StatelessWidget {
   final VoidCallback onBoost;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final balance = ref.watch(tokenWalletProvider).balance;
+
     return BbV5Card(
       radius: 24,
       padding: const EdgeInsets.all(16),
@@ -645,7 +648,7 @@ class _FriendlyTokensCard extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.sm),
               Text(
-                '1 240',
+                _formatTokenBalance(balance),
                 style: AppTextStyles.itemTitle.copyWith(
                   fontSize: 16,
                   letterSpacing: 0,
@@ -690,6 +693,19 @@ class _FriendlyTokensCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatTokenBalance(int value) {
+  final raw = value.toString();
+  final buffer = StringBuffer();
+  for (var index = 0; index < raw.length; index += 1) {
+    final fromEnd = raw.length - index;
+    buffer.write(raw[index]);
+    if (fromEnd > 1 && fromEnd % 3 == 1) {
+      buffer.write(' ');
+    }
+  }
+  return buffer.toString();
 }
 
 class _ProfileTrustActions extends ConsumerWidget {

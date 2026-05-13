@@ -1,8 +1,7 @@
-import 'package:big_break_mobile/app/core/device/payment_link_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
-import 'package:big_break_mobile/features/payments/application/payment_return_controller.dart';
+import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/subscription.dart';
@@ -23,30 +22,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   String _plan = 'year';
   String _paymentAction = 'idle';
   bool _restoring = false;
-  String? _lastOrderId;
 
   @override
   Widget build(BuildContext context) {
     final plansAsync = ref.watch(subscriptionPlansProvider);
     final stateAsync = ref.watch(subscriptionStateProvider);
-    final paymentsEnabled =
-        ref.watch(paymentCatalogProvider).valueOrNull?.tbankEnabled ?? true;
-    ref.listen<PaymentReturnState?>(paymentReturnStateProvider,
-        (previous, next) {
-      if (next == null || previous == next || !context.mounted) {
-        return;
-      }
-      final message = next.confirmed
-          ? next.productKind == 'tokens'
-              ? 'Баланс токенов пополнен'
-              : 'Frendly+ активирован'
-          : next.failed
-              ? 'Оплата не прошла'
-              : 'Платеж еще обрабатывается';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    });
 
     return BbV5Scaffold(
       child: plansAsync.when(
@@ -65,12 +45,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
             selectedPlanId: _plan,
             paymentAction: _paymentAction,
             restoring: _restoring,
-            lastOrderId: _lastOrderId,
-            paymentsEnabled: paymentsEnabled,
             onPlanChanged: (planId) => setState(() => _plan = planId),
             onRestore: _restore,
             onSubscribe: _subscribe,
-            onCheckPayment: _checkLastPayment,
           ),
         ),
       ),
@@ -113,80 +90,23 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     if (_paymentAction != 'idle') {
       return;
     }
-    final repository = ref.read(backendRepositoryProvider);
+    final container = ProviderScope.containerOf(context, listen: false);
     setState(() => _paymentAction = 'creating');
     try {
-      final order = await repository.initPayment(
-        productKind: 'subscription',
-        productId: _plan,
-      );
-      final paymentUrl = order.paymentUrl;
-      if (paymentUrl == null || paymentUrl.isEmpty) {
-        throw StateError('Payment URL is empty');
-      }
-      if (!mounted || !context.mounted) {
-        return;
-      }
-      setState(() {
-        _paymentAction = 'opening';
-        _lastOrderId = order.orderId;
-      });
-      final opened =
-          await ref.read(paymentLinkServiceProvider).openPaymentUrl(paymentUrl);
-      if (!opened) {
-        throw StateError('Payment URL was not opened');
-      }
+      await ref.read(tokenWalletProvider.notifier).subscribeWithTokens(_plan);
+      container.invalidate(subscriptionStateProvider);
       if (!mounted || !context.mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Вернись сюда после оплаты')),
+        const SnackBar(content: Text('Frendly+ активирован')),
       );
     } catch (_) {
       if (mounted && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не получилось открыть оплату')),
+          const SnackBar(content: Text('Не хватает токенов')),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _paymentAction = 'idle');
-      }
-    }
-  }
-
-  Future<void> _checkLastPayment() async {
-    final orderId = _lastOrderId;
-    if (orderId == null || _paymentAction != 'idle') {
-      return;
-    }
-    final repository = ref.read(backendRepositoryProvider);
-    final container = ProviderScope.containerOf(context, listen: false);
-    setState(() => _paymentAction = 'checking');
-    try {
-      final order = await repository.checkPayment(orderId);
-      if (!mounted || !context.mounted) {
-        return;
-      }
-      if (order.isConfirmed) {
-        container.invalidate(subscriptionStateProvider);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Frendly+ активирован')),
-        );
-      } else if (order.isFailed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Оплата не прошла')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Платеж еще обрабатывается')),
-        );
-      }
-    } catch (_) {
-      if (mounted && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Платеж еще обрабатывается')),
-        );
+        context.pushRoute(AppRoute.wallet);
       }
     } finally {
       if (mounted) {
@@ -203,12 +123,9 @@ class _PaywallContent extends StatelessWidget {
     required this.selectedPlanId,
     required this.paymentAction,
     required this.restoring,
-    required this.lastOrderId,
-    required this.paymentsEnabled,
     required this.onPlanChanged,
     required this.onRestore,
     required this.onSubscribe,
-    required this.onCheckPayment,
   });
 
   final List<SubscriptionPlanData> plans;
@@ -216,12 +133,9 @@ class _PaywallContent extends StatelessWidget {
   final String selectedPlanId;
   final String paymentAction;
   final bool restoring;
-  final String? lastOrderId;
-  final bool paymentsEnabled;
   final ValueChanged<String> onPlanChanged;
   final VoidCallback onRestore;
   final VoidCallback onSubscribe;
-  final VoidCallback onCheckPayment;
 
   @override
   Widget build(BuildContext context) {
@@ -275,8 +189,8 @@ class _PaywallContent extends StatelessWidget {
                             activeSubscription:
                                 hasActiveSubscription && state.plan == 'year',
                             summary:
-                                '${year.priceMonthlyRub} ₽/мес · оплата за год',
-                            strikePrice: year.priceRub * 2,
+                                '${year.tokenMonthlyCost} токенов/мес · за год',
+                            strikePrice: year.tokenCost * 2,
                             onTap: () => onPlanChanged('year'),
                           ),
                           const SizedBox(height: 10),
@@ -285,12 +199,12 @@ class _PaywallContent extends StatelessWidget {
                             active: selectedPlanId == 'month',
                             activeSubscription:
                                 hasActiveSubscription && state.plan == 'month',
-                            summary: 'Разовый платеж на 30 дней',
+                            summary: 'Списание токенов на 30 дней',
                             onTap: () => onPlanChanged('month'),
                           ),
                           const SizedBox(height: AppSpacing.md),
                           Text(
-                            'Оплата разовая. Доступ включится после подтверждения платежа.',
+                            'Токены спишутся сразу. Доступ включится после активации.',
                             textAlign: TextAlign.center,
                             style: AppTextStyles.caption.copyWith(
                               fontSize: 10.5,
@@ -312,10 +226,7 @@ class _PaywallContent extends StatelessWidget {
                 child: _StickySubscribeBar(
                   plan: selectedPlan,
                   paymentAction: paymentAction,
-                  lastOrderId: lastOrderId,
-                  paymentsEnabled: paymentsEnabled,
                   onSubscribe: onSubscribe,
-                  onCheckPayment: onCheckPayment,
                 ),
               ),
             ],
@@ -632,23 +543,22 @@ class _PlanTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        '${plan.priceRub} ₽',
+                        '${plan.tokenCost}',
                         style:
                             bbV5DisplayStyle(fontSize: 22, height: 1).copyWith(
                           fontFeatures: const [FontFeature.tabularFigures()],
                         ),
                       ),
-                      if (plan.id == 'month')
-                        Text(
-                          '/мес',
-                          style: AppTextStyles.meta.copyWith(
-                            color: BbV5Colors.inkMute,
-                          ),
+                      Text(
+                        plan.id == 'month' ? ' токенов/мес' : ' токенов',
+                        style: AppTextStyles.meta.copyWith(
+                          color: BbV5Colors.inkMute,
                         ),
+                      ),
                       if (strikePrice != null) ...[
                         const SizedBox(width: AppSpacing.sm),
                         Text(
-                          '$strikePrice ₽',
+                          '$strikePrice',
                           style: AppTextStyles.meta.copyWith(
                             color: BbV5Colors.inkMute,
                             decoration: TextDecoration.lineThrough,
@@ -713,27 +623,19 @@ class _StickySubscribeBar extends StatelessWidget {
   const _StickySubscribeBar({
     required this.plan,
     required this.paymentAction,
-    required this.lastOrderId,
-    required this.paymentsEnabled,
     required this.onSubscribe,
-    required this.onCheckPayment,
   });
 
   final SubscriptionPlanData plan;
   final String paymentAction;
-  final String? lastOrderId;
-  final bool paymentsEnabled;
   final VoidCallback onSubscribe;
-  final VoidCallback onCheckPayment;
 
   @override
   Widget build(BuildContext context) {
     final busy = paymentAction != 'idle';
     final label = switch (paymentAction) {
-      'creating' => 'Создаем платеж...',
-      'opening' => 'Открываем оплату...',
-      'checking' => 'Проверяем оплату...',
-      _ => 'Оплатить ${plan.priceRub} ₽',
+      'creating' => 'Активируем...',
+      _ => 'Оплатить ${plan.tokenCost} токенов',
     };
 
     return DecoratedBox(
@@ -757,26 +659,13 @@ class _StickySubscribeBar extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               BbV5PillButton(
-                label: paymentsEnabled ? label : 'Оплата пока недоступна',
-                onPressed: busy || !paymentsEnabled ? null : onSubscribe,
+                label: label,
+                onPressed: busy ? null : onSubscribe,
                 dark: true,
                 height: 56,
                 fontSize: 14,
                 expanded: true,
               ),
-              if (lastOrderId != null) ...[
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: busy ? null : onCheckPayment,
-                  child: Text(
-                    'Проверить оплату',
-                    style: AppTextStyles.button.copyWith(
-                      fontSize: 12,
-                      color: BbV5Colors.inkSoft,
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
         ),

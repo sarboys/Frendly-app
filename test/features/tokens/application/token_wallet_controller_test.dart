@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/payments.dart';
+import 'package:big_break_mobile/shared/models/subscription.dart';
 import 'package:big_break_mobile/shared/models/token_wallet.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -68,6 +69,27 @@ void main() {
     expect(repository.lastProductKind, 'tokens');
     expect(repository.lastProductId, 'p2');
   });
+
+  test('Frendly Plus subscription spends tokens and refreshes wallet', () async {
+    late _FakeBackendRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _FakeBackendRepository(ref);
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final controller = container.read(tokenWalletProvider.notifier);
+    final subscription = await controller.subscribeWithTokens('year');
+
+    expect(subscription.plan, 'year');
+    expect(repository.lastSubscriptionPlan, 'year');
+    expect(controller.state.balance, 270);
+  });
 }
 
 class _FakeBackendRepository extends BackendRepository {
@@ -75,11 +97,13 @@ class _FakeBackendRepository extends BackendRepository {
 
   String? lastProductKind;
   String? lastProductId;
+  String? lastSubscriptionPlan;
+  var _walletBalance = 350;
 
   @override
   Future<TokenWalletData> fetchTokenWallet() async {
     return TokenWalletData(
-      balance: 350,
+      balance: _walletBalance,
       history: [
         TokenWalletTransactionData(
           id: 'tx-1',
@@ -109,6 +133,19 @@ class _FakeBackendRepository extends BackendRepository {
         targetId: DateTime.now().add(const Duration(hours: 24)),
       },
       promoOptions: const [],
+    );
+  }
+
+  @override
+  Future<SubscriptionStateData> subscribeWithTokens(String plan) async {
+    lastSubscriptionPlan = plan;
+    _walletBalance = 270;
+    return SubscriptionStateData(
+      plan: plan,
+      status: 'active',
+      startedAt: DateTime(2026, 5, 13),
+      renewsAt: DateTime(2027, 5, 13),
+      trialEndsAt: null,
     );
   }
 

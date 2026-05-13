@@ -4,6 +4,8 @@ class SubscriptionPlanData {
     required this.label,
     required this.priceRub,
     required this.priceMonthlyRub,
+    required this.tokenCost,
+    required this.tokenMonthlyCost,
     required this.trialDays,
     required this.badge,
   });
@@ -12,6 +14,8 @@ class SubscriptionPlanData {
   final String label;
   final int priceRub;
   final int priceMonthlyRub;
+  final int tokenCost;
+  final int tokenMonthlyCost;
   final int trialDays;
   final String? badge;
 
@@ -21,6 +25,12 @@ class SubscriptionPlanData {
       label: json['label'] as String,
       priceRub: (json['priceRub'] as num?)?.toInt() ?? 0,
       priceMonthlyRub: (json['priceMonthlyRub'] as num?)?.toInt() ?? 0,
+      tokenCost: (json['tokenCost'] as num?)?.toInt() ??
+          (json['priceRub'] as num?)?.toInt() ??
+          0,
+      tokenMonthlyCost: (json['tokenMonthlyCost'] as num?)?.toInt() ??
+          (json['priceMonthlyRub'] as num?)?.toInt() ??
+          0,
       trialDays: (json['trialDays'] as num?)?.toInt() ?? 0,
       badge: json['badge'] as String?,
     );

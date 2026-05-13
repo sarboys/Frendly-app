@@ -1750,12 +1750,16 @@ class BackendRepository {
     return SubscriptionStateData.fromJson(response.data!);
   }
 
-  Future<PaymentOrderData> subscribe(String plan) async {
+  Future<SubscriptionStateData> subscribe(String plan) async {
+    return subscribeWithTokens(plan);
+  }
+
+  Future<SubscriptionStateData> subscribeWithTokens(String plan) async {
     final response = await dio.post<Map<String, dynamic>>(
       '/subscription/subscribe',
       data: {'plan': plan},
     );
-    return PaymentOrderData.fromJson(response.data!);
+    return SubscriptionStateData.fromJson(response.data!);
   }
 
   Future<PaymentCatalog> fetchPaymentCatalog() async {

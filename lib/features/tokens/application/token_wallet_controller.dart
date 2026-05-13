@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/payments.dart';
+import 'package:big_break_mobile/shared/models/subscription.dart';
 import 'package:big_break_mobile/shared/models/token_wallet.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -235,6 +236,19 @@ class TokenWalletController extends StateNotifier<TokenWalletState> {
     } catch (_) {
       return false;
     }
+  }
+
+  Future<SubscriptionStateData> subscribeWithTokens(String plan) async {
+    final ref = _ref;
+    if (ref == null) {
+      throw StateError('Token wallet is not connected');
+    }
+    await ref.read(authBootstrapProvider.future);
+    final repository = ref.read(backendRepositoryProvider);
+    final subscription = await repository.subscribeWithTokens(plan);
+    await refresh();
+    ref.invalidate(subscriptionStateProvider);
+    return subscription;
   }
 
   TokenWalletState _fromData(TokenWalletData data) {

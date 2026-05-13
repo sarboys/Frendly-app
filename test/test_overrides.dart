@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
+import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/dating_profile.dart';
@@ -262,7 +263,19 @@ List<Override> buildTestOverrides() {
       ],
     ),
     notificationUnreadCountProvider.overrideWith((ref) async => 1),
+    tokenWalletProvider.overrideWith((ref) => _TestTokenWalletController()),
   ];
+}
+
+class _TestTokenWalletController extends TokenWalletController {
+  _TestTokenWalletController() : super(null) {
+    state = const TokenWalletState(
+      balance: 0,
+      promoted: {},
+      history: [],
+      loading: false,
+    );
+  }
 }
 
 DatingProfileData _mockPersonToDating(

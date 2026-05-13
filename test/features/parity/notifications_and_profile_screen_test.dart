@@ -259,7 +259,8 @@ void main() {
     expect(find.text('Верификация'), findsOneWidget);
     expect(find.text('Кнопка SOS'), findsOneWidget);
     expect(find.text('Уведомления'), findsOneWidget);
-    expect(find.text('1 240'), findsOneWidget);
+    expect(find.text('0'), findsWidgets);
+    expect(find.text('1 240'), findsNothing);
     expect(find.text('Подписчиков'), findsNothing);
     expect(find.text('Лайков'), findsNothing);
     expect(find.text('Подписаться'), findsNothing);

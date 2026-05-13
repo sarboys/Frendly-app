@@ -11,8 +11,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-const _tokenBalance = 1240;
-
 class WalletScreen extends ConsumerStatefulWidget {
   const WalletScreen({super.key});
 
@@ -899,11 +897,13 @@ class _TokensTopUpScreenState extends ConsumerState<TokensTopUpScreen> {
   }
 }
 
-class TokensBalanceScreen extends StatelessWidget {
+class TokensBalanceScreen extends ConsumerWidget {
   const TokensBalanceScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final wallet = ref.watch(tokenWalletProvider);
+
     return _TokensPageScaffold(
       bottomNavLocation: '/tokens',
       child: CustomScrollView(
@@ -925,6 +925,7 @@ class TokensBalanceScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                   _BalanceSummaryCard(
+                    balance: wallet.balance,
                     onTopUp: () => context.pushRoute(AppRoute.tokensTopUp),
                   ),
                   const SizedBox(height: 28),
@@ -1693,8 +1694,12 @@ class _PaymentHint extends StatelessWidget {
 }
 
 class _BalanceSummaryCard extends StatelessWidget {
-  const _BalanceSummaryCard({required this.onTopUp});
+  const _BalanceSummaryCard({
+    required this.balance,
+    required this.onTopUp,
+  });
 
+  final int balance;
   final VoidCallback onTopUp;
 
   @override
@@ -1714,7 +1719,7 @@ class _BalanceSummaryCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '1 240',
+                      _formatTokens(balance),
                       style: AppTextStyles.screenTitle.copyWith(
                         fontSize: 36,
                         height: 1,
@@ -1731,7 +1736,7 @@ class _BalanceSummaryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      '≈ 1240₽ · 1 токен = 1₽',
+                      '≈ ${_formatTokens(balance)}₽ · 1 токен = 1₽',
                       style: AppTextStyles.meta.copyWith(
                         fontSize: 12.5,
                         color: BbV5Colors.inkMute,
@@ -2555,7 +2560,7 @@ class _TokensCountPill extends StatelessWidget {
   }
 }
 
-class _BalanceBadge extends StatelessWidget {
+class _BalanceBadge extends ConsumerWidget {
   const _BalanceBadge({
     this.showPlus = false,
     this.onTap,
@@ -2565,7 +2570,9 @@ class _BalanceBadge extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final balance = ref.watch(tokenWalletProvider).balance;
+
     return _SoftButton(
       onTap: onTap ?? () {},
       height: 44,
@@ -2576,7 +2583,7 @@ class _BalanceBadge extends StatelessWidget {
           const _TinyCoin(size: 24),
           const SizedBox(width: 7),
           Text(
-            _formatTokens(_tokenBalance),
+            _formatTokens(balance),
             style: AppTextStyles.itemTitle.copyWith(
               fontSize: 13.5,
               letterSpacing: 0,
