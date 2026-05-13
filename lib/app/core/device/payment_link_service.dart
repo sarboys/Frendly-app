@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 final paymentLinkServiceProvider = Provider<PaymentLinkService>((ref) {
   final service = PaymentLinkService();
@@ -28,6 +29,18 @@ class PaymentLinkService {
     _subscription = _appLinks.uriLinkStream.listen((uri) {
       unawaited(onLink(uri));
     });
+  }
+
+  Future<bool> openPaymentUrl(String paymentUrl) async {
+    final uri = Uri.parse(paymentUrl);
+    final openedInApp = await launchUrl(
+      uri,
+      mode: LaunchMode.inAppBrowserView,
+    );
+    if (openedInApp) {
+      return true;
+    }
+    return launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   void dispose() {

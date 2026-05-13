@@ -1,3 +1,4 @@
+import 'package:big_break_mobile/app/core/device/payment_link_service.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/payments/application/payment_return_controller.dart';
@@ -9,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class PaywallScreen extends ConsumerStatefulWidget {
   const PaywallScreen({super.key});
@@ -128,10 +128,8 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         _paymentAction = 'opening';
         _lastOrderId = order.orderId;
       });
-      final opened = await launchUrl(
-        Uri.parse(paymentUrl),
-        mode: LaunchMode.inAppBrowserView,
-      );
+      final opened =
+          await ref.read(paymentLinkServiceProvider).openPaymentUrl(paymentUrl);
       if (!opened) {
         throw StateError('Payment URL was not opened');
       }
