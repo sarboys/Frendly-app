@@ -59,6 +59,7 @@ enum AppRoute {
   shareCard('/share/:eventId'),
   match('/match/:userId'),
   paywall('/paywall'),
+  paymentReturn('/payment/:result'),
   createCommunity('/community/create'),
   editCommunity('/community/:communityId/edit'),
   createCommunityPost('/community/:communityId/post/create'),

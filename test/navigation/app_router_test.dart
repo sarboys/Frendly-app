@@ -35,6 +35,15 @@ void main() {
     );
 
     expect(
+      appRouter.namedLocation(
+        AppRoute.paymentReturn.name,
+        pathParameters: const {'result': 'success'},
+        queryParameters: const {'orderId': 'fr_123'},
+      ),
+      '/payment/success?orderId=fr_123',
+    );
+
+    expect(
       appRouter.namedLocation(AppRoute.dating.name),
       '/dating',
     );

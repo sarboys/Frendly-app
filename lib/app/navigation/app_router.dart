@@ -47,6 +47,7 @@ import 'package:big_break_mobile/features/onboarding/presentation/onboarding_scr
 import 'package:big_break_mobile/features/personal_chat/presentation/personal_chat_screen.dart';
 import 'package:big_break_mobile/features/perks/presentation/perks_screen.dart';
 import 'package:big_break_mobile/features/paywall/presentation/paywall_screen.dart';
+import 'package:big_break_mobile/features/payments/presentation/payment_return_screen.dart';
 import 'package:big_break_mobile/features/permissions/presentation/permissions_screen.dart';
 import 'package:big_break_mobile/features/phone_auth/presentation/phone_auth_screen.dart';
 import 'package:big_break_mobile/features/profile/presentation/profile_screen.dart';
@@ -208,6 +209,20 @@ GoRouter buildAppRouter({
     refreshListenable: refreshListenable,
     redirect: (context, state) {
       final path = state.uri.path;
+      if (state.uri.scheme == 'frendly' && state.uri.host == 'payment') {
+        final result =
+            state.uri.pathSegments.isEmpty ? '' : state.uri.pathSegments.first;
+        final orderId = state.uri.queryParameters['orderId'];
+        return Uri(
+          path: '/payment/$result',
+          queryParameters: {
+            if (orderId != null && orderId.isNotEmpty) 'orderId': orderId,
+          },
+        ).toString();
+      }
+      if (path == '/') {
+        return AppRouter.initialLocation;
+      }
       final isPublic = _publicRoutePaths.contains(path);
       final authenticated = authCheck();
       final pendingSetup = authenticated ? pendingSetupPath?.call() : null;
@@ -664,6 +679,16 @@ GoRouter buildAppRouter({
         path: AppRoute.paywall.path,
         name: AppRoute.paywall.name,
         pageBuilder: (context, state) => _slidePage(const PaywallScreen()),
+      ),
+      GoRoute(
+        path: AppRoute.paymentReturn.path,
+        name: AppRoute.paymentReturn.name,
+        pageBuilder: (context, state) => _slidePage(
+          PaymentReturnScreen(
+            result: state.pathParameters['result'] ?? '',
+            orderId: state.uri.queryParameters['orderId'],
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoute.createCommunity.path,
