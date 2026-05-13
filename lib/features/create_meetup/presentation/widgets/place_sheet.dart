@@ -4,12 +4,13 @@ import 'package:big_break_mobile/app/core/device/app_address_geocoding_service.d
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/core/device/app_reverse_geocoding_service.dart';
 import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
-import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart' show Point;
 
 class PlaceSelection {
@@ -45,6 +46,7 @@ Future<PlaceSelection?> showPlaceSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    barrierColor: BbV5Colors.ink.withValues(alpha: 0.5),
     builder: (context) => UncontrolledProviderScope(
       container: container,
       child: _PlaceSheet(
@@ -129,7 +131,6 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     final query = _queryController.text.trim().toLowerCase();
     final localMatches = query.isEmpty
         ? _nearbyPlaces
@@ -146,240 +147,162 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
 
     return SafeArea(
       top: false,
-      child: Container(
-        height: MediaQuery.of(context).size.height * 0.9,
-        decoration: BoxDecoration(
-          color: colors.background,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: colors.border,
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-              child: Row(
-                children: [
-                  const SizedBox(width: 40),
-                  Expanded(
-                    child: Text(
-                      'Где встречаемся',
-                      textAlign: TextAlign.center,
-                      style: bbV5DisplayStyle(
-                        fontSize: 18,
-                        height: 1.25,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded, size: 20),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Container(
-                height: 48,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: colors.card,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: colors.border),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Container(
+            height: MediaQuery.sizeOf(context).height * 0.9,
+            decoration: const BoxDecoration(
+              color: BbV5Colors.paper,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(34)),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x4D000000),
+                  blurRadius: 40,
+                  spreadRadius: -10,
+                  offset: Offset(0, -20),
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.search_rounded,
-                      size: 18,
-                      color: colors.inkMute,
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: TextField(
-                        controller: _queryController,
-                        onChanged: _handleQueryChanged,
-                        decoration: InputDecoration(
-                          filled: false,
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          disabledBorder: InputBorder.none,
-                          hintText: 'Кафе, бар, парк или адрес',
-                          hintStyle: AppTextStyles.bodySoft.copyWith(
-                            color: colors.inkMute,
-                            fontSize: 13.5,
-                            height: 1.2,
-                          ),
-                        ),
-                        style: AppTextStyles.body.copyWith(
-                          fontSize: 13.5,
-                          height: 1.2,
-                        ),
-                      ),
-                    ),
-                    if (_queryController.text.isNotEmpty)
-                      IconButton(
-                        onPressed: () => setState(() {
-                          _queryController.clear();
-                          _remoteResults = const [];
-                          _searching = false;
-                        }),
-                        icon: Icon(
-                          Icons.close_rounded,
-                          size: 18,
-                          color: colors.inkMute,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+              ],
             ),
-            if (widget.onPickAfficheEvent != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      widget.onPickAfficheEvent?.call();
-                    },
-                    icon: const Icon(Icons.confirmation_number_outlined,
-                        size: 18),
-                    label: const Text('Идём на событие из афиши'),
-                    style: FilledButton.styleFrom(
-                      textStyle: AppTextStyles.button.copyWith(
-                        fontSize: 13,
-                        height: 1.1,
-                      ),
-                    ),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: BbV5Colors.hair,
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
-              ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                children: [
-                  if (query.isEmpty)
-                    _PlaceRow(
-                      place: PlaceSelection(
-                        name: 'Моё местоположение',
-                        address: _resolvingCurrentLocation
-                            ? 'Определяем текущую точку'
-                            : 'Использовать текущую точку',
-                        distance: _resolvingCurrentLocation ? null : '0 м',
-                        emoji: '📍',
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 18),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const BbV5Kicker('выбрать'),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Где встречаемся',
+                              style: bbV5DisplayStyle(
+                                fontSize: 24,
+                                height: 1.05,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      current: true,
-                      onTap: _resolvingCurrentLocation
-                          ? () {}
-                          : _pickCurrentLocation,
-                    ),
-                  if (query.isEmpty && _recentPlaces.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    const _ListTitle(
-                      icon: Icons.schedule_rounded,
-                      title: 'Недавние',
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    ..._recentPlaces.map(
-                      (place) => _PlaceRow(
-                        place: place,
-                        selected: _samePlace(place, widget.initialValue),
-                        onTap: () => Navigator.of(context).pop(place),
+                      _PlaceSheetCloseButton(
+                        onTap: () => Navigator.of(context).pop(),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                  ],
-                  _ListTitle(
-                    title: query.isEmpty
-                        ? 'Рядом с тобой'
-                        : 'Найдено · ${filtered.length}',
+                    ],
                   ),
-                  const SizedBox(height: AppSpacing.xs),
-                  if (_searching && query.isNotEmpty && filtered.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 32),
-                      child: Column(
-                        children: [
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: colors.primary,
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 22),
+                  child: _PlaceSearchField(
+                    controller: _queryController,
+                    onChanged: _handleQueryChanged,
+                    onClear: () => setState(() {
+                      _queryController.clear();
+                      _remoteResults = const [];
+                      _searching = false;
+                    }),
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+                    children: [
+                      if (_searching && query.isNotEmpty && filtered.isEmpty)
+                        const _PlaceLoadingState()
+                      else if (filtered.isEmpty)
+                        const _PlaceEmptyState()
+                      else
+                        ...filtered.map(
+                          (place) => Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: _PlaceRow(
+                              place: place,
+                              selected: _samePlace(
+                                place,
+                                widget.initialValue,
+                              ),
+                              onTap: () => Navigator.of(context).pop(place),
                             ),
                           ),
-                          const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            'Ищем адрес',
-                            textAlign: TextAlign.center,
-                            style: AppTextStyles.meta.copyWith(
-                              color: colors.inkMute,
-                              fontSize: 12.5,
-                              height: 1.35,
+                        ),
+                      if (query.isEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: _PlaceRow(
+                            place: PlaceSelection(
+                              name: 'Моё местоположение',
+                              address: _resolvingCurrentLocation
+                                  ? 'Определяем текущую точку'
+                                  : 'Использовать текущую точку',
+                              distance:
+                                  _resolvingCurrentLocation ? null : '0 м',
+                              category: 'Геолокация',
+                            ),
+                            current: true,
+                            onTap: _resolvingCurrentLocation
+                                ? () {}
+                                : _pickCurrentLocation,
+                          ),
+                        ),
+                        if (widget.onPickAfficheEvent != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: _PlaceRow(
+                              place: const PlaceSelection(
+                                name: 'Афиша города',
+                                address: 'Выбрать событие',
+                                category: 'События',
+                              ),
+                              onTap: () {
+                                Navigator.of(context).pop();
+                                widget.onPickAfficheEvent?.call();
+                              },
                             ),
                           ),
-                        ],
-                      ),
-                    )
-                  else if (filtered.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 32),
-                      child: Text(
-                        'Ничего не нашли. Попробуй другой запрос.',
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.meta.copyWith(
-                          color: colors.inkMute,
-                          fontSize: 12.5,
-                          height: 1.35,
+                        if (_recentPlaces.isNotEmpty)
+                          ..._recentPlaces.map(
+                            (place) => Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: _PlaceRow(
+                                place: place,
+                                selected:
+                                    _samePlace(place, widget.initialValue),
+                                onTap: () => Navigator.of(context).pop(place),
+                              ),
+                            ),
+                          ),
+                      ],
+                      if (query.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        _UseTypedPlaceButton(
+                          label: _queryController.text.trim(),
+                          onTap: () => Navigator.of(context).pop(
+                            PlaceSelection(
+                              name: _queryController.text.trim(),
+                              address: 'Своё место',
+                              emoji: '📍',
+                            ),
+                          ),
                         ),
-                      ),
-                    )
-                  else
-                    ...filtered.map(
-                      (place) => _PlaceRow(
-                        place: place,
-                        selected: _samePlace(place, widget.initialValue),
-                        onTap: () => Navigator.of(context).pop(place),
-                      ),
-                    ),
-                  if (query.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).pop(
-                        PlaceSelection(
-                          name: _queryController.text.trim(),
-                          address: 'Своё место',
-                          emoji: '📍',
-                        ),
-                      ),
-                      icon: const Icon(Icons.place_outlined, size: 18),
-                      label: Text(
-                          'Использовать «${_queryController.text.trim()}»'),
-                      style: OutlinedButton.styleFrom(
-                        textStyle: AppTextStyles.button.copyWith(
-                          fontSize: 13,
-                          height: 1.1,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -413,6 +336,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
     final mapService = ref.read(yandexMapServiceProvider);
     final addressGeocodingService =
         ref.read(appAddressGeocodingServiceProvider);
+    final near = _manualLocationSearchPoint();
     late final Timer searchTimer;
     searchTimer = Timer(const Duration(milliseconds: 300), () async {
       if (!mounted || !identical(_searchDebounce, searchTimer)) {
@@ -423,6 +347,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
         trimmed,
         mapService,
         addressGeocodingService,
+        near: near,
       );
 
       if (!mounted ||
@@ -489,9 +414,14 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
   Future<List<PlaceSelection>> _searchPlaceResults(
     String query,
     YandexMapService mapService,
-    AppAddressGeocodingService addressGeocodingService,
-  ) async {
-    final yandexPlaces = await _searchYandexPlaces(query, mapService);
+    AppAddressGeocodingService addressGeocodingService, {
+    Point? near,
+  }) async {
+    final yandexPlaces = await _searchYandexPlaces(
+      query,
+      mapService,
+      near: near,
+    );
     if (yandexPlaces.isNotEmpty) {
       return yandexPlaces;
     }
@@ -505,11 +435,16 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
 
   Future<List<PlaceSelection>> _searchYandexPlaces(
     String query,
-    YandexMapService mapService,
-  ) async {
+    YandexMapService mapService, {
+    Point? near,
+  }) async {
     try {
       final resolved = await mapService
-          .searchPlaces(query)
+          .searchPlaces(
+            query,
+            near: near,
+            geocodeFirst: true,
+          )
           .timeout(const Duration(seconds: 6));
       return resolved
           .map(
@@ -528,6 +463,17 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
     } catch (_) {
       return const [];
     }
+  }
+
+  Point? _manualLocationSearchPoint() {
+    final location = ref.read(manualLocationProvider);
+    if (location == null || !isSupportedManualLocation(location)) {
+      return null;
+    }
+    return Point(
+      latitude: location.latitude,
+      longitude: location.longitude,
+    );
   }
 
   Future<PlaceSelection?> _geocodeTypedAddress(
@@ -656,35 +602,6 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
   }
 }
 
-class _ListTitle extends StatelessWidget {
-  const _ListTitle({
-    required this.title,
-    this.icon,
-  });
-
-  final String title;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return Row(
-      children: [
-        if (icon != null) ...[
-          Icon(icon, size: 14, color: colors.inkMute),
-          const SizedBox(width: 6),
-        ],
-        Text(
-          title,
-          style: bbV5KickerStyle(
-            color: colors.inkMute,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _PlaceRow extends StatelessWidget {
   const _PlaceRow({
     required this.place,
@@ -700,31 +617,44 @@ class _PlaceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
     return Material(
-      color: selected ? colors.muted : Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
+      color: selected ? BbV5Colors.paperDeep : BbV5Colors.paperHi,
+      borderRadius: BorderRadius.circular(24),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 84),
+          padding: const EdgeInsets.fromLTRB(14, 14, 18, 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: BbV5Colors.hair),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0FFFFFFF),
+                blurRadius: 1,
+                offset: Offset(0, 1),
+              ),
+            ],
+          ),
           child: Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 54,
+                height: 54,
                 decoration: BoxDecoration(
-                  color: current ? colors.primarySoft : colors.warmStart,
+                  color: BbV5Colors.paper,
                   shape: BoxShape.circle,
+                  border: Border.all(color: BbV5Colors.hair),
                 ),
                 alignment: Alignment.center,
-                child: Text(
-                  place.emoji ?? '📍',
-                  style: const TextStyle(fontSize: 18),
+                child: Icon(
+                  current ? LucideIcons.locate_fixed : LucideIcons.map_pin,
+                  size: 22,
+                  color: BbV5Colors.terra,
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
+              const SizedBox(width: 18),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -733,35 +663,261 @@ class _PlaceRow extends StatelessWidget {
                       place.name,
                       style: AppTextStyles.body.copyWith(
                         fontFamily: 'Sora',
+                        fontSize: 17,
+                        height: 1.18,
+                        fontWeight: FontWeight.w600,
+                        color: BbV5Colors.ink,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _placeSubtitle(place),
+                      style: AppTextStyles.meta.copyWith(
+                        color: BbV5Colors.inkMute,
                         fontSize: 13.5,
                         height: 1.25,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w400,
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      place.category == null
-                          ? place.address
-                          : '${place.address} · ${place.category}',
-                      style: AppTextStyles.meta.copyWith(
-                        color: colors.inkMute,
-                        fontSize: 11,
-                        height: 1.25,
-                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              if (place.distance != null)
-                Text(
-                  place.distance!,
-                  style: AppTextStyles.meta.copyWith(
-                    color: colors.inkMute,
-                    fontSize: 10.5,
-                    height: 1.1,
-                    fontWeight: FontWeight.w600,
-                  ),
+              const SizedBox(width: 12),
+              const Icon(
+                LucideIcons.chevron_right,
+                size: 24,
+                color: BbV5Colors.inkMute,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _placeSubtitle(PlaceSelection place) {
+    final category = place.category?.trim();
+    final distance = place.distance?.trim();
+    final address = place.address.trim();
+
+    if (distance != null && distance.isNotEmpty) {
+      final primary = category != null && category.isNotEmpty
+          ? category
+          : address.isNotEmpty
+              ? address
+              : null;
+      return primary == null ? distance : '$primary · $distance';
+    }
+
+    if (category != null && category.isNotEmpty && address.isNotEmpty) {
+      return '$address · $category';
+    }
+
+    if (category != null && category.isNotEmpty) {
+      return category;
+    }
+
+    return address;
+  }
+}
+
+class _PlaceSheetCloseButton extends StatelessWidget {
+  const _PlaceSheetCloseButton({
+    required this.onTap,
+  });
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: BbV5Colors.paperHi,
+      shape: const CircleBorder(
+        side: BorderSide(color: BbV5Colors.hair),
+      ),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: const SizedBox(
+          width: 58,
+          height: 58,
+          child: Icon(
+            LucideIcons.x,
+            size: 26,
+            color: BbV5Colors.ink,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlaceSearchField extends StatelessWidget {
+  const _PlaceSearchField({
+    required this.controller,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      decoration: BoxDecoration(
+        color: BbV5Colors.paperHi,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: BbV5Colors.hair),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            LucideIcons.search,
+            size: 23,
+            color: BbV5Colors.inkMute,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: onChanged,
+              decoration: InputDecoration(
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                hintText: 'Найти...',
+                hintStyle: AppTextStyles.body.copyWith(
+                  color: BbV5Colors.inkMute.withValues(alpha: 0.72),
+                  fontSize: 16,
+                  height: 1.2,
                 ),
+              ),
+              style: AppTextStyles.body.copyWith(
+                color: BbV5Colors.ink,
+                fontSize: 16,
+                height: 1.2,
+              ),
+            ),
+          ),
+          if (controller.text.isNotEmpty)
+            IconButton(
+              tooltip: 'Очистить',
+              onPressed: onClear,
+              icon: const Icon(
+                LucideIcons.x,
+                size: 18,
+                color: BbV5Colors.inkMute,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlaceLoadingState extends StatelessWidget {
+  const _PlaceLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Column(
+        children: [
+          const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: BbV5Colors.accent,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Ищем адрес',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.meta.copyWith(
+              color: BbV5Colors.inkMute,
+              fontSize: 12.5,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlaceEmptyState extends StatelessWidget {
+  const _PlaceEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Text(
+        'Ничего не нашли',
+        textAlign: TextAlign.center,
+        style: AppTextStyles.meta.copyWith(
+          color: BbV5Colors.inkMute,
+          fontSize: 12.5,
+          height: 1.35,
+        ),
+      ),
+    );
+  }
+}
+
+class _UseTypedPlaceButton extends StatelessWidget {
+  const _UseTypedPlaceButton({
+    required this.label,
+    required this.onTap,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: BbV5Colors.accent,
+      borderRadius: BorderRadius.circular(BbV5Radii.pill),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(BbV5Radii.pill),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                LucideIcons.check,
+                size: 18,
+                color: BbV5Colors.paperHi,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'Использовать «$label»',
+                  style: AppTextStyles.button.copyWith(
+                    color: BbV5Colors.paperHi,
+                    fontSize: 13,
+                    height: 1.1,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
         ),

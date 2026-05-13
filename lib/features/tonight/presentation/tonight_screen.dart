@@ -2405,6 +2405,7 @@ class _TonightLocationSheetState extends ConsumerState<_TonightLocationSheet> {
     });
 
     final mapService = ref.read(yandexMapServiceProvider);
+    final near = _manualLocationSearchPointForQuery(query);
     _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
       if (!mounted) {
         return;
@@ -2415,6 +2416,7 @@ class _TonightLocationSheetState extends ConsumerState<_TonightLocationSheet> {
         results = await mapService
             .searchPlaces(
               query,
+              near: near,
               geocodeFirst: true,
             )
             .timeout(
@@ -2452,10 +2454,12 @@ class _TonightLocationSheetState extends ConsumerState<_TonightLocationSheet> {
     });
 
     final mapService = ref.read(yandexMapServiceProvider);
+    final near = _manualLocationSearchPointForQuery(query);
     try {
       final resolved = await mapService
           .searchAddress(
             query,
+            near: near,
           )
           .timeout(
             tonightLocationSearchTimeout,
@@ -2502,6 +2506,37 @@ class _TonightLocationSheetState extends ConsumerState<_TonightLocationSheet> {
         );
     _refreshTonightLocation();
     Navigator.of(context).pop();
+  }
+
+  Point? _manualLocationSearchPointForQuery(String query) {
+    if (_queryMatchesCityOption(query)) {
+      return null;
+    }
+
+    final location = ref.read(manualLocationProvider);
+    if (location == null || !isSupportedManualLocation(location)) {
+      return null;
+    }
+
+    return Point(
+      latitude: location.latitude,
+      longitude: location.longitude,
+    );
+  }
+
+  bool _queryMatchesCityOption(String query) {
+    final normalized = query.toLowerCase().replaceAll('ё', 'е').trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    return _cityOptions.any((option) {
+      final city = option.city.toLowerCase().replaceAll('ё', 'е');
+      final region = option.region.toLowerCase().replaceAll('ё', 'е');
+      return city.contains(normalized) ||
+          normalized.contains(city) ||
+          region.contains(normalized);
+    });
   }
 
   List<_CityOption> _cityResults() {

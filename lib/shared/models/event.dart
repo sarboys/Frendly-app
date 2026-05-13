@@ -34,6 +34,8 @@ class Event {
     this.accessMode,
     this.genderMode,
     this.visibilityMode,
+    this.routeId,
+    this.isDate = false,
     this.hostNote,
     this.latitude,
     this.longitude,
@@ -71,6 +73,8 @@ class Event {
   final String? accessMode;
   final String? genderMode;
   final String? visibilityMode;
+  final String? routeId;
+  final bool isDate;
   final String? hostNote;
   final double? latitude;
   final double? longitude;
@@ -116,6 +120,8 @@ class Event {
       accessMode: json['accessMode'] as String?,
       genderMode: json['genderMode'] as String?,
       visibilityMode: json['visibilityMode'] as String?,
+      routeId: json['routeId'] as String?,
+      isDate: (json['isDate'] as bool?) ?? false,
       hostNote: json['hostNote'] as String?,
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),

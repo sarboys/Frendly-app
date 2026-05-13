@@ -228,6 +228,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     filteredEvents[eventIndex],
                     filteredEvents,
                     animatePager: false,
+                    keepCurrentZoom: true,
                   );
                 },
                 onExpandedChanged: (expanded) {
@@ -627,6 +628,35 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     return _moveToPoint(point, zoom: 13.5, animated: animated);
   }
 
+  Future<void> _moveToEventPoint(
+    ym.Point point, {
+    required bool keepCurrentZoom,
+  }) async {
+    double? currentZoom;
+    if (keepCurrentZoom) {
+      final controller = _mapController;
+      final generation = _mapControllerGeneration;
+      if (controller != null) {
+        try {
+          final cameraPosition = await controller.getCameraPosition();
+          if (_isActiveMapController(controller, generation)) {
+            currentZoom = cameraPosition.zoom;
+          }
+        } catch (_) {
+          currentZoom = null;
+        }
+      }
+    }
+
+    return _moveToPoint(
+      point,
+      zoom: mapZoomForEventSelection(
+        currentZoom: currentZoom,
+        keepCurrentZoom: keepCurrentZoom,
+      ),
+    );
+  }
+
   Future<void> _moveToPoint(
     ym.Point point, {
     double zoom = 14,
@@ -801,13 +831,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     if (event == null) {
       return;
     }
-    _selectEvent(event, events, animatePager: true);
+    _selectEvent(
+      event,
+      events,
+      animatePager: true,
+      keepCurrentZoom: false,
+    );
   }
 
   void _selectEvent(
     Event event,
     List<Event> events, {
     required bool animatePager,
+    required bool keepCurrentZoom,
   }) {
     setState(() {
       selected = event.id;
@@ -815,7 +851,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     final point = _pointForEvent(event);
     if (point != null) {
-      unawaited(_moveToPoint(point, zoom: 15));
+      unawaited(
+        _moveToEventPoint(
+          point,
+          keepCurrentZoom: keepCurrentZoom,
+        ),
+      );
     }
 
     if (animatePager) {
@@ -944,21 +985,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   List<Event> _filteredEvents(List<Event> events, String currentFilter) {
-    switch (currentFilter) {
-      case 'now':
-        return events
-            .where((item) => item.time.toLowerCase().contains('сегодня'))
-            .toList(growable: false);
-      case 'popular':
-        return events.where((item) => item.going >= 8).toList(growable: false);
-      case 'calm':
-        return events
-            .where((item) => item.vibe.toLowerCase() == 'спокойно')
-            .toList(growable: false);
-      case 'all':
-      default:
-        return events;
+    if (currentFilter == 'all') {
+      return events;
     }
+
+    return events
+        .where((event) => radarCategoryForEvent(event) == currentFilter)
+        .toList(growable: false);
   }
 }
 
@@ -1157,6 +1190,7 @@ class _RadarTopControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final categoryCounts = buildRadarCategoryCounts(events);
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440),
@@ -1225,8 +1259,10 @@ class _RadarTopControls extends StatelessWidget {
                   const SizedBox(width: 8),
                   _MapTopButton(
                     icon: LucideIcons.sliders_horizontal,
-                    onTap: () => onSelectFilter(
-                      filter == 'all' ? 'calm' : 'all',
+                    onTap: () => _showRadarRadiusSheet(
+                      context,
+                      radiusKm,
+                      onRadiusChanged,
                     ),
                   ),
                 ],
@@ -1236,22 +1272,13 @@ class _RadarTopControls extends StatelessWidget {
                 height: 39,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: _radarFilters.length + 1,
-                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                  itemCount: _radarFilters.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
                   itemBuilder: (context, index) {
-                    if (index == 0) {
-                      return _RadarRadiusChip(
-                        radiusKm: radiusKm,
-                        onTap: () => _showRadarRadiusSheet(
-                          context,
-                          radiusKm,
-                          onRadiusChanged,
-                        ),
-                      );
-                    }
-                    final item = _radarFilters[index - 1];
+                    final item = _radarFilters[index];
+                    final count = categoryCounts[item.key] ?? 0;
                     return _RadarFilterChip(
-                      label: item.title,
+                      label: '${item.title} · $count',
                       active: filter == item.key,
                       onTap: () => onSelectFilter(item.key),
                     );
@@ -1262,25 +1289,6 @@ class _RadarTopControls extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _RadarRadiusChip extends StatelessWidget {
-  const _RadarRadiusChip({
-    required this.radiusKm,
-    required this.onTap,
-  });
-
-  final double radiusKm;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return _RadarFilterChip(
-      label: '${radiusKm.round()} км',
-      active: true,
-      onTap: onTap,
     );
   }
 }
@@ -1434,10 +1442,39 @@ class _RadarFilterDefinition {
 
 const _radarFilters = [
   _RadarFilterDefinition(key: 'all', title: 'Все'),
-  _RadarFilterDefinition(key: 'now', title: 'Сейчас'),
-  _RadarFilterDefinition(key: 'popular', title: 'Популярные'),
-  _RadarFilterDefinition(key: 'calm', title: 'Спокойно'),
+  _RadarFilterDefinition(key: 'bars', title: 'Бары'),
+  _RadarFilterDefinition(key: 'routes', title: 'Маршруты'),
+  _RadarFilterDefinition(key: 'dating', title: 'Дейтинг'),
+  _RadarFilterDefinition(key: 'affiche', title: 'Афиша'),
 ];
+
+@visibleForTesting
+Map<String, int> buildRadarCategoryCounts(List<Event> events) {
+  final counts = <String, int>{
+    for (final filter in _radarFilters) filter.key: 0,
+  };
+  counts['all'] = events.length;
+  for (final event in events) {
+    final category = radarCategoryForEvent(event);
+    counts[category] = (counts[category] ?? 0) + 1;
+  }
+  return counts;
+}
+
+@visibleForTesting
+String radarCategoryForEvent(Event event) {
+  if (event.isDate) {
+    return 'dating';
+  }
+  if ((event.routeId ?? '').trim().isNotEmpty) {
+    return 'routes';
+  }
+  if (event.ticketSourceKind != null ||
+      (event.ticketUrl ?? '').trim().isNotEmpty) {
+    return 'affiche';
+  }
+  return 'bars';
+}
 
 @visibleForTesting
 ym.BoundingBox? buildMapViewportBounds({
@@ -1589,7 +1626,11 @@ List<Event> visibleMapEventsForRadar({
   required List<Event> previousEvents,
 }) {
   if (eventsAsync.hasValue) {
-    return eventsAsync.value ?? const <Event>[];
+    final events = eventsAsync.value ?? const <Event>[];
+    if (events.isEmpty && previousEvents.isNotEmpty) {
+      return previousEvents;
+    }
+    return events;
   }
 
   return previousEvents;
@@ -1611,6 +1652,18 @@ double nearbyRadiusKmFromMapQuery({
 @visibleForTesting
 double clampMapZoom(double zoom) {
   return zoom.clamp(_minMapZoom, _maxMapZoom).toDouble();
+}
+
+@visibleForTesting
+double mapZoomForEventSelection({
+  required double? currentZoom,
+  required bool keepCurrentZoom,
+}) {
+  if (keepCurrentZoom && currentZoom != null) {
+    return clampMapZoom(currentZoom);
+  }
+
+  return 15;
 }
 
 @visibleForTesting

@@ -59,4 +59,26 @@ void main() {
     expect(event.ticketVenue, 'Live Arena');
     expect(event.hasPaidTicket, isTrue);
   });
+
+  test('maps radar category fields from event json', () {
+    final event = Event.fromJson({
+      'id': 'event-route-date',
+      'title': 'Маршрут на двоих',
+      'emoji': '✨',
+      'time': 'Сегодня · 18:00',
+      'place': 'Центр',
+      'distance': '1.2 км',
+      'attendees': [],
+      'going': 1,
+      'capacity': 2,
+      'vibe': 'Свидание',
+      'tone': 'warm',
+      'joined': false,
+      'routeId': 'r-date-route',
+      'isDate': true,
+    });
+
+    expect(event.routeId, 'r-date-route');
+    expect(event.isDate, isTrue);
+  });
 }

@@ -7,6 +7,7 @@ import 'package:big_break_mobile/features/create_meetup/presentation/publish_mee
 import 'package:big_break_mobile/features/create_meetup/presentation/create_meetup_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
 import 'package:big_break_mobile/shared/models/create_event_route.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
@@ -205,6 +206,9 @@ class _FakeCreateMeetupRepository extends BackendRepository {
 class _FakeYandexMapService extends YandexMapService {
   _FakeYandexMapService() : super(bootstrap: const _NoopMapkitBootstrap());
 
+  bool? lastSearchPlacesGeocodeFirst;
+  Point? lastSearchPlacesNear;
+
   @override
   Future<ResolvedAddress?> searchAddress(String query, {Point? near}) async {
     switch (query.trim().toLowerCase()) {
@@ -232,8 +236,10 @@ class _FakeYandexMapService extends YandexMapService {
     Point? near,
     bool geocodeFirst = false,
   }) async {
+    lastSearchPlacesGeocodeFirst = geocodeFirst;
+    lastSearchPlacesNear = near;
     final normalized = query.trim().toLowerCase();
-    if (normalized == 'тверская') {
+    if (normalized == 'тверская' && geocodeFirst) {
       return const [
         ResolvedAddress(
           name: 'Тверская улица',
@@ -477,8 +483,7 @@ void main() {
   );
   final placeSheetSearchField = find.byWidgetPredicate(
     (widget) =>
-        widget is TextField &&
-        widget.decoration?.hintText == 'Кафе, бар, парк или адрес',
+        widget is TextField && widget.decoration?.hintText == 'Найти...',
     description: 'place sheet search field',
   );
   Finder mainScrollable() {
@@ -1129,11 +1134,24 @@ void main() {
 
   testWidgets('create meetup place sheet shows yandex search result',
       (tester) async {
+    final mapService = _FakeYandexMapService();
+
     await tester.pumpWidget(
       _wrap(
         (_) {},
         overrides: [
-          yandexMapServiceProvider.overrideWithValue(_FakeYandexMapService()),
+          manualLocationProvider.overrideWith((ref) {
+            return ManualLocationController(null)
+              ..setLocation(
+                const ManualLocation(
+                  label: 'Москва',
+                  latitude: 55.7558,
+                  longitude: 37.6173,
+                  city: 'Москва',
+                ),
+              );
+          }),
+          yandexMapServiceProvider.overrideWithValue(mapService),
         ],
       ),
     );
@@ -1149,6 +1167,12 @@ void main() {
 
     expect(find.text('Тверская улица'), findsOneWidget);
     expect(find.text('Тверская улица, Москва · Яндекс'), findsOneWidget);
+    expect(mapService.lastSearchPlacesGeocodeFirst, isTrue);
+    expect(mapService.lastSearchPlacesNear?.latitude, closeTo(55.7558, 0.0001));
+    expect(
+      mapService.lastSearchPlacesNear?.longitude,
+      closeTo(37.6173, 0.0001),
+    );
   });
 
   testWidgets('create meetup place sheet falls back to platform geocoding',
@@ -1214,6 +1238,11 @@ void main() {
 
     await enterTitle(tester, 'Ужин');
     await openPlaceSheet(tester);
+    await tester.scrollUntilVisible(
+      find.text('Моё местоположение'),
+      240,
+      scrollable: find.byType(Scrollable).last,
+    );
     await tester.tap(find.widgetWithText(InkWell, 'Моё местоположение'));
     await tester.pumpAndSettle();
 

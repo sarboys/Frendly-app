@@ -316,7 +316,8 @@ void main() {
     expect(find.textContaining('от 1500 ₽'), findsOneWidget);
   });
 
-  testWidgets('map filter updates count and selected card', (tester) async {
+  testWidgets('map category filters render counts and keep selected card',
+      (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
@@ -325,13 +326,14 @@ void main() {
     await tester.pumpWidget(_wrap(const MapScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.text('50 км'), findsOneWidget);
+    expect(find.text('Все · 5'), findsOneWidget);
+    expect(find.text('Бары · 5'), findsOneWidget);
     expect(find.text('Винный вечер на крыше'), findsOneWidget);
 
-    await tester.tap(find.text('Популярные'));
+    await tester.tap(find.text('Бары · 5'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Настолки и кофе'), findsOneWidget);
+    expect(find.text('Винный вечер на крыше'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;
   });

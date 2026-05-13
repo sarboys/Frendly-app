@@ -198,6 +198,35 @@ void main() {
     );
   });
 
+  test('map keeps previous event markers when viewport request is empty', () {
+    const previousEvents = [
+      Event(
+        id: 'map-1',
+        title: 'Первая точка',
+        emoji: '☕',
+        time: 'Сегодня · 12:00',
+        place: 'Москва',
+        distance: '0.5 км',
+        attendees: ['Аня'],
+        going: 1,
+        capacity: 4,
+        vibe: 'Спокойно',
+        tone: EventTone.warm,
+        latitude: 55.75,
+        longitude: 37.61,
+        joined: false,
+      ),
+    ];
+
+    expect(
+      visibleMapEventsForRadar(
+        eventsAsync: const AsyncData<List<Event>>([]),
+        previousEvents: previousEvents,
+      ),
+      previousEvents,
+    );
+  });
+
   test('map viewport fit does not repeat without an explicit pending fit', () {
     expect(
       shouldScheduleMapViewportFit(
@@ -274,6 +303,102 @@ void main() {
     expect(clampMapZoom(1), 2);
     expect(clampMapZoom(14.5), 14.5);
     expect(clampMapZoom(22), 19);
+  });
+
+  test('map card swipe keeps the current camera zoom for event selection', () {
+    expect(
+      mapZoomForEventSelection(
+        currentZoom: 8.25,
+        keepCurrentZoom: true,
+      ),
+      8.25,
+    );
+    expect(
+      mapZoomForEventSelection(
+        currentZoom: null,
+        keepCurrentZoom: true,
+      ),
+      15,
+    );
+    expect(
+      mapZoomForEventSelection(
+        currentZoom: 8.25,
+        keepCurrentZoom: false,
+      ),
+      15,
+    );
+  });
+
+  test('radar category counts are calculated from loaded map events', () {
+    const events = [
+      Event(
+        id: 'bar-1',
+        title: 'Brix',
+        emoji: '🍷',
+        time: 'Сегодня · 20:00',
+        place: 'Патрики',
+        distance: '0.4 км',
+        attendees: [],
+        going: 8,
+        capacity: 12,
+        vibe: 'Вино',
+        tone: EventTone.warm,
+        joined: false,
+      ),
+      Event(
+        id: 'route-1',
+        title: 'Тверская в огнях',
+        emoji: '✨',
+        time: 'Сегодня · 20:30',
+        place: 'Тверская',
+        distance: '0.7 км',
+        attendees: [],
+        going: 6,
+        capacity: 8,
+        vibe: 'Маршрут',
+        tone: EventTone.evening,
+        routeId: 'r-lights',
+        joined: false,
+      ),
+      Event(
+        id: 'date-1',
+        title: 'Дейтинг рядом',
+        emoji: '💫',
+        time: 'Сегодня · 21:00',
+        place: 'Центр',
+        distance: '0.9 км',
+        attendees: [],
+        going: 2,
+        capacity: 2,
+        vibe: 'Свидание',
+        tone: EventTone.warm,
+        isDate: true,
+        joined: false,
+      ),
+      Event(
+        id: 'poster-1',
+        title: 'Стендап',
+        emoji: '🎟️',
+        time: 'Сегодня · 22:00',
+        place: 'Клуб',
+        distance: '1.1 км',
+        attendees: [],
+        going: 14,
+        capacity: 30,
+        vibe: 'Афиша',
+        tone: EventTone.sage,
+        ticketSourceKind: EventTicketSourceKind.affiche,
+        joined: false,
+      ),
+    ];
+
+    final counts = buildRadarCategoryCounts(events);
+
+    expect(counts['all'], 4);
+    expect(counts['bars'], 1);
+    expect(counts['routes'], 1);
+    expect(counts['dating'], 1);
+    expect(counts['affiche'], 1);
   });
 
   test('map prefers manual location over device GPS', () {

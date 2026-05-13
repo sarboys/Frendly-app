@@ -994,6 +994,50 @@ void main() {
     expect(find.textContaining('Алматы'), findsNothing);
   });
 
+  testWidgets('tonight location street search uses saved city as search area', (
+    tester,
+  ) async {
+    final mapService = _ManualLocationYandexMapService();
+
+    await tester.pumpWidget(
+      _wrap(
+        const TonightScreen(),
+        extraOverrides: [
+          manualLocationProvider.overrideWith((ref) {
+            return ManualLocationController(null)
+              ..setLocation(
+                const ManualLocation(
+                  label: 'Москва',
+                  latitude: 55.7558,
+                  longitude: 37.6173,
+                  city: 'Москва',
+                ),
+              );
+          }),
+          yandexMapServiceProvider.overrideWithValue(mapService),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('tonight-location-button')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('tonight-location-input')),
+      'Тверская',
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(mapService.lastSearchPlacesGeocodeFirst, isTrue);
+    expect(mapService.lastSearchPlacesNear?.latitude, closeTo(55.7558, 0.0001));
+    expect(
+      mapService.lastSearchPlacesNear?.longitude,
+      closeTo(37.6173, 0.0001),
+    );
+  });
+
   testWidgets('tonight location search stops loading when yandex hangs', (
     tester,
   ) async {
@@ -1246,12 +1290,17 @@ class _ManualLocationYandexMapService extends YandexMapService {
   _ManualLocationYandexMapService()
       : super(bootstrap: const _NoopMapkitBootstrap());
 
+  bool? lastSearchPlacesGeocodeFirst;
+  Point? lastSearchPlacesNear;
+
   @override
   Future<List<ResolvedAddress>> searchPlaces(
     String query, {
     Point? near,
     bool geocodeFirst = false,
   }) async {
+    lastSearchPlacesGeocodeFirst = geocodeFirst;
+    lastSearchPlacesNear = near;
     return const [
       ResolvedAddress(
         name: 'Покровка 17',
