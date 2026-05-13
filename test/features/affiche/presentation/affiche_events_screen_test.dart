@@ -141,7 +141,7 @@ void main() {
     expect(repository.calls.last.category, 'concert');
   });
 
-  testWidgets('affiche common surface shows three quick filter rows', (
+  testWidgets('affiche category filters keep a single selection', (
     tester,
   ) async {
     _setMobileViewport(tester);
@@ -150,9 +150,87 @@ void main() {
     await tester.pumpWidget(_afficheApp(repository));
     await tester.pumpAndSettle();
 
-    expect(
-        find.byKey(const ValueKey('affiche-filter-summary')), findsOneWidget);
-    expect(find.byTooltip('Фильтры'), findsOneWidget);
+    await _tapQuickFilterChip(
+      tester,
+      const Key('affiche-v5-filter-row-category'),
+      '🎧 Концерты',
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.calls.last.category, 'concert');
+
+    await _tapQuickFilterChip(
+      tester,
+      const Key('affiche-v5-filter-row-category'),
+      '🎭 Театр',
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.calls.last.category, 'theatre');
+
+    await _dragQuickFilterRowUntilVisible(
+      tester,
+      const Key('affiche-v5-filter-row-category'),
+      '🎧 Концерты',
+      dragOffset: const Offset(260, 0),
+    );
+    await _tapQuickFilterChip(
+      tester,
+      const Key('affiche-v5-filter-row-category'),
+      '🎧 Концерты',
+    );
+
+    await _dragQuickFilterRowUntilVisible(
+      tester,
+      const Key('affiche-v5-filter-row-category'),
+      '🎧 Концерты',
+      dragOffset: const Offset(260, 0),
+    );
+    await _tapQuickFilterChip(
+      tester,
+      const Key('affiche-v5-filter-row-category'),
+      '🎧 Концерты',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Афиша 0'), findsOneWidget);
+    expect(find.text('Концертная афиша 0'), findsNothing);
+  });
+
+  testWidgets('affiche standup category sends standup filter', (tester) async {
+    _setMobileViewport(tester);
+    final repository = _PagedAfficheRepositoryState();
+
+    await tester.pumpWidget(_afficheApp(repository));
+    await tester.pumpAndSettle();
+
+    await _dragQuickFilterRowUntilVisible(
+      tester,
+      const Key('affiche-v5-filter-row-category'),
+      '🎤 Стендап',
+    );
+    await _tapQuickFilterChip(
+      tester,
+      const Key('affiche-v5-filter-row-category'),
+      '🎤 Стендап',
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.calls.last.category, 'standup');
+  });
+
+  testWidgets('affiche common surface uses only inline quick filters', (
+    tester,
+  ) async {
+    _setMobileViewport(tester);
+    final repository = _PagedAfficheRepositoryState();
+
+    await tester.pumpWidget(_afficheApp(repository));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('affiche-filter-summary')), findsNothing);
+    expect(find.byTooltip('Фильтры'), findsNothing);
+    expect(find.byKey(const Key('affiche-v5-filter-sheet')), findsNothing);
     expect(find.byKey(const Key('affiche-v5-filter-row-date')), findsOneWidget);
     expect(
       find.byKey(const Key('affiche-v5-filter-row-price')),
@@ -165,72 +243,6 @@ void main() {
     expect(find.text('Завтра'), findsOneWidget);
     expect(find.text('Бесплатные'), findsOneWidget);
     expect(find.text('🎭 Театр'), findsOneWidget);
-  });
-
-  testWidgets('affiche filter sheet uses v5 chrome and active count', (
-    tester,
-  ) async {
-    _setMobileViewport(tester);
-    final repository = _PagedAfficheRepositoryState();
-
-    await tester.pumpWidget(_afficheApp(repository));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byTooltip('Фильтры'));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('affiche-v5-filter-sheet')), findsOneWidget);
-    expect(find.text('Когда'), findsOneWidget);
-    expect(find.text('Показать события · 18'), findsOneWidget);
-
-    await _tapFilterSheetChip(tester, 'Завтра');
-    await tester.tap(find.text('Показать события · 18'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('1'), findsOneWidget);
-  });
-
-  testWidgets('affiche filter sheet exposes range, time, category and radius', (
-    tester,
-  ) async {
-    _setMobileViewport(tester);
-    final repository = _PagedAfficheRepositoryState();
-
-    await tester.pumpWidget(_afficheApp(repository));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byTooltip('Фильтры'));
-    await tester.pumpAndSettle();
-
-    final sheet = find.byKey(const Key('affiche-v5-filter-sheet'));
-    expect(find.descendant(of: sheet, matching: find.text('Сегодня')),
-        findsOneWidget);
-    expect(find.descendant(of: sheet, matching: find.text('Завтра')),
-        findsOneWidget);
-    expect(find.descendant(of: sheet, matching: find.text('Выходные')),
-        findsOneWidget);
-    expect(find.descendant(of: sheet, matching: find.text('Неделя')),
-        findsOneWidget);
-    expect(find.text('Время суток'), findsOneWidget);
-    expect(find.byTooltip('Закрыть фильтры'), findsOneWidget);
-    expect(find.text('Утро · 6–12'), findsOneWidget);
-    expect(find.text('День · 12–17'), findsOneWidget);
-    expect(find.text('Вечер · 17–23'), findsOneWidget);
-
-    await tester.scrollUntilVisible(
-      find.text('Радиус · 30 км'),
-      180,
-      scrollable: find.byType(Scrollable).last,
-    );
-    expect(find.text('Радиус · 30 км'), findsOneWidget);
-
-    await tester.scrollUntilVisible(
-      find.text('Бесплатно'),
-      180,
-      scrollable: find.byType(Scrollable).last,
-    );
-    expect(find.text('Бесплатно'), findsOneWidget);
-    expect(find.text('Платно'), findsOneWidget);
   });
 }
 
@@ -250,23 +262,24 @@ Future<void> _tapQuickFilterChip(
   await tester.pump();
 }
 
-Future<void> _tapFilterSheetChip(WidgetTester tester, String label) async {
-  final sheetFinder = find.byKey(const Key('affiche-v5-filter-sheet'));
-  final labelFinder = find.descendant(
-    of: sheetFinder,
-    matching: find.text(label),
-  );
-  await tester.ensureVisible(labelFinder);
-  await tester.pumpAndSettle();
-  await tester.tap(
-    find
-        .ancestor(
-          of: labelFinder,
-          matching: find.byType(InkWell),
-        )
-        .last,
-  );
-  await tester.pump();
+Future<void> _dragQuickFilterRowUntilVisible(
+  WidgetTester tester,
+  Key rowKey,
+  String label, {
+  Offset dragOffset = const Offset(-260, 0),
+}) async {
+  final rowFinder = find.byKey(rowKey);
+  for (var i = 0; i < 8; i += 1) {
+    final labelFinder = find.descendant(
+      of: rowFinder,
+      matching: find.text(label),
+    );
+    if (labelFinder.evaluate().isNotEmpty) {
+      return;
+    }
+    await tester.drag(rowFinder, dragOffset);
+    await tester.pumpAndSettle();
+  }
 }
 
 Future<void> _dragUntil(
@@ -372,10 +385,16 @@ class _PagedAfficheRepository extends BackendRepository {
     }
 
     final start = int.tryParse(cursor ?? '') ?? 0;
+    final titlePrefix = switch (category) {
+      'concert' => 'Концертная афиша',
+      'theatre' => 'Театральная афиша',
+      'standup' => 'Стендап афиша',
+      _ => 'Афиша',
+    };
     return PaginatedResponse<AfficheEvent>(
       items: List.generate(
         limit,
-        (index) => _event(start + index),
+        (index) => _event(start + index, titlePrefix: titlePrefix),
       ),
       nextCursor: cursor == null ? '$limit' : null,
     );

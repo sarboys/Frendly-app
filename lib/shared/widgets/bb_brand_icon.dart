@@ -6,13 +6,16 @@ class BbBrandIcon extends StatelessWidget {
     required this.size,
     this.radius = 24,
     this.boxShadow,
-  });
+    String assetPath = BbBrandIcon.assetPath,
+  }) : imageAssetPath = assetPath;
 
   static const assetPath = 'assets/images/logo-fr-orange.jpg';
+  static const sageAssetPath = 'assets/images/logo-fr-sage.png';
 
   final double size;
   final double radius;
   final List<BoxShadow>? boxShadow;
+  final String imageAssetPath;
 
   static int cacheExtentFor(BuildContext context, double logicalSize) {
     return (logicalSize * MediaQuery.devicePixelRatioOf(context))
@@ -33,7 +36,7 @@ class BbBrandIcon extends StatelessWidget {
         boxShadow: boxShadow,
       ),
       child: Image.asset(
-        assetPath,
+        imageAssetPath,
         fit: BoxFit.cover,
         cacheWidth: cacheExtent,
         cacheHeight: cacheExtent,

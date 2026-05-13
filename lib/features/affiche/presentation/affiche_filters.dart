@@ -43,7 +43,7 @@ const afficheCategoryOptions = [
   ),
   AfficheFilterOption(
     label: 'Стендап',
-    value: 'comedy',
+    value: 'standup',
     icon: LucideIcons.mic,
   ),
   AfficheFilterOption(

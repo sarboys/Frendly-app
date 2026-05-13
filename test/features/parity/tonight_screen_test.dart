@@ -16,6 +16,7 @@ import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
+import 'package:big_break_mobile/shared/widgets/bb_brand_icon.dart';
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:dio/dio.dart';
@@ -91,6 +92,21 @@ void main() {
     expect(find.textContaining('Город дышит'), findsNothing);
     expect(find.textContaining('подключайся'), findsNothing);
     expect(find.text('Среда · 06 мая'), findsNothing);
+  });
+
+  testWidgets('tonight header uses sage Fr logo asset', (
+    tester,
+  ) async {
+    await _pumpTonightDirect(tester);
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is BbBrandIcon &&
+            widget.imageAssetPath == BbBrandIcon.sageAssetPath,
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('tonight routes section uses backend route templates', (
@@ -367,7 +383,7 @@ void main() {
     expect(find.text('Афиша рядом'), findsNothing);
   });
 
-  testWidgets('tonight affiche action opens v5 affiche filter', (
+  testWidgets('tonight affiche action opens v5 affiche surface', (
     tester,
   ) async {
     await _pumpTonightApp(
@@ -388,11 +404,55 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AfficheEventsScreen), findsOneWidget);
+    expect(find.byTooltip('Фильтры'), findsNothing);
+    expect(find.byKey(const Key('affiche-v5-filter-row-date')), findsOneWidget);
+    expect(find.byKey(const Key('affiche-v5-filter-row-price')), findsOneWidget);
+    expect(
+      find.byKey(const Key('affiche-v5-filter-row-category')),
+      findsOneWidget,
+    );
+  });
 
-    await tester.tap(find.byTooltip('Фильтры'));
+  testWidgets('tonight affiche preview is a five item carousel', (
+    tester,
+  ) async {
+    final requestedLimits = <int>[];
+
+    await _pumpTonightDirect(
+      tester,
+      extraOverrides: [
+        afficheEventsProvider.overrideWith((ref, query) async {
+          requestedLimits.add(query.limit);
+          return List<AfficheEvent>.generate(
+            6,
+            (index) => _numberedAfficheFixture(index + 1),
+          );
+        }),
+      ],
+    );
+
+    await _dragUntilVisible(tester, find.text('Афиша города'), 420);
+
+    expect(requestedLimits, contains(5));
+    expect(
+      find.byKey(const ValueKey('tonight-affiche-rail')),
+      findsOneWidget,
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('tonight-affiche-rail')),
+      const Offset(-700, 0),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('affiche-v5-filter-sheet')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('tonight-affiche-card-affiche-5')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('tonight-affiche-card-affiche-6')),
+      findsNothing,
+    );
   });
 
   testWidgets('tonight gathering cards render event source images', (
@@ -677,6 +737,34 @@ const _afficheFixtures = [
     tags: ['спорт'],
   ),
 ];
+
+AfficheEvent _numberedAfficheFixture(int number) {
+  return AfficheEvent(
+    id: 'affiche-$number',
+    title: 'Афиша $number',
+    description: 'Городское событие $number',
+    city: 'Москва',
+    venue: 'Площадка $number',
+    address: 'Адрес $number',
+    latitude: 55.7 + number / 1000,
+    longitude: 37.6 + number / 1000,
+    startsAt: null,
+    endsAt: null,
+    dateLabel: 'Сегодня',
+    timeLabel: '19:00',
+    category: 'culture',
+    priceFrom: 600,
+    priceMode: AffichePriceMode.paid,
+    currency: 'RUB',
+    imageUrl: null,
+    provider: 'mock',
+    sourceCode: 'mock',
+    actionUrl: null,
+    actionKind: 'details',
+    isAffiliate: false,
+    tags: const ['culture'],
+  );
+}
 
 const _tonightRouteTemplate = EveningRouteTemplateSummary(
   id: 'template-backend-route',

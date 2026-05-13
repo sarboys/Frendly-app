@@ -51,6 +51,7 @@ flutter:
   assets:
     - assets/fonts/
     - assets/images/logo-fr-orange.jpg
+    - assets/images/logo-fr-sage.png
   fonts:
     - family: Sora
       fonts:

@@ -1434,19 +1434,20 @@ class _TonightAfficheSection extends ConsumerWidget {
         AfficheEventsQuery(
           city: city,
           priceMode: 'any',
-          limit: 2,
+          limit: 5,
         ),
       ),
     );
     final affiche = afficheAsync.valueOrNull ?? const <AfficheEvent>[];
+    final visibleAffiche = affiche.take(5).toList(growable: false);
     if (affiche.isNotEmpty) {
       unawaited(
         ref.read(appMediaPrewarmServiceProvider).warmExternalEventImages(
-              affiche.map(
+              visibleAffiche.map(
                 (event) => event.imageUrlFor(BbExternalEventImageUsage.rail),
               ),
               usage: BbExternalEventImageUsage.rail,
-              limit: 2,
+              limit: 5,
             ),
       );
     }
@@ -1460,27 +1461,36 @@ class _TonightAfficheSection extends ConsumerWidget {
         color: BbV5Colors.gold,
         onTap: () => context.pushRoute(AppRoute.affiche),
       ),
-      child: afficheAsync.isLoading && affiche.isEmpty
-          ? const _TwoCardSkeletonGrid()
-          : affiche.isEmpty
-              ? const _V5EmptyCard(message: 'Пока нет событий в афише')
-              : Row(
-                  children: [
-                    for (var index = 0; index < affiche.length; index++) ...[
-                      Expanded(
+      child: SizedBox(
+        height: 244,
+        child: afficheAsync.isLoading && visibleAffiche.isEmpty
+            ? const _AfficheSkeletonRail()
+            : visibleAffiche.isEmpty
+                ? const _V5EmptyCard(message: 'Пока нет событий в афише')
+                : ListView.separated(
+                    key: const ValueKey('tonight-affiche-rail'),
+                    scrollDirection: Axis.horizontal,
+                    clipBehavior: Clip.none,
+                    padding: EdgeInsets.zero,
+                    itemBuilder: (context, index) {
+                      final event = visibleAffiche[index];
+                      return SizedBox(
+                        key: ValueKey('tonight-affiche-card-${event.id}'),
+                        width: 168,
                         child: _AffichePreviewCard(
-                          event: affiche[index],
+                          event: event,
                           onTap: () => context.pushRoute(
                             AppRoute.afficheEvent,
-                            pathParameters: {'eventId': affiche[index].id},
+                            pathParameters: {'eventId': event.id},
                           ),
                         ),
-                      ),
-                      if (index != affiche.length - 1)
+                      );
+                    },
+                    separatorBuilder: (_, __) =>
                         const SizedBox(width: AppSpacing.sm),
-                    ],
-                  ],
-                ),
+                    itemCount: visibleAffiche.length,
+                  ),
+      ),
     );
   }
 }
@@ -1512,6 +1522,29 @@ class _AffichePreviewCard extends StatelessWidget {
       going: event.priceLabel,
       color: BbV5Colors.gold,
       onTap: onTap,
+    );
+  }
+}
+
+class _AfficheSkeletonRail extends StatelessWidget {
+  const _AfficheSkeletonRail();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
+      padding: EdgeInsets.zero,
+      itemBuilder: (_, __) => Container(
+        width: 168,
+        decoration: BoxDecoration(
+          color: BbV5Colors.paperHi.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: BbV5Colors.hair),
+        ),
+      ),
+      separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+      itemCount: 5,
     );
   }
 }
@@ -1888,31 +1921,6 @@ class _MiniTag extends StatelessWidget {
   }
 }
 
-class _TwoCardSkeletonGrid extends StatelessWidget {
-  const _TwoCardSkeletonGrid();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (var index = 0; index < 2; index++) ...[
-          Expanded(
-            child: Container(
-              height: 244,
-              decoration: BoxDecoration(
-                color: BbV5Colors.paperHi.withValues(alpha: 0.7),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: BbV5Colors.hair),
-              ),
-            ),
-          ),
-          if (index == 0) const SizedBox(width: AppSpacing.sm),
-        ],
-      ],
-    );
-  }
-}
-
 class _V5EmptyCard extends StatelessWidget {
   const _V5EmptyCard({required this.message});
 
@@ -2131,6 +2139,7 @@ class _TonightHeader extends ConsumerWidget {
                   child: const BbBrandIcon(
                     size: 44,
                     radius: 22,
+                    assetPath: BbBrandIcon.sageAssetPath,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
