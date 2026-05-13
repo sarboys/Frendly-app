@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
 import 'package:big_break_mobile/app/core/maps/yandex_map_service.dart';
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
@@ -992,6 +994,38 @@ void main() {
     expect(find.textContaining('Алматы'), findsNothing);
   });
 
+  testWidgets('tonight location search stops loading when yandex hangs', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        const TonightScreen(),
+        extraOverrides: [
+          yandexMapServiceProvider.overrideWithValue(
+            _HangingYandexMapService(),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('tonight-location-button')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('tonight-location-input')),
+      'Москва, Кетчерская улица',
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('Ищем место'), findsOneWidget);
+
+    await tester.pump(tonightLocationSearchTimeout);
+    await tester.pump();
+
+    expect(find.text('Ищем место'), findsNothing);
+    expect(find.text('Ничего не найдено'), findsOneWidget);
+  });
+
   testWidgets('tonight header uses Vietnamese city and street from geolocation',
       (tester) async {
     await tester.pumpWidget(
@@ -1192,6 +1226,19 @@ class _FailingYandexMapService extends YandexMapService {
   @override
   Future<ResolvedAddress?> reverseGeocode(Point point) {
     throw StateError('reverse geocode unavailable');
+  }
+}
+
+class _HangingYandexMapService extends YandexMapService {
+  _HangingYandexMapService() : super(bootstrap: const _NoopMapkitBootstrap());
+
+  @override
+  Future<List<ResolvedAddress>> searchPlaces(
+    String query, {
+    Point? near,
+    bool geocodeFirst = false,
+  }) {
+    return Completer<List<ResolvedAddress>>().future;
   }
 }
 

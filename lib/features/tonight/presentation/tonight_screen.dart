@@ -28,6 +28,8 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart';
 
+const tonightLocationSearchTimeout = Duration(seconds: 5);
+
 const _streetWords = [
   'улица',
   'проспект',
@@ -2401,10 +2403,15 @@ class _TonightLocationSheetState extends ConsumerState<_TonightLocationSheet> {
 
       List<ResolvedAddress> results;
       try {
-        results = await mapService.searchPlaces(
-          query,
-          geocodeFirst: true,
-        );
+        results = await mapService
+            .searchPlaces(
+              query,
+              geocodeFirst: true,
+            )
+            .timeout(
+              tonightLocationSearchTimeout,
+              onTimeout: () => const <ResolvedAddress>[],
+            );
       } catch (_) {
         if (mounted && _controller.text.trim() == query) {
           setState(() {
@@ -2437,9 +2444,14 @@ class _TonightLocationSheetState extends ConsumerState<_TonightLocationSheet> {
 
     final mapService = ref.read(yandexMapServiceProvider);
     try {
-      final resolved = await mapService.searchAddress(
-        query,
-      );
+      final resolved = await mapService
+          .searchAddress(
+            query,
+          )
+          .timeout(
+            tonightLocationSearchTimeout,
+            onTimeout: () => null,
+          );
       if (!mounted) {
         return;
       }
@@ -2448,6 +2460,10 @@ class _TonightLocationSheetState extends ConsumerState<_TonightLocationSheet> {
         return;
       }
       _applyResolvedLocation(resolved);
+    } catch (_) {
+      if (mounted) {
+        _showSnackBar('Не нашли это место');
+      }
     } finally {
       if (mounted) {
         setState(() {
