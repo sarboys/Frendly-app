@@ -173,7 +173,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 nextFilter,
                 events,
               ),
-              onRadiusChanged: _changeNearbyRadius,
+              onRadiusChanged: (value) => unawaited(_changeNearbyRadius(value)),
             ),
           ),
           Positioned(
@@ -477,16 +477,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  void _changeNearbyRadius(double value) {
+  Future<void> _changeNearbyRadius(double value) async {
     final radiusKm = clampNearbyEventsRadiusKm(value);
     ref.read(nearbyEventsRadiusKmProvider.notifier).setRadiusKm(radiusKm);
-    final currentCenter =
-        _mapQuery.centerLatitude == null || _mapQuery.centerLongitude == null
-            ? _userPoint
-            : ym.Point(
-                latitude: _mapQuery.centerLatitude!,
-                longitude: _mapQuery.centerLongitude!,
-              );
+    final currentCenter = mapRadiusCenterForChange(
+      query: _mapQuery,
+      userPoint: _userPoint,
+      cameraPoint: await _currentCameraCenter(),
+    );
+
+    if (!mounted) {
+      return;
+    }
 
     setState(() {
       if (currentCenter == null) {
@@ -502,6 +504,24 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     if (currentCenter != null) {
       unawaited(_fitViewportForRadius(currentCenter, radiusKm));
+    }
+  }
+
+  Future<ym.Point?> _currentCameraCenter() async {
+    final controller = _mapController;
+    final generation = _mapControllerGeneration;
+    if (controller == null) {
+      return null;
+    }
+
+    try {
+      final cameraPosition = await controller.getCameraPosition();
+      if (!_isActiveMapController(controller, generation)) {
+        return null;
+      }
+      return cameraPosition.target;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -1412,6 +1432,26 @@ ym.BoundingBox buildMapRadiusBounds({
           (center.longitude + longitudeDelta).clamp(-180, 180).toDouble(),
     ),
   );
+}
+
+@visibleForTesting
+ym.Point? mapRadiusCenterForChange({
+  required MapEventsQuery query,
+  required ym.Point? userPoint,
+  required ym.Point? cameraPoint,
+}) {
+  if (cameraPoint != null) {
+    return cameraPoint;
+  }
+
+  if (query.centerLatitude != null && query.centerLongitude != null) {
+    return ym.Point(
+      latitude: query.centerLatitude!,
+      longitude: query.centerLongitude!,
+    );
+  }
+
+  return userPoint;
 }
 
 @visibleForTesting

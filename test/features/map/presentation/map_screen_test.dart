@@ -140,6 +140,20 @@ void main() {
     );
   });
 
+  test('map radius change uses the current camera center first', () {
+    final center = mapRadiusCenterForChange(
+      query: const MapEventsQuery(
+        centerLatitude: 55.7558,
+        centerLongitude: 37.6173,
+      ),
+      userPoint: const ym.Point(latitude: 55.76, longitude: 37.62),
+      cameraPoint: const ym.Point(latitude: 59.93, longitude: 30.31),
+    );
+
+    expect(center?.latitude, 59.93);
+    expect(center?.longitude, 30.31);
+  });
+
   test('map viewport fit does not repeat without an explicit pending fit', () {
     expect(
       shouldScheduleMapViewportFit(
