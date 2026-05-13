@@ -66,6 +66,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _triedInitialLocation = false;
   bool _autoFitPending = false;
   bool _isRadarListExpanded = true;
+  bool _syncRadiusAfterProgrammaticZoom = false;
   String _lastViewportFitKey = '';
   List<Event> _lastMapEvents = const [];
   List<Event> _visibleMapEvents = const [];
@@ -383,7 +384,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     ym.CameraUpdateReason reason,
     bool finished,
   ) {
-    if (!shouldRefreshMapViewportQuery(reason: reason, finished: finished)) {
+    final shouldSyncProgrammaticZoom = _syncRadiusAfterProgrammaticZoom &&
+        reason == ym.CameraUpdateReason.application &&
+        finished;
+    if (shouldSyncProgrammaticZoom) {
+      _syncRadiusAfterProgrammaticZoom = false;
+    }
+
+    if (!shouldRefreshMapViewportQuery(
+      reason: reason,
+      finished: finished,
+      allowApplication: shouldSyncProgrammaticZoom,
+    )) {
       return;
     }
 
@@ -434,6 +446,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         bounds: boundingBoxFromVisibleRegion(visibleRegion),
         center: cameraCenter,
       );
+      final currentRadiusKm = ref.read(nearbyEventsRadiusKmProvider);
+      final nextRadiusKm = nearbyRadiusKmFromMapQuery(
+        currentRadiusKm: currentRadiusKm,
+        query: nextQuery,
+      );
+      if (nextRadiusKm != currentRadiusKm) {
+        ref
+            .read(nearbyEventsRadiusKmProvider.notifier)
+            .setRadiusKm(nextRadiusKm);
+      }
       if (nextQuery == _mapQuery) {
         return;
       }
@@ -649,6 +671,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       if (!_isActiveMapController(controller, generation)) {
         return;
       }
+      _syncRadiusAfterProgrammaticZoom = true;
       await controller.moveCamera(
         ym.CameraUpdate.newCameraPosition(
           ym.CameraPosition(
@@ -664,6 +687,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         ),
       );
     } catch (_) {
+      _syncRadiusAfterProgrammaticZoom = false;
       return;
     }
   }
@@ -1552,8 +1576,11 @@ bool shouldScheduleMapViewportFit({
 bool shouldRefreshMapViewportQuery({
   required ym.CameraUpdateReason reason,
   required bool finished,
+  bool allowApplication = false,
 }) {
-  return finished && reason == ym.CameraUpdateReason.gestures;
+  return finished &&
+      (reason == ym.CameraUpdateReason.gestures ||
+          (allowApplication && reason == ym.CameraUpdateReason.application));
 }
 
 @visibleForTesting
@@ -1566,6 +1593,19 @@ List<Event> visibleMapEventsForRadar({
   }
 
   return previousEvents;
+}
+
+@visibleForTesting
+double nearbyRadiusKmFromMapQuery({
+  required double currentRadiusKm,
+  required MapEventsQuery query,
+}) {
+  final radiusKm = query.radiusKm;
+  if (radiusKm == null) {
+    return currentRadiusKm;
+  }
+
+  return clampNearbyEventsRadiusKm(radiusKm);
 }
 
 @visibleForTesting

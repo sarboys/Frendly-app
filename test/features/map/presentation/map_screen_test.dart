@@ -260,6 +260,14 @@ void main() {
       ),
       isTrue,
     );
+    expect(
+      shouldRefreshMapViewportQuery(
+        reason: ym.CameraUpdateReason.application,
+        finished: true,
+        allowApplication: true,
+      ),
+      isTrue,
+    );
   });
 
   test('map zoom is clamped to supported range', () {
@@ -536,6 +544,16 @@ void main() {
     );
 
     expect(query.radiusKm, 150);
+  });
+
+  test('map radius filter follows the viewport query radius', () {
+    expect(
+      nearbyRadiusKmFromMapQuery(
+        currentRadiusKm: 50,
+        query: const MapEventsQuery(radiusKm: 24.5),
+      ),
+      24.5,
+    );
   });
 
   test('initial map query centers on user location with nearby radius', () {
