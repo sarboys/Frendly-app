@@ -1,5 +1,6 @@
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/payments/application/payment_return_controller.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/subscription.dart';
@@ -8,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class PaywallScreen extends ConsumerStatefulWidget {
   const PaywallScreen({super.key});
@@ -18,13 +20,30 @@ class PaywallScreen extends ConsumerStatefulWidget {
 
 class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   String _plan = 'year';
-  bool _subscribing = false;
+  String _paymentAction = 'idle';
   bool _restoring = false;
+  String? _lastOrderId;
 
   @override
   Widget build(BuildContext context) {
     final plansAsync = ref.watch(subscriptionPlansProvider);
     final stateAsync = ref.watch(subscriptionStateProvider);
+    final paymentsEnabled =
+        ref.watch(paymentCatalogProvider).valueOrNull?.tbankEnabled ?? true;
+    ref.listen<PaymentReturnState?>(paymentReturnStateProvider,
+        (previous, next) {
+      if (next == null || previous == next || !context.mounted) {
+        return;
+      }
+      final message = next.confirmed
+          ? 'Frendly+ активирован'
+          : next.failed
+              ? 'Оплата не прошла'
+              : 'Платеж еще обрабатывается';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    });
 
     return BbV5Scaffold(
       child: plansAsync.when(
@@ -41,11 +60,14 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
             plans: plans,
             state: state,
             selectedPlanId: _plan,
-            subscribing: _subscribing,
+            paymentAction: _paymentAction,
             restoring: _restoring,
+            lastOrderId: _lastOrderId,
+            paymentsEnabled: paymentsEnabled,
             onPlanChanged: (planId) => setState(() => _plan = planId),
             onRestore: _restore,
             onSubscribe: _subscribe,
+            onCheckPayment: _checkLastPayment,
           ),
         ),
       ),
@@ -85,30 +107,89 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   }
 
   Future<void> _subscribe() async {
-    if (_subscribing) {
+    if (_paymentAction != 'idle') {
       return;
     }
     final repository = ref.read(backendRepositoryProvider);
-    final container = ProviderScope.containerOf(context, listen: false);
-    setState(() => _subscribing = true);
+    setState(() => _paymentAction = 'creating');
     try {
-      await repository.subscribe(_plan);
+      final order = await repository.initPayment(
+        productKind: 'subscription',
+        productId: _plan,
+      );
+      final paymentUrl = order.paymentUrl;
+      if (paymentUrl == null || paymentUrl.isEmpty) {
+        throw StateError('Payment URL is empty');
+      }
       if (!mounted || !context.mounted) {
         return;
       }
-      container.invalidate(subscriptionStateProvider);
+      setState(() {
+        _paymentAction = 'opening';
+        _lastOrderId = order.orderId;
+      });
+      final opened = await launchUrl(
+        Uri.parse(paymentUrl),
+        mode: LaunchMode.inAppBrowserView,
+      );
+      if (!opened) {
+        throw StateError('Payment URL was not opened');
+      }
+      if (!mounted || !context.mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Frendly+ активирован')),
+        const SnackBar(content: Text('Вернись сюда после оплаты')),
       );
     } catch (_) {
       if (mounted && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не получилось подключить подписку')),
+          const SnackBar(content: Text('Не получилось открыть оплату')),
         );
       }
     } finally {
       if (mounted) {
-        setState(() => _subscribing = false);
+        setState(() => _paymentAction = 'idle');
+      }
+    }
+  }
+
+  Future<void> _checkLastPayment() async {
+    final orderId = _lastOrderId;
+    if (orderId == null || _paymentAction != 'idle') {
+      return;
+    }
+    final repository = ref.read(backendRepositoryProvider);
+    final container = ProviderScope.containerOf(context, listen: false);
+    setState(() => _paymentAction = 'checking');
+    try {
+      final order = await repository.checkPayment(orderId);
+      if (!mounted || !context.mounted) {
+        return;
+      }
+      if (order.isConfirmed) {
+        container.invalidate(subscriptionStateProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Frendly+ активирован')),
+        );
+      } else if (order.isFailed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Оплата не прошла')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Платеж еще обрабатывается')),
+        );
+      }
+    } catch (_) {
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Платеж еще обрабатывается')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _paymentAction = 'idle');
       }
     }
   }
@@ -119,21 +200,27 @@ class _PaywallContent extends StatelessWidget {
     required this.plans,
     required this.state,
     required this.selectedPlanId,
-    required this.subscribing,
+    required this.paymentAction,
     required this.restoring,
+    required this.lastOrderId,
+    required this.paymentsEnabled,
     required this.onPlanChanged,
     required this.onRestore,
     required this.onSubscribe,
+    required this.onCheckPayment,
   });
 
   final List<SubscriptionPlanData> plans;
   final SubscriptionStateData state;
   final String selectedPlanId;
-  final bool subscribing;
+  final String paymentAction;
   final bool restoring;
+  final String? lastOrderId;
+  final bool paymentsEnabled;
   final ValueChanged<String> onPlanChanged;
   final VoidCallback onRestore;
   final VoidCallback onSubscribe;
+  final VoidCallback onCheckPayment;
 
   @override
   Widget build(BuildContext context) {
@@ -181,7 +268,7 @@ class _PaywallContent extends StatelessWidget {
                             activeSubscription:
                                 hasActiveSubscription && state.plan == 'year',
                             summary:
-                                '${year.priceMonthlyRub} ₽/мес · списание раз в год',
+                                '${year.priceMonthlyRub} ₽/мес · оплата за год',
                             strikePrice: year.priceRub * 2,
                             onTap: () => onPlanChanged('year'),
                           ),
@@ -191,12 +278,12 @@ class _PaywallContent extends StatelessWidget {
                             active: selectedPlanId == 'month',
                             activeSubscription:
                                 hasActiveSubscription && state.plan == 'month',
-                            summary: 'Можно отменить в любой момент',
+                            summary: 'Разовый платеж на 30 дней',
                             onTap: () => onPlanChanged('month'),
                           ),
                           const SizedBox(height: AppSpacing.md),
                           Text(
-                            'Авто-продление можно отключить в настройках. Условия и приватность.',
+                            'Оплата разовая. Доступ включится после подтверждения платежа.',
                             textAlign: TextAlign.center,
                             style: AppTextStyles.caption.copyWith(
                               fontSize: 10.5,
@@ -217,8 +304,11 @@ class _PaywallContent extends StatelessWidget {
                 bottom: 0,
                 child: _StickySubscribeBar(
                   plan: selectedPlan,
-                  subscribing: subscribing,
+                  paymentAction: paymentAction,
+                  lastOrderId: lastOrderId,
+                  paymentsEnabled: paymentsEnabled,
                   onSubscribe: onSubscribe,
+                  onCheckPayment: onCheckPayment,
                 ),
               ),
             ],
@@ -615,19 +705,29 @@ class _PlanBadge extends StatelessWidget {
 class _StickySubscribeBar extends StatelessWidget {
   const _StickySubscribeBar({
     required this.plan,
-    required this.subscribing,
+    required this.paymentAction,
+    required this.lastOrderId,
+    required this.paymentsEnabled,
     required this.onSubscribe,
+    required this.onCheckPayment,
   });
 
   final SubscriptionPlanData plan;
-  final bool subscribing;
+  final String paymentAction;
+  final String? lastOrderId;
+  final bool paymentsEnabled;
   final VoidCallback onSubscribe;
+  final VoidCallback onCheckPayment;
 
   @override
   Widget build(BuildContext context) {
-    final label = plan.id == 'year'
-        ? 'Попробовать ${plan.trialDays} дней бесплатно'
-        : 'Подключить за ${plan.priceRub} ₽/мес';
+    final busy = paymentAction != 'idle';
+    final label = switch (paymentAction) {
+      'creating' => 'Создаем платеж...',
+      'opening' => 'Открываем оплату...',
+      'checking' => 'Проверяем оплату...',
+      _ => 'Оплатить ${plan.priceRub} ₽',
+    };
 
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -646,13 +746,31 @@ class _StickySubscribeBar extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
-          child: BbV5PillButton(
-            label: subscribing ? 'Подключаем...' : label,
-            onPressed: subscribing ? null : onSubscribe,
-            dark: true,
-            height: 56,
-            fontSize: 14,
-            expanded: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              BbV5PillButton(
+                label: paymentsEnabled ? label : 'Оплата пока недоступна',
+                onPressed: busy || !paymentsEnabled ? null : onSubscribe,
+                dark: true,
+                height: 56,
+                fontSize: 14,
+                expanded: true,
+              ),
+              if (lastOrderId != null) ...[
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: busy ? null : onCheckPayment,
+                  child: Text(
+                    'Проверить оплату',
+                    style: AppTextStyles.button.copyWith(
+                      fontSize: 12,
+                      color: BbV5Colors.inkSoft,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),

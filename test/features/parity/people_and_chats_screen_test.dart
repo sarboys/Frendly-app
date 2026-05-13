@@ -676,6 +676,7 @@ class _TestTokenWalletController extends TokenWalletController {
       balance: 0,
       promoted: promoted,
       history: const [],
+      loading: false,
     );
   }
 }

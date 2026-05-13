@@ -1,56 +1,129 @@
 import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
+import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/models/payments.dart';
+import 'package:big_break_mobile/shared/models/token_wallet.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  test('wallet starts from the v5 demo balance', () async {
-    SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
-    final controller = TokenWalletController(prefs);
-
-    expect(controller.state.balance, 250);
-    expect(controller.state.history, isEmpty);
-    expect(tokenPacks, hasLength(4));
+  test('catalog fallback keeps backend product prices', () {
+    expect(tokenPacks.map((pack) => pack.total), [100, 350, 900, 2700]);
+    expect(tokenPacks.map((pack) => pack.price), [199, 499, 999, 2499]);
     expect(promoOptions.map((option) => option.cost), [80, 200, 500]);
   });
 
-  test('top up adds tokens with bonus and stores a history row', () async {
-    SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
-    final controller = TokenWalletController(prefs);
+  test('refresh loads wallet from backend', () async {
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        backendRepositoryProvider.overrideWith(_FakeBackendRepository.new),
+      ],
+    );
+    addTearDown(container.dispose);
 
-    await controller.topUp(tokenPacks[1]);
+    final controller = container.read(tokenWalletProvider.notifier);
+    await controller.refresh();
 
-    expect(controller.state.balance, 600);
-    expect(controller.state.history.single.type, TokenTransactionType.topup);
+    expect(controller.state.balance, 350);
     expect(controller.state.history.single.amount, 350);
-    expect(controller.state.history.single.note, 'Пополнение · Популярный');
+    expect(controller.state.isPromoted('mc1'), isTrue);
   });
 
-  test('promotion spends tokens and marks meetup as promoted', () async {
-    SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
-    final controller = TokenWalletController(prefs);
+  test('promotion spends tokens through backend wallet', () async {
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        backendRepositoryProvider.overrideWith(_FakeBackendRepository.new),
+      ],
+    );
+    addTearDown(container.dispose);
 
+    final controller = container.read(tokenWalletProvider.notifier);
+    await controller.refresh();
     final ok = await controller.promote('mc2', promoOptions.first);
 
     expect(ok, isTrue);
-    expect(controller.state.balance, 170);
+    expect(controller.state.balance, 270);
     expect(controller.state.isPromoted('mc2'), isTrue);
-    expect(controller.state.history.single.type, TokenTransactionType.spend);
-    expect(controller.state.history.single.amount, 80);
   });
 
-  test('promotion returns false when balance is not enough', () async {
-    SharedPreferences.setMockInitialValues({'frendly_v5_tokens': 20});
-    final prefs = await SharedPreferences.getInstance();
-    final controller = TokenWalletController(prefs);
+  test('top up creates a backend payment order', () async {
+    late _FakeBackendRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _FakeBackendRepository(ref);
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
 
-    final ok = await controller.promote('mc3', promoOptions.first);
+    final controller = container.read(tokenWalletProvider.notifier);
+    final order = await controller.createTopUpPayment(tokenPacks[1]);
 
-    expect(ok, isFalse);
-    expect(controller.state.balance, 20);
-    expect(controller.state.isPromoted('mc3'), isFalse);
-    expect(controller.state.history, isEmpty);
+    expect(order.orderId, 'order-1');
+    expect(repository.lastProductKind, 'tokens');
+    expect(repository.lastProductId, 'p2');
   });
+}
+
+class _FakeBackendRepository extends BackendRepository {
+  _FakeBackendRepository(Ref ref) : super(ref: ref, dio: Dio());
+
+  String? lastProductKind;
+  String? lastProductId;
+
+  @override
+  Future<TokenWalletData> fetchTokenWallet() async {
+    return TokenWalletData(
+      balance: 350,
+      history: [
+        TokenWalletTransactionData(
+          id: 'tx-1',
+          type: 'topup',
+          amount: 350,
+          note: 'Пополнение токенов',
+          timestamp: DateTime(2026, 5, 13),
+        ),
+      ],
+      promoted: {
+        'mc1': DateTime.now().add(const Duration(hours: 1)),
+      },
+      promoOptions: const [],
+    );
+  }
+
+  @override
+  Future<TokenWalletData> promoteWithTokens({
+    required String targetKind,
+    required String targetId,
+    required String optionId,
+  }) async {
+    return TokenWalletData(
+      balance: 270,
+      history: const [],
+      promoted: {
+        targetId: DateTime.now().add(const Duration(hours: 24)),
+      },
+      promoOptions: const [],
+    );
+  }
+
+  @override
+  Future<PaymentOrderData> initPayment({
+    required String productKind,
+    required String productId,
+  }) async {
+    lastProductKind = productKind;
+    lastProductId = productId;
+    return const PaymentOrderData(
+      orderId: 'order-1',
+      paymentId: 'payment-1',
+      paymentUrl: 'https://pay.test/form',
+      status: 'pending',
+    );
+  }
 }
