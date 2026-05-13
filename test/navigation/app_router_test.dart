@@ -266,7 +266,9 @@ void main() {
     );
   });
 
-  test('router keeps onboarding pending without birth date', () {
+  test(
+      'router does not reopen onboarding for existing users without birth date',
+      () {
     expect(
       resolvePendingSetupRoute(
         const OnboardingData(
@@ -278,7 +280,7 @@ void main() {
           vibe: 'calm',
         ),
       ),
-      AppRoute.onboarding.path,
+      isNull,
     );
   });
 

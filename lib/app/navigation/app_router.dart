@@ -99,10 +99,8 @@ bool isOnboardingComplete(OnboardingData? onboarding) {
   return onboarding.intent != null &&
       (onboarding.gender?.isNotEmpty ?? false) &&
       onboarding.requiredContact == null &&
-      (onboarding.birthDate?.isNotEmpty ?? false) &&
       (onboarding.city?.isNotEmpty ?? false) &&
-      onboarding.interests.length >= 2 &&
-      (onboarding.vibe?.isNotEmpty ?? false);
+      onboarding.interests.length >= 2;
 }
 
 String? resolvePendingSetupRoute(OnboardingData? onboarding) {
@@ -234,6 +232,8 @@ GoRouter buildAppRouter({
         return null;
       }
 
+      final isPaymentReturn = path.startsWith('/payment/');
+
       if (!authenticated && !isPublic) {
         return AppRoute.welcome.path;
       }
@@ -247,7 +247,9 @@ GoRouter buildAppRouter({
           return pendingSetup;
         }
 
-        if (!_setupRoutePaths.contains(path) && path != pendingSetup) {
+        if (!isPaymentReturn &&
+            !_setupRoutePaths.contains(path) &&
+            path != pendingSetup) {
           return pendingSetup;
         }
       }

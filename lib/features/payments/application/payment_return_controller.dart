@@ -46,6 +46,16 @@ class PaymentReturnController {
       return null;
     }
 
+    if (result == 'fail') {
+      final state = PaymentReturnState(
+        orderId: orderId,
+        status: 'failed',
+        productKind: returnedProductKind,
+      );
+      _ref.read(paymentReturnStateProvider.notifier).state = state;
+      return state;
+    }
+
     try {
       await _ref.read(authBootstrapProvider.future);
       final repository = _ref.read(backendRepositoryProvider);
@@ -55,8 +65,7 @@ class PaymentReturnController {
       _ref.read(tokenWalletProvider.notifier).refresh();
       final state = PaymentReturnState(
         orderId: orderId,
-        status:
-            result == 'fail' && !order.isConfirmed ? 'failed' : order.status,
+        status: order.status,
         productKind: order.productKind.isNotEmpty
             ? order.productKind
             : returnedProductKind,
