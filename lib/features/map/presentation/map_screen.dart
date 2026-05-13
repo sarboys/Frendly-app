@@ -33,6 +33,7 @@ const _minMapZoom = 2.0;
 const _maxMapZoom = 19.0;
 const _radarCarouselInitialPage = 0;
 const _nativeMapPoiLimit = 80;
+const _manualRadiusViewportFitKey = 'manual-radius-fit';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({
@@ -491,6 +492,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
 
     setState(() {
+      _autoFitPending = false;
+      _lastViewportFitKey = _manualRadiusViewportFitKey;
       if (currentCenter == null) {
         _mapQuery = MapEventsQuery(radiusKm: radiusKm);
       } else {
@@ -526,8 +529,52 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   Future<void> _fitViewportForRadius(ym.Point center, double radiusKm) {
-    return _moveToBounds(
-      buildMapRadiusBounds(center: center, radiusKm: radiusKm),
+    return _moveToRadius(center, radiusKm);
+  }
+
+  Future<void> _moveToRadius(ym.Point center, double radiusKm) async {
+    final controller = _mapController;
+    final generation = _mapControllerGeneration;
+    if (controller == null) {
+      return;
+    }
+
+    try {
+      final zoom = mapZoomForRadiusKm(
+        radiusKm: radiusKm,
+        viewportSize: _mapRadiusViewportSize(),
+        latitude: center.latitude,
+      );
+      if (!_isActiveMapController(controller, generation)) {
+        return;
+      }
+      await controller.moveCamera(
+        ym.CameraUpdate.newCameraPosition(
+          ym.CameraPosition(
+            target: center,
+            zoom: zoom,
+            azimuth: 0,
+            tilt: 0,
+          ),
+        ),
+        animation: const ym.MapAnimation(
+          type: ym.MapAnimationType.smooth,
+          duration: 0.35,
+        ),
+      );
+    } catch (_) {
+      return;
+    }
+  }
+
+  Size _mapRadiusViewportSize() {
+    final size = MediaQuery.sizeOf(context);
+    if (size.width <= 0 || size.height <= 0) {
+      return const Size(390, 620);
+    }
+    return Size(
+      size.width,
+      (size.height - 220).clamp(240, size.height).toDouble(),
     );
   }
 
@@ -1432,6 +1479,30 @@ ym.BoundingBox buildMapRadiusBounds({
           (center.longitude + longitudeDelta).clamp(-180, 180).toDouble(),
     ),
   );
+}
+
+@visibleForTesting
+double mapZoomForRadiusKm({
+  required double radiusKm,
+  required Size viewportSize,
+  required double latitude,
+}) {
+  const earthCircumferenceMeters = 40075016.686;
+  const tileSize = 256.0;
+  const radiansPerDegree = 0.017453292519943295;
+  const log2 = 0.6931471805599453;
+  final clampedRadiusKm =
+      radiusKm.clamp(0.5, nearbyEventsMaxRadiusKm).toDouble();
+  final latitudeScale =
+      math.cos(latitude * radiansPerDegree).abs().clamp(0.01, 1).toDouble();
+  final metersPerPixelAtZoomZero =
+      earthCircumferenceMeters * latitudeScale / tileSize;
+  final fitPixels =
+      math.max(120.0, math.min(viewportSize.width, viewportSize.height) * 0.72);
+  final targetMetersPerPixel = (clampedRadiusKm * 2000) / fitPixels;
+  final zoom = math.log(metersPerPixelAtZoomZero / targetMetersPerPixel) / log2;
+
+  return clampMapZoom(zoom);
 }
 
 @visibleForTesting

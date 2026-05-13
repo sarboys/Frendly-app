@@ -154,6 +154,21 @@ void main() {
     expect(center?.longitude, 30.31);
   });
 
+  test('map radius zooms out when radius grows', () {
+    final zoom50 = mapZoomForRadiusKm(
+      radiusKm: 50,
+      viewportSize: const Size(390, 620),
+      latitude: 55.7558,
+    );
+    final zoom150 = mapZoomForRadiusKm(
+      radiusKm: 150,
+      viewportSize: const Size(390, 620),
+      latitude: 55.7558,
+    );
+
+    expect(zoom150, lessThan(zoom50 - 1));
+  });
+
   test('map viewport fit does not repeat without an explicit pending fit', () {
     expect(
       shouldScheduleMapViewportFit(
