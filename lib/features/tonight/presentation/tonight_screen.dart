@@ -301,6 +301,20 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
                   .toSet(),
             ),
           );
+    final prewarmGatheringImages = _promotedFirstEvents(
+      events,
+      promotedIds,
+    ).take(6).map((event) => event.imageUrl);
+    if (events.isNotEmpty) {
+      unawaited(
+        ref.read(appMediaPrewarmServiceProvider).warmExternalEventImages(
+              prewarmGatheringImages,
+              usage: BbExternalEventImageUsage.card,
+              limit: 6,
+              concurrency: 2,
+            ),
+      );
+    }
     final effectiveCity =
         ref.watch(tonightEffectiveCityProvider).valueOrNull?.trim() ?? '';
     final routeTemplatesAsync = effectiveCity.isEmpty
@@ -853,6 +867,8 @@ class _TonightGatheringNowSectionState
                       right: index == visible.length - 1 ? 0 : AppSpacing.sm,
                     ),
                     child: _GatheringCard(
+                      key: ValueKey(
+                          'tonight-gathering-card-${visible[index].id}'),
                       event: visible[index],
                       promoted: widget.promotedIds.contains(visible[index].id),
                       onTap: () => widget.onOpenEvent(visible[index].id),
@@ -930,6 +946,7 @@ class _GatheringCard extends StatelessWidget {
     required this.event,
     required this.promoted,
     required this.onTap,
+    super.key,
   });
 
   final Event event;
@@ -1276,6 +1293,17 @@ class _DatingSkeletonRail extends StatelessWidget {
   }
 }
 
+String? _profileCardImageUrl(DatingProfileData profile) {
+  final primaryPhoto = profile.primaryPhoto;
+  if (primaryPhoto != null) {
+    return primaryPhoto.bestUrlFor(BbImageUsageProfile.card);
+  }
+  if (profile.photos.isNotEmpty) {
+    return profile.photos.first.bestUrlFor(BbImageUsageProfile.card);
+  }
+  return profile.avatarUrl;
+}
+
 class _DatingPreviewCard extends StatelessWidget {
   const _DatingPreviewCard({
     required this.profile,
@@ -1295,7 +1323,7 @@ class _DatingPreviewCard extends StatelessWidget {
     final area = (profile.area ?? profile.distance).trim();
     final title =
         profile.age == null ? profile.name : '${profile.name}, ${profile.age}';
-    final avatarUrl = profile.avatarUrl?.trim();
+    final avatarUrl = _profileCardImageUrl(profile)?.trim();
     final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
 
     return SizedBox(

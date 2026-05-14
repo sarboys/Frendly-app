@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:big_break_mobile/app/core/config/backend_config.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_local_database.dart';
+import 'package:drift/drift.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -49,6 +52,116 @@ class SharedPreferencesChatOutboxStorage implements ChatOutboxStorage {
     }
 
     await _preferences.setString(_storageKey, jsonEncode(commands));
+  }
+}
+
+class DriftChatOutboxStorage implements ChatOutboxStorage {
+  DriftChatOutboxStorage(
+    this._database, {
+    required AppCacheUserScope userScope,
+    ChatOutboxStorage? legacyStorage,
+    DateTime Function()? now,
+  })  : _userId = userScope.storageId,
+        _legacyStorage = legacyStorage,
+        _now = now ?? DateTime.now;
+
+  final AppLocalDatabase _database;
+  final String _userId;
+  final ChatOutboxStorage? _legacyStorage;
+  final DateTime Function() _now;
+  bool _legacyMigrationAttempted = false;
+
+  @override
+  Future<List<Map<String, dynamic>>> readCommands() async {
+    var commands = await _readDbCommands();
+    if (_legacyMigrationAttempted || _legacyStorage == null) {
+      return commands;
+    }
+
+    _legacyMigrationAttempted = true;
+    final legacyCommands = await _legacyStorage.readCommands();
+    if (legacyCommands.isEmpty) {
+      return commands;
+    }
+
+    await writeCommands([...commands, ...legacyCommands]);
+    await _legacyStorage.writeCommands(const []);
+    commands = await _readDbCommands();
+    return commands;
+  }
+
+  @override
+  Future<void> writeCommands(List<Map<String, dynamic>> commands) async {
+    final normalized = _normalizeCommands(commands);
+    await _database.transaction(() async {
+      await (_database.delete(_database.pendingCommands)
+            ..where((table) => table.userId.equals(_userId)))
+          .go();
+      final updatedAt = _now();
+      for (final entry in normalized.entries) {
+        final command = entry.value;
+        final type = command['type'] as String?;
+        final payload = command['payload'];
+        if (type == null || payload is! Map) {
+          continue;
+        }
+        await _database.into(_database.pendingCommands).insert(
+              PendingCommandsCompanion.insert(
+                userId: _userId,
+                commandId: entry.key,
+                chatId: Value(payload['chatId'] as String?),
+                commandType: type,
+                payloadJson: jsonEncode(Map<String, dynamic>.from(payload)),
+                createdAt: updatedAt,
+                updatedAt: updatedAt,
+              ),
+            );
+      }
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> _readDbCommands() async {
+    final rows = await (_database.select(_database.pendingCommands)
+          ..where((table) => table.userId.equals(_userId))
+          ..orderBy([
+            (table) => OrderingTerm.asc(table.createdAt),
+            (table) => OrderingTerm.asc(table.commandId),
+          ]))
+        .get();
+
+    return rows
+        .map(
+          (row) => <String, dynamic>{
+            'type': row.commandType,
+            'payload': jsonDecode(row.payloadJson),
+            'dedupeKey': row.commandId,
+          },
+        )
+        .toList(growable: false);
+  }
+
+  Map<String, Map<String, dynamic>> _normalizeCommands(
+    List<Map<String, dynamic>> commands,
+  ) {
+    final normalized = <String, Map<String, dynamic>>{};
+    for (var index = 0; index < commands.length; index++) {
+      final command = commands[index];
+      final type = command['type'] as String?;
+      final payload = command['payload'];
+      if (type == null || payload is! Map) {
+        continue;
+      }
+      final dedupeKey = command['dedupeKey'] as String?;
+      final commandId = dedupeKey == null || dedupeKey.isEmpty
+          ? 'command:$index:${_now().microsecondsSinceEpoch}'
+          : dedupeKey;
+      normalized[commandId] = {
+        'type': type,
+        'payload': Map<String, dynamic>.from(payload),
+        'dedupeKey': commandId,
+      };
+    }
+    return normalized;
   }
 }
 

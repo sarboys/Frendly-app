@@ -1,12 +1,20 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_cache_policy.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_local_cache_store.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_local_database.dart';
+import 'package:big_break_mobile/app/core/local_cache/chat_local_store.dart';
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
+import 'package:big_break_mobile/app/core/local_cache/local_first_repository.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
+import 'package:big_break_mobile/shared/models/affiche_event.dart';
 import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
@@ -19,7 +27,9 @@ import 'package:big_break_mobile/shared/models/person_summary.dart';
 import 'package:big_break_mobile/shared/models/personal_chat.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
+import 'package:big_break_mobile/shared/models/user_settings.dart';
 import 'package:dio/dio.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
@@ -304,6 +314,258 @@ class _EmptyChatListsRepository extends BackendRepository {
       items: [],
       nextCursor: null,
     );
+  }
+}
+
+class _DelayedMeetupChatsRepository extends BackendRepository {
+  _DelayedMeetupChatsRepository({
+    required super.ref,
+    required super.dio,
+    required this.completer,
+  });
+
+  final Completer<PaginatedResponse<MeetupChat>> completer;
+  var calls = 0;
+
+  @override
+  Future<PaginatedResponse<MeetupChat>> fetchMeetupChats({
+    String? cursor,
+    int limit = 20,
+  }) {
+    calls += 1;
+    return completer.future;
+  }
+}
+
+class _DelayedEventsRepository extends BackendRepository {
+  _DelayedEventsRepository({
+    required super.ref,
+    required super.dio,
+    required this.completer,
+  });
+
+  final Completer<PaginatedResponse<Event>> completer;
+  var calls = 0;
+
+  @override
+  Future<PaginatedResponse<Event>> fetchEvents({
+    String filter = 'nearby',
+    String? q,
+    String? lifestyle,
+    String? price,
+    String? gender,
+    String? access,
+    String? date,
+    String? cursor,
+    int limit = 20,
+    double? latitude,
+    double? longitude,
+    double? radiusKm,
+    double? southWestLatitude,
+    double? southWestLongitude,
+    double? northEastLatitude,
+    double? northEastLongitude,
+    CancelToken? cancelToken,
+  }) {
+    calls += 1;
+    return completer.future;
+  }
+}
+
+class _DelayedAfficheEventsRepository extends BackendRepository {
+  _DelayedAfficheEventsRepository({
+    required super.ref,
+    required super.dio,
+    required this.completer,
+  });
+
+  final Completer<PaginatedResponse<AfficheEvent>> completer;
+  var calls = 0;
+
+  @override
+  Future<PaginatedResponse<AfficheEvent>> fetchAfficheEvents({
+    String? city,
+    String? q,
+    String? date,
+    String? priceMode,
+    String? source,
+    String? category,
+    bool? featured,
+    String? cursor,
+    int limit = 24,
+    CancelToken? cancelToken,
+  }) {
+    calls += 1;
+    return completer.future;
+  }
+}
+
+class _SequencedAfficheEventsRepository extends BackendRepository {
+  _SequencedAfficheEventsRepository({
+    required super.ref,
+    required super.dio,
+    required this.completers,
+  });
+
+  final List<Completer<PaginatedResponse<AfficheEvent>>> completers;
+  var calls = 0;
+
+  @override
+  Future<PaginatedResponse<AfficheEvent>> fetchAfficheEvents({
+    String? city,
+    String? q,
+    String? date,
+    String? priceMode,
+    String? source,
+    String? category,
+    bool? featured,
+    String? cursor,
+    int limit = 24,
+    CancelToken? cancelToken,
+  }) {
+    final index = calls;
+    calls += 1;
+    return completers[index].future;
+  }
+}
+
+class _DelayedRouteTemplatesCacheRepository extends BackendRepository {
+  _DelayedRouteTemplatesCacheRepository({
+    required super.ref,
+    required super.dio,
+    required this.completer,
+  });
+
+  final Completer<PaginatedResponse<EveningRouteTemplateSummary>> completer;
+  var calls = 0;
+
+  @override
+  Future<PaginatedResponse<EveningRouteTemplateSummary>>
+      fetchEveningRouteTemplates({
+    String city = 'Москва',
+    String? q,
+    int limit = 20,
+  }) {
+    calls += 1;
+    return completer.future;
+  }
+}
+
+class _DelayedNotificationsRepository extends BackendRepository {
+  _DelayedNotificationsRepository({
+    required super.ref,
+    required super.dio,
+    required this.completer,
+  });
+
+  final Completer<PaginatedResponse<NotificationItem>> completer;
+  var calls = 0;
+
+  @override
+  Future<PaginatedResponse<NotificationItem>> fetchNotifications({
+    String? cursor,
+    int limit = 20,
+  }) {
+    calls += 1;
+    return completer.future;
+  }
+}
+
+class _DelayedNotificationUnreadCountRepository extends BackendRepository {
+  _DelayedNotificationUnreadCountRepository({
+    required super.ref,
+    required super.dio,
+    required this.completer,
+  });
+
+  final Completer<int> completer;
+  var calls = 0;
+
+  @override
+  Future<int> fetchUnreadNotificationCount() {
+    calls += 1;
+    return completer.future;
+  }
+}
+
+class _DelayedProfileCacheRepository extends BackendRepository {
+  _DelayedProfileCacheRepository({
+    required super.ref,
+    required super.dio,
+    this.profileCompleter,
+    this.onboardingCompleter,
+    this.personProfileCompleter,
+    this.settingsCompleter,
+  });
+
+  final Completer<ProfileData>? profileCompleter;
+  final Completer<OnboardingData>? onboardingCompleter;
+  final Completer<ProfileData>? personProfileCompleter;
+  final Completer<UserSettingsData>? settingsCompleter;
+  var profileCalls = 0;
+  var onboardingCalls = 0;
+  var personProfileCalls = 0;
+  var settingsCalls = 0;
+
+  @override
+  Future<ProfileData> fetchMe() {
+    profileCalls += 1;
+    return profileCompleter!.future;
+  }
+
+  @override
+  Future<OnboardingData> fetchOnboarding() {
+    onboardingCalls += 1;
+    return onboardingCompleter!.future;
+  }
+
+  @override
+  Future<ProfileData> fetchPersonProfile(
+    String userId, {
+    CancelToken? cancelToken,
+  }) {
+    personProfileCalls += 1;
+    return personProfileCompleter!.future;
+  }
+
+  @override
+  Future<UserSettingsData> fetchSettings() {
+    settingsCalls += 1;
+    return settingsCompleter!.future;
+  }
+}
+
+class _DelayedDatingRepository extends BackendRepository {
+  _DelayedDatingRepository({
+    required super.ref,
+    required super.dio,
+    required this.discoverCompleter,
+    required this.likesCompleter,
+  });
+
+  final Completer<PaginatedResponse<DatingProfileData>> discoverCompleter;
+  final Completer<PaginatedResponse<DatingProfileData>> likesCompleter;
+  var discoverCalls = 0;
+  var likesCalls = 0;
+
+  @override
+  Future<PaginatedResponse<DatingProfileData>> fetchDatingDiscover({
+    String? cursor,
+    int limit = 20,
+    CancelToken? cancelToken,
+  }) {
+    discoverCalls += 1;
+    return discoverCompleter.future;
+  }
+
+  @override
+  Future<PaginatedResponse<DatingProfileData>> fetchDatingLikes({
+    String? cursor,
+    int limit = 20,
+    CancelToken? cancelToken,
+  }) {
+    likesCalls += 1;
+    return likesCompleter.future;
   }
 }
 
@@ -781,6 +1043,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         authBootstrapProvider.overrideWith((ref) async {}),
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
         backendRepositoryProvider.overrideWith((ref) {
           repository = _DatingPreviewRepository(ref: ref, dio: Dio());
           return repository!;
@@ -802,6 +1067,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         authBootstrapProvider.overrideWith((ref) async {}),
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
         backendRepositoryProvider.overrideWith((ref) {
           repository = _DatingPreviewRepository(
             ref: ref,
@@ -1365,6 +1633,927 @@ void main() {
     expect(repositoryBuilt, isFalse);
   });
 
+  test('meetup chat list returns local cache before background refresh',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = ChatLocalStore(db);
+    await store.upsertSummary(
+      userScope: AppCacheUserScope.user('user-me'),
+      kind: ChatSummaryKind.meetup,
+      chatId: 'mc1',
+      summaryJson: {
+        'id': 'mc1',
+        'eventId': 'e1',
+        'title': 'Cached chat',
+        'emoji': '🍷',
+        'time': '20:00',
+        'lastMessage': 'cached',
+        'lastAuthor': 'Аня',
+        'lastTime': '1 мин',
+        'unread': 1,
+        'members': ['Аня', 'Ты'],
+      },
+      updatedAt: DateTime.utc(2026, 5, 14, 10),
+    );
+
+    final completer = Completer<PaginatedResponse<MeetupChat>>();
+    late _DelayedMeetupChatsRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        chatLocalStoreProvider.overrideWithValue(store),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedMeetupChatsRepository(
+            ref: ref,
+            dio: Dio(),
+            completer: completer,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final cached = await container
+        .read(meetupChatsProvider.future)
+        .timeout(const Duration(milliseconds: 100));
+
+    expect(cached.single.title, 'Cached chat');
+    expect(repository.calls, 1);
+
+    completer.complete(
+      const PaginatedResponse<MeetupChat>(
+        items: [
+          MeetupChat(
+            id: 'mc1',
+            eventId: 'e1',
+            title: 'Network chat',
+            emoji: '🍷',
+            time: '20:00',
+            lastMessage: 'network',
+            lastAuthor: 'Аня',
+            lastTime: 'сейчас',
+            unread: 0,
+            members: ['Аня', 'Ты'],
+          ),
+        ],
+        nextCursor: null,
+      ),
+    );
+    await _drain();
+
+    expect(
+      container.read(meetupChatsLocalStateProvider)?.single.title,
+      'Network chat',
+    );
+  });
+
+  test('eventsProvider returns local cache before background refresh',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.meetups,
+      cacheKey: AppCacheKey.build(
+        path: '/events',
+        query: const {'filter': 'now'},
+      ),
+      payloadJson: jsonEncode([
+        {
+          'id': 'event-cached',
+          'title': 'Cached event',
+          'emoji': '🍷',
+          'time': '20:00',
+          'place': 'Brix',
+          'distance': '1 км',
+          'attendees': ['Аня'],
+          'going': 4,
+          'capacity': 8,
+          'vibe': 'calm',
+          'tone': 'warm',
+          'joined': false,
+        },
+      ]),
+      policy: AppCachePolicies.meetups,
+    );
+
+    final completer = Completer<PaginatedResponse<Event>>();
+    late _DelayedEventsRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedEventsRepository(
+            ref: ref,
+            dio: Dio(),
+            completer: completer,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final events = await container
+        .read(eventsProvider('now').future)
+        .timeout(const Duration(milliseconds: 100));
+
+    expect(events.single.title, 'Cached event');
+    expect(repository.calls, 1);
+  });
+
+  test('events force refresh bypasses local cache and waits for network',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.meetups,
+      cacheKey: AppCacheKey.build(
+        path: '/events',
+        query: const {'filter': 'now'},
+      ),
+      payloadJson: jsonEncode([
+        {
+          'id': 'event-cached',
+          'title': 'Cached event',
+          'emoji': '🍷',
+          'time': '20:00',
+          'place': 'Brix',
+          'distance': '1 км',
+          'attendees': ['Аня'],
+          'going': 4,
+          'capacity': 8,
+          'vibe': 'calm',
+          'tone': 'warm',
+          'joined': false,
+        },
+      ]),
+      policy: AppCachePolicies.meetups,
+    );
+
+    final completer = Completer<PaginatedResponse<Event>>();
+    late _DelayedEventsRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedEventsRepository(
+            ref: ref,
+            dio: Dio(),
+            completer: completer,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final refresh = container.read(eventsForceRefreshProvider('now').future);
+    await expectLater(
+      refresh.timeout(const Duration(milliseconds: 100)),
+      throwsA(isA<TimeoutException>()),
+    );
+
+    completer.complete(
+      PaginatedResponse<Event>(
+        items: [
+          Event.fromJson(
+            {
+              'id': 'event-network',
+              'title': 'Network event',
+              'emoji': '🎟',
+              'time': '21:00',
+              'place': 'Mars',
+              'distance': '2 км',
+              'attendees': ['Лиза'],
+              'going': 2,
+              'capacity': 8,
+              'vibe': 'active',
+              'tone': 'warm',
+              'joined': false,
+            },
+          ),
+        ],
+        nextCursor: null,
+      ),
+    );
+
+    final events = await refresh;
+    expect(events.single.title, 'Network event');
+    expect(repository.calls, 1);
+  });
+
+  test('afficheEventsProvider returns local cache before background refresh',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    const query = AfficheEventsQuery(city: 'Москва', limit: 12);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.affiche,
+      cacheKey: AppCacheKey.build(
+        path: '/affiche/events',
+        query: const {
+          'city': 'Москва',
+          'priceMode': 'any',
+          'limit': 12,
+        },
+      ),
+      payloadJson: jsonEncode({
+        'items': [_cachedAfficheJson()],
+        'nextCursor': 'next-page',
+      }),
+      policy: AppCachePolicies.affiche,
+    );
+
+    final completer = Completer<PaginatedResponse<AfficheEvent>>();
+    late _DelayedAfficheEventsRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedAfficheEventsRepository(
+            ref: ref,
+            dio: Dio(),
+            completer: completer,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final events = await container
+        .read(afficheEventsProvider(query).future)
+        .timeout(const Duration(milliseconds: 100));
+
+    expect(events.single.title, 'Cached affiche');
+    expect(repository.calls, 1);
+  });
+
+  test('afficheEventsPagedProvider returns first page cache before refresh',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    const query = AfficheEventsQuery(city: 'Москва', limit: 12);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.affiche,
+      cacheKey: AppCacheKey.build(
+        path: '/affiche/events',
+        query: const {
+          'city': 'Москва',
+          'priceMode': 'any',
+          'limit': 12,
+        },
+      ),
+      payloadJson: jsonEncode({
+        'items': [_cachedAfficheJson()],
+        'nextCursor': 'next-page',
+      }),
+      policy: AppCachePolicies.affiche,
+    );
+
+    final completer = Completer<PaginatedResponse<AfficheEvent>>();
+    late _DelayedAfficheEventsRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedAfficheEventsRepository(
+            ref: ref,
+            dio: Dio(),
+            completer: completer,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final page = await _readAfficheFirstPage(container, query)
+        .timeout(const Duration(milliseconds: 100));
+
+    expect(page.items.single.title, 'Cached affiche');
+    expect(page.nextCursor, 'next-page');
+    expect(repository.calls, 1);
+  });
+
+  test('afficheEventsPagedProvider keeps current page during refresh',
+      () async {
+    final firstCompleter = Completer<PaginatedResponse<AfficheEvent>>();
+    final refreshCompleter = Completer<PaginatedResponse<AfficheEvent>>();
+    late _SequencedAfficheEventsRepository repository;
+    const query = AfficheEventsQuery(city: 'Москва', limit: 12);
+    final container = ProviderContainer(
+      overrides: [
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _SequencedAfficheEventsRepository(
+            ref: ref,
+            dio: Dio(),
+            completers: [firstCompleter, refreshCompleter],
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(afficheEventsPagedProvider(query));
+    firstCompleter.complete(
+      PaginatedResponse<AfficheEvent>(
+        items: [AfficheEvent.fromJson(_cachedAfficheJson())],
+        nextCursor: null,
+      ),
+    );
+    final firstPage = await _readAfficheFirstPage(container, query);
+
+    unawaited(
+      container
+          .read(afficheEventsPagedProvider(query).notifier)
+          .loadFirstPage(forceRefresh: true),
+    );
+    await _drain();
+
+    final refreshingPage =
+        container.read(afficheEventsPagedProvider(query)).valueOrNull;
+    expect(firstPage.items.single.title, 'Cached affiche');
+    expect(refreshingPage?.items.single.title, 'Cached affiche');
+    expect(repository.calls, 2);
+
+    refreshCompleter.complete(
+      PaginatedResponse<AfficheEvent>(
+        items: [
+          AfficheEvent.fromJson(
+            {
+              ..._cachedAfficheJson(),
+              'id': 'affiche-network',
+              'title': 'Network affiche',
+            },
+          ),
+        ],
+        nextCursor: null,
+      ),
+    );
+    await _drain();
+
+    final refreshedPage = await _readAfficheFirstPage(container, query);
+    expect(refreshedPage.items.single.title, 'Network affiche');
+  });
+
+  test('route catalog returns local cache before background refresh', () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.routeTemplates,
+      cacheKey: AppCacheKey.build(
+        path: '/evening/route-templates',
+        query: const {
+          'city': 'Москва',
+          'limit': 20,
+        },
+      ),
+      payloadJson: jsonEncode([
+        {
+          'id': 'template-cached',
+          'routeId': 'route-cached',
+          'title': 'Cached route',
+          'blurb': 'cached',
+          'city': 'Москва',
+          'vibe': 'calm',
+          'budget': '2500 ₽',
+          'durationLabel': '2 часа',
+          'totalPriceFrom': 2500,
+          'stepsPreview': [],
+          'partnerOffersPreview': [],
+          'nearestSessions': [],
+        },
+      ]),
+      policy: AppCachePolicies.routeTemplates,
+    );
+
+    final completer =
+        Completer<PaginatedResponse<EveningRouteTemplateSummary>>();
+    late _DelayedRouteTemplatesCacheRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedRouteTemplatesCacheRepository(
+            ref: ref,
+            dio: Dio(),
+            completer: completer,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final routes = await container
+        .read(eveningRouteTemplatesProvider('Москва').future)
+        .timeout(const Duration(milliseconds: 100));
+
+    expect(routes.single.title, 'Cached route');
+    expect(repository.calls, 1);
+  });
+
+  test('route catalog keeps local cache when background refresh fails',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.routeTemplates,
+      cacheKey: AppCacheKey.build(
+        path: '/evening/route-templates',
+        query: const {
+          'city': 'Москва',
+          'limit': 20,
+        },
+      ),
+      payloadJson: jsonEncode([
+        {
+          'id': 'template-cached',
+          'routeId': 'route-cached',
+          'title': 'Cached route',
+          'blurb': 'cached',
+          'city': 'Москва',
+          'vibe': 'calm',
+          'budget': '2500 ₽',
+          'durationLabel': '2 часа',
+          'totalPriceFrom': 2500,
+          'stepsPreview': [],
+          'partnerOffersPreview': [],
+          'nearestSessions': [],
+        },
+      ]),
+      policy: AppCachePolicies.routeTemplates,
+    );
+
+    late _RouteTemplatesRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _RouteTemplatesRepository(
+            ref: ref,
+            dio: Dio(),
+            error: StateError('route template request failed'),
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final routes = await container.read(
+      eveningRouteTemplatesProvider('Москва').future,
+    );
+
+    expect(routes.single.title, 'Cached route');
+    expect(repository.templateCalls, 1);
+  });
+
+  test('notificationsProvider returns local cache before background refresh',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.notifications,
+      cacheKey: AppCacheKey.build(
+        path: '/notifications',
+        query: const {'limit': 20},
+      ),
+      payloadJson: jsonEncode([
+        {
+          'id': 'notification-cached',
+          'kind': 'message',
+          'title': 'Cached notification',
+          'body': 'cached',
+          'payload': {'chatId': 'chat-1'},
+          'readAt': null,
+          'createdAt': '2026-05-14T10:00:00.000Z',
+        },
+      ]),
+      policy: AppCachePolicies.notifications,
+    );
+
+    final completer = Completer<PaginatedResponse<NotificationItem>>();
+    late _DelayedNotificationsRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedNotificationsRepository(
+            ref: ref,
+            dio: Dio(),
+            completer: completer,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifications = await container
+        .read(notificationsProvider.future)
+        .timeout(const Duration(milliseconds: 100));
+
+    expect(notifications.single.title, 'Cached notification');
+    expect(repository.calls, 1);
+  });
+
+  test(
+      'notification unread count returns local cache before background refresh',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.notifications,
+      cacheKey: AppCacheKey.build(path: '/notifications/unread-count'),
+      payloadJson: jsonEncode(7),
+      policy: AppCachePolicies.notifications,
+    );
+
+    final completer = Completer<int>();
+    late _DelayedNotificationUnreadCountRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedNotificationUnreadCountRepository(
+            ref: ref,
+            dio: Dio(),
+            completer: completer,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final count = await container
+        .read(notificationUnreadCountProvider.future)
+        .timeout(const Duration(milliseconds: 100));
+
+    expect(count, 7);
+    expect(repository.calls, 1);
+  });
+
+  test('onboardingProvider returns local cache before background refresh',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.profile,
+      cacheKey: AppCacheKey.build(path: '/onboarding/me'),
+      payloadJson: jsonEncode(_cachedOnboardingJson()),
+      policy: AppCachePolicies.profile,
+    );
+
+    final completer = Completer<OnboardingData>();
+    late _DelayedProfileCacheRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedProfileCacheRepository(
+            ref: ref,
+            dio: Dio(),
+            onboardingCompleter: completer,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final onboarding = await container
+        .read(onboardingProvider.future)
+        .timeout(const Duration(milliseconds: 100));
+
+    expect(onboarding.city, 'Москва');
+    expect(onboarding.area, 'Патрики');
+    expect(repository.onboardingCalls, 1);
+  });
+
+  test('profileProvider returns local cache before background refresh',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.profile,
+      cacheKey: AppCacheKey.build(path: '/profile/me'),
+      payloadJson: jsonEncode(_cachedProfileJson(id: 'user-me')),
+      policy: AppCachePolicies.profile,
+    );
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.profile,
+      cacheKey: AppCacheKey.build(path: '/onboarding/me'),
+      payloadJson: jsonEncode(_cachedOnboardingJson()),
+      policy: AppCachePolicies.profile,
+    );
+
+    final profileCompleter = Completer<ProfileData>();
+    final onboardingCompleter = Completer<OnboardingData>();
+    late _DelayedProfileCacheRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedProfileCacheRepository(
+            ref: ref,
+            dio: Dio(),
+            profileCompleter: profileCompleter,
+            onboardingCompleter: onboardingCompleter,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final profile = await container
+        .read(profileProvider.future)
+        .timeout(const Duration(milliseconds: 100));
+
+    expect(profile.displayName, 'Cached profile');
+    expect(profile.interests, ['Кофе', 'Кино']);
+    expect(repository.profileCalls, 1);
+    expect(repository.onboardingCalls, 1);
+  });
+
+  test('personProfileProvider returns local cache before background refresh',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.publicProfile,
+      cacheKey: AppCacheKey.build(path: '/people/person-cached'),
+      payloadJson: jsonEncode(
+        _cachedProfileJson(
+          id: 'person-cached',
+          displayName: 'Cached person',
+        ),
+      ),
+      policy: AppCachePolicies.publicProfile,
+    );
+
+    final completer = Completer<ProfileData>();
+    late _DelayedProfileCacheRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedProfileCacheRepository(
+            ref: ref,
+            dio: Dio(),
+            personProfileCompleter: completer,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final profile = await container
+        .read(personProfileProvider('person-cached').future)
+        .timeout(const Duration(milliseconds: 100));
+
+    expect(profile.displayName, 'Cached person');
+    expect(repository.personProfileCalls, 1);
+  });
+
+  test('settingsProvider returns local cache before background refresh',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.settings,
+      cacheKey: AppCacheKey.build(path: '/settings/me'),
+      payloadJson: jsonEncode(_cachedSettingsJson()),
+      policy: AppCachePolicies.settings,
+    );
+
+    final completer = Completer<UserSettingsData>();
+    late _DelayedProfileCacheRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedProfileCacheRepository(
+            ref: ref,
+            dio: Dio(),
+            settingsCompleter: completer,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final settings = await container
+        .read(settingsProvider.future)
+        .timeout(const Duration(milliseconds: 100));
+
+    expect(settings.allowPush, isTrue);
+    expect(settings.darkMode, isTrue);
+    expect(repository.settingsCalls, 1);
+  });
+
+  test('dating providers return local cache before background refresh',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.dating,
+      cacheKey: AppCacheKey.build(
+        path: '/dating/discover',
+        query: const {'limit': 20},
+      ),
+      payloadJson: jsonEncode([_cachedDatingJson(userId: 'discover-cached')]),
+      policy: AppCachePolicies.dating,
+    );
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.dating,
+      cacheKey: AppCacheKey.build(
+        path: '/dating/discover',
+        query: const {'limit': 4},
+      ),
+      payloadJson: jsonEncode([_cachedDatingJson(userId: 'home-cached')]),
+      policy: AppCachePolicies.dating,
+    );
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.dating,
+      cacheKey: AppCacheKey.build(
+        path: '/dating/likes',
+        query: const {'limit': 20},
+      ),
+      payloadJson: jsonEncode([_cachedDatingJson(userId: 'like-cached')]),
+      policy: AppCachePolicies.dating,
+    );
+
+    final discoverCompleter = Completer<PaginatedResponse<DatingProfileData>>();
+    final likesCompleter = Completer<PaginatedResponse<DatingProfileData>>();
+    late _DelayedDatingRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedDatingRepository(
+            ref: ref,
+            dio: Dio(),
+            discoverCompleter: discoverCompleter,
+            likesCompleter: likesCompleter,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final discover = await container
+        .read(datingDiscoverProvider.future)
+        .timeout(const Duration(milliseconds: 100));
+    final home = await container
+        .read(datingHomePreviewProvider.future)
+        .timeout(const Duration(milliseconds: 100));
+    final likes = await container
+        .read(datingLikesProvider.future)
+        .timeout(const Duration(milliseconds: 100));
+
+    expect(discover.single.userId, 'discover-cached');
+    expect(home.single.userId, 'home-cached');
+    expect(likes.single.userId, 'like-cached');
+    expect(repository.discoverCalls, 2);
+    expect(repository.likesCalls, 1);
+  });
+
+  test('datingDiscoverProvider filters local action tombstones', () async {
+    final container = ProviderContainer(
+      overrides: [
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
+        backendRepositoryProvider.overrideWith(
+          (ref) => _DatingPreviewRepository(ref: ref, dio: Dio()),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(datingActionTombstonesProvider.notifier).state = const {
+      'dating-0': 'like',
+      'dating-1': 'pass',
+      'dating-2': 'super_like',
+      'dating-3': 'match_open',
+    };
+
+    final profiles = await container.read(datingDiscoverProvider.future);
+
+    expect(
+        profiles.map((profile) => profile.userId), isNot(contains('dating-0')));
+    expect(
+        profiles.map((profile) => profile.userId), isNot(contains('dating-1')));
+    expect(
+        profiles.map((profile) => profile.userId), isNot(contains('dating-2')));
+    expect(
+        profiles.map((profile) => profile.userId), isNot(contains('dating-3')));
+  });
+
   test('route catalog stays empty without auth instead of using fallback data',
       () async {
     var repositoryBuilt = false;
@@ -1559,6 +2748,144 @@ void main() {
     expect(repository.fetchMeCalls, 1);
     expect(container.read(currentUserIdProvider), 'user-me');
   });
+}
+
+Map<String, dynamic> _cachedOnboardingJson() {
+  return {
+    'intent': 'both',
+    'gender': 'male',
+    'birthDate': '1998-01-10',
+    'city': 'Москва',
+    'area': 'Патрики',
+    'interests': ['Кофе', 'Кино'],
+    'vibe': 'calm',
+    'email': 'cached@example.com',
+    'phoneNumber': '+79990000000',
+    'requiredContact': 'email',
+  };
+}
+
+Map<String, dynamic> _cachedProfileJson({
+  required String id,
+  String displayName = 'Cached profile',
+}) {
+  return {
+    'id': id,
+    'displayName': displayName,
+    'verified': true,
+    'online': true,
+    'age': 28,
+    'gender': 'male',
+    'city': 'Москва',
+    'area': 'Патрики',
+    'bio': 'cached bio',
+    'vibe': 'calm',
+    'rating': 4.8,
+    'meetupCount': 12,
+    'avatarUrl': 'https://cdn.example.com/$id.jpg',
+    'interests': ['Кофе'],
+    'intent': ['Друзья'],
+    'photos': [
+      {
+        'id': 'photo-$id',
+        'url': 'https://cdn.example.com/$id-photo.jpg',
+        'order': 0,
+        'variants': const {},
+      },
+    ],
+    'social': const {
+      'followers': 1,
+      'likes': 2,
+      'superLikes': 3,
+      'iFollow': false,
+      'iLike': true,
+      'iSuper': false,
+    },
+  };
+}
+
+Map<String, dynamic> _cachedSettingsJson() {
+  return {
+    'allowLocation': true,
+    'allowPush': true,
+    'allowContacts': false,
+    'autoSharePlans': true,
+    'hideExactLocation': false,
+    'quietHours': true,
+    'showAge': true,
+    'discoverable': true,
+    'darkMode': true,
+  };
+}
+
+Map<String, dynamic> _cachedDatingJson({required String userId}) {
+  return {
+    'userId': userId,
+    'name': 'Cached dating',
+    'age': 27,
+    'city': 'Москва',
+    'distance': 'Рядом',
+    'about': 'cached',
+    'tags': ['кофе'],
+    'prompt': 'cached prompt',
+    'photoEmoji': '💘',
+    'avatarUrl': 'https://cdn.example.com/$userId.jpg',
+    'primaryPhoto': null,
+    'photos': const [],
+    'likedYou': false,
+    'premium': true,
+    'vibe': 'calm',
+    'area': 'Центр',
+    'latitude': 55.75,
+    'longitude': 37.61,
+    'verified': true,
+    'online': true,
+    'languages': const [],
+    'nationality': null,
+  };
+}
+
+Map<String, dynamic> _cachedAfficheJson() {
+  return {
+    'id': 'affiche-cached',
+    'title': 'Cached affiche',
+    'description': 'cached',
+    'city': 'Москва',
+    'venue': 'Дом кино',
+    'address': 'Покровка 12',
+    'lat': 55.75,
+    'lng': 37.61,
+    'startsAt': '2026-05-14T18:00:00.000Z',
+    'endsAt': null,
+    'dateLabel': '14 мая',
+    'timeLabel': '18:00',
+    'category': 'culture',
+    'priceFrom': 0,
+    'priceMode': 'free',
+    'currency': 'RUB',
+    'imageUrl': null,
+    'imageVariants': const {},
+    'provider': 'affiche',
+    'sourceCode': 'cached-source',
+    'actionUrl': 'https://example.com/event',
+    'actionKind': 'details',
+    'isAffiliate': false,
+    'tags': ['кино'],
+  };
+}
+
+Future<AfficheEventsPagedState> _readAfficheFirstPage(
+  ProviderContainer container,
+  AfficheEventsQuery query,
+) async {
+  container.read(afficheEventsPagedProvider(query));
+  while (true) {
+    final value = container.read(afficheEventsPagedProvider(query)).valueOrNull;
+    if (value != null) {
+      return value;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
 }
 
 Future<void> _drain() async {

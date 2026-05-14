@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/features/meetups/presentation/meetups_screen.dart';
+import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
@@ -8,6 +11,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
+
+final _meetupsRefreshVersionProvider = StateProvider<int>((ref) => 0);
 
 void main() {
   test('promoted meetups stay above regular meetups for every sort', () {
@@ -115,7 +120,7 @@ void main() {
         overrides: [
           authBootstrapProvider.overrideWith((ref) async {}),
           appLocationServiceProvider.overrideWithValue(
-            const _NoLocationService(),
+            const _FixedLocationService(),
           ),
           backendRepositoryProvider.overrideWith(
             (ref) => _MeetupsRepository(
@@ -135,6 +140,81 @@ void main() {
 
     expect(find.text('ЗАВТРА'), findsOneWidget);
     expect(find.text('СЕГОДНЯ'), findsNothing);
+  });
+
+  testWidgets('meetup list keeps rows and scroll offset during refresh', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final pendingRefresh = Completer<List<Event>>();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authBootstrapProvider.overrideWith((ref) async {}),
+          appLocationServiceProvider.overrideWithValue(
+            const _NoLocationService(),
+          ),
+          eventsProvider.overrideWith((ref, filter) {
+            final version = ref.watch(_meetupsRefreshVersionProvider);
+            if (version == 0) {
+              return Future.value(
+                List.generate(
+                  18,
+                  (index) => _event(
+                    'meetup-$index',
+                    DateTime(2026, 5, 14, 18 + index),
+                  ),
+                ),
+              );
+            }
+            return pendingRefresh.future;
+          }),
+        ],
+        child: const MaterialApp(home: MeetupsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const ValueKey('meetup-v5-event-meetup-0')), findsOneWidget);
+
+    final scrollable = find.byType(Scrollable).last;
+    await tester.drag(scrollable, const Offset(0, -520));
+    await tester.pumpAndSettle();
+    final before = tester.state<ScrollableState>(scrollable).position.pixels;
+    expect(before, greaterThan(0));
+
+    final context = tester.element(find.byType(MeetupsScreen));
+    ProviderScope.containerOf(context, listen: false)
+        .read(_meetupsRefreshVersionProvider.notifier)
+        .state = 1;
+    await tester.pump();
+
+    final during = tester.state<ScrollableState>(scrollable).position.pixels;
+    expect(during, closeTo(before, 0.1));
+    expect(
+        find.byKey(const ValueKey('meetup-v5-event-meetup-5')), findsWidgets);
+
+    pendingRefresh.complete(
+      List.generate(
+        18,
+        (index) => _event(
+          'meetup-$index',
+          DateTime(2026, 5, 14, 18 + index),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final after = tester.state<ScrollableState>(scrollable).position.pixels;
+    expect(after, closeTo(before, 0.1));
   });
 }
 
@@ -202,6 +282,36 @@ class _NoLocationService implements AppLocationService {
 
   @override
   Future<Position?> getCurrentPosition() async => null;
+
+  @override
+  double distanceBetween({
+    required double startLatitude,
+    required double startLongitude,
+    required double endLatitude,
+    required double endLongitude,
+  }) {
+    return 0;
+  }
+}
+
+class _FixedLocationService implements AppLocationService {
+  const _FixedLocationService();
+
+  @override
+  Future<Position?> getCurrentPosition() async {
+    return Position(
+      longitude: 37.6173,
+      latitude: 55.7558,
+      timestamp: DateTime(2026, 5, 14),
+      accuracy: 5,
+      altitude: 0,
+      altitudeAccuracy: 0,
+      heading: 0,
+      headingAccuracy: 0,
+      speed: 0,
+      speedAccuracy: 0,
+    );
+  }
 
   @override
   double distanceBetween({

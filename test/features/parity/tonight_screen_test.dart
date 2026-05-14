@@ -1,4 +1,5 @@
 import 'package:big_break_mobile/app/app.dart';
+import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
@@ -14,7 +15,9 @@ import 'package:big_break_mobile/shared/models/affiche_event.dart';
 import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
+import 'package:big_break_mobile/shared/models/media_variant.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
+import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
 import 'package:big_break_mobile/shared/widgets/bb_brand_icon.dart';
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
@@ -224,6 +227,23 @@ void main() {
     expect(find.text('Радар вечера'), findsNothing);
   });
 
+  testWidgets('tonight gathering cards keep stable event keys', (
+    tester,
+  ) async {
+    await _pumpTonightDirect(tester);
+
+    await _dragUntilVisible(
+      tester,
+      find.byKey(const ValueKey('tonight-gathering-card-e1')),
+      260,
+    );
+
+    expect(
+      find.byKey(const ValueKey('tonight-gathering-card-e1')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('tonight header AI asks for location when city is unknown', (
     tester,
   ) async {
@@ -304,6 +324,16 @@ void main() {
               verified: true,
               vibe: 'джаз',
               avatarUrl: 'https://cdn.example.com/sergey.jpg',
+              primaryPhoto: ProfilePhoto(
+                id: 'profile-sergey',
+                url: 'https://cdn.example.com/sergey-original.jpg',
+                order: 0,
+                variants: {
+                  'card': MediaVariantData(
+                    url: 'https://cdn.example.com/sergey-card.jpg',
+                  ),
+                },
+              ),
             ),
           ],
         ),
@@ -340,6 +370,16 @@ void main() {
               verified: true,
               vibe: 'джаз',
               avatarUrl: 'https://cdn.example.com/sergey.jpg',
+              primaryPhoto: ProfilePhoto(
+                id: 'profile-sergey',
+                url: 'https://cdn.example.com/sergey-original.jpg',
+                order: 0,
+                variants: {
+                  'card': MediaVariantData(
+                    url: 'https://cdn.example.com/sergey-card.jpg',
+                  ),
+                },
+              ),
             ),
           ],
         ),
@@ -352,7 +392,7 @@ void main() {
       find.byWidgetPredicate(
         (widget) =>
             widget is BbProfilePhotoImage &&
-            widget.imageUrl == 'https://cdn.example.com/sergey.jpg' &&
+            widget.imageUrl == 'https://cdn.example.com/sergey-card.jpg' &&
             widget.usageProfile == BbImageUsageProfile.card,
       ),
       findsOneWidget,
@@ -497,6 +537,39 @@ void main() {
       find.byKey(const ValueKey('tonight-affiche-card-affiche-6')),
       findsNothing,
     );
+  });
+
+  testWidgets('tonight prewarms only first six gathering card images', (
+    tester,
+  ) async {
+    final prewarm = _RecordingMediaPrewarmService();
+
+    await _pumpTonightDirect(
+      tester,
+      extraOverrides: [
+        appMediaPrewarmServiceProvider.overrideWithValue(prewarm),
+        eventsProvider.overrideWith(
+          (ref, filter) async => List<Event>.generate(
+            9,
+            (index) => _numberedEventWithImage(index),
+          ),
+        ),
+      ],
+    );
+
+    final call = prewarm.externalCalls.lastWhere(
+      (call) => call.usage == BbExternalEventImageUsage.card,
+    );
+    expect(call.limit, 6);
+    expect(call.concurrency, 2);
+    expect(call.urls, [
+      'https://cdn.example.com/gathering-0.jpg',
+      'https://cdn.example.com/gathering-1.jpg',
+      'https://cdn.example.com/gathering-2.jpg',
+      'https://cdn.example.com/gathering-3.jpg',
+      'https://cdn.example.com/gathering-4.jpg',
+      'https://cdn.example.com/gathering-5.jpg',
+    ]);
   });
 
   testWidgets('tonight gathering cards render event source images', (
@@ -678,6 +751,41 @@ void _useTallPhoneViewport(WidgetTester tester) {
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
   });
+}
+
+class _ExternalPrewarmCall {
+  const _ExternalPrewarmCall({
+    required this.urls,
+    required this.usage,
+    required this.limit,
+    required this.concurrency,
+  });
+
+  final List<String?> urls;
+  final BbExternalEventImageUsage usage;
+  final int limit;
+  final int concurrency;
+}
+
+class _RecordingMediaPrewarmService extends AppMediaPrewarmService {
+  final externalCalls = <_ExternalPrewarmCall>[];
+
+  @override
+  Future<void> warmExternalEventImages(
+    Iterable<String?> urls, {
+    required BbExternalEventImageUsage usage,
+    int limit = 6,
+    int concurrency = 2,
+  }) async {
+    externalCalls.add(
+      _ExternalPrewarmCall(
+        urls: urls.toList(growable: false),
+        usage: usage,
+        limit: limit,
+        concurrency: concurrency,
+      ),
+    );
+  }
 }
 
 Future<void> _dragUntilVisible(
@@ -894,6 +1002,25 @@ final _tomorrowGatheringFixture = Event.fromJson({
   'joined': false,
   'imageUrl': null,
 });
+
+Event _numberedEventWithImage(int index) {
+  return Event.fromJson({
+    'id': 'event-image-$index',
+    'title': 'Встреча $index',
+    'emoji': '✨',
+    'time': 'Сегодня · 19:00',
+    'startsAtIso': '2026-05-09T16:00:00.000Z',
+    'place': 'Город',
+    'distance': '1.0 км',
+    'attendees': const ['Аня'],
+    'going': 2,
+    'capacity': 8,
+    'vibe': 'Спокойно',
+    'tone': 'warm',
+    'joined': false,
+    'imageUrl': 'https://cdn.example.com/gathering-$index.jpg',
+  });
+}
 
 Event _pulseEvent(
   String id,

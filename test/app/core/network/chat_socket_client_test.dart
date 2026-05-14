@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_local_database.dart';
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
@@ -233,6 +237,134 @@ void main() {
       await _waitFor(() => storage.commands.isEmpty);
     },
   );
+
+  test('drift outbox migrates legacy commands and dedupes by key', () async {
+    SharedPreferences.setMockInitialValues({
+      'chat.outbox.commands': jsonEncode([
+        {
+          'type': 'message.send',
+          'payload': {
+            'chatId': 'chat-1',
+            'text': 'old',
+            'clientMessageId': 'message-1',
+          },
+          'dedupeKey': 'message:chat-1:message-1',
+        },
+        {
+          'type': 'message.send',
+          'payload': {
+            'chatId': 'chat-1',
+            'text': 'new',
+            'clientMessageId': 'message-1',
+          },
+          'dedupeKey': 'message:chat-1:message-1',
+        },
+      ]),
+    });
+    final preferences = await SharedPreferences.getInstance();
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+
+    final storage = DriftChatOutboxStorage(
+      db,
+      userScope: AppCacheUserScope.user('user-me'),
+      legacyStorage: SharedPreferencesChatOutboxStorage(preferences),
+    );
+
+    final commands = await storage.readCommands();
+
+    expect(commands, hasLength(1));
+    expect(commands.single['payload']['text'], 'new');
+    expect(preferences.getString('chat.outbox.commands'), isNull);
+
+    await storage.writeCommands([
+      {
+        'type': 'message.send',
+        'payload': {
+          'chatId': 'chat-1',
+          'text': 'first',
+          'clientMessageId': 'message-2',
+        },
+        'dedupeKey': 'message:chat-1:message-2',
+      },
+      {
+        'type': 'message.send',
+        'payload': {
+          'chatId': 'chat-1',
+          'text': 'second',
+          'clientMessageId': 'message-2',
+        },
+        'dedupeKey': 'message:chat-1:message-2',
+      },
+    ]);
+
+    final written = await storage.readCommands();
+
+    expect(written, hasLength(1));
+    expect(written.single['payload']['text'], 'second');
+  });
+
+  test('drift outbox replays pending message after client recreation',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final storage = DriftChatOutboxStorage(
+      db,
+      userScope: AppCacheUserScope.user('user-me'),
+    );
+    final firstChannel = _FakeWebSocketChannel();
+    final secondChannel = _FakeWebSocketChannel();
+    final channels = <_FakeWebSocketChannel>[firstChannel, secondChannel];
+
+    final firstClient = ChatSocketClient(
+      accessTokenProvider: () async => 'token',
+      channelFactory: () => channels.removeAt(0),
+      reconnectDelay: Duration.zero,
+      outboxStorage: storage,
+    );
+
+    final firstConnect = firstClient.connect();
+    await _waitFor(() => firstChannel.decodedOutbound.isNotEmpty);
+    firstChannel.serverSend({
+      'type': 'session.authenticated',
+      'payload': {'userId': 'user-me'},
+    });
+    await expectLater(firstConnect, completes);
+
+    await firstClient.sendMessage(
+      chatId: 'chat-1',
+      text: 'Привет',
+      clientMessageId: 'message-db-1',
+    );
+    await firstClient.dispose();
+
+    final secondClient = ChatSocketClient(
+      accessTokenProvider: () async => 'token',
+      channelFactory: () => channels.removeAt(0),
+      reconnectDelay: Duration.zero,
+      outboxStorage: storage,
+    );
+    addTearDown(secondClient.dispose);
+
+    final secondConnect = secondClient.connect();
+    await _waitFor(() => secondChannel.decodedOutbound.isNotEmpty);
+    secondChannel.serverSend({
+      'type': 'session.authenticated',
+      'payload': {'userId': 'user-me'},
+    });
+    await expectLater(secondConnect, completes);
+
+    await _waitFor(
+      () => secondChannel.decodedOutbound.any(
+        (event) => event['type'] == 'message.send',
+      ),
+    );
+
+    expect(
+      secondChannel.decodedOutbound.last['payload']['clientMessageId'],
+      'message-db-1',
+    );
+  });
 
   test(
     'sendMessage connects, flushes persisted command once and clears it on echo',

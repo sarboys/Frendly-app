@@ -2,6 +2,10 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_cache_policy.dart';
+import 'package:big_break_mobile/app/core/local_cache/chat_cache_serializers.dart';
+import 'package:big_break_mobile/app/core/local_cache/chat_local_store.dart';
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/device/app_permission_preferences.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
@@ -21,6 +25,7 @@ import 'package:big_break_mobile/shared/models/evening_session.dart';
 import 'package:big_break_mobile/shared/models/host_dashboard.dart';
 import 'package:big_break_mobile/shared/models/live_meetup.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
+import 'package:big_break_mobile/shared/models/media_variant.dart';
 import 'package:big_break_mobile/shared/models/onboarding_data.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
 import 'package:big_break_mobile/shared/models/person_summary.dart';
@@ -89,10 +94,15 @@ final profileProvider = FutureProvider<ProfileData>((ref) async {
   if (bootstrapProfile != null) {
     bootstrapProfileState.state = null;
   }
-  final profileFuture = bootstrapProfile == null
-      ? repository.fetchMe()
-      : Future.value(bootstrapProfile);
-  final profile = await profileFuture;
+  final profile = await _fetchLocalFirst<ProfileData>(
+    ref,
+    namespace: AppCacheNamespace.profile,
+    cacheKey: AppCacheKey.build(path: '/profile/me'),
+    policy: AppCachePolicies.profile,
+    networkFetch: () => bootstrapProfile ?? repository.fetchMe(),
+    fromJson: _profileFromCacheJson,
+    toJson: _profileToCacheJson,
+  );
   final onboarding = await onboardingFuture;
   return mergeProfileDraftPhotos(
     profile.withOnboarding(onboarding),
@@ -111,11 +121,116 @@ final onboardingProvider = FutureProvider<OnboardingData>((ref) async {
   final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
   await authBootstrap;
-  return repository.fetchOnboarding();
+  return _fetchLocalFirst<OnboardingData>(
+    ref,
+    namespace: AppCacheNamespace.profile,
+    cacheKey: AppCacheKey.build(path: '/onboarding/me'),
+    policy: AppCachePolicies.profile,
+    networkFetch: repository.fetchOnboarding,
+    fromJson: _onboardingFromCacheJson,
+    toJson: _onboardingToCacheJson,
+  );
 });
 
+OnboardingData _onboardingFromCacheJson(Object? json) {
+  return OnboardingData.fromJson(_jsonMap(json));
+}
+
+Map<String, dynamic> _onboardingToCacheJson(OnboardingData onboarding) {
+  return {
+    ...onboarding.toJson(),
+    'birthDate': onboarding.birthDate,
+    'requiredContact': onboarding.requiredContact?.toJson(),
+  };
+}
+
+ProfileData _profileFromCacheJson(Object? json) {
+  final payload = _jsonMap(json);
+  return ProfileData(
+    id: payload['id'] as String? ?? '',
+    displayName: payload['displayName'] as String? ?? '',
+    verified: payload['verified'] as bool? ?? false,
+    online: payload['online'] as bool? ?? false,
+    age: (payload['age'] as num?)?.toInt(),
+    gender: payload['gender'] as String?,
+    city: payload['city'] as String?,
+    area: payload['area'] as String?,
+    bio: payload['bio'] as String?,
+    vibe: payload['vibe'] as String?,
+    rating: (payload['rating'] as num?)?.toDouble() ?? 0,
+    meetupCount: (payload['meetupCount'] as num?)?.toInt() ?? 0,
+    avatarUrl: payload['avatarUrl'] as String?,
+    interests: _stringList(payload['interests']),
+    intent: _stringList(payload['intent']),
+    photos: _profilePhotosFromCacheJson(payload['photos']),
+    social: ProfileSocialData.fromJson(payload['social']),
+  );
+}
+
+Map<String, dynamic> _profileToCacheJson(ProfileData profile) {
+  return {
+    'id': profile.id,
+    'displayName': profile.displayName,
+    'verified': profile.verified,
+    'online': profile.online,
+    'age': profile.age,
+    'gender': profile.gender,
+    'city': profile.city,
+    'area': profile.area,
+    'bio': profile.bio,
+    'vibe': profile.vibe,
+    'rating': profile.rating,
+    'meetupCount': profile.meetupCount,
+    'avatarUrl': profile.avatarUrl,
+    'interests': profile.interests,
+    'intent': profile.intent,
+    'photos': profile.photos.map(_profilePhotoToCacheJson).toList(),
+    'social': _profileSocialToCacheJson(profile.social),
+  };
+}
+
+List<ProfilePhoto> _profilePhotosFromCacheJson(Object? json) {
+  return ((json as List?) ?? const [])
+      .whereType<Map>()
+      .map((item) => ProfilePhoto.fromJson(Map<String, dynamic>.from(item)))
+      .toList(growable: false);
+}
+
+Map<String, dynamic> _profilePhotoToCacheJson(ProfilePhoto photo) {
+  return {
+    'id': photo.id,
+    'url': photo.url,
+    'order': photo.order,
+    'variants': _mediaVariantsToCacheJson(photo.variants),
+  };
+}
+
+Map<String, dynamic> _profileSocialToCacheJson(ProfileSocialData social) {
+  return {
+    'followers': social.followers,
+    'likes': social.likes,
+    'superLikes': social.superLikes,
+    'iFollow': social.iFollow,
+    'iLike': social.iLike,
+    'iSuper': social.iSuper,
+  };
+}
+
 final eventsProvider =
-    FutureProvider.family<List<Event>, String>((ref, filter) async {
+    FutureProvider.family<List<Event>, String>((ref, filter) {
+  return _fetchEventFeed(ref, filter);
+});
+
+final eventsForceRefreshProvider =
+    FutureProvider.autoDispose.family<List<Event>, String>((ref, filter) {
+  return _fetchEventFeed(ref, filter, forceRefresh: true);
+});
+
+Future<List<Event>> _fetchEventFeed(
+  Ref ref,
+  String filter, {
+  bool forceRefresh = false,
+}) async {
   final manualLocation = ref.watch(manualLocationProvider);
   final radiusKm =
       filter == 'nearby' ? ref.watch(nearbyEventsRadiusKmProvider) : null;
@@ -131,15 +246,197 @@ final eventsProvider =
   if (filter == 'nearby' && location == null) {
     return const [];
   }
-  return repository
-      .fetchEvents(
-        filter: filter,
-        latitude: location?.latitude,
-        longitude: location?.longitude,
-        radiusKm: location == null ? null : radiusKm,
-      )
-      .then((value) => value.items);
-});
+  final cacheKey = AppCacheKey.build(
+    path: '/events',
+    query: {
+      'filter': filter,
+      'latitude': location?.latitude,
+      'longitude': location?.longitude,
+      'radiusKm': location == null ? null : radiusKm,
+    },
+  );
+  return _fetchLocalFirst<List<Event>>(
+    ref,
+    namespace: AppCacheNamespace.meetups,
+    cacheKey: cacheKey,
+    policy: AppCachePolicies.meetups,
+    networkFetch: () => repository
+        .fetchEvents(
+          filter: filter,
+          latitude: location?.latitude,
+          longitude: location?.longitude,
+          radiusKm: location == null ? null : radiusKm,
+        )
+        .then((value) => value.items),
+    fromJson: (json) => _decodeCacheList(json, Event.fromJson),
+    toJson: _eventsToCacheJson,
+    forceRefresh: forceRefresh,
+  );
+}
+
+Future<T> _fetchLocalFirst<T>(
+  Ref ref, {
+  required AppCacheNamespace namespace,
+  required String cacheKey,
+  required AppCachePolicy policy,
+  required FutureOr<T> Function() networkFetch,
+  required T Function(Object? json) fromJson,
+  required Object? Function(T value) toJson,
+  bool forceRefresh = false,
+}) async {
+  final repository = ref.read(localFirstRepositoryProvider);
+  if (repository == null) {
+    return Future<T>.sync(networkFetch);
+  }
+
+  final result = await repository.fetch<T>(
+    userScope: ref.read(appCacheUserScopeProvider),
+    namespace: namespace,
+    cacheKey: cacheKey,
+    policy: policy,
+    networkFetch: networkFetch,
+    fromJson: fromJson,
+    toJson: toJson,
+    forceRefresh: forceRefresh,
+  );
+  final refresh = result.refresh;
+  if (refresh != null) {
+    unawaited(refresh);
+  }
+  return result.data;
+}
+
+List<T> _decodeCacheList<T>(
+  Object? json,
+  T Function(Map<String, dynamic> json) fromJson,
+) {
+  final items = json is List ? json : const [];
+  return items
+      .whereType<Map>()
+      .map((item) => fromJson(Map<String, dynamic>.from(item)))
+      .toList(growable: false);
+}
+
+Map<String, dynamic> _jsonMap(Object? json) {
+  return json is Map ? Map<String, dynamic>.from(json) : <String, dynamic>{};
+}
+
+List<String> _stringList(Object? json) {
+  return ((json as List?) ?? const [])
+      .whereType<String>()
+      .toList(growable: false);
+}
+
+List<Map<String, dynamic>> _eventsToCacheJson(List<Event> items) {
+  return items.map(_eventToCacheJson).toList(growable: false);
+}
+
+Map<String, dynamic> _eventToCacheJson(Event event) {
+  return {
+    'id': event.id,
+    'title': event.title,
+    'emoji': event.emoji,
+    'time': event.time,
+    'startsAtIso': event.startsAtIso,
+    'imageUrl': event.imageUrl,
+    'place': event.place,
+    'distance': event.distance,
+    'attendees': event.attendees,
+    'going': event.going,
+    'capacity': event.capacity,
+    'vibe': event.vibe,
+    'tone': _eventToneToJson(event.tone),
+    'lifestyle': event.lifestyle,
+    'priceMode': event.priceMode,
+    'priceAmountFrom': event.priceAmountFrom,
+    'priceAmountTo': event.priceAmountTo,
+    'accessMode': event.accessMode,
+    'genderMode': event.genderMode,
+    'visibilityMode': event.visibilityMode,
+    'routeId': event.routeId,
+    'isDate': event.isDate,
+    'hostNote': event.hostNote,
+    'latitude': event.latitude,
+    'longitude': event.longitude,
+    'joined': event.joined,
+    'joinMode': _eventJoinModeToJson(event.joinMode),
+    'joinRequestStatus': _eventJoinRequestStatusToJson(event.joinRequestStatus),
+    'attendanceStatus': _eventAttendanceStatusToJson(event.attendanceStatus),
+    'liveStatus': _eventLiveStatusToJson(event.liveStatus),
+    'isHost': event.isHost,
+    'ticketUrl': event.ticketUrl,
+    'ticketSourceKind': _eventTicketSourceKindToJson(event.ticketSourceKind),
+    'ticketSourceId': event.ticketSourceId,
+    'ticketPriceFrom': event.ticketPriceFrom,
+    'ticketProvider': event.ticketProvider,
+    'ticketVenue': event.ticketVenue,
+    'bookingUrl': event.bookingUrl,
+    'bookingProvider': event.bookingProvider,
+    'bookingPlaceId': event.bookingPlaceId,
+    'bookingAverageCheck': event.bookingAverageCheck,
+    'bookingCurrency': event.bookingCurrency,
+    'bookingPromos': event.bookingPromos.map(_eventBookingPromoToJson).toList(),
+  };
+}
+
+Map<String, dynamic> _eventBookingPromoToJson(EventBookingPromo promo) {
+  return {
+    'title': promo.title,
+    'description': promo.description,
+    'validUntil': promo.validUntil,
+    'bookingUrl': promo.bookingUrl,
+    'sourceUrl': promo.sourceUrl,
+  };
+}
+
+String _eventToneToJson(EventTone tone) {
+  return switch (tone) {
+    EventTone.evening => 'evening',
+    EventTone.sage => 'sage',
+    EventTone.warm => 'warm',
+  };
+}
+
+String _eventJoinModeToJson(EventJoinMode mode) {
+  return switch (mode) {
+    EventJoinMode.request => 'request',
+    EventJoinMode.open => 'open',
+  };
+}
+
+String? _eventJoinRequestStatusToJson(EventJoinRequestStatus? status) {
+  return switch (status) {
+    EventJoinRequestStatus.pending => 'pending',
+    EventJoinRequestStatus.approved => 'approved',
+    EventJoinRequestStatus.rejected => 'rejected',
+    EventJoinRequestStatus.canceled => 'canceled',
+    null => null,
+  };
+}
+
+String _eventAttendanceStatusToJson(EventAttendanceStatus status) {
+  return switch (status) {
+    EventAttendanceStatus.checkedIn => 'checked_in',
+    EventAttendanceStatus.left => 'left',
+    EventAttendanceStatus.notCheckedIn => 'not_checked_in',
+  };
+}
+
+String _eventLiveStatusToJson(EventLiveStatus status) {
+  return switch (status) {
+    EventLiveStatus.live => 'live',
+    EventLiveStatus.finished => 'finished',
+    EventLiveStatus.idle => 'idle',
+  };
+}
+
+String? _eventTicketSourceKindToJson(EventTicketSourceKind? kind) {
+  return switch (kind) {
+    EventTicketSourceKind.poster => 'poster',
+    EventTicketSourceKind.affiche => 'affiche',
+    null => null,
+  };
+}
 
 Future<({double latitude, double longitude})?> _eventFeedLocation(
   String filter,
@@ -222,21 +519,52 @@ final mapEventsProvider = FutureProvider.autoDispose
     .family<List<Event>, MapEventsQuery>((ref, query) async {
   final repository = ref.read(backendRepositoryProvider);
   final cancelToken = _autoDisposeCancelToken(ref);
-  return repository
-      .fetchEvents(
-        filter: 'nearby',
-        limit: query.limit,
-        latitude: query.centerLatitude,
-        longitude: query.centerLongitude,
-        radiusKm: query.radiusKm,
-        southWestLatitude: query.southWestLatitude,
-        southWestLongitude: query.southWestLongitude,
-        northEastLatitude: query.northEastLatitude,
-        northEastLongitude: query.northEastLongitude,
-        cancelToken: cancelToken,
-      )
-      .then((value) => value.items);
+  return _fetchLocalFirst<List<Event>>(
+    ref,
+    namespace: AppCacheNamespace.map,
+    cacheKey: _mapEventsCacheKey(query),
+    policy: AppCachePolicies.map,
+    networkFetch: () => repository
+        .fetchEvents(
+          filter: 'nearby',
+          limit: query.limit,
+          latitude: query.centerLatitude,
+          longitude: query.centerLongitude,
+          radiusKm: query.radiusKm,
+          southWestLatitude: query.southWestLatitude,
+          southWestLongitude: query.southWestLongitude,
+          northEastLatitude: query.northEastLatitude,
+          northEastLongitude: query.northEastLongitude,
+          cancelToken: cancelToken,
+        )
+        .then((value) => value.items),
+    fromJson: (json) => _decodeCacheList(json, Event.fromJson),
+    toJson: _eventsToCacheJson,
+  );
 });
+
+String _mapEventsCacheKey(MapEventsQuery query) {
+  return AppCacheKey.build(
+    path: '/events/map',
+    query: {
+      'limit': query.limit,
+      'centerLatitude': _roundedCoordinate(query.centerLatitude),
+      'centerLongitude': _roundedCoordinate(query.centerLongitude),
+      'radiusKm': query.radiusKm,
+      'southWestLatitude': _roundedCoordinate(query.southWestLatitude),
+      'southWestLongitude': _roundedCoordinate(query.southWestLongitude),
+      'northEastLatitude': _roundedCoordinate(query.northEastLatitude),
+      'northEastLongitude': _roundedCoordinate(query.northEastLongitude),
+    },
+  );
+}
+
+double? _roundedCoordinate(double? value) {
+  if (value == null) {
+    return null;
+  }
+  return double.parse(value.toStringAsFixed(4));
+}
 
 final eventDetailProvider = FutureProvider.autoDispose
     .family<EventDetail, String>((ref, eventId) async {
@@ -299,22 +627,142 @@ final afficheEventsProvider =
   ref,
   query,
 ) async {
-  final repository = ref.read(backendRepositoryProvider);
   final cancelToken = _autoDisposeCancelToken(ref);
-  return repository
-      .fetchAfficheEvents(
-        city: query.city,
-        q: query.query.isEmpty ? null : query.query,
-        date: query.date,
-        priceMode: query.priceMode,
-        source: query.source,
-        category: query.category,
-        featured: query.featured,
-        limit: query.limit,
-        cancelToken: cancelToken,
-      )
-      .then((value) => value.items);
+  final page = await _fetchAfficheEventsPage(
+    ref,
+    query,
+    cancelToken: cancelToken,
+  );
+  return page.items;
 });
+
+Future<PaginatedResponse<AfficheEvent>> _fetchAfficheEventsPage(
+  Ref ref,
+  AfficheEventsQuery query, {
+  String? cursor,
+  CancelToken? cancelToken,
+  bool forceRefresh = false,
+}) {
+  final repository = ref.read(backendRepositoryProvider);
+  Future<PaginatedResponse<AfficheEvent>> fetchNetwork() {
+    return repository.fetchAfficheEvents(
+      city: query.city,
+      q: query.query.isEmpty ? null : query.query,
+      date: query.date,
+      priceMode: query.priceMode,
+      source: query.source,
+      category: query.category,
+      featured: query.featured,
+      cursor: cursor,
+      limit: query.limit,
+      cancelToken: cancelToken,
+    );
+  }
+
+  if (cursor != null) {
+    return fetchNetwork();
+  }
+
+  return _fetchLocalFirst<PaginatedResponse<AfficheEvent>>(
+    ref,
+    namespace: AppCacheNamespace.affiche,
+    cacheKey: _afficheEventsCacheKey(query),
+    policy: AppCachePolicies.affiche,
+    networkFetch: fetchNetwork,
+    fromJson: _afficheEventsPageFromCacheJson,
+    toJson: _afficheEventsPageToCacheJson,
+    forceRefresh: forceRefresh,
+  );
+}
+
+String _afficheEventsCacheKey(AfficheEventsQuery query) {
+  return AppCacheKey.build(
+    path: '/affiche/events',
+    query: {
+      'city': query.city,
+      'q': query.query.isEmpty ? null : query.query,
+      'date': query.date,
+      'priceMode': query.priceMode,
+      'source': query.source,
+      'category': query.category,
+      'featured': query.featured,
+      'limit': query.limit,
+    },
+  );
+}
+
+PaginatedResponse<AfficheEvent> _afficheEventsPageFromCacheJson(
+  Object? json,
+) {
+  final payload =
+      json is Map ? Map<String, dynamic>.from(json) : const <String, dynamic>{};
+  return PaginatedResponse.fromJson(payload, AfficheEvent.fromJson);
+}
+
+Map<String, dynamic> _afficheEventsPageToCacheJson(
+  PaginatedResponse<AfficheEvent> page,
+) {
+  return {
+    'items': page.items.map(_afficheEventToCacheJson).toList(growable: false),
+    'nextCursor': page.nextCursor,
+    'lastEventId': page.lastEventId,
+  };
+}
+
+Map<String, dynamic> _afficheEventToCacheJson(AfficheEvent event) {
+  return {
+    'id': event.id,
+    'title': event.title,
+    'description': event.description,
+    'city': event.city,
+    'venue': event.venue,
+    'address': event.address,
+    'lat': event.latitude,
+    'lng': event.longitude,
+    'startsAt': event.startsAt?.toUtc().toIso8601String(),
+    'endsAt': event.endsAt?.toUtc().toIso8601String(),
+    'dateLabel': event.dateLabel,
+    'timeLabel': event.timeLabel,
+    'category': event.category,
+    'priceFrom': event.priceFrom,
+    'priceMode': _affichePriceModeToJson(event.priceMode),
+    'currency': event.currency,
+    'imageUrl': event.imageUrl,
+    'imageVariants': _mediaVariantsToCacheJson(event.imageVariants),
+    'provider': event.provider,
+    'sourceCode': event.sourceCode,
+    'actionUrl': event.actionUrl,
+    'actionKind': event.actionKind,
+    'isAffiliate': event.isAffiliate,
+    'tags': event.tags,
+  };
+}
+
+String _affichePriceModeToJson(AffichePriceMode mode) {
+  return switch (mode) {
+    AffichePriceMode.free => 'free',
+    AffichePriceMode.paid => 'paid',
+    AffichePriceMode.unknown => 'unknown',
+  };
+}
+
+Map<String, dynamic> _mediaVariantsToCacheJson(
+  Map<String, MediaVariantData> variants,
+) {
+  return variants.map(
+    (key, value) => MapEntry(
+      key,
+      {
+        'url': value.url,
+        'downloadUrl': value.downloadUrl,
+        'mimeType': value.mimeType,
+        'byteSize': value.byteSize,
+        'cacheKey': value.cacheKey,
+        'expiresAt': value.expiresAt?.toUtc().toIso8601String(),
+      },
+    ),
+  );
+}
 
 const _afficheFilterPageCacheTtl = Duration(minutes: 3);
 
@@ -385,19 +833,34 @@ class AfficheEventsPager
   final AfficheEventsQuery query;
   final _cancelToken = CancelToken();
 
-  Future<void> loadFirstPage() async {
-    state = const AsyncLoading();
-    final result = await AsyncValue.guard(() async {
-      final page = await _fetchPage();
-      return AfficheEventsPagedState(
-        items: page.items,
-        nextCursor: page.nextCursor,
-      );
-    });
-    if (!mounted) {
-      return;
+  Future<bool> loadFirstPage({bool forceRefresh = false}) async {
+    final current = state.valueOrNull;
+    if (current == null) {
+      state = const AsyncLoading();
     }
-    state = result;
+    try {
+      final page = await _fetchPage(forceRefresh: forceRefresh);
+      if (!mounted) {
+        return false;
+      }
+      state = AsyncData(
+        AfficheEventsPagedState(
+          items: page.items,
+          nextCursor: page.nextCursor,
+        ),
+      );
+      return true;
+    } catch (error, stackTrace) {
+      if (!mounted) {
+        return false;
+      }
+      if (current != null) {
+        state = AsyncData(current);
+        return false;
+      }
+      state = AsyncError(error, stackTrace);
+      return false;
+    }
   }
 
   Future<void> loadNextPage() async {
@@ -426,19 +889,16 @@ class AfficheEventsPager
     }
   }
 
-  Future<PaginatedResponse<AfficheEvent>> _fetchPage({String? cursor}) async {
-    final repository = ref.read(backendRepositoryProvider);
-    return repository.fetchAfficheEvents(
-      city: query.city,
-      q: query.query.isEmpty ? null : query.query,
-      date: query.date,
-      priceMode: query.priceMode,
-      source: query.source,
-      category: query.category,
-      featured: query.featured,
+  Future<PaginatedResponse<AfficheEvent>> _fetchPage({
+    String? cursor,
+    bool forceRefresh = false,
+  }) async {
+    return _fetchAfficheEventsPage(
+      ref,
+      query,
       cursor: cursor,
-      limit: query.limit,
       cancelToken: _cancelToken,
+      forceRefresh: forceRefresh,
     );
   }
 }
@@ -496,12 +956,14 @@ final hostEventProvider = FutureProvider.autoDispose
 });
 
 final settingsProvider = FutureProvider<UserSettingsData>((ref) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
+  final watchedTokens = ref.watch(authTokensProvider);
+  if (watchedTokens == null) {
+    return UserSettingsData.fallback;
+  }
   final repository = ref.read(backendRepositoryProvider);
   final authTokens = ref.read(authTokensProvider.notifier);
   final currentUser = ref.read(currentUserIdProvider.notifier);
   final permissionPreferences = ref.read(appPermissionPreferencesProvider);
-  await authBootstrap;
   bool sessionStillCurrent(AuthTokens? expectedTokens, String expectedUserId) {
     final currentTokens = authTokens.currentTokens;
     return currentUser.state == expectedUserId &&
@@ -514,7 +976,27 @@ final settingsProvider = FutureProvider<UserSettingsData>((ref) async {
   if (userId == null || sessionTokens == null) {
     return UserSettingsData.fallback;
   }
-  final settings = await repository.fetchSettings();
+  Future<UserSettingsData> fetchAndSyncSettings() async {
+    final settings = await repository.fetchSettings();
+    if (!sessionStillCurrent(sessionTokens, userId)) {
+      return UserSettingsData.fallback;
+    }
+    await permissionPreferences.syncFromSettings(settings);
+    if (!sessionStillCurrent(sessionTokens, userId)) {
+      return UserSettingsData.fallback;
+    }
+    return settings;
+  }
+
+  final settings = await _fetchLocalFirst<UserSettingsData>(
+    ref,
+    namespace: AppCacheNamespace.settings,
+    cacheKey: AppCacheKey.build(path: '/settings/me'),
+    policy: AppCachePolicies.settings,
+    networkFetch: fetchAndSyncSettings,
+    fromJson: (json) => UserSettingsData.fromJson(_jsonMap(json)),
+    toJson: (value) => value.toJson(),
+  );
   if (!sessionStillCurrent(sessionTokens, userId)) {
     return UserSettingsData.fallback;
   }
@@ -601,7 +1083,16 @@ final personProfileProvider =
   final repository = ref.read(backendRepositoryProvider);
   final cancelToken = _autoDisposeCancelToken(ref);
   await authBootstrap;
-  return repository.fetchPersonProfile(userId, cancelToken: cancelToken);
+  return _fetchLocalFirst<ProfileData>(
+    ref,
+    namespace: AppCacheNamespace.publicProfile,
+    cacheKey: AppCacheKey.build(path: '/people/$userId'),
+    policy: AppCachePolicies.publicProfile,
+    networkFetch: () =>
+        repository.fetchPersonProfile(userId, cancelToken: cancelToken),
+    fromJson: _profileFromCacheJson,
+    toJson: _profileToCacheJson,
+  );
 });
 
 final profileSocialProvider = StateNotifierProvider.autoDispose
@@ -753,8 +1244,30 @@ final meetupChatsProvider = FutureProvider<List<MeetupChat>>((ref) async {
   if (localItems != null) {
     return localItems;
   }
+  final localStore = ref.read(chatLocalStoreProvider);
+  final userScope = ref.read(appCacheUserScopeProvider);
+  if (localStore != null) {
+    final cached = await _readChatSummariesCache(
+      ref,
+      localStore,
+      userScope: userScope,
+      kind: ChatSummaryKind.meetup,
+    );
+    if (cached.isNotEmpty) {
+      unawaited(_refreshMeetupChatsCache(ref, localStore, userScope));
+      return cached.map(MeetupChat.fromJson).toList(growable: false);
+    }
+  }
   final repository = ref.read(backendRepositoryProvider);
-  return repository.fetchMeetupChats().then((value) => value.items);
+  final result = await repository.fetchMeetupChats();
+  if (localStore != null) {
+    unawaited(
+      _writeMeetupChatsCache(localStore, userScope, result.items).catchError(
+        (_) {},
+      ),
+    );
+  }
+  return result.items;
 });
 
 final meetupChatSummaryProvider =
@@ -806,10 +1319,94 @@ final eveningRouteTemplatesProvider =
     return const [];
   }
   final repository = ref.read(backendRepositoryProvider);
-  return repository
-      .fetchEveningRouteTemplates(city: normalizedCity)
-      .then((value) => value.items);
+  return _fetchLocalFirst<List<EveningRouteTemplateSummary>>(
+    ref,
+    namespace: AppCacheNamespace.routeTemplates,
+    cacheKey: AppCacheKey.build(
+      path: '/evening/route-templates',
+      query: {
+        'city': normalizedCity,
+        'limit': 20,
+      },
+    ),
+    policy: AppCachePolicies.routeTemplates,
+    networkFetch: () => repository
+        .fetchEveningRouteTemplates(city: normalizedCity)
+        .then((value) => value.items),
+    fromJson: (json) =>
+        _decodeCacheList(json, EveningRouteTemplateSummary.fromJson),
+    toJson: _routeTemplatesToCacheJson,
+  );
 });
+
+List<Map<String, dynamic>> _routeTemplatesToCacheJson(
+  List<EveningRouteTemplateSummary> items,
+) {
+  return items.map(_routeTemplateToCacheJson).toList(growable: false);
+}
+
+Map<String, dynamic> _routeTemplateToCacheJson(
+  EveningRouteTemplateSummary template,
+) {
+  return {
+    'id': template.id,
+    'routeId': template.routeId,
+    'title': template.title,
+    'blurb': template.blurb,
+    'city': template.city,
+    'area': template.area,
+    'badgeLabel': template.badgeLabel,
+    'coverUrl': template.coverUrl,
+    'vibe': template.vibe,
+    'budget': template.budget,
+    'durationLabel': template.durationLabel,
+    'totalPriceFrom': template.totalPriceFrom,
+    'totalSavings': template.totalSavings,
+    'mood': template.mood,
+    'premium': template.premium,
+    'hostsCount': template.hostsCount,
+    'stepsPreview':
+        template.stepsPreview.map(_routeStepPreviewToCacheJson).toList(),
+    'partnerOffersPreview': template.partnerOffersPreview
+        .map(_routePartnerOfferPreviewToCacheJson)
+        .toList(),
+    'nearestSessions':
+        template.nearestSessions.map(_routeSessionToCacheJson).toList(),
+  };
+}
+
+Map<String, dynamic> _routeStepPreviewToCacheJson(
+  EveningRouteTemplateStepPreview step,
+) {
+  return {
+    'title': step.title,
+    'venue': step.venue,
+    'emoji': step.emoji,
+    'time': step.time,
+    'kind': step.kind,
+  };
+}
+
+Map<String, dynamic> _routePartnerOfferPreviewToCacheJson(
+  EveningPartnerOfferPreview offer,
+) {
+  return {
+    'partnerId': offer.partnerId,
+    'title': offer.title,
+    'shortLabel': offer.shortLabel,
+  };
+}
+
+Map<String, dynamic> _routeSessionToCacheJson(
+  EveningRouteTemplateSession session,
+) {
+  return {
+    'sessionId': session.sessionId,
+    'startsAt': session.startsAt,
+    'joinedCount': session.joinedCount,
+    'capacity': session.capacity,
+  };
+}
 
 final eveningRouteTemplateProvider = FutureProvider.autoDispose
     .family<EveningRouteTemplateDetail, String>((ref, templateId) async {
@@ -860,8 +1457,30 @@ final personalChatsProvider = FutureProvider<List<PersonalChat>>((ref) async {
   if (localItems != null) {
     return localItems;
   }
+  final localStore = ref.read(chatLocalStoreProvider);
+  final userScope = ref.read(appCacheUserScopeProvider);
+  if (localStore != null) {
+    final cached = await _readChatSummariesCache(
+      ref,
+      localStore,
+      userScope: userScope,
+      kind: ChatSummaryKind.personal,
+    );
+    if (cached.isNotEmpty) {
+      unawaited(_refreshPersonalChatsCache(ref, localStore, userScope));
+      return cached.map(PersonalChat.fromJson).toList(growable: false);
+    }
+  }
   final repository = ref.read(backendRepositoryProvider);
-  return repository.fetchPersonalChats().then((value) => value.items);
+  final result = await repository.fetchPersonalChats();
+  if (localStore != null) {
+    unawaited(
+      _writePersonalChatsCache(localStore, userScope, result.items).catchError(
+        (_) {},
+      ),
+    );
+  }
+  return result.items;
 });
 
 final personalChatSummaryProvider =
@@ -889,6 +1508,88 @@ final personalChatSummaryProvider =
   );
 });
 
+Future<void> _refreshMeetupChatsCache(
+  Ref ref,
+  ChatLocalStore localStore,
+  AppCacheUserScope userScope,
+) async {
+  try {
+    final result = await ref.read(backendRepositoryProvider).fetchMeetupChats();
+    await _writeMeetupChatsCache(localStore, userScope, result.items);
+    ref.read(meetupChatsLocalStateProvider.notifier).state = result.items;
+  } catch (_) {}
+}
+
+Future<void> _refreshPersonalChatsCache(
+  Ref ref,
+  ChatLocalStore localStore,
+  AppCacheUserScope userScope,
+) async {
+  try {
+    final result =
+        await ref.read(backendRepositoryProvider).fetchPersonalChats();
+    await _writePersonalChatsCache(localStore, userScope, result.items);
+    ref.read(personalChatsLocalStateProvider.notifier).state = result.items;
+  } catch (_) {}
+}
+
+Future<List<Map<String, dynamic>>> _readChatSummariesCache(
+  Ref ref,
+  ChatLocalStore localStore, {
+  required AppCacheUserScope userScope,
+  required ChatSummaryKind kind,
+}) async {
+  try {
+    return await localStore.readSummaries(
+      userScope: userScope,
+      kind: kind,
+    );
+  } catch (_) {
+    _disableLocalCacheAfterFailure(ref);
+    return const [];
+  }
+}
+
+void _disableLocalCacheAfterFailure(Ref ref) {
+  Future<void>.microtask(() {
+    try {
+      ref.read(appLocalCacheRuntimeDisabledProvider.notifier).state = true;
+    } catch (_) {}
+  });
+}
+
+Future<void> _writeMeetupChatsCache(
+  ChatLocalStore localStore,
+  AppCacheUserScope userScope,
+  List<MeetupChat> chats,
+) async {
+  for (final chat in chats) {
+    await localStore.upsertSummary(
+      userScope: userScope,
+      kind: ChatSummaryKind.meetup,
+      chatId: chat.id,
+      summaryJson: meetupChatToCacheJson(chat),
+      updatedAt: DateTime.now(),
+    );
+  }
+}
+
+Future<void> _writePersonalChatsCache(
+  ChatLocalStore localStore,
+  AppCacheUserScope userScope,
+  List<PersonalChat> chats,
+) async {
+  for (final chat in chats) {
+    await localStore.upsertSummary(
+      userScope: userScope,
+      kind: ChatSummaryKind.personal,
+      chatId: chat.id,
+      summaryJson: personalChatToCacheJson(chat),
+      updatedAt: DateTime.now(),
+    );
+  }
+}
+
 final notificationsLocalStateProvider =
     StateProvider<List<NotificationItem>?>((ref) => null);
 
@@ -903,11 +1604,39 @@ final notificationsProvider =
   if (localItems != null) {
     return localItems;
   }
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
-  await authBootstrap;
-  return repository.fetchNotifications().then((value) => value.items);
+  return _fetchLocalFirst<List<NotificationItem>>(
+    ref,
+    namespace: AppCacheNamespace.notifications,
+    cacheKey: AppCacheKey.build(
+      path: '/notifications',
+      query: const {'limit': 20},
+    ),
+    policy: AppCachePolicies.notifications,
+    networkFetch: () =>
+        repository.fetchNotifications().then((value) => value.items),
+    fromJson: (json) => _decodeCacheList(json, NotificationItem.fromJson),
+    toJson: _notificationsToCacheJson,
+  );
 });
+
+List<Map<String, dynamic>> _notificationsToCacheJson(
+  List<NotificationItem> items,
+) {
+  return items.map(_notificationToCacheJson).toList(growable: false);
+}
+
+Map<String, dynamic> _notificationToCacheJson(NotificationItem item) {
+  return {
+    'id': item.id,
+    'kind': item.kind,
+    'title': item.title,
+    'body': item.body,
+    'payload': item.payload,
+    'readAt': item.readAt?.toIso8601String(),
+    'createdAt': item.createdAt.toIso8601String(),
+  };
+}
 
 final notificationUnreadCountOverrideProvider =
     StateProvider<int?>((ref) => null);
@@ -928,10 +1657,16 @@ final notificationUnreadCountProvider = FutureProvider<int>((ref) async {
     return localItems.where((item) => item.unread).length;
   }
 
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
-  await authBootstrap;
-  return repository.fetchUnreadNotificationCount();
+  return _fetchLocalFirst<int>(
+    ref,
+    namespace: AppCacheNamespace.notifications,
+    cacheKey: AppCacheKey.build(path: '/notifications/unread-count'),
+    policy: AppCachePolicies.notifications,
+    networkFetch: repository.fetchUnreadNotificationCount,
+    fromJson: (json) => (json as num?)?.toInt() ?? 0,
+    toJson: (value) => value,
+  );
 });
 
 final chatUnreadBadgeProvider = Provider<int>((ref) {

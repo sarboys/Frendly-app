@@ -78,6 +78,7 @@ class _AfficheEventsBrowserState extends ConsumerState<AfficheEventsBrowser> {
   Set<String> _categories = const {};
   AfficheEventsQuery? _currentQuery;
   AfficheEventsPagedState? _lastPageState;
+  bool _manualRefreshFailed = false;
 
   @override
   void initState() {
@@ -120,6 +121,7 @@ class _AfficheEventsBrowserState extends ConsumerState<AfficheEventsBrowser> {
         return;
       }
       setState(() {
+        _manualRefreshFailed = false;
         _debouncedQuery = query;
       });
     });
@@ -144,9 +146,10 @@ class _AfficheEventsBrowserState extends ConsumerState<AfficheEventsBrowser> {
         _lastPageState = page;
         unawaited(
           ref.read(appMediaPrewarmServiceProvider).warmExternalEventImages(
-                page.items.map(
-                  (event) => event.imageUrlFor(BbExternalEventImageUsage.card),
-                ),
+                page.items.take(8).map(
+                      (event) =>
+                          event.imageUrlFor(BbExternalEventImageUsage.card),
+                    ),
                 usage: BbExternalEventImageUsage.card,
                 limit: 8,
                 concurrency: 2,
@@ -166,122 +169,155 @@ class _AfficheEventsBrowserState extends ConsumerState<AfficheEventsBrowser> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 440),
-          child: CustomScrollView(
-            controller: _scrollController,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            slivers: [
-              if (widget.showDragHandle)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-                    child: Center(
-                      child: Container(
-                        width: 42,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: BbV5Colors.hair,
-                          borderRadius: BorderRadius.circular(999),
+          child: RefreshIndicator(
+            color: BbV5Colors.accent,
+            onRefresh: () async {
+              if (_manualRefreshFailed && mounted) {
+                setState(() {
+                  _manualRefreshFailed = false;
+                });
+              }
+              final refreshed = await ref
+                  .read(pagedProvider.notifier)
+                  .loadFirstPage(forceRefresh: true);
+              if (!refreshed && mounted) {
+                setState(() {
+                  _manualRefreshFailed = true;
+                });
+              }
+            },
+            child: CustomScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              slivers: [
+                if (widget.showDragHandle)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                      child: Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: BbV5Colors.hair,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
-              SliverPadding(
-                padding:
-                    EdgeInsets.fromLTRB(20, widget.headerTopPadding, 20, 0),
-                sliver: SliverToBoxAdapter(
-                  child: _AfficheV5Header(
-                    onBack: widget.onBack,
-                    backIcon: widget.backIcon,
-                    kicker: widget.kicker,
-                    title: widget.title,
-                    accent: widget.accent,
-                  ),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                sliver: SliverToBoxAdapter(
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: BbV5SearchPill(
-                          controller: _queryController,
-                          onChanged: _handleQueryChanged,
-                          hintText: widget.searchHintText,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: _AfficheQuickFilterRows(
-                  date: _date,
-                  priceMode: _priceMode,
-                  categories: _categories,
-                  onDateChanged: (value) => setState(() => _date = value),
-                  onPriceChanged: (value) => setState(
-                    () => _priceMode = value ?? 'any',
-                  ),
-                  onCategoryChanged: _toggleCategory,
-                ),
-              ),
-              if (showInitialLoading)
-                const _AfficheStateSliver(
-                  icon: LucideIcons.ticket,
-                  title: 'Загружаем афишу',
-                  message: 'Собираем события рядом.',
-                  loading: true,
-                )
-              else if (visibleState == null)
-                const _AfficheStateSliver(
-                  icon: LucideIcons.wifi_off,
-                  title: 'Не получилось загрузить афишу',
-                  message: 'Проверь соединение и попробуй еще раз.',
-                )
-              else ...[
-                if (eventsAsync.isLoading)
-                  const SliverToBoxAdapter(
-                    child: LinearProgressIndicator(
-                      minHeight: 2,
-                      color: BbV5Colors.accent,
-                      backgroundColor: Colors.transparent,
                     ),
                   ),
                 SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding:
+                      EdgeInsets.fromLTRB(20, widget.headerTopPadding, 20, 0),
                   sliver: SliverToBoxAdapter(
-                    child: BbV5Kicker('${visibleEvents.length} событий'),
+                    child: _AfficheV5Header(
+                      onBack: widget.onBack,
+                      backIcon: widget.backIcon,
+                      kicker: widget.kicker,
+                      title: widget.title,
+                      accent: widget.accent,
+                    ),
                   ),
                 ),
-                if (visibleEvents.isEmpty)
-                  const _AfficheStateSliver(
-                    icon: LucideIcons.search_x,
-                    title: 'Ничего не нашли',
-                    message: 'Попробуй другой запрос или категорию.',
-                  )
-                else
-                  _AfficheEventsGrid(
-                    events: visibleEvents,
-                    selectedEventId: widget.initialSelectedEvent?.id,
-                    onEventTap: widget.onEventSelected,
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: BbV5SearchPill(
+                            controller: _queryController,
+                            onChanged: _handleQueryChanged,
+                            hintText: widget.searchHintText,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                if (visibleState.isLoadingMore)
-                  const SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: BbV5Colors.ink,
+                ),
+                SliverToBoxAdapter(
+                  child: _AfficheQuickFilterRows(
+                    date: _date,
+                    priceMode: _priceMode,
+                    categories: _categories,
+                    onDateChanged: (value) => setState(() {
+                      _manualRefreshFailed = false;
+                      _date = value;
+                    }),
+                    onPriceChanged: (value) => setState(
+                      () {
+                        _manualRefreshFailed = false;
+                        _priceMode = value ?? 'any';
+                      },
+                    ),
+                    onCategoryChanged: _toggleCategory,
+                  ),
+                ),
+                if (showInitialLoading)
+                  const _AfficheStateSliver(
+                    icon: LucideIcons.ticket,
+                    title: 'Загружаем афишу',
+                    message: 'Собираем события рядом.',
+                    loading: true,
+                  )
+                else if (visibleState == null)
+                  const _AfficheStateSliver(
+                    icon: LucideIcons.wifi_off,
+                    title: 'Не получилось загрузить афишу',
+                    message: 'Проверь соединение и попробуй еще раз.',
+                  )
+                else ...[
+                  if (eventsAsync.isLoading)
+                    const SliverToBoxAdapter(
+                      child: LinearProgressIndicator(
+                        minHeight: 2,
+                        color: BbV5Colors.accent,
+                        backgroundColor: Colors.transparent,
+                      ),
+                    ),
+                  if (_manualRefreshFailed)
+                    const SliverPadding(
+                      padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+                      sliver: SliverToBoxAdapter(
+                        child: _AfficheCompactError(),
+                      ),
+                    ),
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    sliver: SliverToBoxAdapter(
+                      child: BbV5Kicker('${visibleEvents.length} событий'),
+                    ),
+                  ),
+                  if (visibleEvents.isEmpty)
+                    const _AfficheStateSliver(
+                      icon: LucideIcons.search_x,
+                      title: 'Ничего не нашли',
+                      message: 'Попробуй другой запрос или категорию.',
+                    )
+                  else
+                    _AfficheEventsGrid(
+                      events: visibleEvents,
+                      selectedEventId: widget.initialSelectedEvent?.id,
+                      onEventTap: widget.onEventSelected,
+                    ),
+                  if (visibleState.isLoadingMore)
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: BbV5Colors.ink,
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                ],
+                SliverToBoxAdapter(
+                    child: SizedBox(height: widget.bottomSpacer)),
               ],
-              SliverToBoxAdapter(child: SizedBox(height: widget.bottomSpacer)),
-            ],
+            ),
           ),
         ),
       ),
@@ -290,6 +326,7 @@ class _AfficheEventsBrowserState extends ConsumerState<AfficheEventsBrowser> {
 
   void _toggleCategory(AfficheFilterOption option) {
     setState(() {
+      _manualRefreshFailed = false;
       if (option.value == null) {
         _categories = const {};
       } else if (_categories.contains(option.value)) {
@@ -749,6 +786,42 @@ class _AfficheStateSliver extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AfficheCompactError extends StatelessWidget {
+  const _AfficheCompactError();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: BbV5Colors.paperHi,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: BbV5Colors.hair),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            LucideIcons.wifi_off,
+            size: 16,
+            color: BbV5Colors.inkMute,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Не получилось обновить. Показываем текущую афишу.',
+              style: AppTextStyles.caption.copyWith(
+                color: BbV5Colors.inkSoft,
+                fontSize: 11.5,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -2,6 +2,10 @@ import 'dart:io';
 
 import 'package:big_break_mobile/app/core/device/app_attachment_service.dart';
 import 'package:big_break_mobile/app/core/device/app_permission_preferences.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_cache_policy.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_local_cache_store.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_local_database.dart';
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_shell.dart';
@@ -22,6 +26,7 @@ import 'package:big_break_mobile/shared/models/personal_chat.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
 import 'package:dio/dio.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -41,6 +46,34 @@ void main() {
       final preferences = await SharedPreferences.getInstance();
       final socket = _DisposeAwareChatSocketClient();
       final attachmentService = _RecordingAttachmentService();
+      final localDb = AppLocalDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(localDb.close);
+      final localCacheStore = AppLocalCacheStore(localDb);
+      await localCacheStore.write(
+        userScope: AppCacheUserScope.user('user-me'),
+        namespace: AppCacheNamespace.profile,
+        cacheKey: 'me',
+        payloadJson: '{"id":"user-me"}',
+        policy: const AppCachePolicy(
+          staleAfter: Duration(minutes: 1),
+          expiresAfter: Duration(hours: 1),
+        ),
+      );
+      final driftOutbox = DriftChatOutboxStorage(
+        localDb,
+        userScope: AppCacheUserScope.user('user-me'),
+      );
+      await driftOutbox.writeCommands([
+        {
+          'type': 'message.send',
+          'payload': {
+            'chatId': 'chat-1',
+            'text': 'cached',
+            'clientMessageId': 'message-1',
+          },
+          'dedupeKey': 'message:chat-1:message-1',
+        },
+      ]);
       var profileReads = 0;
       var communityReads = 0;
 
@@ -57,6 +90,7 @@ void main() {
             return socket;
           }),
           appAttachmentServiceProvider.overrideWithValue(attachmentService),
+          appLocalCacheStoreProvider.overrideWithValue(localCacheStore),
           communitiesProvider.overrideWith((ref) async {
             communityReads += 1;
             return const [
@@ -167,6 +201,7 @@ void main() {
       await container.read(profileProvider.future);
       await container.read(communitiesProvider.future);
       container.read(chatSocketClientProvider);
+      container.read(appLocalCacheStoreProvider);
 
       container.read(authTokensProvider.notifier).clear();
       await container
@@ -178,6 +213,15 @@ void main() {
       expect(preferences.getString('chat.outbox.commands'), isNull);
       expect(preferences.getBool('permissions.allow_location'), isNull);
       expect(preferences.getBool('permissions.allow_contacts'), isNull);
+      expect(
+        await localCacheStore.readAny(
+          userScope: AppCacheUserScope.user('user-me'),
+          namespace: AppCacheNamespace.profile,
+          cacheKey: 'me',
+        ),
+        isNull,
+      );
+      expect(await driftOutbox.readCommands(), isEmpty);
       expect(container.read(onboardingLocalStateProvider), isNull);
       expect(container.read(meetupChatsLocalStateProvider), isNull);
       expect(container.read(personalChatsLocalStateProvider), isNull);

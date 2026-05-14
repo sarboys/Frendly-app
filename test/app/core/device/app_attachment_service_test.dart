@@ -45,6 +45,7 @@ class _FakeCacheManager extends CacheManager {
   String? lastKey;
   String? lastUrl;
   var getSingleFileCalls = 0;
+  var emptyCacheCalls = 0;
 
   @override
   Future<pfile.File> getSingleFile(
@@ -129,7 +130,9 @@ class _FakeCacheManager extends CacheManager {
   Future<void> removeFile(String key) async {}
 
   @override
-  Future<void> emptyCache() async {}
+  Future<void> emptyCache() async {
+    emptyCacheCalls += 1;
+  }
 
   @override
   Future<void> dispose() async {}
@@ -342,6 +345,71 @@ void main() {
       await service.getDownloadUrl(attachment),
       'https://storage.example.com/signed-1',
     );
+    expect(
+      await service.getDownloadUrl(attachment),
+      'https://storage.example.com/signed-2',
+    );
+    expect(requestCount, 2);
+  });
+
+  test(
+      'attachment service clears signed url cache and ignores in-flight cache writes',
+      () async {
+    var requestCount = 0;
+    final firstRequestReady = Completer<void>();
+    final releaseFirstResponse = Completer<void>();
+    final apiDio = Dio(
+      BaseOptions(baseUrl: BackendConfig.apiBaseUrl),
+    )..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) async {
+            requestCount += 1;
+            final currentRequest = requestCount;
+            if (currentRequest == 1) {
+              firstRequestReady.complete();
+              await releaseFirstResponse.future;
+            }
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'url': 'https://storage.example.com/signed-$currentRequest',
+                },
+              ),
+            );
+          },
+        ),
+      );
+
+    final cachedFile = MemoryFileSystem().file('/photo.jpg');
+    await cachedFile.writeAsString('photo');
+    final cacheManager = _FakeCacheManager(cachedFile);
+    final service = DefaultAppAttachmentService(
+      cacheManager: cacheManager,
+      apiDio: apiDio,
+    );
+
+    const attachment = MessageAttachment(
+      id: 'asset-1',
+      kind: 'chat_attachment',
+      status: 'ready',
+      url: '${BackendConfig.apiBaseUrl}/media/asset-1',
+      downloadUrlPath: '/media/asset-1/download-url',
+      mimeType: 'image/jpeg',
+      byteSize: 1024,
+      fileName: 'photo.jpg',
+    );
+
+    final first = service.getDownloadUrl(attachment);
+    await firstRequestReady.future;
+
+    await service.clearPrivateCache();
+    releaseFirstResponse.complete();
+
+    expect(await first, 'https://storage.example.com/signed-1');
+    expect(cacheManager.emptyCacheCalls, 1);
+    expect(requestCount, 1);
     expect(
       await service.getDownloadUrl(attachment),
       'https://storage.example.com/signed-2',

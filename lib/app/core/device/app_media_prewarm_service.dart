@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
+import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart'
+    as external_images;
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,17 +14,22 @@ final appMediaPrewarmServiceProvider = Provider<AppMediaPrewarmService>(
 class AppMediaPrewarmService {
   AppMediaPrewarmService({
     CacheManager? profileImageCacheManager,
-  }) : _profileImageCacheManager =
-            profileImageCacheManager ?? DefaultCacheManager();
+    CacheManager? externalEventImageCacheManager,
+  })  : _profileImageCacheManager =
+            profileImageCacheManager ?? DefaultCacheManager(),
+        _externalEventImageCacheManager = externalEventImageCacheManager ??
+            external_images.externalEventImageCacheManager;
 
   static const _maxRememberedKeys = 512;
+  static const _maxConcurrentWarmups = 3;
 
   final CacheManager _profileImageCacheManager;
+  final CacheManager _externalEventImageCacheManager;
   final Set<String> _rememberedKeys = <String>{};
 
   Future<void> warmExternalEventImages(
     Iterable<String?> urls, {
-    required BbExternalEventImageUsage usage,
+    required external_images.BbExternalEventImageUsage usage,
     int limit = 6,
     int concurrency = 2,
   }) {
@@ -35,8 +41,11 @@ class AppMediaPrewarmService {
         .map(
           (url) => _MediaPrewarmTarget(
             url: url,
-            cacheKey: BbExternalEventImage.cacheKeyFor(url, usage),
-            cacheManager: externalEventImageCacheManager,
+            cacheKey: external_images.BbExternalEventImage.cacheKeyFor(
+              url,
+              usage,
+            ),
+            cacheManager: _externalEventImageCacheManager,
           ),
         )
         .toList(growable: false);
@@ -77,7 +86,11 @@ class AppMediaPrewarmService {
     }
 
     var next = 0;
-    final workerCount = math.min(math.max(1, concurrency), pending.length);
+    final requestedWorkers = math.min(
+      math.max(1, concurrency),
+      _maxConcurrentWarmups,
+    );
+    final workerCount = math.min(requestedWorkers, pending.length);
     await Future.wait(
       List.generate(workerCount, (_) async {
         while (next < pending.length) {

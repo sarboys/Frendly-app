@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 class BackendConfig {
   const BackendConfig._();
 
@@ -24,6 +26,11 @@ class BackendConfig {
   static const enableTestPhoneShortcuts = bool.fromEnvironment(
     'BIG_BREAK_ENABLE_TEST_PHONE_SHORTCUTS',
     defaultValue: false,
+  );
+
+  static const localFirstCacheEnabled = bool.fromEnvironment(
+    'BIG_BREAK_LOCAL_FIRST_CACHE',
+    defaultValue: !kReleaseMode,
   );
 
   static const googleClientId = String.fromEnvironment(

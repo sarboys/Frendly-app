@@ -2,6 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:big_break_mobile/app/core/config/backend_config.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_local_cache_store.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_local_database.dart';
+import 'package:big_break_mobile/app/core/local_cache/chat_local_store.dart';
+import 'package:big_break_mobile/app/core/local_cache/local_cache_metrics.dart';
+import 'package:big_break_mobile/app/core/local_cache/local_first_repository.dart';
 import 'package:big_break_mobile/app/core/network/api_client.dart';
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
@@ -33,6 +39,94 @@ final currentUserIdProvider = StateProvider<String?>((ref) => null);
 final authBootstrapProfileProvider = StateProvider<ProfileData?>((ref) => null);
 
 final sharedPreferencesProvider = Provider<SharedPreferences?>((ref) => null);
+
+final localFirstCacheEnabledProvider = Provider<bool>((ref) {
+  return BackendConfig.localFirstCacheEnabled;
+});
+
+final appLocalCacheRuntimeDisabledProvider = StateProvider<bool>((ref) {
+  return false;
+});
+
+AppLocalDatabase _createAppLocalDatabase() => AppLocalDatabase();
+
+final appLocalDatabaseFactoryProvider =
+    Provider<AppLocalDatabase Function()>((ref) {
+  return _createAppLocalDatabase;
+});
+
+final appLocalDatabaseProvider = Provider<AppLocalDatabase?>((ref) {
+  final enabled = ref.watch(localFirstCacheEnabledProvider);
+  final runtimeDisabled = ref.watch(appLocalCacheRuntimeDisabledProvider);
+  if (!enabled || runtimeDisabled) {
+    return null;
+  }
+
+  final factory = ref.watch(appLocalDatabaseFactoryProvider);
+  if (identical(factory, _createAppLocalDatabase) &&
+      _isDefaultDatabaseUnavailableInDebugTest()) {
+    return null;
+  }
+
+  AppLocalDatabase database;
+  try {
+    database = factory();
+  } catch (_) {
+    Future<void>.microtask(() {
+      ref.read(appLocalCacheRuntimeDisabledProvider.notifier).state = true;
+    });
+    return null;
+  }
+
+  ref.onDispose(() {
+    unawaited(database.close());
+  });
+  return database;
+});
+
+bool _isDefaultDatabaseUnavailableInDebugTest() {
+  if (!kDebugMode) {
+    return false;
+  }
+  final bindingType = BindingBase.debugBindingType()?.toString();
+  return bindingType == null || bindingType.contains('TestWidgets');
+}
+
+final localCacheMetricsProvider = Provider<LocalCacheMetrics>((ref) {
+  return LocalCacheMetrics();
+});
+
+final appLocalCacheStoreProvider = Provider<AppLocalCacheStore?>((ref) {
+  final database = ref.watch(appLocalDatabaseProvider);
+  if (database == null) {
+    return null;
+  }
+  return AppLocalCacheStore(
+    database,
+    metrics: ref.watch(localCacheMetricsProvider),
+  );
+});
+
+final localFirstRepositoryProvider = Provider<LocalFirstRepository?>((ref) {
+  final store = ref.watch(appLocalCacheStoreProvider);
+  if (store == null) {
+    return null;
+  }
+  return LocalFirstRepository(store);
+});
+
+final chatLocalStoreProvider = Provider<ChatLocalStore?>((ref) {
+  final database = ref.watch(appLocalDatabaseProvider);
+  if (database == null) {
+    return null;
+  }
+  return ChatLocalStore(database);
+});
+
+final appCacheUserScopeProvider = Provider<AppCacheUserScope>((ref) {
+  final userId = ref.watch(currentUserIdProvider);
+  return AppCacheUserScope.fromUserId(userId);
+});
 
 abstract class AuthTokenStorage {
   Future<String?> read();
@@ -120,14 +214,26 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 final chatSocketClientProvider = Provider<ChatSocketClient>((ref) {
   final controller = ref.read(authTokensProvider.notifier);
   final preferences = ref.read(sharedPreferencesProvider);
+  final userId = ref.watch(currentUserIdProvider);
+  ChatOutboxStorage? outboxStorage = preferences == null
+      ? null
+      : SharedPreferencesChatOutboxStorage(preferences);
+  if (userId != null) {
+    final database = ref.watch(appLocalDatabaseProvider);
+    if (database != null) {
+      outboxStorage = DriftChatOutboxStorage(
+        database,
+        userScope: AppCacheUserScope.user(userId),
+        legacyStorage: outboxStorage,
+      );
+    }
+  }
   final client = ChatSocketClient(
     accessTokenProvider: controller.requireAccessToken,
     refreshSession: () async {
       await controller.refreshTokens();
     },
-    outboxStorage: preferences == null
-        ? null
-        : SharedPreferencesChatOutboxStorage(preferences),
+    outboxStorage: outboxStorage,
   );
   ref.onDispose(() {
     client.dispose();

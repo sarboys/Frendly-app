@@ -59,6 +59,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
   final Set<String> _handledProfileIds = <String>{};
   final Map<String, String> _matchedChatIds = <String, String>{};
   final Set<String> _savedProfileIds = <String>{};
+  List<DatingProfileData> _lastDiscoverProfiles = const [];
   final Set<String> _filterInterests = <String>{};
   String _filterArea = 'Все';
   String _filterTime = 'Сегодня вечером';
@@ -79,7 +80,11 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         ? ref.watch(datingLikesProvider)
         : null;
     final likes = likesAsync?.valueOrNull ?? const <DatingProfileData>[];
-    final discover = discoverAsync.valueOrNull ?? const <DatingProfileData>[];
+    final loadedDiscover = discoverAsync.valueOrNull;
+    if (loadedDiscover != null) {
+      _lastDiscoverProfiles = loadedDiscover;
+    }
+    final discover = loadedDiscover ?? _lastDiscoverProfiles;
     final filteredDiscover = _filterProfiles(discover);
     final current = _currentProfile(filteredDiscover);
     if (_tab == 'discover' && filteredDiscover.isNotEmpty) {
@@ -87,7 +92,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         ref.read(appMediaPrewarmServiceProvider).warmProfileImages(
               _prewarmPhotoUrls(filteredDiscover),
               usageProfile: BbImageUsageProfile.hero,
-              limit: 6,
+              limit: 3,
               concurrency: 2,
             ),
       );
@@ -170,6 +175,17 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
     AsyncValue<List<DatingProfileData>> discoverAsync,
     List<DatingProfileData> visibleProfiles,
   ) {
+    if (visibleProfiles.isNotEmpty && current != null) {
+      return _buildDiscoverList(context, current, visibleProfiles);
+    }
+    if (visibleProfiles.isNotEmpty && current == null) {
+      return const _DatingEmptyState(
+        icon: LucideIcons.sparkles,
+        title: 'Пока нет новых профилей',
+        subtitle: 'Загляни позже, когда рядом появятся новые анкеты',
+      );
+    }
+
     return discoverAsync.when(
       data: (profiles) {
         if (profiles.isEmpty) {
@@ -188,67 +204,10 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
           );
         }
 
-        final currentIndex = visibleProfiles.indexWhere(
-              (profile) => profile.userId == current.userId,
-            ) +
-            1;
-
-        return ListView(
-          padding: EdgeInsets.fromLTRB(
-            0,
-            0,
-            0,
-            _datingBottomScrollPadding(context, base: 156),
-          ),
-          children: [
-            _SwipeableDatingCard(
-              key: const ValueKey('dating-discover-card'),
-              enabled: !_submitting,
-              onSwipe: (direction) => _handleAction(
-                context,
-                current,
-                action:
-                    direction == DatingSwipeDirection.like ? 'like' : 'pass',
-              ),
-              child: _DatingProfileCard(
-                profile: current,
-                saved: _savedProfileIds.contains(current.userId),
-                photoIndex: _photoIndexFor(current),
-                actionsEnabled: !_submitting,
-                onPreviousPhoto:
-                    _submitting ? null : () => _showPreviousPhoto(current),
-                onNextPhoto: _submitting ? null : () => _showNextPhoto(current),
-                onSaveToggle: () {
-                  setState(() {
-                    if (_savedProfileIds.contains(current.userId)) {
-                      _savedProfileIds.remove(current.userId);
-                    } else {
-                      _savedProfileIds.add(current.userId);
-                    }
-                  });
-                },
-                onSkip: () => _handleAction(context, current, action: 'pass'),
-                onSuper: () => _handleAction(
-                  context,
-                  current,
-                  action: 'super_like',
-                ),
-                onLike: () => _handleAction(context, current, action: 'like'),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              '${currentIndex.toString().padLeft(2, '0')} / '
-              '${visibleProfiles.length.toString().padLeft(2, '0')}',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.caption.copyWith(
-                color: BbV5Colors.inkMute,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.68,
-              ),
-            ),
-          ],
+        return const _DatingEmptyState(
+          icon: LucideIcons.sparkles,
+          title: 'Пока нет новых профилей',
+          subtitle: 'Загляни позже, когда рядом появятся новые анкеты',
         );
       },
       loading: () => const _DatingLoadingState(),
@@ -257,6 +216,75 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         title: 'Не получилось загрузить анкеты',
         subtitle: 'Проверь соединение и попробуй обновить экран',
       ),
+    );
+  }
+
+  Widget _buildDiscoverList(
+    BuildContext context,
+    DatingProfileData current,
+    List<DatingProfileData> visibleProfiles,
+  ) {
+    final currentIndex = visibleProfiles.indexWhere(
+          (profile) => profile.userId == current.userId,
+        ) +
+        1;
+
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+        0,
+        0,
+        0,
+        _datingBottomScrollPadding(context, base: 156),
+      ),
+      children: [
+        _SwipeableDatingCard(
+          key: const ValueKey('dating-discover-card'),
+          enabled: !_submitting,
+          onSwipe: (direction) => _handleAction(
+            context,
+            current,
+            action: direction == DatingSwipeDirection.like ? 'like' : 'pass',
+          ),
+          child: _DatingProfileCard(
+            key: ValueKey('dating-profile-card-${current.userId}'),
+            profile: current,
+            saved: _savedProfileIds.contains(current.userId),
+            photoIndex: _photoIndexFor(current),
+            actionsEnabled: !_submitting,
+            onPreviousPhoto:
+                _submitting ? null : () => _showPreviousPhoto(current),
+            onNextPhoto: _submitting ? null : () => _showNextPhoto(current),
+            onSaveToggle: () {
+              setState(() {
+                if (_savedProfileIds.contains(current.userId)) {
+                  _savedProfileIds.remove(current.userId);
+                } else {
+                  _savedProfileIds.add(current.userId);
+                }
+              });
+            },
+            onSkip: () => _handleAction(context, current, action: 'pass'),
+            onSuper: () => _handleAction(
+              context,
+              current,
+              action: 'super_like',
+            ),
+            onLike: () => _handleAction(context, current, action: 'like'),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          '${currentIndex.toString().padLeft(2, '0')} / '
+          '${visibleProfiles.length.toString().padLeft(2, '0')}',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.caption.copyWith(
+            color: BbV5Colors.inkMute,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.68,
+          ),
+        ),
+      ],
     );
   }
 
@@ -433,7 +461,9 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
     final container = ProviderScope.containerOf(context, listen: false);
     final targetUserId = profile.userId;
     final previousPhotoIndex = _photoIndexes[targetUserId];
+    final previousTombstones = ref.read(datingActionTombstonesProvider);
     final shouldAdvanceOptimistically = !fromLikes;
+    final tombstoneAction = action == 'pass' ? 'skip' : action;
     setState(() {
       _submitting = true;
       if (shouldAdvanceOptimistically) {
@@ -441,6 +471,10 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         _photoIndexes.remove(targetUserId);
       }
     });
+    ref.read(datingActionTombstonesProvider.notifier).state = {
+      ...previousTombstones,
+      targetUserId: tombstoneAction,
+    };
 
     try {
       final result = await repository.sendDatingAction(
@@ -459,6 +493,12 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
           _matchedChatIds[targetUserId] = matchedChatId;
         }
       });
+      if (isMatched) {
+        ref.read(datingActionTombstonesProvider.notifier).state = {
+          ...ref.read(datingActionTombstonesProvider),
+          targetUserId: 'match_open',
+        };
+      }
 
       container.invalidate(datingDiscoverProvider);
       if (isMatched) {
@@ -486,6 +526,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         targetUserId,
         shouldAdvanceOptimistically,
         previousPhotoIndex,
+        previousTombstones,
       );
       if (!context.mounted) {
         return;
@@ -502,6 +543,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         targetUserId,
         shouldAdvanceOptimistically,
         previousPhotoIndex,
+        previousTombstones,
       );
       if (!context.mounted) {
         return;
@@ -522,7 +564,10 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
     String targetUserId,
     bool shouldRollback,
     int? previousPhotoIndex,
+    Map<String, String> previousTombstones,
   ) {
+    ref.read(datingActionTombstonesProvider.notifier).state =
+        previousTombstones;
     if (!shouldRollback || !mounted) {
       return;
     }
@@ -813,7 +858,8 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
       if (_handledProfileIds.contains(profile.userId)) {
         continue;
       }
-      for (final photo in _photosFor(profile).take(2)) {
+      final photo = _photosFor(profile).firstOrNull;
+      if (photo != null) {
         yield photo.bestUrlFor(BbImageUsageProfile.hero);
       }
       emittedProfiles += 1;
@@ -1327,6 +1373,7 @@ class _DatingProfileCard extends StatelessWidget {
     required this.onSkip,
     required this.onSuper,
     required this.onLike,
+    super.key,
   });
 
   final DatingProfileData profile;

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_providers.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_screen.dart';
@@ -9,6 +12,7 @@ import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/event_detail.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:big_break_mobile/shared/models/personal_chat.dart';
+import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -81,6 +85,43 @@ Finder _verticalScrollable() {
             widget is ListView && widget.scrollDirection == Axis.vertical,
       )
       .first;
+}
+
+final _chatRefreshVersionProvider = StateProvider<int>((ref) => 0);
+
+class _ProfilePrewarmCall {
+  const _ProfilePrewarmCall({
+    required this.urls,
+    required this.usageProfile,
+    required this.limit,
+    required this.concurrency,
+  });
+
+  final List<String?> urls;
+  final BbImageUsageProfile usageProfile;
+  final int limit;
+  final int concurrency;
+}
+
+class _RecordingMediaPrewarmService extends AppMediaPrewarmService {
+  final profileCalls = <_ProfilePrewarmCall>[];
+
+  @override
+  Future<void> warmProfileImages(
+    Iterable<String?> urls, {
+    required BbImageUsageProfile usageProfile,
+    int limit = 4,
+    int concurrency = 2,
+  }) async {
+    profileCalls.add(
+      _ProfilePrewarmCall(
+        urls: urls.toList(growable: false),
+        usageProfile: usageProfile,
+        limit: limit,
+        concurrency: concurrency,
+      ),
+    );
+  }
 }
 
 Future<void> _scrollUntilVisible(
@@ -298,6 +339,83 @@ void main() {
     );
   });
 
+  testWidgets('all chats keep current rows during provider refresh',
+      (tester) async {
+    final pendingRefresh = Completer<List<MeetupChat>>();
+
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        child: const ChatsScreen(),
+        targetText: 'unused',
+        extraOverrides: [
+          meetupChatsProvider.overrideWith((ref) {
+            final version = ref.watch(_chatRefreshVersionProvider);
+            if (version == 0) {
+              return Future.value(
+                const [
+                  MeetupChat(
+                    id: 'mc-refresh',
+                    eventId: 'event-refresh',
+                    title: 'Brix · вино после работы',
+                    emoji: '🍷',
+                    time: '19:00',
+                    lastMessage: 'Мы уже в баре',
+                    lastAuthor: 'Аня',
+                    lastTime: 'сейчас',
+                    unread: 2,
+                    members: ['Ты', 'Аня'],
+                    phase: MeetupPhase.live,
+                  ),
+                ],
+              );
+            }
+            return pendingRefresh.future;
+          }),
+          personalChatsProvider.overrideWith((ref) async => const []),
+          communitiesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _scrollUntilVisible(
+      tester,
+      find.text('Brix · вино после работы'),
+    );
+
+    final context = tester.element(find.byType(ChatsScreen));
+    ProviderScope.containerOf(context, listen: false)
+        .read(_chatRefreshVersionProvider.notifier)
+        .state = 1;
+    await tester.pump();
+
+    expect(find.text('Brix · вино после работы'), findsOneWidget);
+    expect(find.text('Загружаем чаты'), findsNothing);
+    expect(
+        find.byKey(const ValueKey('chat-dismiss-mc-refresh')), findsOneWidget);
+
+    pendingRefresh.complete(
+      const [
+        MeetupChat(
+          id: 'mc-refresh',
+          eventId: 'event-refresh',
+          title: 'Brix · обновили встречу',
+          emoji: '🍷',
+          time: '19:00',
+          lastMessage: 'Мы уже в баре',
+          lastAuthor: 'Аня',
+          lastTime: 'сейчас',
+          unread: 1,
+          members: ['Ты', 'Аня'],
+          phase: MeetupPhase.live,
+        ),
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Brix · обновили встречу'), findsOneWidget);
+  });
+
   testWidgets('all chats include joined community chats', (tester) async {
     await tester.pumpWidget(
       _wrapWithRouter(
@@ -486,6 +604,52 @@ void main() {
     expect(personalCalls, 1);
     expect(meetupCalls, 0);
     expect(communityCalls, 0);
+  });
+
+  testWidgets('chats prewarms only first ten personal avatars', (
+    tester,
+  ) async {
+    final prewarm = _RecordingMediaPrewarmService();
+
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        child: const ChatsScreen(),
+        targetText: 'unused',
+        extraOverrides: [
+          appMediaPrewarmServiceProvider.overrideWithValue(prewarm),
+          chatSegmentProvider.overrideWith((ref) => ChatSegment.personal),
+          meetupChatsProvider.overrideWith((ref) async => const []),
+          personalChatsProvider.overrideWith(
+            (ref) async => List<PersonalChat>.generate(
+              12,
+              (index) => PersonalChat(
+                id: 'pc-$index',
+                name: 'Чат $index',
+                lastMessage: 'Сообщение',
+                lastTime: 'сейчас',
+                unread: 0,
+                online: true,
+                avatarUrl: 'https://cdn.example.com/avatar-$index.jpg',
+              ),
+            ),
+          ),
+          communitiesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final call = prewarm.profileCalls.last;
+    expect(call.usageProfile, BbImageUsageProfile.avatar);
+    expect(call.limit, 10);
+    expect(call.concurrency, 2);
+    expect(
+      call.urls,
+      List<String>.generate(
+        10,
+        (index) => 'https://cdn.example.com/avatar-$index.jpg',
+      ),
+    );
   });
 
   testWidgets('chats screen does not render removed ai dock', (tester) async {

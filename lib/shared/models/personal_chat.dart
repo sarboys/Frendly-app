@@ -1,3 +1,5 @@
+import 'package:big_break_mobile/shared/models/backend_url.dart';
+
 class PersonalChat {
   const PersonalChat({
     required this.id,
@@ -8,12 +10,14 @@ class PersonalChat {
     required this.online,
     this.lastMessageId,
     this.peerUserId,
+    this.avatarUrl,
     this.fromMeetup,
     this.isPinned = false,
   });
 
   final String id;
   final String? peerUserId;
+  final String? avatarUrl;
   final String name;
   final String? lastMessageId;
   final String lastMessage;
@@ -27,6 +31,7 @@ class PersonalChat {
     return PersonalChat(
       id: json['id'] as String,
       peerUserId: json['peerUserId'] as String?,
+      avatarUrl: resolveBackendUrl(json['avatarUrl'] as String?),
       name: json['name'] as String? ?? '',
       lastMessageId: json['lastMessageId'] as String?,
       lastMessage: json['lastMessage'] as String? ?? '',
@@ -41,6 +46,7 @@ class PersonalChat {
   PersonalChat copyWith({
     String? id,
     String? peerUserId,
+    String? avatarUrl,
     String? name,
     String? lastMessageId,
     String? lastMessage,
@@ -53,6 +59,7 @@ class PersonalChat {
     return PersonalChat(
       id: id ?? this.id,
       peerUserId: peerUserId ?? this.peerUserId,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
       name: name ?? this.name,
       lastMessageId: lastMessageId ?? this.lastMessageId,
       lastMessage: lastMessage ?? this.lastMessage,

@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
+import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_shadows.dart';
@@ -19,6 +20,7 @@ import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:big_break_mobile/shared/models/personal_chat.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
+import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_promo.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
@@ -77,6 +79,17 @@ class ChatsScreen extends ConsumerWidget {
       localPersonalChats ?? personalChatsAsync.valueOrNull ?? const [],
       knownPersonalChats.values,
     );
+    final personalAvatarUrls = _personalChatAvatarUrls(personalChats);
+    if (personalAvatarUrls.isNotEmpty) {
+      unawaited(
+        ref.read(appMediaPrewarmServiceProvider).warmProfileImages(
+              personalAvatarUrls,
+              usageProfile: BbImageUsageProfile.avatar,
+              limit: 10,
+              concurrency: 2,
+            ),
+      );
+    }
     final localCommunityChats = ref.watch(communityChatsLocalStateProvider);
     final communityChats = (localCommunityChats ??
             communitiesAsync.valueOrNull ??
@@ -86,6 +99,14 @@ class ChatsScreen extends ConsumerWidget {
     final allChatListHasRows = meetupChats.isNotEmpty ||
         personalChats.isNotEmpty ||
         communityChats.isNotEmpty;
+    final allChatListLoading =
+        (meetupChatsAsync.isLoading && meetupChats.isEmpty) ||
+            (personalChatsAsync.isLoading && personalChats.isEmpty) ||
+            (communitiesAsync.isLoading && !allChatListHasRows);
+    final allChatListError =
+        (meetupChatsAsync.hasError && meetupChats.isEmpty) ||
+            (personalChatsAsync.hasError && personalChats.isEmpty) ||
+            (communitiesAsync.hasError && !allChatListHasRows);
     final liveChats = meetupChats
         .where((chat) => chat.phase == MeetupPhase.live)
         .toList(growable: false);
@@ -112,6 +133,7 @@ class ChatsScreen extends ConsumerWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
             child: ListView(
+              key: const PageStorageKey<String>('chats-v5-scroll'),
               padding: const EdgeInsets.fromLTRB(20, 40, 20, 140),
               children: [
                 InkWell(
@@ -153,12 +175,8 @@ class ChatsScreen extends ConsumerWidget {
                     personalChats: personalChats,
                     communityChats: communityChats,
                     promotedIds: promotedIds,
-                    loading: meetupChatsAsync.isLoading ||
-                        personalChatsAsync.isLoading ||
-                        (communitiesAsync.isLoading && !allChatListHasRows),
-                    error: meetupChatsAsync.hasError ||
-                        personalChatsAsync.hasError ||
-                        (communitiesAsync.hasError && !allChatListHasRows),
+                    loading: allChatListLoading,
+                    error: allChatListError,
                     onMeetupOpen: (chat) => _openMeetupChat(context, chat),
                     onMeetupPinToggle: (chat) {
                       unawaited(_toggleMeetupChatPinned(ref, chat));
@@ -1254,6 +1272,21 @@ String _meetupKind(MeetupChat chat) {
     return 'маршрут';
   }
   return 'встреча';
+}
+
+List<String> _personalChatAvatarUrls(List<PersonalChat> chats) {
+  final urls = <String>[];
+  for (final chat in chats) {
+    final url = chat.avatarUrl?.trim();
+    if (url == null || url.isEmpty) {
+      continue;
+    }
+    urls.add(url);
+    if (urls.length >= 10) {
+      break;
+    }
+  }
+  return urls;
 }
 
 int? _meetupMembersCount(MeetupChat chat) {

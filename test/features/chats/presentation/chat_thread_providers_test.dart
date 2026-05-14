@@ -3,6 +3,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:big_break_mobile/app/core/device/app_attachment_service.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_local_database.dart';
+import 'package:big_break_mobile/app/core/local_cache/chat_local_store.dart';
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_providers.dart';
@@ -15,6 +18,7 @@ import 'package:big_break_mobile/shared/models/message.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
 import 'package:big_break_mobile/shared/models/recorded_voice_draft.dart';
 import 'package:dio/dio.dart';
+import 'package:drift/native.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1409,6 +1413,108 @@ void main() {
     );
   });
 
+  test(
+      'chat thread renders local messages before network and syncs from cursor',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = ChatLocalStore(db);
+    await store.upsertMessages(
+      userScope: AppCacheUserScope.user('user-me'),
+      chatId: 'mc1',
+      messagesJson: [
+        {
+          'id': 'cached-1',
+          'chatId': 'mc1',
+          'clientMessageId': 'cached-client-1',
+          'senderId': 'user-anya',
+          'senderName': 'Аня',
+          'text': 'cached hello',
+          'createdAt': '2026-05-14T10:00:00.000Z',
+          'attachments': [],
+        },
+      ],
+    );
+    await store.setSyncCursor(
+      userScope: AppCacheUserScope.user('user-me'),
+      chatId: 'mc1',
+      cursor: 'event-cached',
+    );
+
+    final socket = _ControllableChatSocketClient();
+    final completer = Completer<PaginatedResponse<Message>>();
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        chatLocalStoreProvider.overrideWithValue(store),
+        backendRepositoryProvider.overrideWith(
+          (ref) => _DelayedChatThreadRepository(
+            ref: ref,
+            dio: Dio(),
+            completer: completer,
+          ),
+        ),
+        appAttachmentServiceProvider
+            .overrideWith((ref) => _FakeAttachmentService()),
+        chatSocketClientProvider.overrideWith((ref) => socket),
+      ],
+    );
+    addTearDown(() async {
+      await socket.dispose();
+      container.dispose();
+    });
+
+    final subscription = container.listen(
+      chatThreadProvider('mc1'),
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(subscription.close);
+
+    await _drainMicrotasks();
+
+    expect(
+      container.read(chatThreadProvider('mc1')).valueOrNull?.single.text,
+      'cached hello',
+    );
+
+    completer.complete(
+      PaginatedResponse<Message>(
+        items: [
+          Message(
+            id: 'server-1',
+            chatId: 'mc1',
+            clientMessageId: 'server-client-1',
+            authorId: 'user-me',
+            author: 'Ты',
+            text: 'network hello',
+            time: '10:01',
+            createdAt: DateTime.utc(2026, 5, 14, 10, 1),
+            mine: true,
+            attachments: const [],
+          ),
+        ],
+        nextCursor: null,
+        lastEventId: 'event-network',
+      ),
+    );
+    await _waitFor(
+      () =>
+          container.read(chatThreadProvider('mc1')).valueOrNull?.single.text ==
+          'network hello',
+    );
+
+    expect(socket.lastRequestedSyncCursor, 'event-cached');
+    expect(
+      await store.readSyncCursor(
+        userScope: AppCacheUserScope.user('user-me'),
+        chatId: 'mc1',
+      ),
+      'event-network',
+    );
+  });
+
   test('chat thread cancels initial message fetch when disposed', () async {
     final socket = _ControllableChatSocketClient();
     final completer = Completer<PaginatedResponse<Message>>();
@@ -1752,6 +1858,21 @@ void main() {
 
     expect(container.read(chatThreadProvider('mc1')).valueOrNull, isEmpty);
   });
+}
+
+Future<void> _drainMicrotasks() async {
+  await Future<void>.delayed(Duration.zero);
+  await Future<void>.delayed(Duration.zero);
+}
+
+Future<void> _waitFor(bool Function() condition) async {
+  for (var attempt = 0; attempt < 100; attempt++) {
+    if (condition()) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  throw StateError('Condition was not met in time');
 }
 
 const _pngBytes = <int>[

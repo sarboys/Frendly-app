@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:big_break_mobile/app/core/device/app_attachment_service.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
+import 'package:big_break_mobile/app/core/local_cache/chat_cache_serializers.dart';
+import 'package:big_break_mobile/app/core/local_cache/chat_local_store.dart';
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_providers.dart';
@@ -44,11 +47,40 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
 
   Future<void> _init() async {
     PaginatedResponse<Message>? result;
+    String? storedSyncCursor;
+    var renderedLocalMessages = false;
     final authBootstrap = ref.read(authBootstrapProvider.future);
     try {
       await authBootstrap;
       if (!mounted) {
         return;
+      }
+      final localStore = ref.read(chatLocalStoreProvider);
+      final userScope = ref.read(appCacheUserScopeProvider);
+      final currentUserId = ref.read(currentUserIdProvider) ?? 'user-me';
+      if (localStore != null) {
+        final localSnapshot = await _readLocalSnapshot(
+          localStore,
+          userScope: userScope,
+        );
+        storedSyncCursor = localSnapshot.syncCursor;
+        final cachedMessages = localSnapshot.messagesJson;
+        if (!mounted) {
+          return;
+        }
+        if (cachedMessages.isNotEmpty) {
+          final messages = cachedMessages
+              .map(
+                (json) => messageFromCacheJson(
+                  json,
+                  currentUserId: currentUserId,
+                ),
+              )
+              .toList(growable: false);
+          renderedLocalMessages = true;
+          state = AsyncValue.data(_decorateMessages(messages));
+          _warmRecentAttachments(messages);
+        }
       }
       try {
         result = await _fetchMessages(limit: 20);
@@ -57,13 +89,20 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         }
         _olderMessagesCursor = result.nextCursor;
         state = AsyncValue.data(_decorateMessages(result.items));
+        await _replaceLocalMessages(result.items);
+        final lastEventId = result.lastEventId;
+        if (lastEventId != null) {
+          await _rememberLocalSyncCursor(lastEventId);
+        }
         _warmRecentAttachments(result.items);
         _scheduleMarkRead();
       } catch (_) {
         if (!mounted) {
           return;
         }
-        state = const AsyncValue.data(<Message>[]);
+        if (!renderedLocalMessages) {
+          state = const AsyncValue.data(<Message>[]);
+        }
       }
 
       final socket = ref.read(chatSocketClientProvider);
@@ -77,7 +116,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         socket.subscribe(chatId);
         socket.requestSync(
           chatId: chatId,
-          sinceEventId: result?.lastEventId,
+          sinceEventId: storedSyncCursor ?? result?.lastEventId,
         );
       } catch (_) {}
     } catch (error, stackTrace) {
@@ -174,6 +213,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         merged = _mergeMessageIntoSortedList(merged, message).messages;
       }
       state = AsyncValue.data(_decorateSortedMessages(merged));
+      await _persistCurrentMessages();
       _warmRecentAttachments(result.items);
     } catch (_) {
       if (!mounted) {
@@ -504,6 +544,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
               chatId: chatId,
               eventId: eventId,
             );
+        unawaited(_rememberLocalSyncCursor(eventId));
       }
       final currentUserId = ref.read(currentUserIdProvider) ?? 'user-me';
       final nextMessage =
@@ -524,6 +565,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
               chatId: chatId,
               eventId: eventId,
             );
+        unawaited(_rememberLocalSyncCursor(eventId));
       }
       final currentUserId = ref.read(currentUserIdProvider) ?? 'user-me';
       final nextMessage =
@@ -546,6 +588,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
               chatId: chatId,
               eventId: eventId,
             );
+        unawaited(_rememberLocalSyncCursor(eventId));
       }
       final messageId =
           payload['messageId'] as String? ?? payload['id'] as String?;
@@ -577,6 +620,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
           chatId: chatId,
           eventId: lastEventId,
         );
+        unawaited(_rememberLocalSyncCursor(lastEventId));
       }
 
       if (payload['hasMore'] == true && lastEventId != null) {
@@ -623,6 +667,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         return;
       }
       state = AsyncValue.data(_decorateSortedMessages(merged));
+      unawaited(_persistCurrentMessages());
       _warmRecentAttachments(synced);
       _scheduleMarkRead();
     }
@@ -637,6 +682,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
 
     state = AsyncValue.data(_decorateMessages(result.items));
     _olderMessagesCursor = result.nextCursor;
+    await _replaceLocalMessages(result.items);
     _warmRecentAttachments(result.items);
 
     final lastEventId = result.lastEventId;
@@ -645,6 +691,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         chatId: chatId,
         eventId: lastEventId,
       );
+      await _rememberLocalSyncCursor(lastEventId);
       socket.requestSync(
         chatId: chatId,
         sinceEventId: lastEventId,
@@ -841,6 +888,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
     state = AsyncValue.data(
       _decorateMessagesAround(result.messages, result.changedIndices),
     );
+    unawaited(_persistCurrentMessages());
   }
 
   _MessageMergeResult _mergeMessageIntoSortedList(
@@ -889,6 +937,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
 
     final next = [...current]..removeAt(removedIndex);
     state = AsyncValue.data(_decorateMessagesAround(next, [removedIndex]));
+    unawaited(_persistCurrentMessages());
   }
 
   void _removeMessageById(String messageId) {
@@ -904,6 +953,82 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
 
     final next = _removeMessageFromList(current, messageId);
     state = AsyncValue.data(_decorateMessagesAround(next, [removedIndex]));
+    unawaited(_persistCurrentMessages());
+  }
+
+  Future<void> _replaceLocalMessages(List<Message> messages) async {
+    final localStore = ref.read(chatLocalStoreProvider);
+    if (localStore == null) {
+      return;
+    }
+    try {
+      await localStore.replaceRecentMessages(
+        userScope: ref.read(appCacheUserScopeProvider),
+        chatId: chatId,
+        messagesJson: messages.map(messageToCacheJson).toList(growable: false),
+      );
+    } catch (_) {
+      _disableLocalCacheAfterFailure();
+    }
+  }
+
+  Future<void> _persistCurrentMessages() async {
+    final messages = state.valueOrNull;
+    if (messages == null) {
+      return;
+    }
+    await _replaceLocalMessages(messages);
+  }
+
+  Future<void> _rememberLocalSyncCursor(String? eventId) async {
+    final localStore = ref.read(chatLocalStoreProvider);
+    if (localStore == null) {
+      return;
+    }
+    try {
+      await localStore.setSyncCursor(
+        userScope: ref.read(appCacheUserScopeProvider),
+        chatId: chatId,
+        cursor: eventId,
+      );
+    } catch (_) {
+      _disableLocalCacheAfterFailure();
+    }
+  }
+
+  Future<({String? syncCursor, List<Map<String, dynamic>> messagesJson})>
+      _readLocalSnapshot(
+    ChatLocalStore localStore, {
+    required AppCacheUserScope userScope,
+  }) async {
+    try {
+      final syncCursor = await localStore.readSyncCursor(
+        userScope: userScope,
+        chatId: chatId,
+      );
+      final messagesJson = await localStore.readRecentMessages(
+        userScope: userScope,
+        chatId: chatId,
+      );
+      return (syncCursor: syncCursor, messagesJson: messagesJson);
+    } catch (_) {
+      _disableLocalCacheAfterFailure();
+      return (
+        syncCursor: null,
+        messagesJson: const <Map<String, dynamic>>[],
+      );
+    }
+  }
+
+  void _disableLocalCacheAfterFailure() {
+    Future<void>.microtask(() {
+      if (!mounted) {
+        return;
+      }
+      try {
+        ref.read(appLocalCacheRuntimeDisabledProvider.notifier).state = true;
+      } catch (_) {}
+    });
   }
 
   List<Message> _removeMessageFromList(List<Message> messages, String id) {

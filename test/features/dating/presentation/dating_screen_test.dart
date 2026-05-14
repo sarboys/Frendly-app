@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
@@ -8,6 +9,7 @@ import 'package:big_break_mobile/features/dating/presentation/dating_screen.dart
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/dating_profile.dart';
+import 'package:big_break_mobile/shared/models/media_variant.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/models/subscription.dart';
@@ -86,6 +88,41 @@ Widget _wrap({
   return MaterialApp.router(routerConfig: router);
 }
 
+class _ProfilePrewarmCall {
+  const _ProfilePrewarmCall({
+    required this.urls,
+    required this.usageProfile,
+    required this.limit,
+    required this.concurrency,
+  });
+
+  final List<String?> urls;
+  final BbImageUsageProfile usageProfile;
+  final int limit;
+  final int concurrency;
+}
+
+class _RecordingMediaPrewarmService extends AppMediaPrewarmService {
+  final profileCalls = <_ProfilePrewarmCall>[];
+
+  @override
+  Future<void> warmProfileImages(
+    Iterable<String?> urls, {
+    required BbImageUsageProfile usageProfile,
+    int limit = 4,
+    int concurrency = 2,
+  }) async {
+    profileCalls.add(
+      _ProfilePrewarmCall(
+        urls: urls.toList(growable: false),
+        usageProfile: usageProfile,
+        limit: limit,
+        concurrency: concurrency,
+      ),
+    );
+  }
+}
+
 void main() {
   test('dating screen uses shared profile photo image widget', () {
     final source = File(
@@ -94,6 +131,48 @@ void main() {
 
     expect(source, isNot(contains('CachedNetworkImage(')));
     expect(source, contains('BbProfilePhotoImage'));
+  });
+
+  testWidgets('dating prewarms only the next three card photos',
+      (tester) async {
+    final prewarm = _RecordingMediaPrewarmService();
+
+    await tester.pumpWidget(
+      _wrap(
+        overrides: [
+          appMediaPrewarmServiceProvider.overrideWithValue(prewarm),
+          subscriptionStateProvider.overrideWith(
+            (ref) async => SubscriptionStateData(
+              plan: 'year',
+              status: 'active',
+              startedAt: DateTime(2026, 4, 18),
+              renewsAt: DateTime(2027, 4, 18),
+              trialEndsAt: null,
+            ),
+          ),
+          datingDiscoverProvider.overrideWith(
+            (ref) async => [
+              _twoPhotoProfile('user-1', 'Аня', 25, 'a'),
+              _twoPhotoProfile('user-2', 'Боря', 26, 'b'),
+              _twoPhotoProfile('user-3', 'Вера', 27, 'v'),
+              _twoPhotoProfile('user-4', 'Гриша', 28, 'g'),
+            ],
+          ),
+          datingLikesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final call = prewarm.profileCalls.last;
+    expect(call.usageProfile, BbImageUsageProfile.hero);
+    expect(call.limit, 3);
+    expect(call.concurrency, 2);
+    expect(call.urls, [
+      'https://cdn.example.com/a-1-hero.jpg',
+      'https://cdn.example.com/b-1-hero.jpg',
+      'https://cdn.example.com/v-1-hero.jpg',
+    ]);
   });
 
   testWidgets('dating is available without Frendly+ subscription',
@@ -351,6 +430,10 @@ void main() {
     expect(find.text('Соня, 26'), findsOneWidget);
     expect(find.text('Дейтинг'), findsOneWidget);
     expect(find.text('Frendly+'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('dating-profile-card-user-sonya')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('dating discover card hides social follow row', (tester) async {
@@ -553,6 +636,59 @@ void main() {
     expect(repository.actionTargets, ['user-sonya']);
     expect(find.text('Лиза, 27'), findsOneWidget);
     expect(find.text('Соня, 26'), findsNothing);
+
+    action.complete(
+      const DatingActionResult(
+        ok: true,
+        action: 'like',
+        matched: false,
+        chatId: null,
+        peer: null,
+      ),
+    );
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('dating shows empty state after the last local action', (
+    tester,
+  ) async {
+    final action = Completer<DatingActionResult>();
+
+    await tester.pumpWidget(
+      _wrap(
+        overrides: [
+          backendRepositoryProvider.overrideWith(
+            (ref) => _PendingDatingRepository(
+              ref: ref,
+              dio: Dio(),
+              action: action.future,
+            ),
+          ),
+          subscriptionStateProvider.overrideWith(
+            (ref) async => SubscriptionStateData(
+              plan: 'year',
+              status: 'active',
+              startedAt: DateTime(2026, 4, 18),
+              renewsAt: DateTime(2027, 4, 18),
+              trialEndsAt: null,
+            ),
+          ),
+          datingDiscoverProvider.overrideWith(
+            (ref) async => const [_sonyaProfile],
+          ),
+          datingLikesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.bySemanticsLabel('Лайк'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Лайк'));
+    await tester.pump();
+
+    expect(find.text('Пока нет новых профилей'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
 
     action.complete(
       const DatingActionResult(
@@ -1100,6 +1236,53 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
   });
+}
+
+DatingProfileData _twoPhotoProfile(
+  String userId,
+  String name,
+  int age,
+  String prefix,
+) {
+  return DatingProfileData(
+    userId: userId,
+    name: name,
+    age: age,
+    distance: '1 км',
+    about: '',
+    tags: const ['кофе'],
+    prompt: '',
+    photoEmoji: '☕',
+    avatarUrl: null,
+    photos: [
+      ProfilePhoto(
+        id: '$prefix-1',
+        url: 'https://cdn.example.com/$prefix-1.jpg',
+        order: 0,
+        variants: {
+          'hero': MediaVariantData(
+            url: 'https://cdn.example.com/$prefix-1-hero.jpg',
+          ),
+        },
+      ),
+      ProfilePhoto(
+        id: '$prefix-2',
+        url: 'https://cdn.example.com/$prefix-2.jpg',
+        order: 1,
+        variants: {
+          'hero': MediaVariantData(
+            url: 'https://cdn.example.com/$prefix-2-hero.jpg',
+          ),
+        },
+      ),
+    ],
+    likedYou: false,
+    premium: true,
+    vibe: 'Спокойно',
+    area: 'Центр',
+    verified: true,
+    online: true,
+  );
 }
 
 const _sonyaProfile = DatingProfileData(

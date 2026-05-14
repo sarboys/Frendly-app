@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/features/affiche/presentation/affiche_events_screen.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
+import 'package:big_break_mobile/shared/models/media_variant.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
+import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +16,41 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../test_overrides.dart';
+
+class _ExternalPrewarmCall {
+  const _ExternalPrewarmCall({
+    required this.urls,
+    required this.usage,
+    required this.limit,
+    required this.concurrency,
+  });
+
+  final List<String?> urls;
+  final BbExternalEventImageUsage usage;
+  final int limit;
+  final int concurrency;
+}
+
+class _RecordingMediaPrewarmService extends AppMediaPrewarmService {
+  final externalCalls = <_ExternalPrewarmCall>[];
+
+  @override
+  Future<void> warmExternalEventImages(
+    Iterable<String?> urls, {
+    required BbExternalEventImageUsage usage,
+    int limit = 6,
+    int concurrency = 2,
+  }) async {
+    externalCalls.add(
+      _ExternalPrewarmCall(
+        urls: urls.toList(growable: false),
+        usage: usage,
+        limit: limit,
+        concurrency: concurrency,
+      ),
+    );
+  }
+}
 
 void main() {
   testWidgets('affiche screen builds a lazy page and loads the next page', (
@@ -50,6 +88,36 @@ void main() {
     expect(repository.calls.last.cursor, '18');
   });
 
+  testWidgets('affiche screen prewarms first eight card variants', (
+    tester,
+  ) async {
+    _setMobileViewport(tester);
+    final repository = _PagedAfficheRepositoryState(withImageVariants: true);
+    final prewarm = _RecordingMediaPrewarmService();
+
+    await tester.pumpWidget(
+      _afficheApp(
+        repository,
+        extraOverrides: [
+          appMediaPrewarmServiceProvider.overrideWithValue(prewarm),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final call = prewarm.externalCalls.last;
+    expect(call.usage, BbExternalEventImageUsage.card);
+    expect(call.limit, 8);
+    expect(call.concurrency, 2);
+    expect(
+      call.urls,
+      List<String>.generate(
+        8,
+        (index) => 'https://cdn.example.com/affiche-$index-card.jpg',
+      ),
+    );
+  });
+
   testWidgets('affiche screen keeps previous page during filter refresh', (
     tester,
   ) async {
@@ -76,6 +144,19 @@ void main() {
 
     expect(find.text('Платная афиша 0'), findsOneWidget);
     expect(find.text('Афиша 0'), findsNothing);
+  });
+
+  testWidgets('affiche screen exposes pull refresh without hiding the page', (
+    tester,
+  ) async {
+    _setMobileViewport(tester);
+    final repository = _PagedAfficheRepositoryState();
+
+    await tester.pumpWidget(_afficheApp(repository));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RefreshIndicator), findsOneWidget);
+    expect(find.text('Афиша 0'), findsOneWidget);
   });
 
   testWidgets('affiche screen reuses recently loaded filter pages', (
@@ -294,7 +375,10 @@ Future<void> _dragUntil(
   }
 }
 
-Widget _afficheApp(_PagedAfficheRepositoryState repository) {
+Widget _afficheApp(
+  _PagedAfficheRepositoryState repository, {
+  List<Override> extraOverrides = const [],
+}) {
   final router = GoRouter(
     initialLocation: AppRoute.affiche.path,
     routes: [
@@ -321,6 +405,7 @@ Widget _afficheApp(_PagedAfficheRepositoryState repository) {
       backendRepositoryProvider.overrideWith(
         (ref) => _PagedAfficheRepository(ref: ref, state: repository),
       ),
+      ...extraOverrides,
     ],
     child: MaterialApp.router(routerConfig: router),
   );
@@ -329,9 +414,11 @@ Widget _afficheApp(_PagedAfficheRepositoryState repository) {
 class _PagedAfficheRepositoryState {
   _PagedAfficheRepositoryState({
     this.delayPaidPage = false,
+    this.withImageVariants = false,
   });
 
   final bool delayPaidPage;
+  final bool withImageVariants;
   final calls = <_AfficheCall>[];
   Completer<PaginatedResponse<AfficheEvent>>? _paidCompleter;
 
@@ -394,7 +481,11 @@ class _PagedAfficheRepository extends BackendRepository {
     return PaginatedResponse<AfficheEvent>(
       items: List.generate(
         limit,
-        (index) => _event(start + index, titlePrefix: titlePrefix),
+        (index) => _event(
+          start + index,
+          titlePrefix: titlePrefix,
+          withImageVariants: state.withImageVariants,
+        ),
       ),
       nextCursor: cursor == null ? '$limit' : null,
     );
@@ -417,7 +508,11 @@ class _AfficheCall {
   final String? category;
 }
 
-AfficheEvent _event(int index, {String titlePrefix = 'Афиша'}) {
+AfficheEvent _event(
+  int index, {
+  String titlePrefix = 'Афиша',
+  bool withImageVariants = false,
+}) {
   return AfficheEvent(
     id: 'affiche-$index',
     title: '$titlePrefix $index',
@@ -441,6 +536,13 @@ AfficheEvent _event(int index, {String titlePrefix = 'Афиша'}) {
     actionUrl: 'https://tickets.example.com/$index',
     actionKind: 'affiliate_ticket',
     isAffiliate: true,
+    imageVariants: withImageVariants
+        ? {
+            'card': MediaVariantData(
+              url: 'https://cdn.example.com/affiche-$index-card.jpg',
+            ),
+          }
+        : const {},
     tags: const [],
   );
 }

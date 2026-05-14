@@ -85,7 +85,11 @@ class MeetupsScreen extends ConsumerStatefulWidget {
 
 class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   Timer? _searchDebounce;
+  _MeetupsQuery? _lastQuery;
+  List<Event>? _lastEvents;
+  Object? _manualRefreshError;
   String _q = '';
   String _when = _whenOptions.first;
   _MeetupsSort _sort = _MeetupsSort.time;
@@ -98,6 +102,7 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -117,6 +122,16 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
     final feedAsync = usesSharedNearbyFeed
         ? ref.watch(eventsProvider('nearby'))
         : ref.watch(_meetupsFeedProvider(query));
+    if (_lastQuery != query) {
+      _lastQuery = query;
+      _lastEvents = null;
+      _manualRefreshError = null;
+    }
+    final loadedEvents = feedAsync.valueOrNull;
+    if (loadedEvents != null) {
+      _lastEvents = loadedEvents;
+    }
+    final displayEvents = loadedEvents ?? _lastEvents;
     final wallet = ref.watch(tokenWalletProvider);
     final promotedIds = wallet.promoted.keys
         .where((eventId) => wallet.isPromoted(eventId))
@@ -187,87 +202,91 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
-                  child: feedAsync.when(
-                    data: (events) {
-                      final visible = _visibleEvents(events, promotedIds);
-                      return _SortHeader(
-                        count: visible.length,
-                        sort: _sort,
-                        onChanged: (sort) {
-                          setState(() {
-                            _sort = sort;
-                          });
-                        },
-                      );
+                  child: _SortHeader(
+                    count: displayEvents == null
+                        ? 0
+                        : _visibleEvents(displayEvents, promotedIds).length,
+                    sort: _sort,
+                    loading: feedAsync.isLoading && displayEvents == null,
+                    onChanged: (sort) {
+                      setState(() {
+                        _sort = sort;
+                      });
                     },
-                    loading: () => _SortHeader(
-                      count: 0,
-                      sort: _sort,
-                      loading: true,
-                      onChanged: (sort) {
-                        setState(() {
-                          _sort = sort;
-                        });
-                      },
-                    ),
-                    error: (_, __) => _SortHeader(
-                      count: 0,
-                      sort: _sort,
-                      onChanged: (sort) {
-                        setState(() {
-                          _sort = sort;
-                        });
-                      },
-                    ),
                   ),
                 ),
                 Expanded(
-                  child: feedAsync.when(
-                    data: (events) {
-                      final visible = _visibleEvents(events, promotedIds);
-                      if (visible.isEmpty) {
-                        return _MeetupsEmptyState(
-                          onReset: _resetFilters,
+                  child: Builder(
+                    builder: (context) {
+                      final events = displayEvents;
+                      if (events != null) {
+                        final visible = _visibleEvents(events, promotedIds);
+                        if (visible.isEmpty) {
+                          return _MeetupsEmptyState(
+                            onReset: _resetFilters,
+                          );
+                        }
+                        return Column(
+                          children: [
+                            if (_manualRefreshError != null)
+                              const Padding(
+                                padding: EdgeInsets.fromLTRB(20, 0, 20, 10),
+                                child: _MeetupsCompactError(),
+                              ),
+                            Expanded(
+                              child: RefreshIndicator(
+                                color: BbV5Colors.accent,
+                                onRefresh: () => _refreshMeetups(
+                                    query, usesSharedNearbyFeed),
+                                child: ListView.separated(
+                                  key: const PageStorageKey<String>(
+                                    'meetups-v5-list',
+                                  ),
+                                  controller: _scrollController,
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                                  itemBuilder: (context, index) =>
+                                      _MeetupListCard(
+                                    key: ValueKey(
+                                      'meetup-v5-event-${visible[index].id}',
+                                    ),
+                                    event: visible[index],
+                                    promoted:
+                                        promotedIds.contains(visible[index].id),
+                                    onTap: () => context.pushRoute(
+                                      AppRoute.eventDetail,
+                                      pathParameters: {
+                                        'eventId': visible[index].id,
+                                      },
+                                    ),
+                                  ),
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: AppSpacing.sm),
+                                  itemCount: visible.length,
+                                ),
+                              ),
+                            ),
+                          ],
                         );
                       }
-                      return RefreshIndicator(
-                        color: BbV5Colors.accent,
-                        onRefresh: () async {
-                          if (usesSharedNearbyFeed) {
-                            ref.invalidate(eventsProvider('nearby'));
-                            await ref.read(eventsProvider('nearby').future);
-                            return;
-                          }
-                          ref.invalidate(_meetupsFeedProvider(query));
-                          await ref.read(_meetupsFeedProvider(query).future);
-                        },
-                        child: ListView.separated(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-                          itemBuilder: (context, index) => _MeetupListCard(
-                            event: visible[index],
-                            promoted: promotedIds.contains(visible[index].id),
-                            onTap: () => context.pushRoute(
-                              AppRoute.eventDetail,
-                              pathParameters: {'eventId': visible[index].id},
-                            ),
-                          ),
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: AppSpacing.sm),
-                          itemCount: visible.length,
-                        ),
-                      );
+                      if (feedAsync.isLoading) {
+                        return const _MeetupsSkeletonList();
+                      }
+                      if (feedAsync.hasError) {
+                        return _MeetupsErrorState(
+                          onRetry: () {
+                            if (usesSharedNearbyFeed) {
+                              ref.invalidate(eventsProvider('nearby'));
+                              return;
+                            }
+                            ref.invalidate(_meetupsFeedProvider(query));
+                          },
+                        );
+                      }
+                      return _MeetupsEmptyState(onReset: _resetFilters);
                     },
-                    loading: () => const _MeetupsSkeletonList(),
-                    error: (_, __) => _MeetupsErrorState(
-                      onRetry: () {
-                        if (usesSharedNearbyFeed) {
-                          ref.invalidate(eventsProvider('nearby'));
-                          return;
-                        }
-                        ref.invalidate(_meetupsFeedProvider(query));
-                      },
-                    ),
                   ),
                 ),
               ],
@@ -295,6 +314,45 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
         _access.length +
         (_when == _whenOptions.first ? 0 : 1) +
         (_radiusKm.round() == nearbyEventsDefaultRadiusKm.round() ? 0 : 1);
+  }
+
+  Future<void> _refreshMeetups(
+    _MeetupsQuery query,
+    bool usesSharedNearbyFeed,
+  ) async {
+    if (_manualRefreshError != null && mounted) {
+      setState(() {
+        _manualRefreshError = null;
+      });
+    }
+
+    try {
+      final events = usesSharedNearbyFeed
+          ? await ref.read(eventsForceRefreshProvider('nearby').future)
+          : await _refreshFilteredMeetups(query);
+      if (!mounted) {
+        return;
+      }
+      if (usesSharedNearbyFeed) {
+        ref.invalidate(eventsProvider('nearby'));
+      }
+      setState(() {
+        _lastEvents = events;
+        _manualRefreshError = null;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _manualRefreshError = error;
+      });
+    }
+  }
+
+  Future<List<Event>> _refreshFilteredMeetups(_MeetupsQuery query) async {
+    ref.invalidate(_meetupsFeedProvider(query));
+    return ref.read(_meetupsFeedProvider(query).future);
   }
 
   void _onSearchChanged(String value) {
@@ -802,6 +860,7 @@ class _MeetupListCard extends StatelessWidget {
     required this.event,
     required this.promoted,
     required this.onTap,
+    super.key,
   });
 
   final Event event;
@@ -1119,6 +1178,42 @@ class _MeetupsErrorState extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MeetupsCompactError extends StatelessWidget {
+  const _MeetupsCompactError();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: BbV5Colors.paperHi,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: BbV5Colors.hair),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            LucideIcons.wifi_off,
+            size: 16,
+            color: BbV5Colors.inkMute,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Не получилось обновить. Показываем текущие встречи.',
+              style: AppTextStyles.caption.copyWith(
+                color: BbV5Colors.inkSoft,
+                fontSize: 11.5,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/device/app_attachment_service.dart';
 import 'package:big_break_mobile/app/core/device/app_permission_preferences.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_shell.dart';
 import 'package:big_break_mobile/features/chats/presentation/chat_thread_providers.dart';
@@ -89,6 +90,10 @@ class AppSessionController {
   }) async {
     final sharedPreferences = ref.read(sharedPreferencesProvider);
     final attachmentService = ref.read(appAttachmentServiceProvider);
+    final localCacheStore = ref.exists(appLocalCacheStoreProvider)
+        ? ref.read(appLocalCacheStoreProvider)
+        : null;
+    final currentUserId = ref.read(currentUserIdProvider);
     final permissionPreferences = ref.read(appPermissionPreferencesProvider);
     final profilePhotoDraft = ref.read(profilePhotoDraftProvider.notifier);
     final profilePhotoPreview = ref.read(profilePhotoPreviewProvider.notifier);
@@ -116,6 +121,10 @@ class AppSessionController {
       await SharedPreferencesChatOutboxStorage.clearStoredCommands(
         sharedPreferences,
       );
+      if (currentUserId != null) {
+        await localCacheStore
+            ?.deleteUser(AppCacheUserScope.user(currentUserId));
+      }
     }
 
     await attachmentService.clearPrivateCache();
