@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/device/app_attachment_service.dart';
 import 'package:big_break_mobile/app/core/device/app_permission_preferences.dart';
@@ -49,6 +51,11 @@ class AppSessionController {
     }
 
     currentUser.state = userId;
+    unawaited(
+      ref
+          .read(sharedPreferencesProvider)
+          ?.setString(appLocalCacheLastUserIdStorageKey, userId),
+    );
     ref.invalidate(authBootstrapProvider);
   }
 

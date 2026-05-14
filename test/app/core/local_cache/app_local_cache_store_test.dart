@@ -3,6 +3,7 @@ import 'package:big_break_mobile/app/core/local_cache/app_cache_policy.dart';
 import 'package:big_break_mobile/app/core/local_cache/app_local_cache_store.dart';
 import 'package:big_break_mobile/app/core/local_cache/app_local_database.dart';
 import 'package:big_break_mobile/app/core/local_cache/local_cache_metrics.dart';
+import 'package:big_break_mobile/app/core/local_cache/local_first_repository.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -192,5 +193,33 @@ void main() {
       ),
       isNull,
     );
+  });
+
+  test('tracks refresh failures, DB read p95 and estimated DB size', () async {
+    final repository = LocalFirstRepository(store);
+    await store.write(
+      userScope: userA,
+      namespace: AppCacheNamespace.tonight,
+      cacheKey: 'home',
+      payloadJson: '{"items":["cached"]}',
+      policy: policy,
+    );
+
+    final result = await repository.fetch<Map<String, dynamic>>(
+      userScope: userA,
+      namespace: AppCacheNamespace.tonight,
+      cacheKey: 'home',
+      policy: policy,
+      networkFetch: () => throw StateError('offline'),
+      fromJson: (json) => Map<String, dynamic>.from(json as Map),
+      toJson: (value) => value,
+    );
+    await result.refresh;
+
+    expect(metrics.count(LocalCacheMetricNames.cacheRefreshFailure), 1);
+    expect(metrics.p95Ms(LocalCacheMetricNames.cacheReadMs), isNonNegative);
+    final sizeBytes = await store.estimateSizeBytes(userScope: userA);
+    expect(sizeBytes, greaterThan(0));
+    expect(metrics.gauge(LocalCacheMetricNames.cacheDbSizeBytes), sizeBytes);
   });
 }

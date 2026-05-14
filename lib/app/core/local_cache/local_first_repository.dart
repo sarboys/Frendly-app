@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
 import 'package:big_break_mobile/app/core/local_cache/app_cache_policy.dart';
 import 'package:big_break_mobile/app/core/local_cache/app_local_cache_store.dart';
+import 'package:big_break_mobile/app/core/local_cache/local_cache_metrics.dart';
 
 typedef LocalFirstNetworkFetch<T> = FutureOr<T> Function();
 typedef LocalFirstJsonDecoder<T> = T Function(Object? json);
@@ -97,6 +98,7 @@ class LocalFirstRepository {
         toJson: toJson,
       );
     } catch (_) {
+      _store.metrics.increment(LocalCacheMetricNames.cacheRefreshFailure);
       return fallback;
     }
   }

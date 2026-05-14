@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:big_break_mobile/app/core/device/app_attachment_service.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
 import 'package:big_break_mobile/shared/models/auth_flow.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
@@ -66,6 +68,7 @@ final authBootstrapProvider = FutureProvider<void>((ref) async {
     if (!tokensStillCurrent() || currentUserIdController.state != null) {
       return;
     }
+    await _cleanupRestoredAuthUser(ref, me.id);
     currentUserIdController.state = me.id;
     bootstrapProfileController.state = me;
   } on DioException catch (error) {
@@ -86,6 +89,26 @@ final authBootstrapProvider = FutureProvider<void>((ref) async {
     }
   } catch (_) {}
 });
+
+Future<void> _cleanupRestoredAuthUser(Ref ref, String restoredUserId) async {
+  final preferences = ref.read(sharedPreferencesProvider);
+  final previousUserId =
+      preferences?.getString(appLocalCacheLastUserIdStorageKey);
+  if (previousUserId != null &&
+      previousUserId.isNotEmpty &&
+      previousUserId != restoredUserId) {
+    try {
+      await ref
+          .read(appLocalCacheStoreProvider)
+          ?.deleteUser(AppCacheUserScope.user(previousUserId));
+      await ref.read(appAttachmentServiceProvider).clearPrivateCache();
+    } catch (_) {}
+  }
+  await preferences?.setString(
+    appLocalCacheLastUserIdStorageKey,
+    restoredUserId,
+  );
+}
 
 final backendRepositoryProvider = Provider<BackendRepository>((ref) {
   return BackendRepository(

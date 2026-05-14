@@ -39,6 +39,8 @@ class AppLocalCacheStore {
   final LocalCacheMetrics _metrics;
   final _writeQueues = <String, Future<void>>{};
 
+  LocalCacheMetrics get metrics => _metrics;
+
   Future<AppLocalCacheHit?> readFresh({
     required AppCacheUserScope userScope,
     required AppCacheNamespace namespace,
@@ -152,6 +154,17 @@ class AppLocalCacheStore {
         .go();
   }
 
+  Future<int> estimateSizeBytes({AppCacheUserScope? userScope}) async {
+    var total = 0;
+    total += await _sumCacheEntryBytes(userScope);
+    total += await _sumChatSummaryBytes(userScope);
+    total += await _sumChatMessageBytes(userScope);
+    total += await _sumSyncCursorBytes(userScope);
+    total += await _sumPendingCommandBytes(userScope);
+    _metrics.setGauge(LocalCacheMetricNames.cacheDbSizeBytes, total);
+    return total;
+  }
+
   Future<AppLocalCacheHit?> _read({
     required AppCacheUserScope userScope,
     required AppCacheNamespace namespace,
@@ -232,4 +245,95 @@ class AppLocalCacheStore {
           LocalCacheMetricNames.cacheWriteMs, stopwatch.elapsed);
     }
   }
+
+  Future<int> _sumCacheEntryBytes(AppCacheUserScope? userScope) async {
+    final query = _database.select(_database.cacheEntries);
+    if (userScope != null) {
+      query.where((table) => table.userId.equals(userScope.storageId));
+    }
+    final rows = await query.get();
+    return rows.fold<int>(
+      0,
+      (total, row) =>
+          total +
+          _stringBytes(row.userId) +
+          _stringBytes(row.namespace) +
+          _stringBytes(row.cacheKey) +
+          _stringBytes(row.payloadJson) +
+          _stringBytes(row.etag) +
+          _stringBytes(row.lastModified),
+    );
+  }
+
+  Future<int> _sumChatSummaryBytes(AppCacheUserScope? userScope) async {
+    final query = _database.select(_database.chatSummaries);
+    if (userScope != null) {
+      query.where((table) => table.userId.equals(userScope.storageId));
+    }
+    final rows = await query.get();
+    return rows.fold<int>(
+      0,
+      (total, row) =>
+          total +
+          _stringBytes(row.userId) +
+          _stringBytes(row.chatId) +
+          _stringBytes(row.chatKind) +
+          _stringBytes(row.summaryJson),
+    );
+  }
+
+  Future<int> _sumChatMessageBytes(AppCacheUserScope? userScope) async {
+    final query = _database.select(_database.chatMessages);
+    if (userScope != null) {
+      query.where((table) => table.userId.equals(userScope.storageId));
+    }
+    final rows = await query.get();
+    return rows.fold<int>(
+      0,
+      (total, row) =>
+          total +
+          _stringBytes(row.userId) +
+          _stringBytes(row.chatId) +
+          _stringBytes(row.messageId) +
+          _stringBytes(row.clientMessageId) +
+          _stringBytes(row.messageJson),
+    );
+  }
+
+  Future<int> _sumSyncCursorBytes(AppCacheUserScope? userScope) async {
+    final query = _database.select(_database.syncCursors);
+    if (userScope != null) {
+      query.where((table) => table.userId.equals(userScope.storageId));
+    }
+    final rows = await query.get();
+    return rows.fold<int>(
+      0,
+      (total, row) =>
+          total +
+          _stringBytes(row.userId) +
+          _stringBytes(row.chatId) +
+          _stringBytes(row.cursor),
+    );
+  }
+
+  Future<int> _sumPendingCommandBytes(AppCacheUserScope? userScope) async {
+    final query = _database.select(_database.pendingCommands);
+    if (userScope != null) {
+      query.where((table) => table.userId.equals(userScope.storageId));
+    }
+    final rows = await query.get();
+    return rows.fold<int>(
+      0,
+      (total, row) =>
+          total +
+          _stringBytes(row.userId) +
+          _stringBytes(row.commandId) +
+          _stringBytes(row.chatId) +
+          _stringBytes(row.commandType) +
+          _stringBytes(row.payloadJson) +
+          _stringBytes(row.lastError),
+    );
+  }
+
+  int _stringBytes(String? value) => value == null ? 0 : value.length;
 }

@@ -20,6 +20,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const _tokensStorageKey = 'auth.tokens';
 const _installMarkerKey = 'app.install.marker.v1';
+const appLocalCacheLastUserIdStorageKey = 'app.local_cache.last_user_id.v1';
 
 final initialAuthTokensProvider = Provider<AuthTokens?>((ref) => null);
 

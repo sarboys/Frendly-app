@@ -299,6 +299,61 @@ void main() {
     expect(attachmentService.clearCalls, 1);
   });
 
+  test('auth bootstrap clears previous restored user cache on account change',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      'app.local_cache.last_user_id.v1': 'user-old',
+    });
+    final preferences = await SharedPreferences.getInstance();
+    final attachmentService = _RecordingAttachmentService();
+    final localDb = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(localDb.close);
+    final localCacheStore = AppLocalCacheStore(localDb);
+    await localCacheStore.write(
+      userScope: AppCacheUserScope.user('user-old'),
+      namespace: AppCacheNamespace.profile,
+      cacheKey: 'me',
+      payloadJson: '{"id":"user-old"}',
+      policy: const AppCachePolicy(
+        staleAfter: Duration(minutes: 1),
+        expiresAfter: Duration(hours: 1),
+      ),
+    );
+
+    final container = ProviderContainer(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(preferences),
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
+        appAttachmentServiceProvider.overrideWithValue(attachmentService),
+        appLocalCacheStoreProvider.overrideWithValue(localCacheStore),
+        backendRepositoryProvider.overrideWith(
+          (ref) => _FetchMeProfileRepository(
+            ref: ref,
+            userId: 'user-new',
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(authBootstrapProvider.future);
+
+    expect(container.read(currentUserIdProvider), 'user-new');
+    expect(
+      await localCacheStore.readAny(
+        userScope: AppCacheUserScope.user('user-old'),
+        namespace: AppCacheNamespace.profile,
+        cacheKey: 'me',
+      ),
+      isNull,
+    );
+    expect(
+        preferences.getString('app.local_cache.last_user_id.v1'), 'user-new');
+    expect(attachmentService.clearCalls, 1);
+  });
+
   test('auth bootstrap skips profile fetch right after session replacement',
       () async {
     final tokensController = _StaticAuthTokensController();
@@ -402,5 +457,34 @@ class _FetchMeShouldStayIdleRepository extends BackendRepository {
   Future<ProfileData> fetchMe() async {
     onFetchMe();
     throw StateError('fresh login bootstrap should not fetch profile');
+  }
+}
+
+class _FetchMeProfileRepository extends BackendRepository {
+  _FetchMeProfileRepository({
+    required super.ref,
+    required this.userId,
+  }) : super(dio: Dio());
+
+  final String userId;
+
+  @override
+  Future<ProfileData> fetchMe() async {
+    return ProfileData(
+      id: userId,
+      displayName: 'Restored user',
+      verified: true,
+      online: true,
+      age: 28,
+      city: 'Москва',
+      area: 'Центр',
+      bio: 'bio',
+      vibe: 'calm',
+      rating: 4.8,
+      meetupCount: 1,
+      avatarUrl: null,
+      interests: const ['Кофе'],
+      intent: const ['Друзья'],
+    );
   }
 }
