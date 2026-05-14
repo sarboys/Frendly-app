@@ -414,17 +414,6 @@ Future<void> _requestDeleteMeetupChat(
   WidgetRef ref,
   MeetupChat chat,
 ) async {
-  final currentUserId = ref.read(currentUserIdProvider);
-  if (chat.hostUserId != null && chat.hostUserId == currentUserId) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content:
-            Text('Хост не может выйти из своей встречи через удаление чата'),
-      ),
-    );
-    return;
-  }
-
   final confirmed = await _confirmDeleteChat(
     context,
     kind: _DeleteChatKind.meetup,
@@ -513,7 +502,16 @@ Future<void> _deleteMeetupChat(
       previous.where((item) => item.id != chat.id).toList(growable: false);
 
   try {
-    await ref.read(backendRepositoryProvider).deleteChat(chat.id);
+    final repository = ref.read(backendRepositoryProvider);
+    try {
+      await repository.deleteChat(chat.id);
+    } catch (_) {
+      final eventId = chat.eventId;
+      if (eventId == null || eventId.isEmpty) {
+        rethrow;
+      }
+      await repository.leaveEvent(eventId);
+    }
     ref.invalidate(meetupChatsProvider);
     if (chat.eventId case final eventId?) {
       ref.invalidate(eventDetailProvider(eventId));
@@ -579,7 +577,12 @@ Future<void> _deleteCommunityChat(
       previous.where((item) => item.id != community.id).toList(growable: false);
 
   try {
-    await ref.read(backendRepositoryProvider).deleteChat(community.chatId);
+    final repository = ref.read(backendRepositoryProvider);
+    try {
+      await repository.deleteChat(community.chatId);
+    } catch (_) {
+      await repository.leaveCommunity(community.id);
+    }
     ref.invalidate(communitiesProvider);
     ref.invalidate(communitiesFeedProvider);
     ref.invalidate(communityProvider(community.id));

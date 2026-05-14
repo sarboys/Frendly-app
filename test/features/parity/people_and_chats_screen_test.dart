@@ -6,6 +6,7 @@ import 'package:big_break_mobile/features/communities/presentation/community_pro
 import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/models/event_detail.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:big_break_mobile/shared/models/personal_chat.dart';
 import 'package:dio/dio.dart';
@@ -761,6 +762,112 @@ void main() {
     expect(find.text('Обычная встреча'), findsNothing);
   });
 
+  testWidgets('hosted meetup chat can be deleted from the chat list',
+      (tester) async {
+    _RecordingBackendRepository? repository;
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        child: const ChatsScreen(),
+        targetText: 'unused',
+        extraOverrides: [
+          currentUserIdProvider.overrideWith((ref) => 'user-me'),
+          backendRepositoryProvider.overrideWith((ref) {
+            final created = _RecordingBackendRepository(ref);
+            repository = created;
+            return created;
+          }),
+          chatSegmentProvider.overrideWith((ref) => ChatSegment.meetup),
+          meetupChatsProvider.overrideWith(
+            (ref) async => const [
+              MeetupChat(
+                id: 'hosted-upcoming',
+                eventId: 'event-hosted',
+                title: 'Моя встреча',
+                emoji: '🍷',
+                time: '08:33',
+                lastMessage: 'До встречи',
+                lastAuthor: 'Сергей',
+                lastTime: '5 ч',
+                unread: 0,
+                members: ['Сергей', 'Ты'],
+                status: 'Сегодня',
+                phase: MeetupPhase.upcoming,
+                hostUserId: 'user-me',
+              ),
+            ],
+          ),
+          personalChatsProvider.overrideWith((ref) async => const []),
+          communitiesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('Моя встреча'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Удалить'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Удалить чат'));
+    await tester.pumpAndSettle();
+
+    expect(repository?.deletedChatIds, ['hosted-upcoming']);
+    expect(find.text('Моя встреча'), findsNothing);
+  });
+
+  testWidgets('meetup delete falls back to leave event when chat delete fails',
+      (tester) async {
+    _RecordingBackendRepository? repository;
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        child: const ChatsScreen(),
+        targetText: 'unused',
+        extraOverrides: [
+          currentUserIdProvider.overrideWith((ref) => 'user-me'),
+          backendRepositoryProvider.overrideWith((ref) {
+            final created = _RecordingBackendRepository(ref)
+              ..failDeleteChat = true;
+            repository = created;
+            return created;
+          }),
+          chatSegmentProvider.overrideWith((ref) => ChatSegment.meetup),
+          meetupChatsProvider.overrideWith(
+            (ref) async => const [
+              MeetupChat(
+                id: 'regular-upcoming',
+                eventId: 'event-1',
+                title: 'Обычная встреча',
+                emoji: '🍷',
+                time: '08:33',
+                lastMessage: 'Голосовое сообщение',
+                lastAuthor: 'Сергей',
+                lastTime: '5 ч',
+                unread: 0,
+                members: ['Сергей', 'Ты'],
+                status: 'Сегодня',
+                phase: MeetupPhase.upcoming,
+                hostUserId: 'host-1',
+              ),
+            ],
+          ),
+          personalChatsProvider.overrideWith((ref) async => const []),
+          communitiesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('Обычная встреча'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Удалить'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Удалить чат'));
+    await tester.pumpAndSettle();
+
+    expect(repository?.deletedChatIds, ['regular-upcoming']);
+    expect(repository?.leftEventIds, ['event-1']);
+    expect(find.text('Обычная встреча'), findsNothing);
+  });
+
   testWidgets('club chat long press can delete chat and leave club',
       (tester) async {
     _RecordingBackendRepository? repository;
@@ -833,6 +940,9 @@ class _RecordingBackendRepository extends BackendRepository {
 
   final List<String> startedSessionIds = [];
   final List<String> deletedChatIds = [];
+  final List<String> leftEventIds = [];
+  final List<String> leftCommunityIds = [];
+  bool failDeleteChat = false;
 
   @override
   Future<void> startEveningSession(String sessionId) async {
@@ -842,7 +952,78 @@ class _RecordingBackendRepository extends BackendRepository {
   @override
   Future<void> deleteChat(String chatId) async {
     deletedChatIds.add(chatId);
+    if (failDeleteChat) {
+      throw Exception('delete failed');
+    }
   }
+
+  @override
+  Future<EventDetail> leaveEvent(String eventId) async {
+    leftEventIds.add(eventId);
+    return _dummyEventDetail(eventId);
+  }
+
+  @override
+  Future<Community> leaveCommunity(String communityId) async {
+    leftCommunityIds.add(communityId);
+    return _dummyCommunity(communityId);
+  }
+}
+
+EventDetail _dummyEventDetail(String id) {
+  return EventDetail(
+    id: id,
+    title: 'Удалённая встреча',
+    emoji: '🍷',
+    time: '',
+    place: '',
+    distance: '',
+    vibe: '',
+    description: '',
+    hostNote: null,
+    joined: false,
+    partnerName: null,
+    partnerOffer: null,
+    capacity: 1,
+    going: 0,
+    chatId: null,
+    host: const EventHost(
+      id: 'host',
+      displayName: 'Host',
+      verified: false,
+      rating: 0,
+      meetupCount: 0,
+      avatarUrl: null,
+    ),
+    attendees: const [],
+  );
+}
+
+Community _dummyCommunity(String id) {
+  return Community(
+    id: id,
+    chatId: 'chat-$id',
+    name: 'Клуб',
+    avatar: '📚',
+    description: '',
+    privacy: CommunityPrivacy.public,
+    members: 0,
+    online: 0,
+    tags: const [],
+    joinRule: '',
+    joined: false,
+    premiumOnly: false,
+    unread: 0,
+    mood: '',
+    sharedMediaLabel: '0 медиа',
+    news: const [],
+    meetups: const [],
+    media: const [],
+    chatPreview: const [],
+    chatMessages: const [],
+    socialLinks: const [],
+    memberNames: const [],
+  );
 }
 
 class _TestTokenWalletController extends TokenWalletController {
