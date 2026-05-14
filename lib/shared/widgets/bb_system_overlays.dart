@@ -470,7 +470,7 @@ class _CityLimitToast extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '$feature — пока только в Москве и СПб',
+                          '$feature — сначала выбери город',
                           style: AppTextStyles.itemTitle.copyWith(
                             color: colors.background,
                             fontSize: 13,
@@ -481,7 +481,7 @@ class _CityLimitToast extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Извините! Мы скоро расширимся в другие города.',
+                          'Так лента не подставит чужой город.',
                           style: AppTextStyles.meta.copyWith(
                             color: colors.background.withValues(alpha: 0.8),
                             fontSize: 12,
@@ -523,6 +523,7 @@ Future<void> showChatMembersSheet(
   String? hostName,
   ValueChanged<MeetupMember>? onOpenProfile,
   ValueChanged<MeetupMember>? onMessage,
+  VoidCallback? onInviteFriends,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -538,6 +539,7 @@ Future<void> showChatMembersSheet(
       hostName: hostName,
       onOpenProfile: onOpenProfile,
       onMessage: onMessage,
+      onInviteFriends: onInviteFriends,
     ),
   );
 }
@@ -551,6 +553,7 @@ class _ChatMembersSheet extends StatelessWidget {
     this.hostName,
     this.onOpenProfile,
     this.onMessage,
+    this.onInviteFriends,
   });
 
   final String title;
@@ -560,6 +563,7 @@ class _ChatMembersSheet extends StatelessWidget {
   final String? hostName;
   final ValueChanged<MeetupMember>? onOpenProfile;
   final ValueChanged<MeetupMember>? onMessage;
+  final VoidCallback? onInviteFriends;
 
   @override
   Widget build(BuildContext context) {
@@ -694,7 +698,10 @@ class _ChatMembersSheet extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: _InviteFriendsRow(colors: colors),
+                child: _InviteFriendsRow(
+                  colors: colors,
+                  onTap: onInviteFriends,
+                ),
               ),
               Expanded(
                 child: ListView.builder(
@@ -786,16 +793,25 @@ class _ChatMembersSheet extends StatelessWidget {
 }
 
 class _InviteFriendsRow extends StatelessWidget {
-  const _InviteFriendsRow({required this.colors});
+  const _InviteFriendsRow({
+    required this.colors,
+    this.onTap,
+  });
 
   final BigBreakThemeColors colors;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {},
+        onTap: onTap == null
+            ? null
+            : () {
+                Navigator.of(context).pop();
+                onTap?.call();
+              },
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),

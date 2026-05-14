@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/meetup_chat/presentation/meetup_invite_sheet.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
@@ -125,6 +126,13 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       }
                     }
                   },
+            onInvite: event.joined || event.isHost
+                ? () => showMeetupInviteSheet(
+                      context,
+                      eventId: event.id,
+                      title: event.title,
+                    )
+                : null,
             onSecondaryAction: _actionBusy
                 ? null
                 : (!event.joined &&
@@ -189,12 +197,14 @@ class _EventDetailBody extends StatelessWidget {
     required this.event,
     required this.onJoinOrOpen,
     required this.actionBusy,
+    this.onInvite,
     this.onSecondaryAction,
   });
 
   final EventDetail event;
   final Future<void> Function()? onJoinOrOpen;
   final bool actionBusy;
+  final VoidCallback? onInvite;
   final Future<void> Function()? onSecondaryAction;
 
   @override
@@ -243,6 +253,13 @@ class _EventDetailBody extends StatelessWidget {
                             AppRoute.createMeetup,
                             queryParameters: {'editEventId': event.id},
                           ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                      ],
+                      if (onInvite != null) ...[
+                        BbV5IconButton(
+                          icon: LucideIcons.user_plus,
+                          onPressed: onInvite,
                         ),
                         const SizedBox(width: AppSpacing.xs),
                       ],
@@ -1434,13 +1451,16 @@ String _bookingSubtitle(EventDetail event) {
   final parts = <String>[];
   final averageCheck = event.bookingAverageCheck;
   if (averageCheck != null && averageCheck > 0) {
-    parts.add('средний чек $averageCheck ${_currencySymbol(event.bookingCurrency)}');
+    parts.add(
+        'средний чек $averageCheck ${_currencySymbol(event.bookingCurrency)}');
   }
   final provider = event.bookingProvider?.trim();
   if (provider != null && provider.isNotEmpty) {
     parts.add(provider);
   }
-  return parts.isEmpty ? 'Откроется внешний сайт бронирования' : parts.join(' · ');
+  return parts.isEmpty
+      ? 'Откроется внешний сайт бронирования'
+      : parts.join(' · ');
 }
 
 String _currencySymbol(String? currency) {

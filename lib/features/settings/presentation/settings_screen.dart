@@ -32,6 +32,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   UserSettingsData? _settings;
   bool _didHydrateFromRemote = false;
   bool _isSavingSettings = false;
+  bool _isLoggingOut = false;
   UserSettingsData? _queuedSettings;
   UserSettingsData? _lastConfirmedSettings;
   String _language = 'Русский';
@@ -268,7 +269,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                _LogoutButton(onTap: _logout),
+                _LogoutButton(
+                  loading: _isLoggingOut,
+                  onTap: _logout,
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 Center(
                   child: Text(
@@ -346,54 +350,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _logout() async {
+    if (_isLoggingOut) {
+      return;
+    }
+    setState(() {
+      _isLoggingOut = true;
+    });
+
     final repository = ref.read(backendRepositoryProvider);
     final sessionController = ref.read(appSessionControllerProvider);
     final authTokens = ref.read(authTokensProvider.notifier);
     final currentUserId = ref.read(currentUserIdProvider.notifier);
     final pushTokenService = ref.read(appPushTokenServiceProvider);
-    final logoutTokens = ref.read(authTokensProvider);
-    final logoutUserId = ref.read(currentUserIdProvider);
-    bool logoutSessionStillCurrent() {
-      final currentTokens = authTokens.currentTokens;
-      return currentUserId.state == logoutUserId &&
-          currentTokens?.accessToken == logoutTokens?.accessToken &&
-          currentTokens?.refreshToken == logoutTokens?.refreshToken;
-    }
 
-    final pushDeviceId = await pushTokenService.currentDeviceId();
-    if (!logoutSessionStillCurrent()) {
-      return;
-    }
-    if (pushDeviceId != null) {
-      try {
-        await repository.deletePushTokenByDeviceId(pushDeviceId);
-      } catch (_) {}
-    }
-    if (!logoutSessionStillCurrent()) {
-      return;
-    }
-
-    try {
-      await repository.logout();
-    } catch (_) {}
-    if (!logoutSessionStillCurrent()) {
-      return;
-    }
-
-    await pushTokenService.clearRegisteredToken();
-    if (!logoutSessionStillCurrent()) {
-      return;
-    }
+    unawaited(_logoutRemoteBestEffort(repository, pushTokenService));
     await sessionController.clearSessionRuntime(clearPersistedChatState: true);
-    if (!logoutSessionStillCurrent()) {
-      return;
-    }
     authTokens.clear();
     currentUserId.state = null;
 
     if (mounted && context.mounted) {
       context.goRoute(AppRoute.welcome);
     }
+  }
+
+  Future<void> _logoutRemoteBestEffort(
+    BackendRepository repository,
+    AppPushTokenService pushTokenService,
+  ) async {
+    try {
+      final pushDeviceId = await pushTokenService.currentDeviceId();
+      if (pushDeviceId != null) {
+        try {
+          await repository.deletePushTokenByDeviceId(pushDeviceId);
+        } catch (_) {}
+      }
+      try {
+        await repository.logout();
+      } catch (_) {}
+      await pushTokenService.clearRegisteredToken();
+    } catch (_) {}
   }
 
   Future<void> _handlePushToggle(
@@ -1112,8 +1107,12 @@ class _RemoteSettingsBanner extends StatelessWidget {
 }
 
 class _LogoutButton extends StatelessWidget {
-  const _LogoutButton({required this.onTap});
+  const _LogoutButton({
+    required this.loading,
+    required this.onTap,
+  });
 
+  final bool loading;
   final VoidCallback onTap;
 
   @override
@@ -1121,9 +1120,15 @@ class _LogoutButton extends StatelessWidget {
     return SizedBox(
       height: 48,
       child: FilledButton.icon(
-        onPressed: onTap,
-        icon: const Icon(LucideIcons.log_out, size: 17),
-        label: const Text('Выйти'),
+        onPressed: loading ? null : onTap,
+        icon: loading
+            ? const SizedBox(
+                width: 17,
+                height: 17,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(LucideIcons.log_out, size: 17),
+        label: Text(loading ? 'Выходим' : 'Выйти'),
         style: FilledButton.styleFrom(
           elevation: 0,
           backgroundColor: BbV5Colors.paperHi,

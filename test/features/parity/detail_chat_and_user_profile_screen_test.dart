@@ -14,6 +14,7 @@ import 'package:big_break_mobile/shared/models/evening_session.dart';
 import 'package:big_break_mobile/shared/models/message.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
+import 'package:big_break_mobile/shared/models/person_summary.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/widgets/bb_chat_bubble.dart';
 import 'package:big_break_mobile/shared/widgets/bb_social_actions.dart';
@@ -34,11 +35,14 @@ class _FakeChatBackendRepository extends BackendRepository {
     required super.ref,
     required super.dio,
     this.messagesByChat = const {},
+    this.followingPeople = const [],
     this.onCreateDirectChat,
   });
 
   final Map<String, List<Message>> messagesByChat;
+  final List<FollowingPerson> followingPeople;
   final String Function(String userId)? onCreateDirectChat;
+  final invitedUsers = <String>[];
 
   @override
   Future<PaginatedResponse<Message>> fetchMessages(
@@ -58,6 +62,22 @@ class _FakeChatBackendRepository extends BackendRepository {
   @override
   Future<String> createOrGetDirectChat(String userId) async {
     return onCreateDirectChat?.call(userId) ?? 'personal-$userId';
+  }
+
+  @override
+  Future<PaginatedResponse<FollowingPerson>> fetchFollowingPeople({
+    required String eventId,
+    String? q,
+    String? cursor,
+    int limit = 20,
+    CancelToken? cancelToken,
+  }) async {
+    return PaginatedResponse(items: followingPeople, nextCursor: null);
+  }
+
+  @override
+  Future<void> inviteUserToEvent(String eventId, String userId) async {
+    invitedUsers.add('$eventId:$userId');
   }
 }
 
@@ -143,6 +163,8 @@ Widget _wrap(
   bool withChatOverrides = false,
   Map<String, List<Message>> messagesByChat = const {},
   String Function(String userId)? onCreateDirectChat,
+  List<FollowingPerson> followingPeople = const [],
+  void Function(_FakeChatBackendRepository repository)? onRepository,
   bool withPersonalChatRoute = false,
   List<Override> extraOverrides = const [],
 }) {
@@ -151,12 +173,17 @@ Widget _wrap(
       ...buildTestOverrides(),
       if (withChatOverrides)
         backendRepositoryProvider.overrideWith(
-          (ref) => _FakeChatBackendRepository(
-            ref: ref,
-            dio: Dio(),
-            messagesByChat: messagesByChat,
-            onCreateDirectChat: onCreateDirectChat,
-          ),
+          (ref) {
+            final repository = _FakeChatBackendRepository(
+              ref: ref,
+              dio: Dio(),
+              messagesByChat: messagesByChat,
+              followingPeople: followingPeople,
+              onCreateDirectChat: onCreateDirectChat,
+            );
+            onRepository?.call(repository);
+            return repository;
+          },
         ),
       if (withChatOverrides)
         chatSocketClientProvider.overrideWith((ref) => _FakeChatSocketClient()),
@@ -337,6 +364,61 @@ void main() {
     expect(find.text('Купить билет · от 2 500 ₽'), findsOneWidget);
     expect(find.text('Ticketland · Live Arena'), findsOneWidget);
     expect(find.byIcon(LucideIcons.ticket), findsWidgets);
+  });
+
+  testWidgets('meetup chat members sheet opens following invite flow',
+      (tester) async {
+    late _FakeChatBackendRepository repository;
+    await tester.pumpWidget(
+      _wrap(
+        const MeetupChatScreen(chatId: 'chat-invite'),
+        withChatOverrides: true,
+        followingPeople: const [
+          FollowingPerson(
+            id: 'user-anna',
+            name: 'Аня',
+            age: null,
+            area: 'Патрики',
+            common: ['кино'],
+            online: true,
+            verified: false,
+            vibe: 'Спокойно',
+            avatarUrl: null,
+            inviteState: FollowingInviteState.available,
+          ),
+        ],
+        onRepository: (value) => repository = value,
+        extraOverrides: [
+          meetupChatsProvider.overrideWith(
+            (ref) async => const [
+              MeetupChat(
+                id: 'chat-invite',
+                eventId: 'event-1',
+                title: 'Винный вечер',
+                emoji: '🍷',
+                time: '21:00',
+                lastMessage: 'До встречи',
+                lastAuthor: 'Маша',
+                lastTime: 'сейчас',
+                unread: 0,
+                members: ['Ты', 'Маша'],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(LucideIcons.ellipsis));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Пригласить друзей'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Пригласить'));
+    await tester.pumpAndSettle();
+
+    expect(repository.invitedUsers, ['event-1:user-anna']);
+    expect(find.text('Приглашение отправлено'), findsOneWidget);
   });
 
   testWidgets('soon evening meetup chat renders live start banner',
@@ -1005,7 +1087,8 @@ void main() {
     );
   });
 
-  testWidgets('user profile keeps compact social actions without duplicate stats',
+  testWidgets(
+      'user profile keeps compact social actions without duplicate stats',
       (tester) async {
     await tester.pumpWidget(
       _wrap(const UserProfileScreen(userId: 'user-anya')),

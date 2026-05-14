@@ -385,23 +385,22 @@ GoRouter buildAppRouter({
       GoRoute(
         path: AppRoute.tokensFocus.path,
         name: AppRoute.tokensFocus.name,
-        pageBuilder: (context, state) => _slidePage(const TokensFocusScreen()),
+        redirect: (context, state) => AppRoute.wallet.path,
       ),
       GoRoute(
         path: AppRoute.tokensBalance.path,
         name: AppRoute.tokensBalance.name,
-        pageBuilder: (context, state) =>
-            _slidePage(const TokensBalanceScreen()),
+        redirect: (context, state) => AppRoute.wallet.path,
       ),
       GoRoute(
         path: AppRoute.tokensTopUp.path,
         name: AppRoute.tokensTopUp.name,
-        pageBuilder: (context, state) => _slidePage(const TokensTopUpScreen()),
+        redirect: (context, state) => AppRoute.wallet.path,
       ),
       GoRoute(
         path: AppRoute.tokensBoost.path,
         name: AppRoute.tokensBoost.name,
-        pageBuilder: (context, state) => _slidePage(const TokensBoostScreen()),
+        redirect: (context, state) => AppRoute.wallet.path,
       ),
       GoRoute(
         path: AppRoute.wallet.path,

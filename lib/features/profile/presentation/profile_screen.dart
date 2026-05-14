@@ -103,24 +103,12 @@ class ProfileV5Content extends StatelessWidget {
                     ),
                     if (showOwnerCards) ...[
                       const SizedBox(height: AppSpacing.md),
-                      _FrendlyPlusCard(
-                        onTap: () => context.pushRoute(AppRoute.paywall),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      _FriendlyTokensCard(
-                        onBalance: () =>
-                            context.pushRoute(AppRoute.tokensBalance),
-                        onFocus: () => context.pushRoute(AppRoute.tokensFocus),
-                        onTopUp: () => context.pushRoute(AppRoute.tokensTopUp),
-                        onBoost: () => context.pushRoute(AppRoute.tokensBoost),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      _ProfileTrustActions(
+                      _ProfileQuickGrid(
+                        onPlus: () => context.pushRoute(AppRoute.paywall),
+                        onWallet: () => context.pushRoute(AppRoute.wallet),
                         onVerification: () =>
                             context.pushRoute(AppRoute.verification),
                         onSos: () => context.pushRoute(AppRoute.sos),
-                        onNotifications: () =>
-                            context.pushRoute(AppRoute.notifications),
                       ),
                     ],
                     _ProfileSection(
@@ -506,333 +494,90 @@ class _MetricTile extends StatelessWidget {
   }
 }
 
-class _FrendlyPlusCard extends StatelessWidget {
-  const _FrendlyPlusCard({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return BbV5Card(
-      radius: 24,
-      padding: const EdgeInsets.all(16),
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: BbV5Colors.paperHi,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: BbV5Colors.hair),
-            ),
-            child: const Icon(
-              LucideIcons.crown,
-              size: 21,
-              color: BbV5Colors.terra,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text.rich(
-                  TextSpan(
-                    children: [
-                      const TextSpan(text: 'Frendly'),
-                      TextSpan(
-                        text: '+',
-                        style: AppTextStyles.itemTitle.copyWith(
-                          color: BbV5Colors.terra,
-                        ),
-                      ),
-                    ],
-                  ),
-                  style: bbV5DisplayStyle(fontSize: 14.5),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Dating, фильтры и приоритет в заявках',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.meta.copyWith(
-                    fontSize: 11.5,
-                    color: BbV5Colors.inkMute,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          const Icon(
-            LucideIcons.chevron_right,
-            size: 17,
-            color: BbV5Colors.inkMute,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FriendlyTokensCard extends ConsumerWidget {
-  const _FriendlyTokensCard({
-    required this.onBalance,
-    required this.onFocus,
-    required this.onTopUp,
-    required this.onBoost,
+class _ProfileQuickGrid extends ConsumerWidget {
+  const _ProfileQuickGrid({
+    required this.onPlus,
+    required this.onWallet,
+    required this.onVerification,
+    required this.onSos,
   });
 
-  final VoidCallback onBalance;
-  final VoidCallback onFocus;
-  final VoidCallback onTopUp;
-  final VoidCallback onBoost;
+  final VoidCallback onPlus;
+  final VoidCallback onWallet;
+  final VoidCallback onVerification;
+  final VoidCallback onSos;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final balance = ref.watch(tokenWalletProvider).balance;
-
-    return BbV5Card(
-      radius: 24,
-      padding: const EdgeInsets.all(16),
-      tint: BbV5Colors.terraSoft,
-      onTap: onBalance,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: BbV5Colors.accent,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.52),
-                  ),
-                  boxShadow: BbV5Shadows.pill,
-                ),
-                child: const Icon(
-                  LucideIcons.sparkles,
-                  size: 22,
-                  color: BbV5Colors.paperHi,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Frendly Tokens',
-                      style: bbV5DisplayStyle(
-                        fontSize: 15,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Продвигай встречи, маршруты и события',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.meta.copyWith(
-                        fontSize: 11.5,
-                        color: BbV5Colors.inkMute,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Text(
-                _formatTokenBalance(balance),
-                style: AppTextStyles.itemTitle.copyWith(
-                  fontSize: 16,
-                  letterSpacing: 0,
-                ),
-              ),
-              const SizedBox(width: 6),
-              const Icon(
-                LucideIcons.chevron_right,
-                size: 17,
-                color: BbV5Colors.inkMute,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _TokenEntryChip(
-                label: 'Баланс',
-                icon: LucideIcons.wallet,
-                onTap: onBalance,
-              ),
-              _TokenEntryChip(
-                label: 'Фокус',
-                icon: LucideIcons.sparkles,
-                onTap: onFocus,
-              ),
-              _TokenEntryChip(
-                label: 'Пополнить',
-                icon: LucideIcons.plus,
-                onTap: onTopUp,
-              ),
-              _TokenEntryChip(
-                label: 'Буст',
-                icon: LucideIcons.target,
-                onTap: onBoost,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-String _formatTokenBalance(int value) {
-  final raw = value.toString();
-  final buffer = StringBuffer();
-  for (var index = 0; index < raw.length; index += 1) {
-    final fromEnd = raw.length - index;
-    buffer.write(raw[index]);
-    if (fromEnd > 1 && fromEnd % 3 == 1) {
-      buffer.write(' ');
-    }
-  }
-  return buffer.toString();
-}
-
-class _ProfileTrustActions extends ConsumerWidget {
-  const _ProfileTrustActions({
-    required this.onVerification,
-    required this.onSos,
-    required this.onNotifications,
-  });
-
-  final VoidCallback onVerification;
-  final VoidCallback onSos;
-  final VoidCallback onNotifications;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final unread = ref.watch(notificationUnreadCountProvider).valueOrNull ?? 0;
 
     return Column(
       children: [
         Row(
           children: [
             Expanded(
-              child: _ProfileActionTile(
-                icon: LucideIcons.shield_check,
-                iconColor: BbV5Colors.brand,
-                title: 'Верификация',
-                subtitle: 'Получи галочку доверия',
-                onTap: onVerification,
+              child: _ProfileQuickTile(
+                icon: LucideIcons.crown,
+                title: 'Frendly+',
+                subtitle: 'Фильтры, лайки, закрытые вечера',
+                tone: BbV5Colors.gold,
+                onTap: onPlus,
               ),
             ),
             const SizedBox(width: AppSpacing.xs),
             Expanded(
-              child: _ProfileActionTile(
-                icon: LucideIcons.shield_alert,
-                iconColor: const Color(0xFFB5443B),
-                iconBackground: const Color(0x1FD85B4A),
-                title: 'Кнопка SOS',
-                subtitle: 'Доверенные и горячие линии',
-                onTap: onSos,
+              child: _ProfileQuickTile(
+                icon: LucideIcons.wallet,
+                title: 'Wallet',
+                subtitle: '${_formatTokenBalance(balance)} токенов',
+                tone: BbV5Colors.brand,
+                onTap: onWallet,
               ),
             ),
           ],
         ),
         const SizedBox(height: AppSpacing.xs),
-        BbV5Card(
-          radius: BbV5Radii.md,
-          padding: const EdgeInsets.all(16),
-          onTap: onNotifications,
-          child: Row(
-            children: [
-              const _ProfileActionIcon(
-                icon: LucideIcons.bell,
-                color: BbV5Colors.terra,
+        Row(
+          children: [
+            Expanded(
+              child: _ProfileQuickTile(
+                icon: LucideIcons.badge_check,
+                title: 'Верификация',
+                subtitle: 'Быстрее проходят заявки',
+                tone: BbV5Colors.brand,
+                onTap: onVerification,
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Уведомления',
-                      style: AppTextStyles.caption.copyWith(
-                        fontFamily: 'Sora',
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: BbV5Colors.ink,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Приглашения, чаты, перки',
-                      style: AppTextStyles.caption.copyWith(
-                        fontSize: 10.5,
-                        color: BbV5Colors.inkMute,
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: _ProfileQuickTile(
+                icon: LucideIcons.shield_alert,
+                title: 'SOS',
+                subtitle: 'Контакты и быстрый сигнал',
+                tone: const Color(0xFFB5443B),
+                onTap: onSos,
               ),
-              if (unread > 0)
-                Container(
-                  height: 24,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: BbV5Colors.accent,
-                    borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                  ),
-                  child: Text(
-                    unread > 99 ? '99+' : '$unread',
-                    style: AppTextStyles.caption.copyWith(
-                      fontFamily: 'Sora',
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                      color: BbV5Colors.paperHi,
-                    ),
-                  ),
-                ),
-              const SizedBox(width: AppSpacing.xs),
-              const Icon(
-                LucideIcons.chevron_right,
-                size: 17,
-                color: BbV5Colors.inkMute,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ],
     );
   }
 }
 
-class _ProfileActionTile extends StatelessWidget {
-  const _ProfileActionTile({
+class _ProfileQuickTile extends StatelessWidget {
+  const _ProfileQuickTile({
     required this.icon,
-    required this.iconColor,
     required this.title,
     required this.subtitle,
+    required this.tone,
     required this.onTap,
-    this.iconBackground,
   });
 
   final IconData icon;
-  final Color iconColor;
-  final Color? iconBackground;
   final String title;
   final String subtitle;
+  final Color tone;
   final VoidCallback onTap;
 
   @override
@@ -844,10 +589,15 @@ class _ProfileActionTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ProfileActionIcon(
-            icon: icon,
-            color: iconColor,
-            background: iconBackground,
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: tone.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+              border: Border.all(color: tone.withValues(alpha: 0.24)),
+            ),
+            child: Icon(icon, size: 17, color: tone),
           ),
           const SizedBox(height: 10),
           Text(
@@ -878,55 +628,17 @@ class _ProfileActionTile extends StatelessWidget {
   }
 }
 
-class _ProfileActionIcon extends StatelessWidget {
-  const _ProfileActionIcon({
-    required this.icon,
-    required this.color,
-    this.background,
-  });
-
-  final IconData icon;
-  final Color color;
-  final Color? background;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: background ?? BbV5Colors.paper,
-        shape: BoxShape.circle,
-        border: Border.all(color: BbV5Colors.hair),
-      ),
-      child: Icon(icon, size: 17, color: color),
-    );
+String _formatTokenBalance(int value) {
+  final raw = value.toString();
+  final buffer = StringBuffer();
+  for (var index = 0; index < raw.length; index += 1) {
+    final fromEnd = raw.length - index;
+    buffer.write(raw[index]);
+    if (fromEnd > 1 && fromEnd % 3 == 1) {
+      buffer.write(' ');
+    }
   }
-}
-
-class _TokenEntryChip extends StatelessWidget {
-  const _TokenEntryChip({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return BbV5PillButton(
-      label: label,
-      icon: icon,
-      height: 34,
-      fontSize: 11.5,
-      iconSize: 13,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      onPressed: onTap,
-    );
-  }
+  return buffer.toString();
 }
 
 class _ProfileSection extends StatelessWidget {

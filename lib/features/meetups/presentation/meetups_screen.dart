@@ -58,13 +58,16 @@ final _meetupsFeedProvider =
     await authBootstrap;
 
     final location = await _meetupsLocation(manualLocation, locationService);
+    if (location == null) {
+      return const [];
+    }
     final page = await repository.fetchEvents(
       filter: 'nearby',
       q: query.q,
       access: query.backendAccess,
       date: query.backendDate,
-      latitude: location?.latitude,
-      longitude: location?.longitude,
+      latitude: location.latitude,
+      longitude: location.longitude,
       radiusKm: query.radiusKm.toDouble(),
       limit: 60,
       cancelToken: cancelToken,

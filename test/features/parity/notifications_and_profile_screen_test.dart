@@ -89,6 +89,25 @@ class _FakeMediaPrewarmService extends AppMediaPrewarmService {
   }
 }
 
+class _FakeSocialRepository extends BackendRepository {
+  _FakeSocialRepository({required super.ref}) : super(dio: Dio());
+
+  @override
+  Future<ProfileSocialData> setProfileFollow(
+    String userId, {
+    required bool follow,
+  }) async {
+    return ProfileSocialData(
+      followers: follow ? 249 : 248,
+      likes: 1340,
+      superLikes: 32,
+      iFollow: follow,
+      iLike: false,
+      iSuper: false,
+    );
+  }
+}
+
 Widget _wrap(
   Widget child, {
   List<Override> extraOverrides = const [],
@@ -255,10 +274,12 @@ void main() {
 
     expect(find.text('Аккаунт'), findsOneWidget);
     expect(find.byKey(const ValueKey('profile-header-sos')), findsOneWidget);
-    expect(find.text('Frendly Tokens'), findsOneWidget);
+    expect(find.text('Frendly Tokens'), findsNothing);
+    expect(find.text('Frendly+'), findsOneWidget);
+    expect(find.text('Wallet'), findsOneWidget);
     expect(find.text('Верификация'), findsOneWidget);
-    expect(find.text('Кнопка SOS'), findsOneWidget);
-    expect(find.text('Уведомления'), findsOneWidget);
+    expect(find.text('SOS'), findsOneWidget);
+    expect(find.text('Уведомления'), findsNothing);
     expect(find.text('0'), findsWidgets);
     expect(find.text('1 240'), findsNothing);
     expect(find.text('Подписчиков'), findsNothing);
@@ -604,6 +625,84 @@ void main() {
     expect(find.text('История'), findsOneWidget);
     expect(find.text('Позвать на встречу'), findsOneWidget);
     expect(find.text('Написать'), findsOneWidget);
+  });
+
+  testWidgets('public user profile updates social stats optimistically',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      _wrap(
+        const UserProfileScreen(userId: 'user-anya'),
+        extraOverrides: [
+          backendRepositoryProvider.overrideWith(
+            (ref) => _FakeSocialRepository(ref: ref),
+          ),
+          personProfileProvider.overrideWith(
+            (ref, userId) async => const ProfileData(
+              id: 'user-anya',
+              displayName: 'Аня К',
+              verified: true,
+              online: true,
+              age: 27,
+              city: 'Москва',
+              area: 'Чистые пруды',
+              bio: 'Люблю камерные вечера и хорошие бары.',
+              vibe: 'Спокойно',
+              rating: 4.9,
+              meetupCount: 23,
+              avatarUrl: null,
+              interests: ['Кофе'],
+              intent: ['Свидания'],
+              social: ProfileSocialData(
+                followers: 248,
+                likes: 1340,
+                superLikes: 32,
+                iFollow: false,
+                iLike: false,
+                iSuper: false,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('profile-stat-followers')),
+        matching: find.text('248'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(find.text('Подписаться'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Подписаться'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('profile-stat-followers')),
+        matching: find.text('249'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('profile-stat-followers')),
+        matching: find.text('248'),
+      ),
+      findsNothing,
+    );
+    expect(find.text('Подписан'), findsOneWidget);
   });
 
   testWidgets('public route for current user hides social actions and CTAs',

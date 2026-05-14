@@ -57,7 +57,9 @@ class ChatsScreen extends ConsumerWidget {
         ? ref.watch(communitiesProvider)
         : const AsyncValue<List<Community>>.data(<Community>[]);
     final knownPersonalChats = ref.watch(knownPersonalChatsProvider);
-    final meetupChats = meetupChatsAsync.valueOrNull ?? const [];
+    final localMeetupChats = ref.watch(meetupChatsLocalStateProvider);
+    final meetupChats =
+        localMeetupChats ?? meetupChatsAsync.valueOrNull ?? const [];
     final promotedIds = meetupChats.isEmpty
         ? const <String>{}
         : ref.watch(
@@ -70,11 +72,15 @@ class ChatsScreen extends ConsumerWidget {
     if (realtimeScope != null) {
       ref.watch(chatRealtimeSyncForScopeProvider(realtimeScope));
     }
+    final localPersonalChats = ref.watch(personalChatsLocalStateProvider);
     final personalChats = mergeKnownPersonalChats(
-      personalChatsAsync.valueOrNull ?? const [],
+      localPersonalChats ?? personalChatsAsync.valueOrNull ?? const [],
       knownPersonalChats.values,
     );
-    final communityChats = (communitiesAsync.valueOrNull ?? const <Community>[])
+    final localCommunityChats = ref.watch(communityChatsLocalStateProvider);
+    final communityChats = (localCommunityChats ??
+            communitiesAsync.valueOrNull ??
+            const <Community>[])
         .where(_isJoinedCommunityChat)
         .toList(growable: false);
     final allChatListHasRows = meetupChats.isNotEmpty ||
@@ -157,6 +163,11 @@ class ChatsScreen extends ConsumerWidget {
                     onMeetupPinToggle: (chat) {
                       unawaited(_toggleMeetupChatPinned(ref, chat));
                     },
+                    onMeetupDelete: (chat) => _requestDeleteMeetupChat(
+                      context,
+                      ref,
+                      chat,
+                    ),
                     onPersonalOpen: (chat) => context.pushRoute(
                       AppRoute.personalChat,
                       pathParameters: {'chatId': chat.id},
@@ -164,6 +175,11 @@ class ChatsScreen extends ConsumerWidget {
                     onPersonalPinToggle: (chat) {
                       unawaited(_togglePersonalChatPinned(ref, chat));
                     },
+                    onPersonalDelete: (chat) => _requestDeletePersonalChat(
+                      context,
+                      ref,
+                      chat,
+                    ),
                     onCommunityOpen: (community) => context.pushRoute(
                       AppRoute.communityChat,
                       pathParameters: {'communityId': community.id},
@@ -178,6 +194,11 @@ class ChatsScreen extends ConsumerWidget {
                       onPinToggle: (chat) {
                         unawaited(_toggleMeetupChatPinned(ref, chat));
                       },
+                      onDelete: (chat) => _requestDeleteMeetupChat(
+                        context,
+                        ref,
+                        chat,
+                      ),
                       onLaunch: (chat) => _startEveningFromChatList(
                         context,
                         chat,
@@ -219,6 +240,11 @@ class ChatsScreen extends ConsumerWidget {
                       onPinToggle: (chat) {
                         unawaited(_togglePersonalChatPinned(ref, chat));
                       },
+                      onDelete: (chat) => _requestDeletePersonalChat(
+                        context,
+                        ref,
+                        chat,
+                      ),
                     ),
                     loading: () => const _V5ChatState(
                       text: 'Загружаем личные чаты',
@@ -288,6 +314,246 @@ Future<void> _togglePersonalChatPinned(WidgetRef ref, PersonalChat chat) async {
     ref.invalidate(personalChatsProvider);
   } catch (_) {
     ref.read(personalChatsLocalStateProvider.notifier).state = previous;
+  }
+}
+
+enum _ChatRowAction { pin, delete }
+
+typedef _AsyncValueChanged<T> = Future<void> Function(T value);
+
+Future<void> _showChatRowActions(
+  BuildContext context, {
+  required bool pinned,
+  required VoidCallback onPin,
+  required Future<void> Function() onDelete,
+}) async {
+  final action = await _showChatActionsSheet(context, pinned: pinned);
+  if (!context.mounted || action == null) {
+    return;
+  }
+  switch (action) {
+    case _ChatRowAction.pin:
+      onPin();
+      return;
+    case _ChatRowAction.delete:
+      await onDelete();
+      return;
+  }
+}
+
+Future<_ChatRowAction?> _showChatActionsSheet(
+  BuildContext context, {
+  required bool pinned,
+}) {
+  return showModalBottomSheet<_ChatRowAction>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withValues(alpha: 0.45),
+    builder: (context) => BbV5BottomSheet(
+      maxHeightFactor: 0.45,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _V5ChatActionTile(
+            icon: pinned ? Icons.push_pin : Icons.push_pin_outlined,
+            label: pinned ? 'Открепить' : 'Закрепить',
+            onTap: () => Navigator.of(context).pop(_ChatRowAction.pin),
+          ),
+          const SizedBox(height: 6),
+          _V5ChatActionTile(
+            icon: LucideIcons.trash_2,
+            label: 'Удалить',
+            destructive: true,
+            onTap: () => Navigator.of(context).pop(_ChatRowAction.delete),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<void> _requestDeleteMeetupChat(
+  BuildContext context,
+  WidgetRef ref,
+  MeetupChat chat,
+) async {
+  final currentUserId = ref.read(currentUserIdProvider);
+  if (chat.hostUserId != null && chat.hostUserId == currentUserId) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content:
+            Text('Хост не может выйти из своей встречи через удаление чата'),
+      ),
+    );
+    return;
+  }
+
+  final confirmed = await _confirmDeleteChat(context, meetup: true);
+  if (!context.mounted || !confirmed) {
+    return;
+  }
+  await _deleteMeetupChat(context, ref, chat);
+}
+
+Future<void> _requestDeletePersonalChat(
+  BuildContext context,
+  WidgetRef ref,
+  PersonalChat chat,
+) async {
+  final confirmed = await _confirmDeleteChat(context, meetup: false);
+  if (!context.mounted || !confirmed) {
+    return;
+  }
+  await _deletePersonalChat(context, ref, chat);
+}
+
+Future<bool> _confirmDeleteChat(
+  BuildContext context, {
+  required bool meetup,
+}) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(
+        meetup ? 'Удалить чат и выйти из встречи?' : 'Удалить личный чат?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: FilledButton.styleFrom(
+            backgroundColor: BbV5Colors.terra,
+            foregroundColor: BbV5Colors.paperHi,
+          ),
+          child: const Text('Удалить чат'),
+        ),
+      ],
+    ),
+  );
+  return result ?? false;
+}
+
+Future<void> _deleteMeetupChat(
+  BuildContext context,
+  WidgetRef ref,
+  MeetupChat chat,
+) async {
+  final previousLocal = ref.read(meetupChatsLocalStateProvider);
+  final previousRemote = ref.read(meetupChatsProvider).valueOrNull;
+  final previous = previousLocal ?? previousRemote;
+  if (previous == null) {
+    return;
+  }
+
+  ref.read(meetupChatsLocalStateProvider.notifier).state =
+      previous.where((item) => item.id != chat.id).toList(growable: false);
+
+  try {
+    await ref.read(backendRepositoryProvider).deleteChat(chat.id);
+    ref.invalidate(meetupChatsProvider);
+    if (chat.eventId case final eventId?) {
+      ref.invalidate(eventDetailProvider(eventId));
+    }
+    _invalidateEventFeeds(ref);
+  } catch (_) {
+    ref.read(meetupChatsLocalStateProvider.notifier).state = previous;
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не получилось удалить чат')),
+      );
+    }
+  }
+}
+
+Future<void> _deletePersonalChat(
+  BuildContext context,
+  WidgetRef ref,
+  PersonalChat chat,
+) async {
+  final previousLocal = ref.read(personalChatsLocalStateProvider);
+  final previousRemote = ref.read(personalChatsProvider).valueOrNull;
+  final previousKnown = ref.read(knownPersonalChatsProvider);
+  final previous = previousLocal ?? previousRemote;
+  if (previous == null) {
+    return;
+  }
+
+  ref.read(personalChatsLocalStateProvider.notifier).state =
+      previous.where((item) => item.id != chat.id).toList(growable: false);
+  ref.read(knownPersonalChatsProvider.notifier).state = {
+    for (final entry in previousKnown.entries)
+      if (entry.key != chat.id) entry.key: entry.value,
+  };
+
+  try {
+    await ref.read(backendRepositoryProvider).deleteChat(chat.id);
+    ref.invalidate(personalChatsProvider);
+  } catch (_) {
+    ref.read(personalChatsLocalStateProvider.notifier).state = previous;
+    ref.read(knownPersonalChatsProvider.notifier).state = previousKnown;
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не получилось удалить чат')),
+      );
+    }
+  }
+}
+
+void _invalidateEventFeeds(WidgetRef ref) {
+  ref.invalidate(eventsProvider('nearby'));
+  ref.invalidate(mapEventsProvider);
+  ref.invalidate(eventsProvider('now'));
+  ref.invalidate(eventsProvider('calm'));
+  ref.invalidate(eventsProvider('newcomers'));
+  ref.invalidate(eventsProvider('date'));
+}
+
+class _V5ChatActionTile extends StatelessWidget {
+  const _V5ChatActionTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = destructive ? BbV5Colors.terra : BbV5Colors.ink;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(BbV5Radii.md),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTextStyles.itemTitle.copyWith(
+                    color: color,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -630,8 +896,10 @@ class _V5AllChatList extends StatelessWidget {
     required this.error,
     required this.onMeetupOpen,
     required this.onMeetupPinToggle,
+    required this.onMeetupDelete,
     required this.onPersonalOpen,
     required this.onPersonalPinToggle,
+    required this.onPersonalDelete,
     required this.onCommunityOpen,
   });
 
@@ -643,8 +911,10 @@ class _V5AllChatList extends StatelessWidget {
   final bool error;
   final ValueChanged<MeetupChat> onMeetupOpen;
   final ValueChanged<MeetupChat> onMeetupPinToggle;
+  final _AsyncValueChanged<MeetupChat> onMeetupDelete;
   final ValueChanged<PersonalChat> onPersonalOpen;
   final ValueChanged<PersonalChat> onPersonalPinToggle;
+  final _AsyncValueChanged<PersonalChat> onPersonalDelete;
   final ValueChanged<Community> onCommunityOpen;
 
   @override
@@ -689,11 +959,14 @@ class _V5AllChatList extends StatelessWidget {
         children: [
           for (var index = 0; index < visibleEntries.length; index++) ...[
             visibleEntries[index].buildRow(
+              context: context,
               promotedIds: promotedIds,
               onMeetupOpen: onMeetupOpen,
               onMeetupPinToggle: onMeetupPinToggle,
+              onMeetupDelete: onMeetupDelete,
               onPersonalOpen: onPersonalOpen,
               onPersonalPinToggle: onPersonalPinToggle,
+              onPersonalDelete: onPersonalDelete,
               onCommunityOpen: onCommunityOpen,
             ),
             if (index < visibleEntries.length - 1) const _V5RowDivider(),
@@ -726,11 +999,14 @@ class _V5AllChatEntry {
       meetup?.lastTime ?? personal?.lastTime ?? _communityLastTime(community);
 
   Widget buildRow({
+    required BuildContext context,
     required Set<String> promotedIds,
     required ValueChanged<MeetupChat> onMeetupOpen,
     required ValueChanged<MeetupChat> onMeetupPinToggle,
+    required _AsyncValueChanged<MeetupChat> onMeetupDelete,
     required ValueChanged<PersonalChat> onPersonalOpen,
     required ValueChanged<PersonalChat> onPersonalPinToggle,
+    required _AsyncValueChanged<PersonalChat> onPersonalDelete,
     required ValueChanged<Community> onCommunityOpen,
   }) {
     final meetupChat = meetup;
@@ -753,6 +1029,15 @@ class _V5AllChatEntry {
         ),
         onTap: () => onMeetupOpen(meetupChat),
         onPinToggle: () => onMeetupPinToggle(meetupChat),
+        onLongPress: () => unawaited(
+          _showChatRowActions(
+            context,
+            pinned: meetupChat.isPinned,
+            onPin: () => onMeetupPinToggle(meetupChat),
+            onDelete: () => onMeetupDelete(meetupChat),
+          ),
+        ),
+        onDelete: () => onMeetupDelete(meetupChat),
       );
     }
 
@@ -773,6 +1058,15 @@ class _V5AllChatEntry {
         ),
         onTap: () => onPersonalOpen(personalChat),
         onPinToggle: () => onPersonalPinToggle(personalChat),
+        onLongPress: () => unawaited(
+          _showChatRowActions(
+            context,
+            pinned: personalChat.isPinned,
+            onPin: () => onPersonalPinToggle(personalChat),
+            onDelete: () => onPersonalDelete(personalChat),
+          ),
+        ),
+        onDelete: () => onPersonalDelete(personalChat),
       );
     }
 
@@ -935,11 +1229,15 @@ class _V5ChatRow extends StatelessWidget {
     required this.item,
     this.onTap,
     this.onPinToggle,
+    this.onLongPress,
+    this.onDelete,
   });
 
   final _V5ChatRowItem item;
   final VoidCallback? onTap;
   final VoidCallback? onPinToggle;
+  final VoidCallback? onLongPress;
+  final Future<void> Function()? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1060,7 +1358,10 @@ class _V5ChatRow extends StatelessWidget {
                     ],
                     if (item.unread > 0) ...[
                       const Spacer(),
-                      _V5MiniCounter(count: item.unread),
+                      _V5MiniCounter(
+                        key: ValueKey('chat-row-unread-${item.id}'),
+                        count: item.unread,
+                      ),
                     ],
                   ],
                 ),
@@ -1071,16 +1372,75 @@ class _V5ChatRow extends StatelessWidget {
       ),
     );
 
-    if (onTap == null) {
-      return row;
+    final interactive = onTap == null && onLongPress == null
+        ? row
+        : Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              onLongPress: onLongPress,
+              child: row,
+            ),
+          );
+
+    if (onDelete == null) {
+      return interactive;
     }
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: row,
+    return _V5SwipeDeleteAction(
+      id: item.id,
+      onDelete: onDelete!,
+      child: interactive,
+    );
+  }
+}
+
+class _V5SwipeDeleteAction extends StatelessWidget {
+  const _V5SwipeDeleteAction({
+    required this.id,
+    required this.child,
+    required this.onDelete,
+  });
+
+  final String id;
+  final Widget child;
+  final Future<void> Function() onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dismissible(
+      key: ValueKey('chat-dismiss-$id'),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (direction) async {
+        await onDelete();
+        return false;
+      },
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        color: BbV5Colors.terra,
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              LucideIcons.trash_2,
+              size: 18,
+              color: BbV5Colors.paperHi,
+            ),
+            SizedBox(width: 8),
+            Text(
+              'Удалить',
+              style: TextStyle(
+                color: BbV5Colors.paperHi,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
+      child: child,
     );
   }
 }
@@ -1135,6 +1495,7 @@ class _V5MeetupChatList extends StatelessWidget {
     required this.currentUserId,
     required this.onOpen,
     required this.onPinToggle,
+    required this.onDelete,
     required this.onLaunch,
   });
 
@@ -1142,6 +1503,7 @@ class _V5MeetupChatList extends StatelessWidget {
   final String? currentUserId;
   final ValueChanged<MeetupChat> onOpen;
   final ValueChanged<MeetupChat> onPinToggle;
+  final _AsyncValueChanged<MeetupChat> onDelete;
   final ValueChanged<MeetupChat> onLaunch;
 
   @override
@@ -1181,6 +1543,15 @@ class _V5MeetupChatList extends StatelessWidget {
       type: entry.type,
       onTap: () => onOpen(chat),
       onPinToggle: () => onPinToggle(chat),
+      onLongPress: () => unawaited(
+        _showChatRowActions(
+          context,
+          pinned: chat.isPinned,
+          onPin: () => onPinToggle(chat),
+          onDelete: () => onDelete(chat),
+        ),
+      ),
+      onDelete: () => onDelete(chat),
       onLaunch: canLaunch ? () => onLaunch(chat) : null,
     );
   }
@@ -1191,11 +1562,13 @@ class _V5PersonalChatList extends StatelessWidget {
     required this.chats,
     required this.onOpen,
     required this.onPinToggle,
+    required this.onDelete,
   });
 
   final List<PersonalChat> chats;
   final ValueChanged<PersonalChat> onOpen;
   final ValueChanged<PersonalChat> onPinToggle;
+  final _AsyncValueChanged<PersonalChat> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1214,6 +1587,15 @@ class _V5PersonalChatList extends StatelessWidget {
               chat: chat,
               onTap: () => onOpen(chat),
               onPinToggle: () => onPinToggle(chat),
+              onLongPress: () => unawaited(
+                _showChatRowActions(
+                  context,
+                  pinned: chat.isPinned,
+                  onPin: () => onPinToggle(chat),
+                  onDelete: () => onDelete(chat),
+                ),
+              ),
+              onDelete: () => onDelete(chat),
             ),
         ],
       ),
@@ -1262,6 +1644,8 @@ class _V5MeetupChatRow extends StatelessWidget {
     required this.type,
     required this.onTap,
     required this.onPinToggle,
+    this.onLongPress,
+    this.onDelete,
     this.onLaunch,
   });
 
@@ -1269,6 +1653,8 @@ class _V5MeetupChatRow extends StatelessWidget {
   final _MeetupChatEntryType type;
   final VoidCallback onTap;
   final VoidCallback onPinToggle;
+  final VoidCallback? onLongPress;
+  final Future<void> Function()? onDelete;
   final VoidCallback? onLaunch;
 
   @override
@@ -1281,10 +1667,11 @@ class _V5MeetupChatRow extends StatelessWidget {
         : '${chat.lastAuthor}: ${chat.lastMessage}';
     final titleColor = isDone ? BbV5Colors.inkSoft : BbV5Colors.ink;
 
-    return Material(
+    final row = Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           child: Column(
@@ -1440,6 +1827,16 @@ class _V5MeetupChatRow extends StatelessWidget {
         ),
       ),
     );
+
+    if (onDelete == null) {
+      return row;
+    }
+
+    return _V5SwipeDeleteAction(
+      id: chat.id,
+      onDelete: onDelete!,
+      child: row,
+    );
   }
 }
 
@@ -1477,18 +1874,23 @@ class _V5PersonalChatRow extends StatelessWidget {
     required this.chat,
     required this.onTap,
     required this.onPinToggle,
+    this.onLongPress,
+    this.onDelete,
   });
 
   final PersonalChat chat;
   final VoidCallback onTap;
   final VoidCallback onPinToggle;
+  final VoidCallback? onLongPress;
+  final Future<void> Function()? onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    final row = Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           child: Row(
@@ -1573,6 +1975,16 @@ class _V5PersonalChatRow extends StatelessWidget {
         ),
       ),
     );
+
+    if (onDelete == null) {
+      return row;
+    }
+
+    return _V5SwipeDeleteAction(
+      id: chat.id,
+      onDelete: onDelete!,
+      child: row,
+    );
   }
 }
 
@@ -1642,7 +2054,7 @@ class _V5InitialsAvatar extends StatelessWidget {
 }
 
 class _V5MiniCounter extends StatelessWidget {
-  const _V5MiniCounter({required this.count});
+  const _V5MiniCounter({required this.count, super.key});
 
   final int count;
 

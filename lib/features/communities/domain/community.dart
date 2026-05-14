@@ -285,4 +285,35 @@ class Community {
           .toList(growable: false),
     );
   }
+
+  Community copyWith({
+    int? unread,
+  }) {
+    return Community(
+      id: id,
+      chatId: chatId,
+      name: name,
+      avatar: avatar,
+      description: description,
+      privacy: privacy,
+      members: members,
+      online: online,
+      tags: tags,
+      joinRule: joinRule,
+      joined: joined,
+      isOwner: isOwner,
+      premiumOnly: premiumOnly,
+      unread: unread ?? this.unread,
+      mood: mood,
+      sharedMediaLabel: sharedMediaLabel,
+      news: news,
+      meetups: meetups,
+      media: media,
+      chatPreview: chatPreview,
+      chatMessages: chatMessages,
+      socialLinks: socialLinks,
+      memberNames: memberNames,
+      nextMeetup: nextMeetup,
+    );
+  }
 }

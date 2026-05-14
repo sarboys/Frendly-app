@@ -128,6 +128,46 @@ void main() {
     expect(find.text('Замоскворечье ночью'), findsNothing);
   });
 
+  testWidgets('tonight uses arbitrary manual city instead of Moscow fallback', (
+    tester,
+  ) async {
+    final routeCities = <String>[];
+    final afficheCities = <String?>[];
+
+    await _pumpTonightDirect(
+      tester,
+      includeDefaultLocation: false,
+      extraOverrides: [
+        manualLocationProvider.overrideWith((ref) {
+          return ManualLocationController(null)
+            ..setLocation(
+              const ManualLocation(
+                label: 'Da Nang',
+                city: 'Da Nang',
+                latitude: 16.0471,
+                longitude: 108.2068,
+              ),
+            );
+        }),
+        eveningRouteTemplatesProvider.overrideWith((ref, city) async {
+          routeCities.add(city);
+          return const <EveningRouteTemplateSummary>[];
+        }),
+        afficheEventsProvider.overrideWith((ref, query) async {
+          afficheCities.add(query.city);
+          return const <AfficheEvent>[];
+        }),
+      ],
+    );
+
+    await _dragUntilVisible(tester, find.text('Афиша города'), 420);
+
+    expect(routeCities, contains('Da Nang'));
+    expect(routeCities, isNot(contains('Москва')));
+    expect(afficheCities, contains('Da Nang'));
+    expect(afficheCities, isNot(contains('Москва')));
+  });
+
   testWidgets('tonight radar legend keeps full row width', (tester) async {
     await _pumpTonightDirect(tester);
 
@@ -184,11 +224,12 @@ void main() {
     expect(find.text('Радар вечера'), findsNothing);
   });
 
-  testWidgets('tonight header AI opens city limited flow', (
+  testWidgets('tonight header AI asks for location when city is unknown', (
     tester,
   ) async {
     await _pumpTonightApp(
       tester,
+      includeDefaultLocation: false,
       extraOverrides: [
         tonightCityAvailabilityProvider.overrideWith((ref) async => false),
       ],
@@ -198,24 +239,26 @@ void main() {
     await tester.pump(const Duration(milliseconds: 260));
 
     expect(
-      find.text('Frendly Вечер — пока только в Москве и СПб'),
+      find.text('Frendly Вечер — сначала выбери город'),
       findsOneWidget,
     );
   });
 
-  testWidgets('tonight header AI opens builder from manual Moscow location', (
+  testWidgets('tonight header AI opens builder from any manual location', (
     tester,
   ) async {
     await _pumpTonightApp(
       tester,
+      includeDefaultLocation: false,
       extraOverrides: [
         manualLocationProvider.overrideWith((ref) {
           return ManualLocationController(null)
             ..setLocation(
               const ManualLocation(
-                label: 'Москва - Покровка',
-                latitude: 55.757,
-                longitude: 37.648,
+                label: 'Da Nang',
+                city: 'Da Nang',
+                latitude: 16.0471,
+                longitude: 108.2068,
               ),
             );
         }),
@@ -232,7 +275,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text('Frendly Вечер — пока только в Москве и СПб'),
+      find.text('Frendly Вечер — сначала выбери город'),
       findsNothing,
     );
   });
@@ -406,7 +449,8 @@ void main() {
     expect(find.byType(AfficheEventsScreen), findsOneWidget);
     expect(find.byTooltip('Фильтры'), findsNothing);
     expect(find.byKey(const Key('affiche-v5-filter-row-date')), findsOneWidget);
-    expect(find.byKey(const Key('affiche-v5-filter-row-price')), findsOneWidget);
+    expect(
+        find.byKey(const Key('affiche-v5-filter-row-price')), findsOneWidget);
     expect(
       find.byKey(const Key('affiche-v5-filter-row-category')),
       findsOneWidget,
@@ -554,6 +598,7 @@ void main() {
 Future<void> _pumpTonightDirect(
   WidgetTester tester, {
   List<Override> extraOverrides = const [],
+  bool includeDefaultLocation = true,
 }) async {
   _useTallPhoneViewport(tester);
 
@@ -561,6 +606,7 @@ Future<void> _pumpTonightDirect(
     ProviderScope(
       overrides: [
         ...buildTestOverrides(),
+        if (includeDefaultLocation) _defaultManualLocationOverride(),
         afficheEventsProvider.overrideWith(
           (ref, query) async => _afficheFixtures,
         ),
@@ -577,6 +623,7 @@ Future<void> _pumpTonightDirect(
 Future<void> _pumpTonightApp(
   WidgetTester tester, {
   List<Override> extraOverrides = const [],
+  bool includeDefaultLocation = true,
 }) async {
   if (tester.view.physicalSize.height <= 700) {
     _useTallPhoneViewport(tester);
@@ -592,6 +639,7 @@ Future<void> _pumpTonightApp(
     BigBreakRoot(
       overrides: [
         ...buildTestOverrides(),
+        if (includeDefaultLocation) _defaultManualLocationOverride(),
         initialAuthTokensProvider.overrideWithValue(
           const AuthTokens(
             accessToken: 'access-token',
@@ -607,6 +655,20 @@ Future<void> _pumpTonightApp(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+Override _defaultManualLocationOverride() {
+  return manualLocationProvider.overrideWith((ref) {
+    return ManualLocationController(null)
+      ..setLocation(
+        const ManualLocation(
+          label: 'Москва',
+          city: 'Москва',
+          latitude: 55.7558,
+          longitude: 37.6173,
+        ),
+      );
+  });
 }
 
 void _useTallPhoneViewport(WidgetTester tester) {

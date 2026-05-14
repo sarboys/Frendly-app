@@ -623,6 +623,29 @@ class BackendRepository {
     );
   }
 
+  Future<PaginatedResponse<FollowingPerson>> fetchFollowingPeople({
+    required String eventId,
+    String? q,
+    String? cursor,
+    int limit = 20,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await dio.get<Map<String, dynamic>>(
+      '/people/following',
+      queryParameters: {
+        'eventId': eventId,
+        'limit': limit,
+        if (q != null && q.isNotEmpty) 'q': q,
+        if (cursor != null) 'cursor': cursor,
+      },
+      cancelToken: cancelToken,
+    );
+    return PaginatedResponse.fromJson(
+      response.data!,
+      FollowingPerson.fromJson,
+    );
+  }
+
   Future<PaginatedResponse<DatingProfileData>> fetchDatingDiscover({
     String? cursor,
     int limit = 20,
@@ -726,6 +749,13 @@ class BackendRepository {
     return response.data!['id'] as String;
   }
 
+  Future<void> inviteUserToEvent(String eventId, String userId) async {
+    await dio.post<Map<String, dynamic>>(
+      '/events/$eventId/invites',
+      data: {'userId': userId},
+    );
+  }
+
   Future<PaginatedResponse<MeetupChat>> fetchMeetupChats({
     String? cursor,
     int limit = 20,
@@ -769,6 +799,10 @@ class BackendRepository {
       '/chats/$chatId/pin',
       data: {'isPinned': isPinned},
     );
+  }
+
+  Future<void> deleteChat(String chatId) async {
+    await dio.delete<Map<String, dynamic>>('/chats/$chatId');
   }
 
   Future<PaginatedResponse<Community>> fetchCommunities({

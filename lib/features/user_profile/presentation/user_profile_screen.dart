@@ -43,6 +43,11 @@ class UserProfileScreen extends ConsumerWidget {
           _prewarmUserProfilePhotos(ref, profile);
           final isCurrentUser =
               currentUserId != null && (currentUserId == userId);
+          final social = isCurrentUser
+              ? profile.social
+              : ref.watch(profileSocialProvider(userId)).valueOrNull ??
+                  profile.social;
+          final visibleProfile = profile.copyWith(social: social);
           final commonInterests = currentProfile == null
               ? <String>[]
               : profile.interests
@@ -50,10 +55,10 @@ class UserProfileScreen extends ConsumerWidget {
                   .toList(growable: false);
 
           return ProfileV5Content(
-            key: ValueKey('user-profile-content-${profile.id}'),
-            profile: profile,
+            key: ValueKey('user-profile-content-${visibleProfile.id}'),
+            profile: visibleProfile,
             header: _PublicProfileHeader(
-              profile: profile,
+              profile: visibleProfile,
               userId: userId,
             ),
             showOwnerCards: false,
@@ -73,7 +78,7 @@ class UserProfileScreen extends ConsumerWidget {
                 ? null
                 : BbSocialActions(
                     userId: userId,
-                    initialSocial: profile.social,
+                    initialSocial: social,
                     variant: BbSocialActionsVariant.compact,
                   ),
             interestHighlights: commonInterests.toSet(),
@@ -90,7 +95,7 @@ class UserProfileScreen extends ConsumerWidget {
                 ? null
                 : _PublicProfileBottomBar(
                     userId: userId,
-                    profile: profile,
+                    profile: visibleProfile,
                   ),
           );
         },

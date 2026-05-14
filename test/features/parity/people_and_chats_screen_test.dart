@@ -287,6 +287,14 @@ void main() {
 
     expect(brixTop, lessThan(annaTop));
     expect(annaTop, lessThan(standupTop));
+
+    final unreadBadge = find.byKey(const ValueKey('chat-row-unread-mc-now'));
+    expect(unreadBadge, findsOneWidget);
+    expect(
+      tester.getCenter(unreadBadge).dx,
+      greaterThan(
+          tester.getCenter(find.text('Brix · вино после работы').last).dx),
+    );
   });
 
   testWidgets('all chats include joined community chats', (tester) async {
@@ -700,16 +708,74 @@ void main() {
     expect(find.text('ПРЕДСТОЯЩИЕ'), findsOneWidget);
     expect(find.text('Обычная встреча'), findsOneWidget);
   });
+
+  testWidgets('meetup chat long press can delete chat and leave event',
+      (tester) async {
+    _RecordingBackendRepository? repository;
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        child: const ChatsScreen(),
+        targetText: 'unused',
+        extraOverrides: [
+          currentUserIdProvider.overrideWith((ref) => 'user-me'),
+          backendRepositoryProvider.overrideWith((ref) {
+            final created = _RecordingBackendRepository(ref);
+            repository = created;
+            return created;
+          }),
+          chatSegmentProvider.overrideWith((ref) => ChatSegment.meetup),
+          meetupChatsProvider.overrideWith(
+            (ref) async => const [
+              MeetupChat(
+                id: 'regular-upcoming',
+                eventId: 'event-1',
+                title: 'Обычная встреча',
+                emoji: '🍷',
+                time: '08:33',
+                lastMessage: 'Голосовое сообщение',
+                lastAuthor: 'Сергей',
+                lastTime: '5 ч',
+                unread: 0,
+                members: ['Сергей', 'Ты'],
+                status: 'Сегодня',
+                phase: MeetupPhase.upcoming,
+                hostUserId: 'host-1',
+              ),
+            ],
+          ),
+          personalChatsProvider.overrideWith((ref) async => const []),
+          communitiesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('Обычная встреча'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Удалить'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Удалить чат'));
+    await tester.pumpAndSettle();
+
+    expect(repository?.deletedChatIds, ['regular-upcoming']);
+    expect(find.text('Обычная встреча'), findsNothing);
+  });
 }
 
 class _RecordingBackendRepository extends BackendRepository {
   _RecordingBackendRepository(Ref ref) : super(ref: ref, dio: Dio());
 
   final List<String> startedSessionIds = [];
+  final List<String> deletedChatIds = [];
 
   @override
   Future<void> startEveningSession(String sessionId) async {
     startedSessionIds.add(sessionId);
+  }
+
+  @override
+  Future<void> deleteChat(String chatId) async {
+    deletedChatIds.add(chatId);
   }
 }
 

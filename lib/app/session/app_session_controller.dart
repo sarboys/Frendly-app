@@ -165,6 +165,7 @@ class AppSessionController {
     ref.invalidate(personProfileProvider);
     ref.invalidate(profileSocialProvider);
     ref.invalidate(meetupChatsProvider);
+    ref.invalidate(communityChatsLocalStateProvider);
     ref.invalidate(eveningSessionsProvider);
     ref.invalidate(eveningSessionProvider);
     ref.invalidate(eveningRouteTemplatesProvider);

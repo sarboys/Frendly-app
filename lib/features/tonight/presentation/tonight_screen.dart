@@ -17,6 +17,7 @@ import 'package:big_break_mobile/shared/models/affiche_event.dart';
 import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
+import 'package:big_break_mobile/shared/utils/location_label.dart';
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_brand_icon.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
@@ -263,14 +264,19 @@ final tonightHeaderLocationProvider = FutureProvider<String?>((ref) async {
 });
 
 final tonightCityAvailabilityProvider = FutureProvider<bool>((ref) async {
+  final city = await ref.watch(tonightEffectiveCityProvider.future);
+  return city != null && city.trim().isNotEmpty;
+});
+
+final tonightEffectiveCityProvider = FutureProvider<String?>((ref) async {
   final manualLocation = ref.watch(manualLocationProvider);
-  if (manualLocation != null) {
-    return isSupportedManualLocation(manualLocation);
+  final manualCity = _cityLabelFromManualLocation(manualLocation);
+  if (manualCity != null) {
+    return manualCity;
   }
 
-  final locationLabelFuture = ref.watch(tonightHeaderLocationProvider.future);
-  final locationLabel = await locationLabelFuture;
-  return isSupportedCityLocationLabel(locationLabel);
+  final locationLabel = await ref.watch(tonightHeaderLocationProvider.future);
+  return _cityLabelFromRaw(locationLabel);
 });
 
 class TonightScreen extends ConsumerStatefulWidget {
@@ -295,8 +301,11 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
                   .toSet(),
             ),
           );
-    final routeTemplatesAsync =
-        ref.watch(eveningRouteTemplatesProvider(_tonightAfficheCity(ref)));
+    final effectiveCity =
+        ref.watch(tonightEffectiveCityProvider).valueOrNull?.trim() ?? '';
+    final routeTemplatesAsync = effectiveCity.isEmpty
+        ? const AsyncValue<List<EveningRouteTemplateSummary>>.data([])
+        : ref.watch(eveningRouteTemplatesProvider(effectiveCity));
 
     return BbV5Scaffold(
       child: SafeArea(
@@ -1434,16 +1443,19 @@ class _TonightAfficheSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final city = _tonightAfficheCity(ref);
-    final afficheAsync = ref.watch(
-      afficheEventsProvider(
-        AfficheEventsQuery(
-          city: city,
-          priceMode: 'any',
-          limit: 5,
-        ),
-      ),
-    );
+    final city =
+        ref.watch(tonightEffectiveCityProvider).valueOrNull?.trim() ?? '';
+    final afficheAsync = city.isEmpty
+        ? const AsyncValue<List<AfficheEvent>>.data([])
+        : ref.watch(
+            afficheEventsProvider(
+              AfficheEventsQuery(
+                city: city,
+                priceMode: 'any',
+                limit: 5,
+              ),
+            ),
+          );
     final affiche = afficheAsync.valueOrNull ?? const <AfficheEvent>[];
     final visibleAffiche = affiche.take(5).toList(growable: false);
     if (affiche.isNotEmpty) {
@@ -2665,6 +2677,7 @@ class _TonightLocationSheetState extends ConsumerState<_TonightLocationSheet> {
 
   void _refreshTonightLocation() {
     ref.invalidate(tonightHeaderLocationProvider);
+    ref.invalidate(tonightEffectiveCityProvider);
     ref.invalidate(tonightCityAvailabilityProvider);
     ref.invalidate(eventsProvider('nearby'));
   }
@@ -3293,22 +3306,27 @@ bool _looksLikeHouseNumber(String item) {
   return RegExp(r'^\d+[а-яa-z]?$').hasMatch(normalized);
 }
 
-String _tonightAfficheCity(WidgetRef ref) {
-  final manualLocation = ref.watch(manualLocationProvider);
-  final raw = manualLocation?.city ?? manualLocation?.label;
-  final normalized = raw
-          ?.toLowerCase()
-          .replaceAll('ё', 'е')
-          .replaceAll(RegExp(r'[^a-zа-я0-9]+'), ' ')
-          .trim() ??
-      '';
-  if (normalized.contains('санкт петербург') ||
-      normalized.contains('saint petersburg') ||
-      normalized.contains('st petersburg') ||
-      RegExp(r'(^|\s)(спб|питер)(\s|$)').hasMatch(normalized)) {
-    return 'Санкт-Петербург';
+String? _cityLabelFromManualLocation(ManualLocation? location) {
+  if (location == null || !isSupportedManualLocation(location)) {
+    return null;
   }
-  return 'Москва';
+  return _cityLabelFromRaw(location.city) ?? _cityLabelFromRaw(location.label);
+}
+
+String? _cityLabelFromRaw(String? raw) {
+  final trimmed = raw?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+
+  final firstPart = trimmed.split(RegExp(r'\s+[·-]\s+')).first.trim();
+  final normalized = normalizeCityLabel(firstPart);
+  if (normalized.isNotEmpty) {
+    return normalized;
+  }
+
+  final fallback = normalizeCityLabel(trimmed);
+  return fallback.isEmpty ? null : fallback;
 }
 
 class _TonightMetricsSection extends StatelessWidget {

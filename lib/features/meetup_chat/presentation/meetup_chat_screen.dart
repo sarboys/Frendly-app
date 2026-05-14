@@ -11,6 +11,7 @@ import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/chats/presentation/chat_thread_screen.dart';
 import 'package:big_break_mobile/features/chats/presentation/chat_thread_providers.dart';
+import 'package:big_break_mobile/features/meetup_chat/presentation/meetup_invite_sheet.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
@@ -759,6 +760,7 @@ class _MeetupChatScreenState extends ConsumerState<MeetupChatScreen> {
   }
 
   void _showMembersSheet(MeetupChat chat) {
+    final eventId = chat.eventId?.trim();
     showChatMembersSheet(
       context,
       title: chat.title,
@@ -778,6 +780,20 @@ class _MeetupChatScreenState extends ConsumerState<MeetupChatScreen> {
         );
       },
       onMessage: _openMemberDirectChat,
+      onInviteFriends: eventId == null || eventId.isEmpty
+          ? null
+          : () {
+              Future<void>.microtask(() {
+                if (!mounted) {
+                  return;
+                }
+                showMeetupInviteSheet(
+                  context,
+                  eventId: eventId,
+                  title: chat.title,
+                );
+              });
+            },
     );
   }
 

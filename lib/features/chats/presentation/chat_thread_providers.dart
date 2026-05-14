@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:big_break_mobile/app/core/device/app_attachment_service.dart';
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
+import 'package:big_break_mobile/features/chats/presentation/chats_providers.dart';
+import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/message.dart';
@@ -469,12 +471,24 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
       return;
     }
 
+    _lastMarkedReadMessageId = messageId;
+    _sendReadReceipt(messageId);
+    _clearChatSummaryUnread();
+  }
+
+  void _sendReadReceipt(String messageId) {
     ref.read(chatSocketClientProvider).markRead(
           chatId: chatId,
           messageId: messageId,
         );
-    _lastMarkedReadMessageId = messageId;
-    _clearChatSummaryUnread();
+    unawaited(
+      ref
+          .read(backendRepositoryProvider)
+          .markChatRead(chatId, messageId)
+          .catchError(
+            (_) {},
+          ),
+    );
   }
 
   void _handleEvent(Map<String, dynamic> envelope) {
@@ -966,6 +980,21 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         personalChats.any((chat) => chat.id == chatId)) {
       ref.read(personalChatsLocalStateProvider.notifier).state =
           setPersonalChatUnread(personalChats, chatId: chatId, unread: 0);
+      return;
+    }
+
+    final localCommunityChats = ref.read(communityChatsLocalStateProvider);
+    final communityChats =
+        localCommunityChats ?? ref.read(communitiesProvider).valueOrNull;
+    if (communityChats != null &&
+        communityChats.any((community) => community.chatId == chatId)) {
+      ref.read(communityChatsLocalStateProvider.notifier).state = communityChats
+          .map(
+            (community) => community.chatId == chatId
+                ? community.copyWith(unread: 0)
+                : community,
+          )
+          .toList(growable: false);
     }
   }
 

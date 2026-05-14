@@ -5,7 +5,9 @@ import 'dart:typed_data';
 import 'package:big_break_mobile/app/core/device/app_attachment_service.dart';
 import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
+import 'package:big_break_mobile/features/chats/presentation/chats_providers.dart';
 import 'package:big_break_mobile/features/chats/presentation/chat_thread_providers.dart';
+import 'package:big_break_mobile/features/communities/domain/community.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
@@ -776,7 +778,7 @@ void main() {
     expect(attachmentService.warmedAttachmentIds, ['server-voice-a1']);
   });
 
-  test('chat thread marks incoming message as read through socket only',
+  test('chat thread marks incoming message as read through socket and REST',
       () async {
     final socket = _ControllableChatSocketClient();
     late _FakeChatThreadRepository repository;
@@ -825,7 +827,7 @@ void main() {
 
     expect(socket.lastReadChatId, 'mc1');
     expect(socket.lastReadMessageId, 'server-read-1');
-    expect(repository.markReadCalls, 0);
+    expect(repository.markReadCalls, 1);
   });
 
   test('chat thread marks latest visible incoming message after initial load',
@@ -962,6 +964,142 @@ void main() {
     expect(socket.lastReadMessageId, 'server-incoming-fresh');
     final meetupChats = container.read(meetupChatsLocalStateProvider);
     expect(meetupChats?.single.unread, 0);
+  });
+
+  test('chat thread clears community unread badge locally', () async {
+    final socket = _ControllableChatSocketClient();
+    final fetchedMessages = [
+      Message.fromJson(
+        {
+          'id': 'club-message-34',
+          'chatId': 'club-chat-1',
+          'clientMessageId': 'club-message-34',
+          'senderId': 'user-anya',
+          'senderName': 'Аня',
+          'text': 'Клубное сообщение',
+          'createdAt': '2026-04-21T12:10:00Z',
+          'attachments': const [],
+        },
+        currentUserId: 'user-me',
+      ),
+    ];
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        communityChatsLocalStateProvider.overrideWith(
+          (ref) => const [
+            Community(
+              id: 'club-1',
+              chatId: 'club-chat-1',
+              name: 'клуб тест',
+              avatar: 'КТ',
+              description: 'Тестовый клуб',
+              privacy: CommunityPrivacy.public,
+              members: 2,
+              online: 0,
+              tags: ['club'],
+              joinRule: 'Открыто',
+              joined: true,
+              premiumOnly: false,
+              unread: 34,
+              mood: 'Спокойно',
+              sharedMediaLabel: '0 медиа',
+              news: [],
+              meetups: [],
+              media: [],
+              chatPreview: [],
+              chatMessages: [],
+              socialLinks: [],
+              memberNames: ['Ты', 'Аня'],
+            ),
+          ],
+        ),
+        backendRepositoryProvider.overrideWith(
+          (ref) => _FakeChatThreadRepository(
+            ref: ref,
+            dio: Dio(),
+            fetchedMessages: fetchedMessages,
+          ),
+        ),
+        appAttachmentServiceProvider
+            .overrideWith((ref) => _FakeAttachmentService()),
+        chatSocketClientProvider.overrideWith((ref) => socket),
+      ],
+    );
+    addTearDown(() async {
+      await socket.dispose();
+      container.dispose();
+    });
+
+    final subscription = container.listen(
+      chatThreadProvider('club-chat-1'),
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(subscription.close);
+
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    expect(socket.lastReadChatId, 'club-chat-1');
+    expect(socket.lastReadMessageId, 'club-message-34');
+    final communityChats = container.read(communityChatsLocalStateProvider);
+    expect(communityChats?.single.unread, 0);
+  });
+
+  test('chat thread also sends read through REST fallback', () async {
+    final socket = _ControllableChatSocketClient();
+    late _FakeChatThreadRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _FakeChatThreadRepository(
+            ref: ref,
+            dio: Dio(),
+            fetchedMessages: [
+              Message.fromJson(
+                {
+                  'id': 'server-incoming-1',
+                  'chatId': 'mc1',
+                  'clientMessageId': 'incoming-1',
+                  'senderId': 'user-anya',
+                  'senderName': 'Аня',
+                  'text': 'Нужно прочитать',
+                  'createdAt': '2026-04-21T12:10:00Z',
+                  'attachments': const [],
+                },
+                currentUserId: 'user-me',
+              ),
+            ],
+          );
+          return repository;
+        }),
+        appAttachmentServiceProvider
+            .overrideWith((ref) => _FakeAttachmentService()),
+        chatSocketClientProvider.overrideWith((ref) => socket),
+      ],
+    );
+    addTearDown(() async {
+      await socket.dispose();
+      container.dispose();
+    });
+
+    final subscription = container.listen(
+      chatThreadProvider('mc1'),
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(subscription.close);
+
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    expect(socket.lastReadChatId, 'mc1');
+    expect(socket.lastReadMessageId, 'server-incoming-1');
+    expect(repository.markReadCalls, 1);
+    expect(repository.lastMarkedReadChatId, 'mc1');
+    expect(repository.lastMarkedReadMessageId, 'server-incoming-1');
   });
 
   test('chat thread remembers latest sync cursor from snapshot and live events',

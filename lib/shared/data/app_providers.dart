@@ -128,6 +128,9 @@ final eventsProvider =
     manualLocation,
     locationService,
   );
+  if (filter == 'nearby' && location == null) {
+    return const [];
+  }
   return repository
       .fetchEvents(
         filter: filter,
@@ -798,9 +801,13 @@ final eveningRouteTemplatesProvider =
   if (authTokens == null) {
     return const [];
   }
+  final normalizedCity = city.trim();
+  if (normalizedCity.isEmpty) {
+    return const [];
+  }
   final repository = ref.read(backendRepositoryProvider);
   return repository
-      .fetchEveningRouteTemplates(city: city)
+      .fetchEveningRouteTemplates(city: normalizedCity)
       .then((value) => value.items);
 });
 

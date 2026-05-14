@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
+import 'package:big_break_mobile/shared/utils/location_label.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -42,17 +43,7 @@ class ManualLocation {
 }
 
 bool isSupportedCityLocationLabel(String? value) {
-  final normalized = _normalizeLocationText(value);
-  if (normalized.isEmpty) {
-    return false;
-  }
-
-  return RegExp(r'(^|\s)москва(\s|$)').hasMatch(normalized) ||
-      RegExp(r'(^|\s)moscow(\s|$)').hasMatch(normalized) ||
-      normalized.contains('санкт петербург') ||
-      normalized.contains('saint petersburg') ||
-      normalized.contains('st petersburg') ||
-      RegExp(r'(^|\s)(спб|питер)(\s|$)').hasMatch(normalized);
+  return normalizeCityLabel(value).isNotEmpty;
 }
 
 bool isSupportedManualLocation(ManualLocation location) {
@@ -64,15 +55,6 @@ bool isSupportedManualLocation(ManualLocation location) {
       location.longitude >= -180 &&
       location.longitude <= 180 &&
       (location.latitude != 0 || location.longitude != 0);
-}
-
-String _normalizeLocationText(String? value) {
-  return value
-          ?.toLowerCase()
-          .replaceAll('ё', 'е')
-          .replaceAll(RegExp(r'[^a-zа-я0-9]+'), ' ')
-          .trim() ??
-      '';
 }
 
 final manualLocationProvider =
