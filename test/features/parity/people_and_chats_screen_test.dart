@@ -760,6 +760,72 @@ void main() {
     expect(repository?.deletedChatIds, ['regular-upcoming']);
     expect(find.text('Обычная встреча'), findsNothing);
   });
+
+  testWidgets('club chat long press can delete chat and leave club',
+      (tester) async {
+    _RecordingBackendRepository? repository;
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        child: const ChatsScreen(),
+        targetText: 'unused',
+        extraOverrides: [
+          backendRepositoryProvider.overrideWith((ref) {
+            final created = _RecordingBackendRepository(ref);
+            repository = created;
+            return created;
+          }),
+          chatSegmentProvider.overrideWith((ref) => ChatSegment.clubs),
+          meetupChatsProvider.overrideWith((ref) async => const []),
+          personalChatsProvider.overrideWith((ref) async => const []),
+          communitiesProvider.overrideWith(
+            (ref) async => const [
+              Community(
+                id: 'club-1',
+                chatId: 'community-chat-1',
+                name: 'Книжный клуб',
+                avatar: '📚',
+                description: 'Читаем вместе',
+                privacy: CommunityPrivacy.public,
+                members: 12,
+                online: 3,
+                tags: ['books'],
+                joinRule: 'Открытое вступление',
+                joined: true,
+                premiumOnly: false,
+                unread: 2,
+                mood: 'Спокойно',
+                sharedMediaLabel: '0 медиа',
+                news: [],
+                meetups: [],
+                media: [],
+                chatPreview: [
+                  CommunityChatPreview(
+                    author: 'Ты',
+                    text: 'Всем привет',
+                    time: 'сейчас',
+                  ),
+                ],
+                chatMessages: [],
+                socialLinks: [],
+                memberNames: ['Ты', 'Аня'],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('Книжный клуб'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Удалить'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Удалить чат'));
+    await tester.pumpAndSettle();
+
+    expect(repository?.deletedChatIds, ['community-chat-1']);
+    expect(find.text('Книжный клуб'), findsNothing);
+  });
 }
 
 class _RecordingBackendRepository extends BackendRepository {

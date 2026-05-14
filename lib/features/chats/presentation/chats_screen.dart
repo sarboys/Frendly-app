@@ -184,6 +184,12 @@ class ChatsScreen extends ConsumerWidget {
                       AppRoute.communityChat,
                       pathParameters: {'communityId': community.id},
                     ),
+                    onCommunityDelete: (community) =>
+                        _requestDeleteCommunityChat(
+                      context,
+                      ref,
+                      community,
+                    ),
                   )
                 else if (segment == ChatSegment.meetup)
                   meetupChatsAsync.when(
@@ -219,6 +225,11 @@ class ChatsScreen extends ConsumerWidget {
                       onOpen: (community) => context.pushRoute(
                         AppRoute.communityChat,
                         pathParameters: {'communityId': community.id},
+                      ),
+                      onDelete: (community) => _requestDeleteCommunityChat(
+                        context,
+                        ref,
+                        community,
                       ),
                     ),
                     loading: () => const _V5ChatState(
@@ -319,6 +330,8 @@ Future<void> _togglePersonalChatPinned(WidgetRef ref, PersonalChat chat) async {
 
 enum _ChatRowAction { pin, delete }
 
+enum _DeleteChatKind { meetup, direct, community }
+
 typedef _AsyncValueChanged<T> = Future<void> Function(T value);
 
 Future<void> _showChatRowActions(
@@ -372,6 +385,30 @@ Future<_ChatRowAction?> _showChatActionsSheet(
   );
 }
 
+Future<void> _showDeleteOnlyChatActions(
+  BuildContext context, {
+  required Future<void> Function() onDelete,
+}) async {
+  final action = await showModalBottomSheet<_ChatRowAction>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withValues(alpha: 0.45),
+    builder: (context) => BbV5BottomSheet(
+      maxHeightFactor: 0.32,
+      child: _V5ChatActionTile(
+        icon: LucideIcons.trash_2,
+        label: 'Удалить',
+        destructive: true,
+        onTap: () => Navigator.of(context).pop(_ChatRowAction.delete),
+      ),
+    ),
+  );
+  if (!context.mounted || action != _ChatRowAction.delete) {
+    return;
+  }
+  await onDelete();
+}
+
 Future<void> _requestDeleteMeetupChat(
   BuildContext context,
   WidgetRef ref,
@@ -388,7 +425,10 @@ Future<void> _requestDeleteMeetupChat(
     return;
   }
 
-  final confirmed = await _confirmDeleteChat(context, meetup: true);
+  final confirmed = await _confirmDeleteChat(
+    context,
+    kind: _DeleteChatKind.meetup,
+  );
   if (!context.mounted || !confirmed) {
     return;
   }
@@ -400,23 +440,44 @@ Future<void> _requestDeletePersonalChat(
   WidgetRef ref,
   PersonalChat chat,
 ) async {
-  final confirmed = await _confirmDeleteChat(context, meetup: false);
+  final confirmed = await _confirmDeleteChat(
+    context,
+    kind: _DeleteChatKind.direct,
+  );
   if (!context.mounted || !confirmed) {
     return;
   }
   await _deletePersonalChat(context, ref, chat);
 }
 
+Future<void> _requestDeleteCommunityChat(
+  BuildContext context,
+  WidgetRef ref,
+  Community community,
+) async {
+  final confirmed = await _confirmDeleteChat(
+    context,
+    kind: _DeleteChatKind.community,
+  );
+  if (!context.mounted || !confirmed) {
+    return;
+  }
+  await _deleteCommunityChat(context, ref, community);
+}
+
 Future<bool> _confirmDeleteChat(
   BuildContext context, {
-  required bool meetup,
+  required _DeleteChatKind kind,
 }) async {
+  final title = switch (kind) {
+    _DeleteChatKind.meetup => 'Удалить чат и выйти из встречи?',
+    _DeleteChatKind.direct => 'Удалить личный чат?',
+    _DeleteChatKind.community => 'Удалить чат и выйти из клуба?',
+  };
   final result = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text(
-        meetup ? 'Удалить чат и выйти из встречи?' : 'Удалить личный чат?',
-      ),
+      title: Text(title),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
@@ -494,6 +555,36 @@ Future<void> _deletePersonalChat(
   } catch (_) {
     ref.read(personalChatsLocalStateProvider.notifier).state = previous;
     ref.read(knownPersonalChatsProvider.notifier).state = previousKnown;
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не получилось удалить чат')),
+      );
+    }
+  }
+}
+
+Future<void> _deleteCommunityChat(
+  BuildContext context,
+  WidgetRef ref,
+  Community community,
+) async {
+  final previousLocal = ref.read(communityChatsLocalStateProvider);
+  final previousRemote = ref.read(communitiesProvider).valueOrNull;
+  final previous = previousLocal ?? previousRemote;
+  if (previous == null) {
+    return;
+  }
+
+  ref.read(communityChatsLocalStateProvider.notifier).state =
+      previous.where((item) => item.id != community.id).toList(growable: false);
+
+  try {
+    await ref.read(backendRepositoryProvider).deleteChat(community.chatId);
+    ref.invalidate(communitiesProvider);
+    ref.invalidate(communitiesFeedProvider);
+    ref.invalidate(communityProvider(community.id));
+  } catch (_) {
+    ref.read(communityChatsLocalStateProvider.notifier).state = previous;
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Не получилось удалить чат')),
@@ -901,6 +992,7 @@ class _V5AllChatList extends StatelessWidget {
     required this.onPersonalPinToggle,
     required this.onPersonalDelete,
     required this.onCommunityOpen,
+    required this.onCommunityDelete,
   });
 
   final List<MeetupChat> meetupChats;
@@ -916,6 +1008,7 @@ class _V5AllChatList extends StatelessWidget {
   final ValueChanged<PersonalChat> onPersonalPinToggle;
   final _AsyncValueChanged<PersonalChat> onPersonalDelete;
   final ValueChanged<Community> onCommunityOpen;
+  final _AsyncValueChanged<Community> onCommunityDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -968,6 +1061,7 @@ class _V5AllChatList extends StatelessWidget {
               onPersonalPinToggle: onPersonalPinToggle,
               onPersonalDelete: onPersonalDelete,
               onCommunityOpen: onCommunityOpen,
+              onCommunityDelete: onCommunityDelete,
             ),
             if (index < visibleEntries.length - 1) const _V5RowDivider(),
           ],
@@ -1008,6 +1102,7 @@ class _V5AllChatEntry {
     required ValueChanged<PersonalChat> onPersonalPinToggle,
     required _AsyncValueChanged<PersonalChat> onPersonalDelete,
     required ValueChanged<Community> onCommunityOpen,
+    required _AsyncValueChanged<Community> onCommunityDelete,
   }) {
     final meetupChat = meetup;
     if (meetupChat != null) {
@@ -1074,6 +1169,13 @@ class _V5AllChatEntry {
     return _V5CommunityChatRow(
       community: communityChat,
       onTap: () => onCommunityOpen(communityChat),
+      onLongPress: () => unawaited(
+        _showDeleteOnlyChatActions(
+          context,
+          onDelete: () => onCommunityDelete(communityChat),
+        ),
+      ),
+      onDelete: () => onCommunityDelete(communityChat),
     );
   }
 }
@@ -1607,10 +1709,12 @@ class _V5CommunityChatList extends StatelessWidget {
   const _V5CommunityChatList({
     required this.communities,
     required this.onOpen,
+    required this.onDelete,
   });
 
   final List<Community> communities;
   final ValueChanged<Community> onOpen;
+  final _AsyncValueChanged<Community> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1629,6 +1733,13 @@ class _V5CommunityChatList extends StatelessWidget {
             _V5CommunityChatRow(
               community: communities[index],
               onTap: () => onOpen(communities[index]),
+              onLongPress: () => unawaited(
+                _showDeleteOnlyChatActions(
+                  context,
+                  onDelete: () => onDelete(communities[index]),
+                ),
+              ),
+              onDelete: () => onDelete(communities[index]),
             ),
             if (index < communities.length - 1) const _V5RowDivider(),
           ],
@@ -1844,10 +1955,14 @@ class _V5CommunityChatRow extends StatelessWidget {
   const _V5CommunityChatRow({
     required this.community,
     required this.onTap,
+    this.onLongPress,
+    this.onDelete,
   });
 
   final Community community;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  final Future<void> Function()? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1865,6 +1980,8 @@ class _V5CommunityChatRow extends StatelessWidget {
         dot: community.unread > 0 || community.online > 0,
       ),
       onTap: onTap,
+      onLongPress: onLongPress,
+      onDelete: onDelete,
     );
   }
 }
