@@ -266,6 +266,58 @@ void main() {
     );
   });
 
+  test('router accepts the same single interest that onboarding UI allows', () {
+    expect(
+      resolvePendingSetupRoute(
+        const OnboardingData(
+          intent: 'both',
+          gender: 'male',
+          city: 'Москва',
+          area: 'Чистые пруды',
+          interests: ['Кофе'],
+          vibe: 'calm',
+        ),
+      ),
+      isNull,
+    );
+  });
+
+  test('router accepts an existing completed profile when onboarding is stale',
+      () {
+    expect(
+      resolvePendingSetupRoute(
+        const OnboardingData(
+          intent: null,
+          gender: null,
+          city: null,
+          area: null,
+          interests: [],
+          vibe: null,
+        ),
+        hasCompletedProfileSetup: true,
+      ),
+      isNull,
+    );
+  });
+
+  test('router still requires missing contact for completed profile', () {
+    expect(
+      resolvePendingSetupRoute(
+        const OnboardingData(
+          intent: null,
+          gender: null,
+          city: null,
+          area: null,
+          interests: [],
+          vibe: null,
+          requiredContact: OnboardingContactRequirement.email,
+        ),
+        hasCompletedProfileSetup: true,
+      ),
+      AppRoute.onboarding.path,
+    );
+  });
+
   test(
       'router does not reopen onboarding for existing users without birth date',
       () {
@@ -336,6 +388,40 @@ void main() {
 
     router.go(AppRoute.permissions.path);
     await tester.pumpAndSettle();
+    expect(
+        router.routeInformationProvider.value.uri.path, AppRoute.tonight.path);
+  });
+
+  testWidgets('router leaves onboarding when setup becomes completed', (
+    tester,
+  ) async {
+    final pendingSetup = ValueNotifier<String?>(AppRoute.onboarding.path);
+    final router = buildAppRouter(
+      authenticated: true,
+      refreshListenable: pendingSetup,
+      isAuthenticated: () => true,
+      pendingSetupPath: () => pendingSetup.value,
+    );
+    addTearDown(() {
+      router.dispose();
+      pendingSetup.dispose();
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: buildTestOverrides(),
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+
+    router.go(AppRoute.onboarding.path);
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path,
+        AppRoute.onboarding.path);
+
+    pendingSetup.value = null;
+    await tester.pumpAndSettle();
+
     expect(
         router.routeInformationProvider.value.uri.path, AppRoute.tonight.path);
   });

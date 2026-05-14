@@ -314,6 +314,36 @@ void main() {
     expect(mapZoomForClusterTap(18.5), 19);
   });
 
+  test('event clusters refresh when zoom returns to cluster range', () {
+    expect(
+      shouldRefreshEventClustersForZoom(
+        hasClusterCollection: true,
+        previousZoom: 15,
+        currentZoom: 12.5,
+        finished: true,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldRefreshEventClustersForZoom(
+        hasClusterCollection: true,
+        previousZoom: 12.5,
+        currentZoom: 11,
+        finished: true,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldRefreshEventClustersForZoom(
+        hasClusterCollection: false,
+        previousZoom: 15,
+        currentZoom: 12.5,
+        finished: true,
+      ),
+      isFalse,
+    );
+  });
+
   test('map card swipe keeps the current camera zoom for event selection', () {
     expect(
       mapZoomForEventSelection(
@@ -355,7 +385,7 @@ void main() {
         joined: false,
       ),
       Event(
-        id: 'route-1',
+        id: 'route-backed-meetup-1',
         title: 'Тверская в огнях',
         emoji: '✨',
         time: 'Сегодня · 20:30',
@@ -404,8 +434,8 @@ void main() {
     final counts = buildRadarCategoryCounts(events, datingProfileCount: 2);
 
     expect(counts['all'], 6);
-    expect(counts['bars'], 1);
-    expect(counts['routes'], 1);
+    expect(counts['bars'], 2);
+    expect(counts['routes'], 0);
     expect(counts['dating'], 2);
     expect(counts['affiche'], 1);
   });
@@ -464,6 +494,49 @@ void main() {
     expect(placemarks.single.point.latitude, 55.764);
     expect(placemarks.single.point.longitude, 37.592);
     expect(placemarks.single.text, isNull);
+  });
+
+  test('dating profile placemarks use avatar pin bytes when available', () {
+    final avatarBytes = Uint8List.fromList([1, 2, 3, 4]);
+    const profiles = [
+      DatingProfileData(
+        userId: 'user-anya',
+        name: 'Аня',
+        age: 27,
+        city: 'Москва',
+        distance: '1.2 км',
+        about: '',
+        tags: ['вино'],
+        prompt: '',
+        photoEmoji: '🍷',
+        avatarUrl: 'https://example.com/avatar.png',
+        likedYou: false,
+        premium: true,
+        vibe: 'Спокойно',
+        area: 'Патрики',
+        latitude: 55.764,
+        longitude: 37.592,
+        verified: true,
+        online: true,
+      ),
+    ];
+
+    final placemarks = buildDatingProfilePlacemarks(
+      profiles: profiles,
+      selectedUserId: 'user-anya',
+      datingAvatarPinBytes: {'user-anya': avatarBytes},
+      onProfileTap: (_) {},
+    );
+    final style =
+        placemarks.single.icon!.toJson()['style'] as Map<String, dynamic>;
+    final image = style['image'] as Map<String, dynamic>;
+    final anchor = style['anchor'] as Map<String, dynamic>;
+
+    expect(image['type'], 'fromBytes');
+    expect(image['rawImageData'], avatarBytes);
+    expect(style['scale'], 0.9);
+    expect(anchor['dx'], 0.5);
+    expect(anchor['dy'], 0.84);
   });
 
   test('map prefers manual location over device GPS', () {
@@ -593,7 +666,7 @@ void main() {
     final selectedImage = selectedStyle['image'] as Map<String, dynamic>;
     expect(
       selectedImage['assetName'],
-      'assets/map/pins/radar_pin_bars_selected.png',
+      'assets/map/pins/v5_pin_coffee.png',
     );
   });
 
@@ -647,14 +720,14 @@ void main() {
     expect(placemarks.first.text?.text, '🔥');
     expect(
       promotedImage['assetName'],
-      'assets/map/pins/radar_pin_promoted_selected.png',
+      'assets/map/pins/v5_pin_flame.png',
     );
     expect(placemarks.last.text, isNull);
   });
 
-  test('radarPinKindForEvent maps route events to route pins', () {
+  test('radarPinKindForEvent keeps route-backed meetups as meetup pins', () {
     const event = Event(
-      id: 'route-1',
+      id: 'route-backed-meetup-1',
       title: 'Маршрут',
       emoji: '🚶',
       time: 'Сегодня',
@@ -671,7 +744,9 @@ void main() {
       joined: false,
     );
 
-    expect(radarPinKindForEvent(event), RadarMapPinKind.routes);
+    expect(radarCategoryForEvent(event), 'bars');
+    expect(radarPinKindForEvent(event), RadarMapPinKind.bars);
+    expect(radarCardSubtypeForEvent(event), 'встреча по маршруту');
   });
 
   test('radarPinKindForEvent maps ticket events to affiche pins', () {
@@ -763,7 +838,7 @@ void main() {
   test('map object cache uses cluster collection for dense event sets', () {
     final cache = MapObjectCache();
     final events = List<Event>.generate(
-      50,
+      24,
       (index) => Event(
         id: 'dense-$index',
         title: 'Точка $index',
@@ -798,10 +873,61 @@ void main() {
     );
     final collection =
         objects.whereType<ym.ClusterizedPlacemarkCollection>().single;
-    expect(collection.placemarks, hasLength(50));
-    expect(collection.radius, 48);
+    expect(collection.placemarks, hasLength(24));
+    expect(collection.radius, 64);
     expect(collection.minZoom, 13);
     expect(collection.onClusterTap, isNotNull);
+  });
+
+  test('map object cache can force cluster collection refresh', () {
+    final cache = MapObjectCache();
+    final events = List<Event>.generate(
+      24,
+      (index) => Event(
+        id: 'refresh-$index',
+        title: 'Точка $index',
+        emoji: '☕',
+        time: 'Сегодня',
+        place: 'Москва',
+        distance: '1 км',
+        attendees: const [],
+        going: 0,
+        capacity: 8,
+        vibe: 'Спокойно',
+        tone: EventTone.warm,
+        latitude: 55.75 + index * 0.0001,
+        longitude: 37.61 + index * 0.0001,
+        joined: false,
+      ),
+    );
+
+    final first = cache.objectsFor(
+      events: events,
+      selectedId: 'refresh-0',
+      liveEvenings: const [],
+      userPoint: null,
+      searchPoint: null,
+      onEventTap: (_) {},
+      onSessionTap: (_) {},
+    );
+    final refreshed = cache.objectsFor(
+      events: events,
+      selectedId: 'refresh-0',
+      clusterRefreshRevision: 1,
+      liveEvenings: const [],
+      userPoint: null,
+      searchPoint: null,
+      onEventTap: (_) {},
+      onSessionTap: (_) {},
+    );
+
+    final firstCluster =
+        first.whereType<ym.ClusterizedPlacemarkCollection>().single;
+    final refreshedCluster =
+        refreshed.whereType<ym.ClusterizedPlacemarkCollection>().single;
+
+    expect(identical(refreshed, first), isFalse);
+    expect(refreshedCluster.zIndex, isNot(firstCluster.zIndex));
   });
 
   test('clusterCenterPoint averages clustered placemark points', () {
@@ -1036,6 +1162,37 @@ void main() {
     expect(queries.first.radiusKm, 50);
   });
 
+  testWidgets('map uses Moscow fallback for the first query without location', (
+    tester,
+  ) async {
+    final queries = <MapEventsQuery>[];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ..._mapTestOverrides(
+            [
+              mapEventsProvider.overrideWith((ref, query) async {
+                queries.add(query);
+                return const <Event>[];
+              }),
+            ],
+          ),
+        ],
+        child: const MaterialApp(
+          home: MapScreen(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(queries, isNotEmpty);
+    expect(queries.first.centerLatitude, 55.7558);
+    expect(queries.first.centerLongitude, 37.6173);
+    expect(queries.first.radiusKm, 50);
+  });
+
   test('radar carousel maps infinite pages to event indexes', () {
     expect(radarCarouselEventIndex(1000, 2), 0);
     expect(radarCarouselEventIndex(1001, 2), 1);
@@ -1047,6 +1204,14 @@ void main() {
     expect(nearestRadarCarouselPage(1000, targetIndex: 1, eventCount: 2), 1001);
     expect(nearestRadarCarouselPage(1001, targetIndex: 0, eventCount: 2), 1002);
     expect(nearestRadarCarouselPage(1000, targetIndex: 0, eventCount: 1), 0);
+  });
+
+  test('radar carousel teleports edge pages back to the middle block', () {
+    expect(teleportedRadarCarouselPage(0, eventCount: 6), 6);
+    expect(teleportedRadarCarouselPage(5, eventCount: 6), 11);
+    expect(teleportedRadarCarouselPage(12, eventCount: 6), 6);
+    expect(teleportedRadarCarouselPage(8, eventCount: 6), 8);
+    expect(teleportedRadarCarouselPage(1, eventCount: 2), 1);
   });
 
   testWidgets('map bottom sheet renders v5 event cards', (tester) async {
@@ -1113,7 +1278,10 @@ void main() {
 
       final pageView = tester.widget<PageView>(find.byType(PageView));
       expect(pageView.padEnds, isTrue);
-      expect(pageView.controller?.viewportFraction, greaterThan(0.70));
+      expect(pageView.controller?.viewportFraction, closeTo(0.48, 0.001));
+      expect(find.byIcon(LucideIcons.chevron_left), findsOneWidget);
+      expect(find.byIcon(LucideIcons.chevron_right), findsOneWidget);
+      expect(find.byKey(const Key('radar-carousel-dots')), findsOneWidget);
 
       await tester.fling(
         find.byKey(const Key('radar-bottom-sheet-drag-area')),
@@ -1312,15 +1480,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(_eventPlacemarkScale(tester, 'map-1'), 2.0);
-      expect(_eventPlacemarkScale(tester, 'map-2'), 1.8);
+      expect(_eventPlacemarkScale(tester, 'map-1'), 1.18);
+      expect(_eventPlacemarkScale(tester, 'map-2'), 1.04);
 
       final pageView = tester.widget<PageView>(find.byType(PageView));
       pageView.onPageChanged!(1);
       await tester.pumpAndSettle();
 
-      expect(_eventPlacemarkScale(tester, 'map-1'), 1.8);
-      expect(_eventPlacemarkScale(tester, 'map-2'), 2.0);
+      expect(_eventPlacemarkScale(tester, 'map-1'), 1.04);
+      expect(_eventPlacemarkScale(tester, 'map-2'), 1.18);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

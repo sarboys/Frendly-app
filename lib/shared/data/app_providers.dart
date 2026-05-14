@@ -116,7 +116,6 @@ final onboardingProvider = FutureProvider<OnboardingData>((ref) async {
 
 final eventsProvider =
     FutureProvider.family<List<Event>, String>((ref, filter) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
   final manualLocation = ref.watch(manualLocationProvider);
   final radiusKm =
       filter == 'nearby' ? ref.watch(nearbyEventsRadiusKmProvider) : null;
@@ -124,7 +123,6 @@ final eventsProvider =
   final locationService = filter == 'nearby' && manualLocation == null
       ? ref.read(appLocationServiceProvider)
       : null;
-  await authBootstrap;
   final location = await _eventFeedLocation(
     filter,
     manualLocation,
@@ -219,10 +217,8 @@ class MapEventsQuery {
 
 final mapEventsProvider = FutureProvider.autoDispose
     .family<List<Event>, MapEventsQuery>((ref, query) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
   final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
   return repository
       .fetchEvents(
         filter: 'nearby',
@@ -754,9 +750,7 @@ final meetupChatsProvider = FutureProvider<List<MeetupChat>>((ref) async {
   if (localItems != null) {
     return localItems;
   }
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
-  await authBootstrap;
   return repository.fetchMeetupChats().then((value) => value.items);
 });
 
@@ -784,9 +778,7 @@ final eveningSessionsProvider =
   if (authTokens == null) {
     return const [];
   }
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
-  await authBootstrap;
   return repository.fetchEveningSessions().then((value) => value.items);
 });
 
@@ -806,9 +798,7 @@ final eveningRouteTemplatesProvider =
   if (authTokens == null) {
     return const [];
   }
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
-  await authBootstrap;
   return repository
       .fetchEveningRouteTemplates(city: city)
       .then((value) => value.items);
@@ -863,9 +853,7 @@ final personalChatsProvider = FutureProvider<List<PersonalChat>>((ref) async {
   if (localItems != null) {
     return localItems;
   }
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
   final repository = ref.read(backendRepositoryProvider);
-  await authBootstrap;
   return repository.fetchPersonalChats().then((value) => value.items);
 });
 
@@ -981,13 +969,26 @@ final hasLiveMeetupChatProvider = Provider<bool>((ref) {
   }));
 });
 
+enum ChatRealtimeSyncScope { all, meetups, personal }
+
 final chatRealtimeSyncProvider = Provider<void>((ref) {
+  ref.watch(chatRealtimeSyncForScopeProvider(ChatRealtimeSyncScope.all));
+});
+
+final chatRealtimeSyncForScopeProvider =
+    Provider.family<void, ChatRealtimeSyncScope>((ref, scope) {
   final authTokens = ref.watch(authTokensProvider);
   if (authTokens == null) {
     return;
   }
 
-  final coordinator = _ChatRealtimeSyncCoordinator(ref);
+  final coordinator = _ChatRealtimeSyncCoordinator(
+    ref,
+    syncMeetups: scope == ChatRealtimeSyncScope.all ||
+        scope == ChatRealtimeSyncScope.meetups,
+    syncPersonal: scope == ChatRealtimeSyncScope.all ||
+        scope == ChatRealtimeSyncScope.personal,
+  );
   ref.onDispose(coordinator.dispose);
 });
 
@@ -1237,21 +1238,31 @@ List<NotificationItem> prependNotificationItem(
 }
 
 class _ChatRealtimeSyncCoordinator {
-  _ChatRealtimeSyncCoordinator(this.ref)
-      : _socket = ref.read(chatSocketClientProvider) {
+  _ChatRealtimeSyncCoordinator(
+    this.ref, {
+    required this.syncMeetups,
+    required this.syncPersonal,
+  }) : _socket = ref.read(chatSocketClientProvider) {
     _eventsSubscription = _socket.events.listen(_handleSocketEvent);
 
-    ref.listen<AsyncValue<List<MeetupChat>>>(meetupChatsProvider, (_, __) {
-      _syncSubscriptions();
-    });
-    ref.listen<AsyncValue<List<PersonalChat>>>(personalChatsProvider, (_, __) {
-      _syncSubscriptions();
-    });
+    if (syncMeetups) {
+      ref.listen<AsyncValue<List<MeetupChat>>>(meetupChatsProvider, (_, __) {
+        _syncSubscriptions();
+      });
+    }
+    if (syncPersonal) {
+      ref.listen<AsyncValue<List<PersonalChat>>>(personalChatsProvider,
+          (_, __) {
+        _syncSubscriptions();
+      });
+    }
 
     unawaited(_connectAndSync());
   }
 
   final Ref ref;
+  final bool syncMeetups;
+  final bool syncPersonal;
   final ChatSocketClient _socket;
   final _subscribedChatIds = <String>{};
   late final StreamSubscription<Map<String, dynamic>> _eventsSubscription;
@@ -1282,10 +1293,13 @@ class _ChatRealtimeSyncCoordinator {
     }
 
     final nextChatIds = <String>{
-      ...(ref.read(meetupChatsProvider).valueOrNull ?? const <MeetupChat>[])
-          .map((chat) => chat.id),
-      ...(ref.read(personalChatsProvider).valueOrNull ?? const <PersonalChat>[])
-          .map((chat) => chat.id),
+      if (syncMeetups)
+        ...(ref.read(meetupChatsProvider).valueOrNull ?? const <MeetupChat>[])
+            .map((chat) => chat.id),
+      if (syncPersonal)
+        ...(ref.read(personalChatsProvider).valueOrNull ??
+                const <PersonalChat>[])
+            .map((chat) => chat.id),
     };
 
     final removedChatIds = _subscribedChatIds.difference(nextChatIds);

@@ -285,7 +285,16 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider('nearby'));
     final events = eventsAsync.valueOrNull ?? const [];
-    final wallet = ref.watch(tokenWalletProvider);
+    final promotedIds = events.isEmpty
+        ? const <String>{}
+        : ref.watch(
+            tokenWalletProvider.select(
+              (wallet) => events
+                  .where((event) => wallet.isPromoted(event.id))
+                  .map((event) => event.id)
+                  .toSet(),
+            ),
+          );
     final routeTemplatesAsync =
         ref.watch(eveningRouteTemplatesProvider(_tonightAfficheCity(ref)));
 
@@ -312,10 +321,7 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
             SliverToBoxAdapter(
               child: _TonightGatheringNowSection(
                 events: events,
-                promotedIds: events
-                    .where((event) => wallet.isPromoted(event.id))
-                    .map((event) => event.id)
-                    .toSet(),
+                promotedIds: promotedIds,
                 loading: eventsAsync.isLoading,
                 onOpenAll: () => context.pushRoute(AppRoute.meetups),
                 onOpenEvent: (eventId) => context.pushRoute(

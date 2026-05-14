@@ -700,6 +700,9 @@ class _MeetupChatScreenState extends ConsumerState<MeetupChatScreen> {
             scrollTopContent: true,
             headerCoversTopSafeArea: true,
             messagesAsync: messagesAsync,
+            onLoadOlderMessages: () => ref
+                .read(chatThreadProvider(widget.chatId).notifier)
+                .loadOlderMessages(),
             onMessageReply: (message) {
               setState(() {
                 _replyTo = _toReplyPreview(message);

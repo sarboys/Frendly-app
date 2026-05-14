@@ -2,7 +2,10 @@ import 'package:big_break_mobile/app/app.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/features/ai_create/presentation/ai_create_screen.dart';
 import 'package:big_break_mobile/features/ai_voice/presentation/ai_voice_screen.dart';
+import 'package:big_break_mobile/features/create_meetup/presentation/create_meetup_draft.dart';
+import 'package:big_break_mobile/features/create_meetup/presentation/publish_meetup_screen.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -144,6 +147,74 @@ void main() {
 
     expect(find.byType(AiVoiceScreen), findsOneWidget);
   });
+
+  testWidgets('ai create opens publish screen for generated route', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final router = GoRouter(
+      initialLocation: AppRoute.aiCreate.path,
+      routes: [
+        GoRoute(
+          path: AppRoute.aiCreate.path,
+          name: AppRoute.aiCreate.name,
+          builder: (context, state) => const AiCreateScreen(),
+        ),
+        GoRoute(
+          path: AppRoute.publishMeetup.path,
+          name: AppRoute.publishMeetup.name,
+          builder: (context, state) => PublishMeetupScreen(
+            initialDraft: state.extra is CreateMeetupDraft
+                ? state.extra! as CreateMeetupDraft
+                : null,
+          ),
+        ),
+        GoRoute(
+          path: AppRoute.eveningPlan.path,
+          name: AppRoute.eveningPlan.name,
+          builder: (context, state) => const Scaffold(
+            body: Text('OLD EVENING PLAN'),
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          backendRepositoryProvider.overrideWith(
+            (ref) => _FakeAiRouteRepository(ref),
+          ),
+          tokenWalletProvider
+              .overrideWith((ref) => _TestTokenWalletController()),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byType(TextField),
+      'Винный бар и джаз на двоих',
+    );
+    await _dragUntilVisible(tester, find.text('Собрать план'), 260);
+    await tester.tap(find.text('Собрать план'));
+    await tester.pumpAndSettle();
+
+    await _dragUntilVisible(tester, find.text('Создать встречу'), 260);
+    await tester.tap(find.text('Создать встречу'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('OLD EVENING PLAN'), findsNothing);
+    expect(find.text('Финальный шаг'), findsOneWidget);
+    expect(find.text('Маршрут · Backend Route'), findsOneWidget);
+  });
 }
 
 Future<void> _dragUntilVisible(
@@ -220,3 +291,14 @@ const _backendRouteJson = {
     },
   ],
 };
+
+class _TestTokenWalletController extends TokenWalletController {
+  _TestTokenWalletController() : super(null) {
+    state = const TokenWalletState(
+      balance: 20,
+      promoted: {},
+      history: [],
+      loading: false,
+    );
+  }
+}

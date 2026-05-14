@@ -11,6 +11,7 @@ import 'package:big_break_mobile/app/theme/app_theme_mode.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/features/payments/application/payment_return_controller.dart';
+import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
 import 'package:big_break_mobile/shared/widgets/bb_system_overlays.dart';
 import 'package:flutter/foundation.dart';
@@ -96,6 +97,7 @@ class _RootAppViewState extends ConsumerState<_RootAppView> {
     final themeMode = ref.watch(appThemeModeProvider);
     final authTokens = ref.watch(authTokensProvider);
     ref.watch(authBootstrapProvider);
+    final bootstrapProfile = ref.watch(authBootstrapProfileProvider);
     final isAuthenticated = authTokens != null;
     final onboardingAsync =
         isAuthenticated ? ref.watch(onboardingProvider) : null;
@@ -105,8 +107,13 @@ class _RootAppViewState extends ConsumerState<_RootAppView> {
     }
 
     if (onboardingAsync case final value?) {
-      final pendingSetup =
-          value.hasValue ? resolvePendingSetupRoute(value.valueOrNull) : null;
+      final pendingSetup = value.hasValue
+          ? resolvePendingSetupRoute(
+              value.valueOrNull,
+              hasCompletedProfileSetup:
+                  hasCompletedProfileSetup(bootstrapProfile),
+            )
+          : null;
       if (_pendingSetupNotifier.value != pendingSetup) {
         _pendingSetupNotifier.value = pendingSetup;
       }
@@ -159,6 +166,15 @@ class _RootAppViewState extends ConsumerState<_RootAppView> {
       );
     });
   }
+}
+
+@visibleForTesting
+bool hasCompletedProfileSetup(ProfileData? profile) {
+  if (profile == null) {
+    return false;
+  }
+  return (profile.gender?.trim().isNotEmpty ?? false) &&
+      (profile.city?.trim().isNotEmpty ?? false);
 }
 
 SystemUiOverlayStyle _systemUiOverlayStyleFor(Brightness brightness) {

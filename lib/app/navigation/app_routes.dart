@@ -84,11 +84,13 @@ extension AppRouteNavigation on BuildContext {
     AppRoute route, {
     Map<String, String> pathParameters = const {},
     Map<String, String> queryParameters = const {},
+    Object? extra,
   }) {
     return pushNamed<T>(
       route.name,
       pathParameters: pathParameters,
       queryParameters: queryParameters,
+      extra: extra,
     );
   }
 
@@ -96,11 +98,13 @@ extension AppRouteNavigation on BuildContext {
     AppRoute route, {
     Map<String, String> pathParameters = const {},
     Map<String, String> queryParameters = const {},
+    Object? extra,
   }) {
     goNamed(
       route.name,
       pathParameters: pathParameters,
       queryParameters: queryParameters,
+      extra: extra,
     );
   }
 }

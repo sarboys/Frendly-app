@@ -1,9 +1,14 @@
+import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/features/ai_voice/presentation/ai_voice_screen.dart';
+import 'package:big_break_mobile/features/create_meetup/presentation/create_meetup_draft.dart';
+import 'package:big_break_mobile/features/create_meetup/presentation/publish_meetup_screen.dart';
+import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 void main() {
   testWidgets('ai voice resolves dictated prompt through backend', (
@@ -38,6 +43,69 @@ void main() {
     expect(repository.lastPrompt, 'Тихий ужин и долгая прогулка, не громко');
     expect(find.text('Backend Bar'), findsOneWidget);
     expect(find.text('Маршрут появится после ответа сервера.'), findsNothing);
+  });
+
+  testWidgets('ai voice opens publish screen for generated route', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final router = GoRouter(
+      initialLocation: AppRoute.aiVoice.path,
+      routes: [
+        GoRoute(
+          path: AppRoute.aiVoice.path,
+          name: AppRoute.aiVoice.name,
+          builder: (context, state) => const AiVoiceScreen(),
+        ),
+        GoRoute(
+          path: AppRoute.publishMeetup.path,
+          name: AppRoute.publishMeetup.name,
+          builder: (context, state) => PublishMeetupScreen(
+            initialDraft: state.extra is CreateMeetupDraft
+                ? state.extra! as CreateMeetupDraft
+                : null,
+          ),
+        ),
+        GoRoute(
+          path: AppRoute.eveningPlan.path,
+          name: AppRoute.eveningPlan.name,
+          builder: (context, state) => const Scaffold(
+            body: Text('OLD EVENING PLAN'),
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          backendRepositoryProvider.overrideWith(
+            (ref) => _FakeAiVoiceRepository(ref),
+          ),
+          tokenWalletProvider
+              .overrideWith((ref) => _TestTokenWalletController()),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.textContaining('Тихий ужин и долгая прогулка'));
+    await tester.pump(const Duration(milliseconds: 1600));
+
+    await tester.ensureVisible(find.text('Превратить в встречу'));
+    await tester.tap(find.text('Превратить в встречу'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('OLD EVENING PLAN'), findsNothing);
+    expect(find.text('Финальный шаг'), findsOneWidget);
+    expect(find.text('Маршрут · Voice Backend Route'), findsOneWidget);
   });
 }
 
@@ -93,3 +161,14 @@ const _backendRouteJson = {
     },
   ],
 };
+
+class _TestTokenWalletController extends TokenWalletController {
+  _TestTokenWalletController() : super(null) {
+    state = const TokenWalletState(
+      balance: 20,
+      promoted: {},
+      history: [],
+      loading: false,
+    );
+  }
+}

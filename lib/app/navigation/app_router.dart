@@ -16,6 +16,7 @@ import 'package:big_break_mobile/features/communities/presentation/community_det
 import 'package:big_break_mobile/features/communities/presentation/community_media_screen.dart';
 import 'package:big_break_mobile/features/communities/presentation/create_community_screen.dart';
 import 'package:big_break_mobile/features/communities/presentation/create_community_post_screen.dart';
+import 'package:big_break_mobile/features/create_meetup/presentation/create_meetup_draft.dart';
 import 'package:big_break_mobile/features/create_meetup/presentation/create_meetup_screen.dart';
 import 'package:big_break_mobile/features/create_meetup/presentation/publish_meetup_screen.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_screen.dart';
@@ -100,11 +101,19 @@ bool isOnboardingComplete(OnboardingData? onboarding) {
       (onboarding.gender?.isNotEmpty ?? false) &&
       onboarding.requiredContact == null &&
       (onboarding.city?.isNotEmpty ?? false) &&
-      onboarding.interests.length >= 2;
+      onboarding.interests.isNotEmpty;
 }
 
-String? resolvePendingSetupRoute(OnboardingData? onboarding) {
-  return isOnboardingComplete(onboarding) ? null : AppRoute.onboarding.path;
+String? resolvePendingSetupRoute(
+  OnboardingData? onboarding, {
+  bool hasCompletedProfileSetup = false,
+}) {
+  final needsContact = onboarding?.requiredContact != null;
+  if ((hasCompletedProfileSetup && !needsContact) ||
+      isOnboardingComplete(onboarding)) {
+    return null;
+  }
+  return AppRoute.onboarding.path;
 }
 
 CustomTransitionPage<void> _slidePage(Widget child) {
@@ -240,6 +249,12 @@ GoRouter buildAppRouter({
 
       if (authenticated && _legacySetupRoutePaths.contains(path)) {
         return pendingSetup ?? AppRoute.tonight.path;
+      }
+
+      if (authenticated &&
+          pendingSetup == null &&
+          _setupRoutePaths.contains(path)) {
+        return AppRoute.tonight.path;
       }
 
       if (authenticated && pendingSetup != null) {
@@ -566,7 +581,11 @@ GoRouter buildAppRouter({
         path: AppRoute.publishMeetup.path,
         name: AppRoute.publishMeetup.name,
         pageBuilder: (context, state) => _slidePage(
-          const PublishMeetupScreen(),
+          PublishMeetupScreen(
+            initialDraft: state.extra is CreateMeetupDraft
+                ? state.extra! as CreateMeetupDraft
+                : null,
+          ),
         ),
       ),
       GoRoute(

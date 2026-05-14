@@ -1,8 +1,10 @@
+import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/payments.dart';
 import 'package:big_break_mobile/shared/models/subscription.dart';
 import 'package:big_break_mobile/shared/models/token_wallet.dart';
+import 'package:big_break_mobile/shared/models/tokens.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,6 +20,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         authBootstrapProvider.overrideWith((ref) async {}),
+        initialAuthTokensProvider.overrideWithValue(_testAuthTokens),
         backendRepositoryProvider.overrideWith(_FakeBackendRepository.new),
       ],
     );
@@ -35,6 +38,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         authBootstrapProvider.overrideWith((ref) async {}),
+        initialAuthTokensProvider.overrideWithValue(_testAuthTokens),
         backendRepositoryProvider.overrideWith(_FakeBackendRepository.new),
       ],
     );
@@ -54,6 +58,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         authBootstrapProvider.overrideWith((ref) async {}),
+        initialAuthTokensProvider.overrideWithValue(_testAuthTokens),
         backendRepositoryProvider.overrideWith((ref) {
           repository = _FakeBackendRepository(ref);
           return repository;
@@ -75,6 +80,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         authBootstrapProvider.overrideWith((ref) async {}),
+        initialAuthTokensProvider.overrideWithValue(_testAuthTokens),
         backendRepositoryProvider.overrideWith((ref) {
           repository = _FakeBackendRepository(ref);
           return repository;
@@ -91,6 +97,11 @@ void main() {
     expect(controller.state.balance, 270);
   });
 }
+
+const _testAuthTokens = AuthTokens(
+  accessToken: 'access-token',
+  refreshToken: 'refresh-token',
+);
 
 class _FakeBackendRepository extends BackendRepository {
   _FakeBackendRepository(Ref ref) : super(ref: ref, dio: Dio());

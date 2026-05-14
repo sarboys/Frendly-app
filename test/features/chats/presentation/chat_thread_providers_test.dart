@@ -110,6 +110,8 @@ class _SequentialChatThreadRepository extends BackendRepository {
 
   final List<PaginatedResponse<Message>> responses;
   var fetchMessagesCalls = 0;
+  final requestedCursors = <String?>[];
+  final requestedLimits = <int>[];
 
   @override
   Future<PaginatedResponse<Message>> fetchMessages(
@@ -118,6 +120,8 @@ class _SequentialChatThreadRepository extends BackendRepository {
     int limit = 100,
     CancelToken? cancelToken,
   }) async {
+    requestedCursors.add(cursor);
+    requestedLimits.add(limit);
     final index = fetchMessagesCalls < responses.length
         ? fetchMessagesCalls
         : responses.length - 1;
@@ -1136,6 +1140,94 @@ void main() {
     expect(socket.lastRememberedSyncCursor, 'event-fresh');
     expect(socket.lastRequestedSyncChatId, 'mc1');
     expect(socket.lastRequestedSyncCursor, 'event-fresh');
+  });
+
+  test('chat thread loads older message page with stored cursor', () async {
+    final socket = _ControllableChatSocketClient();
+    late _SequentialChatThreadRepository repository;
+    final newerMessage = Message.fromJson(
+      {
+        'id': 'newer-message',
+        'chatId': 'mc1',
+        'clientMessageId': 'newer-message',
+        'senderId': 'user-anya',
+        'senderName': 'Аня',
+        'text': 'Новое',
+        'createdAt': '2026-04-21T12:20:00Z',
+        'attachments': const [],
+      },
+      currentUserId: 'user-me',
+    );
+    final olderMessage = Message.fromJson(
+      {
+        'id': 'older-message',
+        'chatId': 'mc1',
+        'clientMessageId': 'older-message',
+        'senderId': 'user-anya',
+        'senderName': 'Аня',
+        'text': 'Старое',
+        'createdAt': '2026-04-21T12:00:00Z',
+        'attachments': const [],
+      },
+      currentUserId: 'user-me',
+    );
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        backendRepositoryProvider.overrideWith(
+          (ref) {
+            repository = _SequentialChatThreadRepository(
+              ref: ref,
+              dio: Dio(),
+              responses: [
+                PaginatedResponse(
+                  items: [newerMessage],
+                  nextCursor: 'older-cursor',
+                  lastEventId: 'event-newer',
+                ),
+                PaginatedResponse(
+                  items: [olderMessage],
+                  nextCursor: null,
+                  lastEventId: 'event-newer',
+                ),
+              ],
+            );
+            return repository;
+          },
+        ),
+        appAttachmentServiceProvider
+            .overrideWith((ref) => _FakeAttachmentService()),
+        chatSocketClientProvider.overrideWith((ref) => socket),
+      ],
+    );
+    addTearDown(() async {
+      await socket.dispose();
+      container.dispose();
+    });
+
+    final subscription = container.listen(
+      chatThreadProvider('mc1'),
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(subscription.close);
+
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    await container
+        .read(chatThreadProvider('mc1').notifier)
+        .loadOlderMessages();
+
+    final messages = container.read(chatThreadProvider('mc1')).valueOrNull;
+    expect(repository.fetchMessagesCalls, 2);
+    expect(repository.requestedCursors, [null, 'older-cursor']);
+    expect(repository.requestedLimits, [20, 20]);
+    expect(messages?.map((message) => message.id), [
+      'older-message',
+      'newer-message',
+    ]);
   });
 
   test(

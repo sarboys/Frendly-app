@@ -201,6 +201,83 @@ class _MapEventsRepository extends BackendRepository {
   }
 }
 
+class _FastScreenDataRepository extends BackendRepository {
+  _FastScreenDataRepository({
+    required super.ref,
+    required super.dio,
+  });
+
+  var eventsCalls = 0;
+  var meetupChatsCalls = 0;
+  var personalChatsCalls = 0;
+  var routeTemplatesCalls = 0;
+
+  @override
+  Future<PaginatedResponse<Event>> fetchEvents({
+    String filter = 'nearby',
+    String? q,
+    String? lifestyle,
+    String? price,
+    String? gender,
+    String? access,
+    String? date,
+    String? cursor,
+    int limit = 20,
+    double? latitude,
+    double? longitude,
+    double? radiusKm,
+    double? southWestLatitude,
+    double? southWestLongitude,
+    double? northEastLatitude,
+    double? northEastLongitude,
+    CancelToken? cancelToken,
+  }) async {
+    eventsCalls += 1;
+    return const PaginatedResponse<Event>(
+      items: [],
+      nextCursor: null,
+    );
+  }
+
+  @override
+  Future<PaginatedResponse<MeetupChat>> fetchMeetupChats({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    meetupChatsCalls += 1;
+    return const PaginatedResponse<MeetupChat>(
+      items: [],
+      nextCursor: null,
+    );
+  }
+
+  @override
+  Future<PaginatedResponse<PersonalChat>> fetchPersonalChats({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    personalChatsCalls += 1;
+    return const PaginatedResponse<PersonalChat>(
+      items: [],
+      nextCursor: null,
+    );
+  }
+
+  @override
+  Future<PaginatedResponse<EveningRouteTemplateSummary>>
+      fetchEveningRouteTemplates({
+    String city = 'Москва',
+    String? q,
+    int limit = 20,
+  }) async {
+    routeTemplatesCalls += 1;
+    return const PaginatedResponse<EveningRouteTemplateSummary>(
+      items: [],
+      nextCursor: null,
+    );
+  }
+}
+
 class _EmptyChatListsRepository extends BackendRepository {
   _EmptyChatListsRepository({
     required super.ref,
@@ -1332,6 +1409,39 @@ void main() {
 
     expect(routes, isEmpty);
     expect(repository.templateCalls, 1);
+  });
+
+  test(
+      'screen data providers use saved auth tokens without waiting for bootstrap',
+      () async {
+    final bootstrapCompleter = Completer<void>();
+    late _FastScreenDataRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) => bootstrapCompleter.future),
+        authTokensProvider.overrideWith(
+          (ref) => _StaticAuthTokensController(),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _FastScreenDataRepository(ref: ref, dio: Dio());
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await Future.wait([
+      container.read(eventsProvider('now').future),
+      container.read(meetupChatsProvider.future),
+      container.read(personalChatsProvider.future),
+      container.read(eveningRouteTemplatesProvider('Москва').future),
+    ]).timeout(const Duration(milliseconds: 100));
+
+    expect(repository.eventsCalls, 1);
+    expect(repository.meetupChatsCalls, 1);
+    expect(repository.personalChatsCalls, 1);
+    expect(repository.routeTemplatesCalls, 1);
+    expect(bootstrapCompleter.isCompleted, isFalse);
   });
 
   test('route catalog exposes backend errors instead of fallback data',

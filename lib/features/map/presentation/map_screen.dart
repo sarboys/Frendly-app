@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
@@ -17,10 +18,12 @@ import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
+import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
 import 'package:big_break_mobile/shared/widgets/bb_bottom_nav.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -34,11 +37,23 @@ const _mapZoomStep = 1.0;
 const _minMapZoom = 2.0;
 const _maxMapZoom = 19.0;
 const _radarCarouselInitialPage = 0;
+const _radarCarouselCardViewportFraction = 0.48;
 const _nativeMapPoiLimit = 80;
 const _manualRadiusViewportFitKey = 'manual-radius-fit';
-const _radarClusterPointThreshold = 40;
-const _radarClusterRadius = 48.0;
+const _radarClusterPointThreshold = 10;
+const _radarClusterRadius = 64.0;
 const _radarClusterMinZoom = 13;
+const _radarPinScale = 1.04;
+const _radarSelectedPinScale = 1.18;
+const _radarClusterPinScale = 1.12;
+const _datingAvatarPinScale = 0.8;
+const _datingAvatarSelectedPinScale = 0.9;
+
+@visibleForTesting
+const radarDefaultMapPoint = ym.Point(
+  latitude: 55.7558,
+  longitude: 37.6173,
+);
 
 @visibleForTesting
 enum RadarMapPinKind {
@@ -51,26 +66,23 @@ enum RadarMapPinKind {
   search,
   cluster,
   promoted,
+  coffee,
+  footprints,
+  music,
 }
 
 const _radarPinAssetByKind = <RadarMapPinKind, String>{
-  RadarMapPinKind.bars: 'assets/map/pins/radar_pin_bars.png',
-  RadarMapPinKind.routes: 'assets/map/pins/radar_pin_routes.png',
-  RadarMapPinKind.dating: 'assets/map/pins/radar_pin_dating.png',
-  RadarMapPinKind.affiche: 'assets/map/pins/radar_pin_affiche.png',
-  RadarMapPinKind.live: 'assets/map/pins/radar_pin_live.png',
+  RadarMapPinKind.bars: 'assets/map/pins/v5_pin_wine.png',
+  RadarMapPinKind.routes: 'assets/map/pins/v5_pin_sparkles.png',
+  RadarMapPinKind.dating: 'assets/map/pins/v5_pin_heart.png',
+  RadarMapPinKind.affiche: 'assets/map/pins/v5_pin_ticket.png',
+  RadarMapPinKind.live: 'assets/map/pins/v5_pin_music.png',
   RadarMapPinKind.user: 'assets/map/pins/radar_pin_user.png',
   RadarMapPinKind.cluster: 'assets/map/pins/radar_pin_cluster.png',
-  RadarMapPinKind.promoted: 'assets/map/pins/radar_pin_promoted.png',
-};
-
-const _radarSelectedPinAssetByKind = <RadarMapPinKind, String>{
-  RadarMapPinKind.bars: 'assets/map/pins/radar_pin_bars_selected.png',
-  RadarMapPinKind.routes: 'assets/map/pins/radar_pin_routes_selected.png',
-  RadarMapPinKind.dating: 'assets/map/pins/radar_pin_dating_selected.png',
-  RadarMapPinKind.affiche: 'assets/map/pins/radar_pin_affiche_selected.png',
-  RadarMapPinKind.live: 'assets/map/pins/radar_pin_live_selected.png',
-  RadarMapPinKind.promoted: 'assets/map/pins/radar_pin_promoted_selected.png',
+  RadarMapPinKind.promoted: 'assets/map/pins/v5_pin_flame.png',
+  RadarMapPinKind.coffee: 'assets/map/pins/v5_pin_coffee.png',
+  RadarMapPinKind.footprints: 'assets/map/pins/v5_pin_footprints.png',
+  RadarMapPinKind.music: 'assets/map/pins/v5_pin_music.png',
 };
 
 @visibleForTesting
@@ -127,7 +139,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   int _mapControllerGeneration = 0;
   int _viewportQueryGeneration = 0;
   int _viewportFitGeneration = 0;
-  MapEventsQuery _mapQuery = const MapEventsQuery();
+  int _clusterRefreshRevision = 0;
+  double? _lastCameraZoom;
+  MapEventsQuery _mapQuery = initialRadarMapEventsQuery();
   ym.Point? _searchPoint;
   ym.Point? _userPoint;
   String selected = '';
@@ -142,6 +156,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   String _lastViewportFitKey = '';
   List<Event> _lastMapEvents = const [];
   List<Event> _visibleMapEvents = const [];
+  final Map<String, Uint8List> _datingAvatarPinBytes = {};
+  final Map<String, String> _datingAvatarPinKeys = {};
+  final Set<String> _datingAvatarPinLoads = {};
 
   bool get _supportsNativeMap =>
       !kIsWeb &&
@@ -153,7 +170,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     super.initState();
     _eventPageController = PageController(
       initialPage: _radarCarouselInitialPage,
-      viewportFraction: 0.74,
+      viewportFraction: _radarCarouselCardViewportFraction,
     );
     final initialEventId = widget.initialEventId;
     if (initialEventId != null && initialEventId.isNotEmpty) {
@@ -164,7 +181,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
     if (initialManualPoint != null && (initialEventId ?? '').isEmpty) {
       _userPoint = initialManualPoint;
-      _mapQuery = buildInitialMapEventsQuery(initialManualPoint);
+      _mapQuery =
+          initialRadarMapEventsQuery(preferredPoint: initialManualPoint);
       _didPrimeInitialLocation = true;
       _triedInitialLocation = true;
       _autoFitPending = true;
@@ -185,6 +203,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _mapController = null;
     _viewportQueryDebounce?.cancel();
     _eventPageController.dispose();
+    _datingAvatarPinBytes.clear();
+    _datingAvatarPinKeys.clear();
+    _datingAvatarPinLoads.clear();
     super.dispose();
   }
 
@@ -207,6 +228,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final datingProfiles = datingProfilesWithMapPoints(
       datingProfilesAsync.valueOrNull ?? const <DatingProfileData>[],
     );
+    if (filter == 'dating') {
+      _ensureDatingAvatarPins(datingProfiles);
+    }
     final filteredEvents =
         filter == 'dating' ? const <Event>[] : _filteredEvents(events, filter);
     final liveEvenings =
@@ -234,6 +258,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       promotedIds: promotedIds,
       datingProfiles: filter == 'dating' ? datingProfiles : const [],
       selectedDatingUserId: activeDatingProfile?.userId ?? selectedDatingUserId,
+      datingAvatarPinBytes:
+          filter == 'dating' ? _datingAvatarPinBytes : const {},
+      clusterRefreshRevision: _clusterRefreshRevision,
       liveEvenings: liveEvenings,
       userPoint: _userPoint,
       searchPoint: _searchPoint,
@@ -263,6 +290,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               filteredEvents,
               mapObjects,
               selectedId,
+              datingProfiles: filter == 'dating' ? datingProfiles : const [],
+              selectedDatingUserId:
+                  activeDatingProfile?.userId ?? selectedDatingUserId,
             ),
           ),
           if (!_supportsNativeMap)
@@ -363,6 +393,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               bottom: 96,
               child: _RadarBottomSheet(
                 events: filteredEvents,
+                promotedIds: promotedIds,
                 isExpanded: _isRadarListExpanded,
                 pageController: _eventPageController,
                 onPageChanged: (index) {
@@ -418,13 +449,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   Widget _buildMapSurface(
     List<Event> filteredEvents,
     List<ym.MapObject> mapObjects,
-    String selectedId,
-  ) {
+    String selectedId, {
+    List<DatingProfileData> datingProfiles = const [],
+    String selectedDatingUserId = '',
+  }) {
     if (!_supportsNativeMap) {
       return _FallbackMapSurface(
         events: filteredEvents,
         selectedId: selectedId,
+        datingProfiles: datingProfiles,
+        selectedDatingUserId: selectedDatingUserId,
         onTap: _handleEventTap,
+        onDatingTap: _handleDatingProfileTap,
       );
     }
 
@@ -436,7 +472,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             key: const Key('map-bootstrap-error-surface'),
             events: filteredEvents,
             selectedId: selectedId,
+            datingProfiles: datingProfiles,
+            selectedDatingUserId: selectedDatingUserId,
             onTap: _handleEventTap,
+            onDatingTap: _handleDatingProfileTap,
             footer: const _NativeMapErrorBadge(),
           );
         }
@@ -535,6 +574,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     ym.CameraUpdateReason reason,
     bool finished,
   ) {
+    final previousZoom = _lastCameraZoom;
+    _lastCameraZoom = cameraPosition.zoom;
+    if (shouldRefreshEventClustersForZoom(
+      hasClusterCollection:
+          filter != 'dating' && hasClusterableEventPoints(_visibleMapEvents),
+      previousZoom: previousZoom,
+      currentZoom: cameraPosition.zoom,
+      finished: finished,
+    )) {
+      setState(() {
+        _clusterRefreshRevision += 1;
+      });
+    }
+
     final shouldSyncProgrammaticZoom = _syncRadiusAfterProgrammaticZoom &&
         reason == ym.CameraUpdateReason.application &&
         finished;
@@ -648,7 +701,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       setState(() {
         _autoFitPending = true;
         _userPoint = point;
-        _mapQuery = buildInitialMapEventsQuery(point);
+        _mapQuery = initialRadarMapEventsQuery(preferredPoint: point);
       });
 
       unawaited(_moveToUserPreview(point, animated: animated));
@@ -1038,6 +1091,70 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       animatePager: true,
       keepCurrentZoom: false,
     );
+  }
+
+  void _ensureDatingAvatarPins(List<DatingProfileData> profiles) {
+    final activeIds = profiles.map((profile) => profile.userId).toSet();
+    _datingAvatarPinBytes
+        .removeWhere((userId, _) => !activeIds.contains(userId));
+    _datingAvatarPinKeys
+        .removeWhere((userId, _) => !activeIds.contains(userId));
+    _datingAvatarPinLoads.removeWhere((userId) => !activeIds.contains(userId));
+
+    for (final profile in profiles.take(32)) {
+      final key = datingAvatarPinCacheKey(profile);
+      final userId = profile.userId;
+      if (_datingAvatarPinKeys[userId] == key &&
+          _datingAvatarPinBytes.containsKey(userId)) {
+        continue;
+      }
+      if (_datingAvatarPinLoads.contains(userId)) {
+        continue;
+      }
+
+      _datingAvatarPinKeys[userId] = key;
+      _datingAvatarPinLoads.add(userId);
+      unawaited(_loadDatingAvatarPin(profile, key));
+    }
+  }
+
+  Future<void> _loadDatingAvatarPin(
+    DatingProfileData profile,
+    String expectedKey,
+  ) async {
+    final avatarImage = await _loadDatingAvatarImage(profile.avatarUrl);
+    final bytes = await buildDatingAvatarPinBytes(
+      profile,
+      avatarImage: avatarImage,
+    );
+    avatarImage?.dispose();
+    if (!mounted || _datingAvatarPinKeys[profile.userId] != expectedKey) {
+      return;
+    }
+    setState(() {
+      _datingAvatarPinBytes[profile.userId] = bytes;
+      _datingAvatarPinLoads.remove(profile.userId);
+    });
+  }
+
+  Future<ui.Image?> _loadDatingAvatarImage(String? imageUrl) async {
+    final url = imageUrl?.trim();
+    if (url == null || url.isEmpty) {
+      return null;
+    }
+    try {
+      final file = await DefaultCacheManager().getSingleFile(url);
+      final bytes = await file.readAsBytes();
+      final codec = await ui.instantiateImageCodec(
+        bytes,
+        targetWidth: 96,
+        targetHeight: 96,
+      );
+      final frame = await codec.getNextFrame();
+      return frame.image;
+    } catch (_) {
+      return null;
+    }
   }
 
   void _selectEvent(
@@ -1861,9 +1978,6 @@ String radarCategoryForEvent(Event event) {
   if (event.isDate) {
     return 'dating';
   }
-  if ((event.routeId ?? '').trim().isNotEmpty) {
-    return 'routes';
-  }
   if (event.ticketSourceKind != null ||
       (event.ticketUrl ?? '').trim().isNotEmpty) {
     return 'affiche';
@@ -1873,17 +1987,39 @@ String radarCategoryForEvent(Event event) {
 
 @visibleForTesting
 RadarMapPinKind radarPinKindForEvent(Event event) {
-  switch (radarCategoryForEvent(event)) {
-    case 'routes':
-      return RadarMapPinKind.routes;
-    case 'affiche':
-      return RadarMapPinKind.affiche;
-    case 'dating':
-      return RadarMapPinKind.dating;
-    case 'bars':
-    default:
-      return RadarMapPinKind.bars;
+  final pinText = '${event.title} ${event.vibe} ${event.place} ${event.emoji}'
+      .toLowerCase();
+  final category = radarCategoryForEvent(event);
+  if (category == 'dating') {
+    return RadarMapPinKind.dating;
   }
+  if (category == 'affiche') {
+    return RadarMapPinKind.affiche;
+  }
+  if (category == 'routes') {
+    if (pinText.contains('прогул') ||
+        pinText.contains('пеш') ||
+        pinText.contains('🚶')) {
+      return RadarMapPinKind.footprints;
+    }
+    return RadarMapPinKind.routes;
+  }
+  if (pinText.contains('coffee') ||
+      pinText.contains('кофе') ||
+      pinText.contains('☕')) {
+    return RadarMapPinKind.coffee;
+  }
+  if (pinText.contains('jazz') ||
+      pinText.contains('джаз') ||
+      pinText.contains('music') ||
+      pinText.contains('музык') ||
+      pinText.contains('концерт') ||
+      pinText.contains('🎙') ||
+      pinText.contains('🎵') ||
+      pinText.contains('🎶')) {
+    return RadarMapPinKind.music;
+  }
+  return RadarMapPinKind.bars;
 }
 
 @visibleForTesting
@@ -1891,13 +2027,15 @@ ym.PlacemarkIconStyle radarPinIconStyle({
   required RadarMapPinKind kind,
   required bool selected,
 }) {
-  final selectedAsset = _radarSelectedPinAssetByKind[kind];
-  final asset = selected && selectedAsset != null
-      ? selectedAsset
-      : _radarPinAssetByKind[kind]!;
+  final asset = _radarPinAssetByKind[kind]!;
+  final scale = switch (kind) {
+    RadarMapPinKind.user => 1.0,
+    RadarMapPinKind.cluster => _radarClusterPinScale,
+    _ => selected ? _radarSelectedPinScale : _radarPinScale,
+  };
   return ym.PlacemarkIconStyle(
     image: ym.BitmapDescriptor.fromAssetImage(asset),
-    scale: selected ? 2.0 : 1.8,
+    scale: scale,
     anchor: kind == RadarMapPinKind.user
         ? const Offset(0.5, 0.5)
         : const Offset(0.5, 0.82),
@@ -2049,6 +2187,22 @@ bool shouldRefreshMapViewportQuery({
 }
 
 @visibleForTesting
+bool shouldRefreshEventClustersForZoom({
+  required bool hasClusterCollection,
+  required double? previousZoom,
+  required double currentZoom,
+  required bool finished,
+}) {
+  if (!finished || !hasClusterCollection) {
+    return false;
+  }
+  if (currentZoom > _radarClusterMinZoom) {
+    return false;
+  }
+  return previousZoom == null || previousZoom > _radarClusterMinZoom;
+}
+
+@visibleForTesting
 List<Event> visibleMapEventsForRadar({
   required AsyncValue<List<Event>> eventsAsync,
   required List<Event> previousEvents,
@@ -2062,6 +2216,12 @@ List<Event> visibleMapEventsForRadar({
   }
 
   return previousEvents;
+}
+
+@visibleForTesting
+bool hasClusterableEventPoints(List<Event> events) {
+  return events.map(_pointForEventModel).whereType<ym.Point>().length >
+      _radarClusterPointThreshold;
 }
 
 @visibleForTesting
@@ -2146,6 +2306,20 @@ int nearestRadarCarouselPage(
 }
 
 @visibleForTesting
+int teleportedRadarCarouselPage(
+  int pageIndex, {
+  required int eventCount,
+}) {
+  if (eventCount <= 2) {
+    return pageIndex;
+  }
+  if (pageIndex < eventCount || pageIndex >= eventCount * 2) {
+    return eventCount + radarCarouselEventIndex(pageIndex, eventCount);
+  }
+  return pageIndex;
+}
+
+@visibleForTesting
 String buildMapViewportFitKey(List<Event> events, String filter) {
   final parts = events
       .where((event) => event.latitude != null && event.longitude != null)
@@ -2187,6 +2361,8 @@ class MapObjectCache {
     required String selectedId,
     List<DatingProfileData> datingProfiles = const [],
     String selectedDatingUserId = '',
+    Map<String, Uint8List> datingAvatarPinBytes = const {},
+    int clusterRefreshRevision = 0,
     Set<String> promotedIds = const {},
     required List<EveningSessionSummary> liveEvenings,
     required ym.Point? userPoint,
@@ -2201,6 +2377,8 @@ class MapObjectCache {
       selectedId: selectedId,
       datingProfiles: datingProfiles,
       selectedDatingUserId: selectedDatingUserId,
+      datingAvatarPinBytes: datingAvatarPinBytes,
+      clusterRefreshRevision: clusterRefreshRevision,
       promotedIds: promotedIds,
       liveEvenings: liveEvenings,
       userPoint: userPoint,
@@ -2220,6 +2398,7 @@ class MapObjectCache {
       if (eventPlacemarks.length > _radarClusterPointThreshold)
         buildEventClusterCollection(
           placemarks: eventPlacemarks,
+          clusterRefreshRevision: clusterRefreshRevision,
           onClusterTap: onEventClusterTap ?? (_) {},
         )
       else
@@ -2227,6 +2406,7 @@ class MapObjectCache {
       ...buildDatingProfilePlacemarks(
         profiles: datingProfiles,
         selectedUserId: selectedDatingUserId,
+        datingAvatarPinBytes: datingAvatarPinBytes,
         onProfileTap: onDatingProfileTap ?? (_) {},
       ),
       ...buildLiveEveningPlacemarks(
@@ -2249,6 +2429,8 @@ String buildMapObjectsCacheKey({
   required String selectedId,
   List<DatingProfileData> datingProfiles = const [],
   String selectedDatingUserId = '',
+  Map<String, Uint8List> datingAvatarPinBytes = const {},
+  int clusterRefreshRevision = 0,
   Set<String> promotedIds = const {},
   required List<EveningSessionSummary> liveEvenings,
   required ym.Point? userPoint,
@@ -2260,6 +2442,7 @@ String buildMapObjectsCacheKey({
     'user:${_pointCacheKey(userPoint)}',
     'search:${_pointCacheKey(searchPoint)}',
     'cluster:${events.length > _radarClusterPointThreshold}',
+    'clusterRefresh:$clusterRefreshRevision',
     for (final event in events)
       if (event.latitude != null && event.longitude != null)
         [
@@ -2278,6 +2461,9 @@ String buildMapObjectsCacheKey({
           _roundGeo(profile.latitude!).toStringAsFixed(5),
           _roundGeo(profile.longitude!).toStringAsFixed(5),
           profile.photoEmoji,
+          datingAvatarPinBytes.containsKey(profile.userId)
+              ? 'avatar:${datingAvatarPinBytes[profile.userId]!.length}'
+              : 'fallback',
         ].join(':'),
     for (final session in liveEvenings)
       if (session.lat != null && session.lng != null)
@@ -2339,7 +2525,7 @@ ym.PlacemarkMapObject _buildEventPlacemark({
         ? ym.PlacemarkText(
             text: '🔥',
             style: ym.PlacemarkTextStyle(
-              size: selected ? 16 : 15,
+              size: selected ? 13 : 12,
               placement: ym.TextStylePlacement.center,
               offsetFromIcon: false,
             ),
@@ -2352,6 +2538,7 @@ ym.PlacemarkMapObject _buildEventPlacemark({
 @visibleForTesting
 ym.ClusterizedPlacemarkCollection buildEventClusterCollection({
   required List<ym.PlacemarkMapObject> placemarks,
+  int clusterRefreshRevision = 0,
   required void Function(List<ym.PlacemarkMapObject> placemarks) onClusterTap,
 }) {
   return ym.ClusterizedPlacemarkCollection(
@@ -2359,7 +2546,7 @@ ym.ClusterizedPlacemarkCollection buildEventClusterCollection({
     placemarks: placemarks,
     radius: _radarClusterRadius,
     minZoom: _radarClusterMinZoom,
-    zIndex: 1,
+    zIndex: _clusterCollectionZIndex(clusterRefreshRevision),
     consumeTapEvents: true,
     onClusterAdded: (collection, cluster) async {
       return cluster.copyWith(
@@ -2388,6 +2575,10 @@ ym.ClusterizedPlacemarkCollection buildEventClusterCollection({
   );
 }
 
+double _clusterCollectionZIndex(int refreshRevision) {
+  return 1 + (refreshRevision % 1000) * 0.0001;
+}
+
 @visibleForTesting
 List<DatingProfileData> datingProfilesWithMapPoints(
   List<DatingProfileData> profiles,
@@ -2409,6 +2600,7 @@ List<ym.Point> datingProfilePoints(List<DatingProfileData> profiles) {
 List<ym.PlacemarkMapObject> buildDatingProfilePlacemarks({
   required List<DatingProfileData> profiles,
   required String selectedUserId,
+  Map<String, Uint8List> datingAvatarPinBytes = const {},
   required void Function(String userId) onProfileTap,
 }) {
   return [
@@ -2417,6 +2609,7 @@ List<ym.PlacemarkMapObject> buildDatingProfilePlacemarks({
         _buildDatingProfilePlacemark(
           profile: profile,
           selected: profile.userId == selectedUserId,
+          avatarPinBytes: datingAvatarPinBytes[profile.userId],
           onProfileTap: onProfileTap,
         ),
   ];
@@ -2425,6 +2618,7 @@ List<ym.PlacemarkMapObject> buildDatingProfilePlacemarks({
 ym.PlacemarkMapObject _buildDatingProfilePlacemark({
   required DatingProfileData profile,
   required bool selected,
+  required Uint8List? avatarPinBytes,
   required void Function(String userId) onProfileTap,
 }) {
   return ym.PlacemarkMapObject(
@@ -2437,12 +2631,210 @@ ym.PlacemarkMapObject _buildDatingProfilePlacemark({
     consumeTapEvents: true,
     opacity: 1,
     icon: ym.PlacemarkIcon.single(
-      radarPinIconStyle(
-        kind: RadarMapPinKind.dating,
+      datingProfilePinIconStyle(
         selected: selected,
+        avatarPinBytes: avatarPinBytes,
       ),
     ),
     onTap: (_, __) => onProfileTap(profile.userId),
+  );
+}
+
+@visibleForTesting
+ym.PlacemarkIconStyle datingProfilePinIconStyle({
+  required bool selected,
+  Uint8List? avatarPinBytes,
+}) {
+  if (avatarPinBytes == null) {
+    return radarPinIconStyle(
+      kind: RadarMapPinKind.dating,
+      selected: selected,
+    );
+  }
+
+  return ym.PlacemarkIconStyle(
+    image: ym.BitmapDescriptor.fromBytes(avatarPinBytes),
+    scale: selected ? _datingAvatarSelectedPinScale : _datingAvatarPinScale,
+    anchor: const Offset(0.5, 0.84),
+  );
+}
+
+@visibleForTesting
+String datingAvatarPinCacheKey(DatingProfileData profile) {
+  return [
+    profile.userId,
+    profile.name,
+    profile.avatarUrl ?? '',
+    profile.photoEmoji,
+    profile.online ? 'online' : 'offline',
+  ].join('|');
+}
+
+@visibleForTesting
+Future<Uint8List> buildDatingAvatarPinBytes(
+  DatingProfileData profile, {
+  ui.Image? avatarImage,
+}) async {
+  const width = 96.0;
+  const height = 108.0;
+  const center = Offset(48, 42);
+  const outerRadius = 34.0;
+  const photoRadius = 28.0;
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, width, height));
+
+  canvas.drawCircle(
+    center.translate(0, 6),
+    outerRadius,
+    Paint()
+      ..color = const Color(0x331F241D)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+  );
+  canvas.drawCircle(
+    center,
+    outerRadius,
+    Paint()..color = BbV5Colors.paperHi,
+  );
+  canvas.drawCircle(
+    center,
+    outerRadius - 1.5,
+    Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..color = BbV5Colors.accent,
+  );
+
+  final photoRect = Rect.fromCircle(center: center, radius: photoRadius);
+  canvas.save();
+  canvas.clipPath(Path()..addOval(photoRect));
+  if (avatarImage != null) {
+    final imageSize = Size(
+      avatarImage.width.toDouble(),
+      avatarImage.height.toDouble(),
+    );
+    final source = _coverSourceRect(imageSize);
+    canvas.drawImageRect(avatarImage, source, photoRect, Paint());
+  } else {
+    final colors = _datingAvatarFallbackColors(profile.name);
+    canvas.drawRect(photoRect, Paint()..color = colors.bg);
+    final label = profile.photoEmoji.trim().isNotEmpty
+        ? profile.photoEmoji.trim()
+        : _datingAvatarInitials(profile.name);
+    _paintCenteredText(
+      canvas,
+      label,
+      photoRect.center,
+      fontSize: label.length > 2 ? 17 : 20,
+      color: colors.fg,
+      fontWeight: FontWeight.w800,
+    );
+  }
+  canvas.restore();
+
+  if (profile.online) {
+    canvas.drawCircle(
+      center.translate(20, 20),
+      7,
+      Paint()..color = BbV5Colors.paperHi,
+    );
+    canvas.drawCircle(
+      center.translate(20, 20),
+      4.5,
+      Paint()..color = const Color(0xFF3BAA68),
+    );
+  }
+
+  canvas.drawCircle(
+    center.translate(22, -22),
+    11,
+    Paint()..color = BbV5Colors.rose,
+  );
+  _paintCenteredText(
+    canvas,
+    '♥',
+    center.translate(22, -22),
+    fontSize: 14,
+    color: Colors.white,
+    fontWeight: FontWeight.w800,
+  );
+
+  canvas.drawCircle(
+    const Offset(48, 88),
+    4,
+    Paint()..color = BbV5Colors.accent,
+  );
+
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(width.toInt(), height.toInt());
+  final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  picture.dispose();
+  return byteData!.buffer.asUint8List();
+}
+
+Rect _coverSourceRect(Size imageSize) {
+  final sourceAspect = imageSize.width / imageSize.height;
+  const targetAspect = 1.0;
+  if (sourceAspect > targetAspect) {
+    final width = imageSize.height * targetAspect;
+    final left = (imageSize.width - width) / 2;
+    return Rect.fromLTWH(left, 0, width, imageSize.height);
+  }
+  final height = imageSize.width / targetAspect;
+  final top = (imageSize.height - height) / 2;
+  return Rect.fromLTWH(0, top, imageSize.width, height);
+}
+
+({Color bg, Color fg}) _datingAvatarFallbackColors(String value) {
+  const palette = <({Color bg, Color fg})>[
+    (bg: Color(0xFFF0C7BD), fg: Color(0xFF874432)),
+    (bg: Color(0xFFD5E7D9), fg: Color(0xFF355A3F)),
+    (bg: Color(0xFFF1DFC0), fg: Color(0xFF785C2D)),
+    (bg: Color(0xFFDCE3F2), fg: Color(0xFF425170)),
+    (bg: Color(0xFFE5DCEF), fg: Color(0xFF5F4870)),
+    (bg: Color(0xFFD8EBEA), fg: Color(0xFF376665)),
+  ];
+  var hash = 0;
+  for (final codeUnit in value.codeUnits) {
+    hash = (hash * 31 + codeUnit) & 0x7fffffff;
+  }
+  return palette[hash % palette.length];
+}
+
+String _datingAvatarInitials(String value) {
+  final initials = value
+      .split(' ')
+      .where((part) => part.isNotEmpty)
+      .take(2)
+      .map((part) => part.substring(0, 1))
+      .join()
+      .toUpperCase();
+  return initials.isEmpty ? '?' : initials;
+}
+
+void _paintCenteredText(
+  Canvas canvas,
+  String text,
+  Offset center, {
+  required double fontSize,
+  required Color color,
+  required FontWeight fontWeight,
+}) {
+  final painter = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: TextStyle(
+        color: color,
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+      ),
+    ),
+    textAlign: TextAlign.center,
+    textDirection: TextDirection.ltr,
+  )..layout();
+  painter.paint(
+    canvas,
+    center - Offset(painter.width / 2, painter.height / 2),
   );
 }
 
@@ -2610,6 +3002,11 @@ MapEventsQuery buildInitialMapEventsQuery(ym.Point point) {
 }
 
 @visibleForTesting
+MapEventsQuery initialRadarMapEventsQuery({ym.Point? preferredPoint}) {
+  return buildInitialMapEventsQuery(preferredPoint ?? radarDefaultMapPoint);
+}
+
+@visibleForTesting
 ym.Point? resolvePreferredMapPoint({
   ManualLocation? manualLocation,
   Position? currentPosition,
@@ -2661,9 +3058,57 @@ double _distanceKm(ym.Point from, ym.Point to) {
   return 2 * earthRadiusKm * math.atan2(math.sqrt(a), math.sqrt(1 - a));
 }
 
+@visibleForTesting
+String radarEtaLabelForDistance(String distance) {
+  final normalized = distance.trim().toLowerCase().replaceAll(',', '.');
+  if (normalized.isEmpty) {
+    return '';
+  }
+  final match = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(normalized);
+  if (match == null) {
+    return '';
+  }
+  final value = double.tryParse(match.group(1)!);
+  if (value == null) {
+    return '';
+  }
+  final distanceKm = normalized.contains('м') && !normalized.contains('км')
+      ? value / 1000
+      : value;
+  final minutes = math.max(1, (distanceKm * 12.5).ceil());
+  return '$minutes мин';
+}
+
+@visibleForTesting
+String radarCardSubtypeForEvent(Event event) {
+  switch (radarCategoryForEvent(event)) {
+    case 'routes':
+      return (event.vibe.trim().isEmpty ? 'маршрут' : 'маршрут · ${event.vibe}')
+          .trim();
+    case 'affiche':
+      return (event.time.trim().isEmpty ? 'афиша' : 'афиша · ${event.time}')
+          .trim();
+    case 'dating':
+      return 'дейтинг';
+    case 'bars':
+    default:
+      if ((event.routeId ?? '').trim().isNotEmpty) {
+        return 'встреча по маршруту';
+      }
+      return event.vibe.trim().isEmpty ? 'встреча' : event.vibe.trim();
+  }
+}
+
+typedef _RadarCarouselItemBuilder = Widget Function(
+  BuildContext context,
+  int index,
+  bool active,
+);
+
 class _RadarBottomSheet extends StatelessWidget {
   const _RadarBottomSheet({
     required this.events,
+    required this.promotedIds,
     required this.isExpanded,
     required this.pageController,
     required this.onPageChanged,
@@ -2672,6 +3117,7 @@ class _RadarBottomSheet extends StatelessWidget {
   });
 
   final List<Event> events;
+  final Set<String> promotedIds;
   final bool isExpanded;
   final PageController pageController;
   final ValueChanged<int> onPageChanged;
@@ -2730,30 +3176,22 @@ class _RadarBottomSheet extends StatelessWidget {
                   ),
                 ),
                 if (isExpanded) ...[
-                  const SizedBox(height: 6),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 136,
-                    child: PageView.builder(
-                      controller: pageController,
-                      padEnds: true,
-                      onPageChanged: onPageChanged,
-                      itemCount: events.length <= 2 ? events.length : null,
-                      itemBuilder: (context, index) {
-                        final event = events[radarCarouselEventIndex(
-                          index,
-                          events.length,
-                        )];
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                          child: _RadarEventCard(
-                            event: event,
-                            onTap: () => onEventTap(event),
-                          ),
-                        );
-                      },
-                    ),
+                  const SizedBox(height: 2),
+                  _RadarCenterCarousel(
+                    itemCount: events.length,
+                    pageController: pageController,
+                    onPageChanged: onPageChanged,
+                    itemBuilder: (context, index, active) {
+                      final event = events[index];
+                      return _RadarEventCard(
+                        event: event,
+                        active: active,
+                        promoted: promotedIds.contains(event.id),
+                        onTap: () => onEventTap(event),
+                      );
+                    },
                   ),
+                  const SizedBox(height: 1),
                 ],
               ],
             ),
@@ -2833,30 +3271,21 @@ class _RadarDatingBottomSheet extends StatelessWidget {
                   ),
                 ),
                 if (isExpanded) ...[
-                  const SizedBox(height: 6),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 136,
-                    child: PageView.builder(
-                      controller: pageController,
-                      padEnds: true,
-                      onPageChanged: onPageChanged,
-                      itemCount: profiles.length <= 2 ? profiles.length : null,
-                      itemBuilder: (context, index) {
-                        final profile = profiles[radarCarouselEventIndex(
-                          index,
-                          profiles.length,
-                        )];
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                          child: _RadarDatingProfileCard(
-                            profile: profile,
-                            onTap: () => onProfileTap(profile),
-                          ),
-                        );
-                      },
-                    ),
+                  const SizedBox(height: 2),
+                  _RadarCenterCarousel(
+                    itemCount: profiles.length,
+                    pageController: pageController,
+                    onPageChanged: onPageChanged,
+                    itemBuilder: (context, index, active) {
+                      final profile = profiles[index];
+                      return _RadarDatingProfileCard(
+                        profile: profile,
+                        active: active,
+                        onTap: () => onProfileTap(profile),
+                      );
+                    },
                   ),
+                  const SizedBox(height: 1),
                 ],
               ],
             ),
@@ -2867,13 +3296,297 @@ class _RadarDatingBottomSheet extends StatelessWidget {
   }
 }
 
+class _RadarCenterCarousel extends StatefulWidget {
+  const _RadarCenterCarousel({
+    required this.itemCount,
+    required this.pageController,
+    required this.onPageChanged,
+    required this.itemBuilder,
+  });
+
+  final int itemCount;
+  final PageController pageController;
+  final ValueChanged<int> onPageChanged;
+  final _RadarCarouselItemBuilder itemBuilder;
+
+  @override
+  State<_RadarCenterCarousel> createState() => _RadarCenterCarouselState();
+}
+
+class _RadarCenterCarouselState extends State<_RadarCenterCarousel> {
+  int _activeIndex = 0;
+
+  bool get _isLooping => widget.itemCount > 2;
+
+  int get _physicalItemCount =>
+      _isLooping ? widget.itemCount * 3 : widget.itemCount;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.pageController.addListener(_syncActiveFromPage);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureMiddleBlock());
+  }
+
+  @override
+  void didUpdateWidget(covariant _RadarCenterCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pageController != widget.pageController) {
+      oldWidget.pageController.removeListener(_syncActiveFromPage);
+      widget.pageController.addListener(_syncActiveFromPage);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureMiddleBlock());
+  }
+
+  @override
+  void dispose() {
+    widget.pageController.removeListener(_syncActiveFromPage);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.itemCount <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 126,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              PageView.builder(
+                key: const Key('radar-center-carousel-page-view'),
+                controller: widget.pageController,
+                padEnds: true,
+                clipBehavior: Clip.none,
+                onPageChanged: _handlePageChanged,
+                itemCount: _physicalItemCount,
+                itemBuilder: (context, index) {
+                  final realIndex = radarCarouselEventIndex(
+                    index,
+                    widget.itemCount,
+                  );
+                  return _RadarCarouselPage(
+                    controller: widget.pageController,
+                    pageIndex: index,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: widget.itemBuilder(
+                        context,
+                        realIndex,
+                        realIndex == _activeIndex,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              if (widget.itemCount > 1) ...[
+                Positioned(
+                  left: 0,
+                  top: 47,
+                  child: _RadarCarouselArrowButton(
+                    icon: LucideIcons.chevron_left,
+                    onTap: () => _moveBy(-1),
+                  ),
+                ),
+                Positioned(
+                  right: 0,
+                  top: 47,
+                  child: _RadarCarouselArrowButton(
+                    icon: LucideIcons.chevron_right,
+                    onTap: () => _moveBy(1),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (widget.itemCount > 1)
+          Row(
+            key: const Key('radar-carousel-dots'),
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var index = 0; index < widget.itemCount; index++)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  width: index == _activeIndex ? 14 : 4,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    color: index == _activeIndex
+                        ? BbV5Colors.ink
+                        : BbV5Colors.hair,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  void _handlePageChanged(int index) {
+    _setActiveFromPhysicalPage(index);
+    widget.onPageChanged(index);
+    if (!_isLooping) {
+      return;
+    }
+    final targetPage = teleportedRadarCarouselPage(
+      index,
+      eventCount: widget.itemCount,
+    );
+    if (targetPage == index) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.pageController.hasClients) {
+        return;
+      }
+      widget.pageController.jumpToPage(targetPage);
+    });
+  }
+
+  void _moveBy(int delta) {
+    if (!widget.pageController.hasClients) {
+      return;
+    }
+    final page = (widget.pageController.page ??
+            widget.pageController.initialPage.toDouble())
+        .round();
+    widget.pageController.animateToPage(
+      page + delta,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _ensureMiddleBlock() {
+    if (!mounted || !_isLooping || !widget.pageController.hasClients) {
+      return;
+    }
+    final page = (widget.pageController.page ??
+            widget.pageController.initialPage.toDouble())
+        .round();
+    final targetPage = teleportedRadarCarouselPage(
+      page,
+      eventCount: widget.itemCount,
+    );
+    if (targetPage != page) {
+      widget.pageController.jumpToPage(targetPage);
+      _setActiveFromPhysicalPage(targetPage);
+    }
+  }
+
+  void _syncActiveFromPage() {
+    if (!widget.pageController.hasClients || widget.itemCount <= 0) {
+      return;
+    }
+    final page = widget.pageController.page;
+    if (page == null) {
+      return;
+    }
+    _setActiveFromPhysicalPage(page.round());
+  }
+
+  void _setActiveFromPhysicalPage(int page) {
+    final activeIndex = radarCarouselEventIndex(page, widget.itemCount);
+    if (activeIndex == _activeIndex) {
+      return;
+    }
+    setState(() {
+      _activeIndex = activeIndex;
+    });
+  }
+}
+
+class _RadarCarouselPage extends StatelessWidget {
+  const _RadarCarouselPage({
+    required this.controller,
+    required this.pageIndex,
+    required this.child,
+  });
+
+  final PageController controller;
+  final int pageIndex;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      child: child,
+      builder: (context, child) {
+        final page = controller.hasClients
+            ? controller.page ?? controller.initialPage.toDouble()
+            : controller.initialPage.toDouble();
+        final distance = (page - pageIndex).abs().clamp(0.0, 1.0);
+        final scale = 1 - (0.08 * distance);
+        final opacity = 1 - (0.45 * distance);
+        return Opacity(
+          opacity: opacity,
+          child: Transform.scale(
+            scale: scale,
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RadarCarouselArrowButton extends StatelessWidget {
+  const _RadarCarouselArrowButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: BbV5Colors.paperHi,
+      shape: const CircleBorder(),
+      shadowColor: const Color(0x4D1F241D),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: BbV5Colors.hair),
+            boxShadow: BbV5Shadows.pill,
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: BbV5Colors.ink,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RadarDatingProfileCard extends StatelessWidget {
   const _RadarDatingProfileCard({
     required this.profile,
+    required this.active,
     required this.onTap,
   });
 
   final DatingProfileData profile;
+  final bool active;
   final VoidCallback onTap;
 
   @override
@@ -2895,43 +3608,42 @@ class _RadarDatingProfileCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: BbV5Colors.paperHi,
+            color: active ? BbV5Colors.paperHi : BbV5Colors.paper,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: BbV5Colors.hair),
-            boxShadow: BbV5Shadows.pill,
+            border: Border.all(
+              color: active ? BbV5Colors.hair : BbV5Colors.hairSoft,
+            ),
+            boxShadow: active ? BbV5Shadows.pill : const [],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: BbV5Colors.paper,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: BbV5Colors.hair),
-                ),
-                child: Text(
-                  profile.photoEmoji,
-                  style: const TextStyle(fontSize: 17),
-                ),
+              Row(
+                children: [
+                  Image.asset(
+                    _radarPinAssetByKind[RadarMapPinKind.dating]!,
+                    width: 36,
+                    height: 36,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.itemTitle.copyWith(
+                        fontFamily: 'Sora',
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: BbV5Colors.ink,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 7),
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.itemTitle.copyWith(
-                  fontFamily: 'Sora',
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: BbV5Colors.ink,
-                ),
-              ),
-              const SizedBox(height: 1),
               Text(
                 details,
                 maxLines: 1,
@@ -2978,101 +3690,200 @@ class _RadarDatingProfileCard extends StatelessWidget {
 class _RadarEventCard extends StatelessWidget {
   const _RadarEventCard({
     required this.event,
+    required this.active,
+    required this.promoted,
     required this.onTap,
   });
 
   final Event event;
+  final bool active;
+  final bool promoted;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final toneColor = switch (event.tone) {
-      EventTone.evening => BbV5Colors.terra,
-      EventTone.sage => BbV5Colors.brand,
-      EventTone.warm => BbV5Colors.gold,
-    };
+    final distance = event.distance.trim();
+    final eta = radarEtaLabelForDistance(distance);
+    final distanceEta = distance.isEmpty
+        ? 'рядом'
+        : eta.isEmpty
+            ? distance
+            : '$distance · $eta';
+    final subtype = radarCardSubtypeForEvent(event);
+    final pinKind =
+        promoted ? RadarMapPinKind.promoted : radarPinKindForEvent(event);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: BbV5Colors.paperHi,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: BbV5Colors.hair),
-            boxShadow: BbV5Shadows.pill,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: BbV5Colors.paper,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: BbV5Colors.hair),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: active ? BbV5Colors.paperHi : BbV5Colors.paper,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: active
+                      ? promoted
+                          ? BbV5Colors.accent
+                          : BbV5Colors.hair
+                      : BbV5Colors.hairSoft,
                 ),
-                child: Text(
-                  event.emoji,
-                  style: const TextStyle(fontSize: 17),
-                ),
+                boxShadow: active
+                    ? promoted
+                        ? const [
+                            BoxShadow(
+                              color: Color(0x80D08A63),
+                              blurRadius: 30,
+                              spreadRadius: -12,
+                              offset: Offset(0, 14),
+                            ),
+                          ]
+                        : BbV5Shadows.pill
+                    : const [],
               ),
-              const SizedBox(height: 7),
-              Text(
-                event.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.itemTitle.copyWith(
-                  fontFamily: 'Sora',
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: BbV5Colors.ink,
-                ),
-              ),
-              const SizedBox(height: 1),
-              Text(
-                '${event.vibe} · ${event.distance}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.caption.copyWith(
-                  fontSize: 10,
-                  color: BbV5Colors.inkMute,
-                ),
-              ),
-              const Spacer(),
-              Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    LucideIcons.users,
-                    size: 10,
-                    color: BbV5Colors.inkSoft,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      '${event.going} идут',
-                      style: AppTextStyles.caption.copyWith(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: BbV5Colors.inkSoft,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Image.asset(
+                        _radarPinAssetByKind[pinKind]!,
+                        width: 36,
+                        height: 36,
                       ),
-                    ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              event.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.itemTitle.copyWith(
+                                fontFamily: 'Sora',
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: BbV5Colors.ink,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              subtype,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.caption.copyWith(
+                                fontSize: 10,
+                                color: BbV5Colors.inkMute,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  Icon(
-                    LucideIcons.arrow_up_right,
-                    size: 16,
-                    color: toneColor,
+                  const Spacer(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          distanceEta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.caption.copyWith(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w600,
+                            color: BbV5Colors.inkSoft,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        height: 18,
+                        padding: const EdgeInsets.symmetric(horizontal: 7),
+                        decoration: BoxDecoration(
+                          color: BbV5Colors.paper,
+                          borderRadius: BorderRadius.circular(BbV5Radii.pill),
+                          border: Border.all(color: BbV5Colors.hairSoft),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              LucideIcons.users,
+                              size: 10,
+                              color: BbV5Colors.inkSoft,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${event.going} идут',
+                              style: AppTextStyles.caption.copyWith(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                                color: BbV5Colors.inkSoft,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+            if (promoted)
+              Positioned(
+                left: 12,
+                top: -8,
+                child: Container(
+                  height: 20,
+                  padding: const EdgeInsets.symmetric(horizontal: 7),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [BbV5Colors.gold, BbV5Colors.terra],
+                    ),
+                    borderRadius: BorderRadius.circular(BbV5Radii.pill),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0xAAC97A55),
+                        blurRadius: 10,
+                        spreadRadius: -2,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        LucideIcons.flame,
+                        size: 11,
+                        color: Color(0xFFFFF8EC),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'ТОП',
+                        style: AppTextStyles.caption.copyWith(
+                          fontFamily: 'Sora',
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFFFFF8EC),
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -3425,13 +4236,19 @@ class _FallbackMapSurface extends StatelessWidget {
     super.key,
     required this.events,
     required this.selectedId,
+    required this.datingProfiles,
+    required this.selectedDatingUserId,
     required this.onTap,
+    required this.onDatingTap,
     this.footer,
   });
 
   final List<Event> events;
   final String selectedId;
+  final List<DatingProfileData> datingProfiles;
+  final String selectedDatingUserId;
   final ValueChanged<String> onTap;
+  final ValueChanged<String> onDatingTap;
   final Widget? footer;
 
   @override
@@ -3460,6 +4277,10 @@ class _FallbackMapSurface extends StatelessWidget {
                   .where((event) =>
                       event.latitude != null && event.longitude != null)
                   .toList(growable: false);
+              final profilesWithCoordinates = datingProfiles
+                  .where((profile) =>
+                      profile.latitude != null && profile.longitude != null)
+                  .toList(growable: false);
               return Stack(
                 children: [
                   for (final entry in eventsWithCoordinates.asMap().entries)
@@ -3481,9 +4302,30 @@ class _FallbackMapSurface extends StatelessWidget {
                       child: GestureDetector(
                         onTap: () => onTap(entry.value.id),
                         child: _FallbackPin(
-                          emoji: entry.value.emoji,
+                          event: entry.value,
                           selected: entry.value.id == selectedId,
-                          tone: entry.value.tone,
+                        ),
+                      ),
+                    ),
+                  for (final entry in profilesWithCoordinates.asMap().entries)
+                    Positioned(
+                      left: constraints.maxWidth *
+                              _fallbackPositionForPoint(
+                                latitude: entry.value.latitude!,
+                                longitude: entry.value.longitude!,
+                              ).left -
+                          28,
+                      top: constraints.maxHeight *
+                              _fallbackPositionForPoint(
+                                latitude: entry.value.latitude!,
+                                longitude: entry.value.longitude!,
+                              ).top -
+                          28,
+                      child: GestureDetector(
+                        onTap: () => onDatingTap(entry.value.userId),
+                        child: _FallbackDatingPin(
+                          profile: entry.value,
+                          selected: entry.value.userId == selectedDatingUserId,
                         ),
                       ),
                     ),
@@ -3503,26 +4345,114 @@ class _FallbackMapSurface extends StatelessWidget {
   int index,
   int total,
 ) {
-  final left = ((event.longitude! - 37.5) / 0.2).clamp(0.14, 0.86);
-  final top = (1 - ((event.latitude! - 55.70) / 0.1)).clamp(0.18, 0.82);
+  return _fallbackPositionForPoint(
+    latitude: event.latitude!,
+    longitude: event.longitude!,
+  );
+}
+
+({double left, double top}) _fallbackPositionForPoint({
+  required double latitude,
+  required double longitude,
+}) {
+  final left = ((longitude - 37.5) / 0.2).clamp(0.14, 0.86);
+  final top = (1 - ((latitude - 55.70) / 0.1)).clamp(0.18, 0.82);
   return (left: left, top: top);
+}
+
+class _FallbackDatingPin extends StatelessWidget {
+  const _FallbackDatingPin({
+    required this.profile,
+    required this.selected,
+  });
+
+  final DatingProfileData profile;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = selected ? 46.0 : 42.0;
+    return Transform.scale(
+      scale: selected ? 1.06 : 1,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: size,
+            height: size,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: BbV5Colors.paperHi,
+              border: Border.all(color: BbV5Colors.accent, width: 2),
+              boxShadow: BbV5Shadows.pill,
+            ),
+            alignment: Alignment.center,
+            child: BbAvatar(
+              name: profile.name,
+              imageUrl: profile.avatarUrl,
+              online: profile.online,
+              size: selected ? BbAvatarSize.md : BbAvatarSize.sm,
+            ),
+          ),
+          Positioned(
+            right: -2,
+            top: -2,
+            child: Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: BbV5Colors.rose,
+                border: Border.all(color: BbV5Colors.paperHi, width: 2),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                LucideIcons.heart,
+                size: 10,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          Positioned(
+            left: size / 2 - 3,
+            bottom: -8,
+            child: Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: BbV5Colors.accent,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: BbV5Colors.ink.withValues(alpha: 0.20),
+                    blurRadius: 8,
+                    spreadRadius: -2,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _FallbackPin extends StatelessWidget {
   const _FallbackPin({
-    required this.emoji,
+    required this.event,
     required this.selected,
-    required this.tone,
   });
 
-  final String emoji;
+  final Event event;
   final bool selected;
-  final EventTone tone;
 
   @override
   Widget build(BuildContext context) {
-    final size = selected ? 50.0 : 44.0;
-    final color = _radarPinColor(emoji, tone);
+    final size = selected ? 43.0 : 38.0;
+    final color = _radarPinColor(event.emoji, event.tone);
     return Transform.scale(
       scale: selected ? 1.06 : 1,
       child: Stack(
@@ -3538,10 +4468,10 @@ class _FallbackPin extends StatelessWidget {
               boxShadow: BbV5Shadows.pill,
             ),
             alignment: Alignment.center,
-            child: Icon(
-              _radarPinIcon(emoji, tone),
-              size: selected ? 19 : 17,
-              color: color,
+            child: Image.asset(
+              _radarPinAssetByKind[radarPinKindForEvent(event)]!,
+              width: selected ? 31 : 28,
+              height: selected ? 31 : 28,
             ),
           ),
           Positioned(
@@ -3568,25 +4498,6 @@ class _FallbackPin extends StatelessWidget {
       ),
     );
   }
-}
-
-IconData _radarPinIcon(String emoji, EventTone tone) {
-  if (emoji.contains('✨') || tone == EventTone.sage) {
-    return LucideIcons.sparkles;
-  }
-  if (emoji.contains('♡') || emoji.contains('❤️') || emoji.contains('💘')) {
-    return LucideIcons.heart;
-  }
-  if (emoji.contains('🎟') || emoji.contains('🎫')) {
-    return LucideIcons.ticket;
-  }
-  if (emoji.contains('☕')) {
-    return LucideIcons.coffee;
-  }
-  if (emoji.contains('🚶')) {
-    return LucideIcons.footprints;
-  }
-  return LucideIcons.wine;
 }
 
 Color _radarPinColor(String emoji, EventTone tone) {

@@ -31,17 +31,45 @@ class ChatsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final segment = ref.watch(chatSegmentProvider);
+    final loadMeetupChats =
+        segment == ChatSegment.all || segment == ChatSegment.meetup;
+    final loadPersonalChats = segment == ChatSegment.all ||
+        segment == ChatSegment.dating ||
+        segment == ChatSegment.personal;
+    final loadCommunityChats =
+        segment == ChatSegment.all || segment == ChatSegment.clubs;
+    final realtimeScope = switch (segment) {
+      ChatSegment.all => ChatRealtimeSyncScope.all,
+      ChatSegment.meetup => ChatRealtimeSyncScope.meetups,
+      ChatSegment.dating ||
+      ChatSegment.personal =>
+        ChatRealtimeSyncScope.personal,
+      ChatSegment.clubs => null,
+    };
     final currentUserId = ref.watch(currentUserIdProvider);
-    final meetupChatsAsync = ref.watch(meetupChatsProvider);
-    final personalChatsAsync = ref.watch(personalChatsProvider);
-    final communitiesAsync = ref.watch(communitiesProvider);
+    final meetupChatsAsync = loadMeetupChats
+        ? ref.watch(meetupChatsProvider)
+        : const AsyncValue<List<MeetupChat>>.data(<MeetupChat>[]);
+    final personalChatsAsync = loadPersonalChats
+        ? ref.watch(personalChatsProvider)
+        : const AsyncValue<List<PersonalChat>>.data(<PersonalChat>[]);
+    final communitiesAsync = loadCommunityChats
+        ? ref.watch(communitiesProvider)
+        : const AsyncValue<List<Community>>.data(<Community>[]);
     final knownPersonalChats = ref.watch(knownPersonalChatsProvider);
-    final wallet = ref.watch(tokenWalletProvider);
-    final promotedIds = wallet.promoted.keys
-        .where((eventId) => wallet.isPromoted(eventId))
-        .toSet();
-    ref.watch(chatRealtimeSyncProvider);
     final meetupChats = meetupChatsAsync.valueOrNull ?? const [];
+    final promotedIds = meetupChats.isEmpty
+        ? const <String>{}
+        : ref.watch(
+            tokenWalletProvider.select(
+              (wallet) => wallet.promoted.keys
+                  .where((eventId) => wallet.isPromoted(eventId))
+                  .toSet(),
+            ),
+          );
+    if (realtimeScope != null) {
+      ref.watch(chatRealtimeSyncForScopeProvider(realtimeScope));
+    }
     final personalChats = mergeKnownPersonalChats(
       personalChatsAsync.valueOrNull ?? const [],
       knownPersonalChats.values,
@@ -70,297 +98,142 @@ class ChatsScreen extends ConsumerWidget {
       upcomingChats: upcomingChats,
       doneChats: doneChats,
     );
-    final nowRadarItems = _buildNowRadarItems(
-      meetupChats: meetupChats,
-      personalChats: personalChats,
-      communityChats: communityChats,
-    );
 
     return BbV5Scaffold(
-      child: Stack(
-        children: [
-          SafeArea(
-            bottom: false,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 40, 20, 204),
-                  children: [
-                    InkWell(
-                      onTap: () => showV5SearchModal(context),
-                      borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                      child: const _V5SearchLauncher(),
+      child: SafeArea(
+        bottom: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 40, 20, 140),
+              children: [
+                InkWell(
+                  onTap: () => showV5SearchModal(context),
+                  borderRadius: BorderRadius.circular(BbV5Radii.pill),
+                  child: const _V5SearchLauncher(),
+                ),
+                const SizedBox(height: 24),
+                _V5ActiveChatsRail(
+                  meetupChats: meetupChats,
+                  personalChats: personalChats,
+                  promotedIds: promotedIds,
+                  onMeetupTap: (chat) => _openMeetupChat(context, chat),
+                  onPersonalTap: (chat) => context.pushRoute(
+                    AppRoute.personalChat,
+                    pathParameters: {'chatId': chat.id},
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _V5ChatSegments(
+                  segment: segment,
+                  onAll: () => ref.read(chatSegmentProvider.notifier).state =
+                      ChatSegment.all,
+                  onMeetups: () => ref
+                      .read(chatSegmentProvider.notifier)
+                      .state = ChatSegment.meetup,
+                  onDating: () => ref.read(chatSegmentProvider.notifier).state =
+                      ChatSegment.dating,
+                  onPersonal: () => ref
+                      .read(chatSegmentProvider.notifier)
+                      .state = ChatSegment.personal,
+                  onClubs: () => ref.read(chatSegmentProvider.notifier).state =
+                      ChatSegment.clubs,
+                ),
+                const SizedBox(height: 14),
+                if (segment == ChatSegment.all)
+                  _V5AllChatList(
+                    meetupChats: meetupChats,
+                    personalChats: personalChats,
+                    communityChats: communityChats,
+                    promotedIds: promotedIds,
+                    loading: meetupChatsAsync.isLoading ||
+                        personalChatsAsync.isLoading ||
+                        (communitiesAsync.isLoading && !allChatListHasRows),
+                    error: meetupChatsAsync.hasError ||
+                        personalChatsAsync.hasError ||
+                        (communitiesAsync.hasError && !allChatListHasRows),
+                    onMeetupOpen: (chat) => _openMeetupChat(context, chat),
+                    onMeetupPinToggle: (chat) {
+                      unawaited(_toggleMeetupChatPinned(ref, chat));
+                    },
+                    onPersonalOpen: (chat) => context.pushRoute(
+                      AppRoute.personalChat,
+                      pathParameters: {'chatId': chat.id},
                     ),
-                    const SizedBox(height: 24),
-                    _V5ActiveChatsRail(
-                      meetupChats: meetupChats,
-                      personalChats: personalChats,
-                      promotedIds: promotedIds,
-                      onMeetupTap: (chat) => _openMeetupChat(context, chat),
-                      onPersonalTap: (chat) => context.pushRoute(
+                    onPersonalPinToggle: (chat) {
+                      unawaited(_togglePersonalChatPinned(ref, chat));
+                    },
+                    onCommunityOpen: (community) => context.pushRoute(
+                      AppRoute.communityChat,
+                      pathParameters: {'communityId': community.id},
+                    ),
+                  )
+                else if (segment == ChatSegment.meetup)
+                  meetupChatsAsync.when(
+                    data: (_) => _V5MeetupChatList(
+                      entries: meetupEntries,
+                      currentUserId: currentUserId,
+                      onOpen: (chat) => _openMeetupChat(context, chat),
+                      onPinToggle: (chat) {
+                        unawaited(_toggleMeetupChatPinned(ref, chat));
+                      },
+                      onLaunch: (chat) => _startEveningFromChatList(
+                        context,
+                        chat,
+                      ),
+                    ),
+                    loading: () => const _V5ChatState(
+                      text: 'Загружаем чаты встреч',
+                      loading: true,
+                    ),
+                    error: (_, __) => const _V5ChatState(
+                      text: 'Не получилось загрузить чаты встреч',
+                    ),
+                  )
+                else if (segment == ChatSegment.clubs)
+                  communitiesAsync.when(
+                    data: (_) => _V5CommunityChatList(
+                      communities: communityChats,
+                      onOpen: (community) => context.pushRoute(
+                        AppRoute.communityChat,
+                        pathParameters: {'communityId': community.id},
+                      ),
+                    ),
+                    loading: () => const _V5ChatState(
+                      text: 'Загружаем клубы',
+                      loading: true,
+                    ),
+                    error: (_, __) => const _V5ChatState(
+                      text: 'Не получилось загрузить клубы',
+                    ),
+                  )
+                else
+                  personalChatsAsync.when(
+                    data: (_) => _V5PersonalChatList(
+                      chats: personalChats,
+                      onOpen: (chat) => context.pushRoute(
                         AppRoute.personalChat,
                         pathParameters: {'chatId': chat.id},
                       ),
+                      onPinToggle: (chat) {
+                        unawaited(_togglePersonalChatPinned(ref, chat));
+                      },
                     ),
-                    const SizedBox(height: 18),
-                    _V5NowRadarCard(
-                      items: nowRadarItems,
-                      onTap: (item) => _openNowRadarItem(context, item),
+                    loading: () => const _V5ChatState(
+                      text: 'Загружаем личные чаты',
+                      loading: true,
                     ),
-                    const SizedBox(height: 18),
-                    _V5IcebreakersCard(
-                      onVoiceTap: () => context.pushRoute(AppRoute.aiVoice),
+                    error: (_, __) => const _V5ChatState(
+                      text: 'Не получилось загрузить личные чаты',
                     ),
-                    const SizedBox(height: 24),
-                    _V5ChatSegments(
-                      segment: segment,
-                      onAll: () => ref
-                          .read(chatSegmentProvider.notifier)
-                          .state = ChatSegment.all,
-                      onMeetups: () => ref
-                          .read(chatSegmentProvider.notifier)
-                          .state = ChatSegment.meetup,
-                      onDating: () => ref
-                          .read(chatSegmentProvider.notifier)
-                          .state = ChatSegment.dating,
-                      onPersonal: () => ref
-                          .read(chatSegmentProvider.notifier)
-                          .state = ChatSegment.personal,
-                      onClubs: () => ref
-                          .read(chatSegmentProvider.notifier)
-                          .state = ChatSegment.clubs,
-                    ),
-                    const SizedBox(height: 14),
-                    if (segment == ChatSegment.all)
-                      _V5AllChatList(
-                        meetupChats: meetupChats,
-                        personalChats: personalChats,
-                        communityChats: communityChats,
-                        promotedIds: promotedIds,
-                        loading: meetupChatsAsync.isLoading ||
-                            personalChatsAsync.isLoading ||
-                            (communitiesAsync.isLoading && !allChatListHasRows),
-                        error: meetupChatsAsync.hasError ||
-                            personalChatsAsync.hasError ||
-                            (communitiesAsync.hasError && !allChatListHasRows),
-                        onMeetupOpen: (chat) => _openMeetupChat(context, chat),
-                        onMeetupPinToggle: (chat) {
-                          unawaited(_toggleMeetupChatPinned(ref, chat));
-                        },
-                        onPersonalOpen: (chat) => context.pushRoute(
-                          AppRoute.personalChat,
-                          pathParameters: {'chatId': chat.id},
-                        ),
-                        onPersonalPinToggle: (chat) {
-                          unawaited(_togglePersonalChatPinned(ref, chat));
-                        },
-                        onCommunityOpen: (community) => context.pushRoute(
-                          AppRoute.communityChat,
-                          pathParameters: {'communityId': community.id},
-                        ),
-                      )
-                    else if (segment == ChatSegment.meetup)
-                      meetupChatsAsync.when(
-                        data: (_) => _V5MeetupChatList(
-                          entries: meetupEntries,
-                          currentUserId: currentUserId,
-                          onOpen: (chat) => _openMeetupChat(context, chat),
-                          onPinToggle: (chat) {
-                            unawaited(_toggleMeetupChatPinned(ref, chat));
-                          },
-                          onLaunch: (chat) => _startEveningFromChatList(
-                            context,
-                            chat,
-                          ),
-                        ),
-                        loading: () => const _V5ChatState(
-                          text: 'Загружаем чаты встреч',
-                          loading: true,
-                        ),
-                        error: (_, __) => const _V5ChatState(
-                          text: 'Не получилось загрузить чаты встреч',
-                        ),
-                      )
-                    else if (segment == ChatSegment.clubs)
-                      communitiesAsync.when(
-                        data: (_) => _V5CommunityChatList(
-                          communities: communityChats,
-                          onOpen: (community) => context.pushRoute(
-                            AppRoute.communityChat,
-                            pathParameters: {'communityId': community.id},
-                          ),
-                        ),
-                        loading: () => const _V5ChatState(
-                          text: 'Загружаем клубы',
-                          loading: true,
-                        ),
-                        error: (_, __) => const _V5ChatState(
-                          text: 'Не получилось загрузить клубы',
-                        ),
-                      )
-                    else
-                      personalChatsAsync.when(
-                        data: (_) => _V5PersonalChatList(
-                          chats: personalChats,
-                          onOpen: (chat) => context.pushRoute(
-                            AppRoute.personalChat,
-                            pathParameters: {'chatId': chat.id},
-                          ),
-                          onPinToggle: (chat) {
-                            unawaited(_togglePersonalChatPinned(ref, chat));
-                          },
-                        ),
-                        loading: () => const _V5ChatState(
-                          text: 'Загружаем личные чаты',
-                          loading: true,
-                        ),
-                        error: (_, __) => const _V5ChatState(
-                          text: 'Не получилось загрузить личные чаты',
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+                  ),
+              ],
             ),
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 86,
-            child: _V5AiCompassDock(
-              onTap: () => context.pushRoute(AppRoute.aiVoice),
-            ),
-          ),
-        ],
+        ),
       ),
     );
-  }
-}
-
-void _openNowRadarItem(BuildContext context, _V5NowRadarItem item) {
-  final meetupChat = item.meetupChat;
-  if (meetupChat != null) {
-    _openMeetupChat(context, meetupChat);
-    return;
-  }
-
-  final personalChat = item.personalChat;
-  if (personalChat != null) {
-    context.pushRoute(
-      AppRoute.personalChat,
-      pathParameters: {'chatId': personalChat.id},
-    );
-    return;
-  }
-
-  final community = item.community;
-  if (community != null) {
-    context.pushRoute(
-      AppRoute.communityChat,
-      pathParameters: {'communityId': community.id},
-    );
-  }
-}
-
-List<_V5NowRadarItem> _buildNowRadarItems({
-  required List<MeetupChat> meetupChats,
-  required List<PersonalChat> personalChats,
-  required List<Community> communityChats,
-}) {
-  final meetupItems = meetupChats
-      .where((chat) => chat.phase == MeetupPhase.live)
-      .map(_V5NowRadarItem.meetup);
-  final soonItems = meetupChats
-      .where((chat) => chat.phase == MeetupPhase.soon)
-      .map(_V5NowRadarItem.meetup);
-  final onlineItems =
-      personalChats.where((chat) => chat.online).map(_V5NowRadarItem.personal);
-  final clubItems = communityChats
-      .where((community) => community.online > 0)
-      .map(_V5NowRadarItem.community);
-
-  return [
-    ...meetupItems,
-    ...soonItems,
-    ...onlineItems,
-    ...clubItems,
-  ].take(5).toList(growable: false);
-}
-
-class _V5NowRadarItem {
-  const _V5NowRadarItem.meetup(MeetupChat chat)
-      : meetupChat = chat,
-        personalChat = null,
-        community = null;
-
-  const _V5NowRadarItem.personal(PersonalChat chat)
-      : meetupChat = null,
-        personalChat = chat,
-        community = null;
-
-  const _V5NowRadarItem.community(Community value)
-      : meetupChat = null,
-        personalChat = null,
-        community = value;
-
-  final MeetupChat? meetupChat;
-  final PersonalChat? personalChat;
-  final Community? community;
-
-  String get title =>
-      meetupChat?.title ?? personalChat?.name ?? community!.name;
-
-  String get subtitle {
-    final meetup = meetupChat;
-    if (meetup != null) {
-      final place = (meetup.currentPlace ?? meetup.area ?? '').trim();
-      if (place.isNotEmpty) {
-        return place;
-      }
-      return meetup.phase == MeetupPhase.live ? 'идет сейчас' : 'скоро старт';
-    }
-
-    final personal = personalChat;
-    if (personal != null) {
-      final source = personal.fromMeetup?.trim();
-      return source == null || source.isEmpty ? 'онлайн' : source;
-    }
-
-    final online = community!.online;
-    return online > 0 ? '$online онлайн' : 'клуб';
-  }
-
-  String get meta {
-    final meetup = meetupChat;
-    if (meetup != null) {
-      final count = _meetupMembersCount(meetup);
-      if (count != null) {
-        return '$count чел.';
-      }
-      return meetup.lastTime;
-    }
-
-    final personal = personalChat;
-    if (personal != null) {
-      return personal.lastTime.isEmpty ? 'сейчас' : personal.lastTime;
-    }
-
-    final unread = community!.unread;
-    return unread > 0 ? '$unread новых' : 'live';
-  }
-
-  Color get color {
-    final meetup = meetupChat;
-    if (meetup != null) {
-      return meetup.phase == MeetupPhase.live
-          ? BbV5Colors.terra
-          : BbV5Colors.gold;
-    }
-    if (personalChat != null) {
-      return BbV5Colors.rose;
-    }
-    return BbV5Colors.brand;
   }
 }
 
@@ -448,503 +321,6 @@ class _V5SearchLauncher extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _V5NowRadarCard extends StatelessWidget {
-  const _V5NowRadarCard({
-    required this.items,
-    required this.onTap,
-  });
-
-  final List<_V5NowRadarItem> items;
-  final ValueChanged<_V5NowRadarItem> onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final entries = items.isEmpty
-        ? const [
-            _V5NowRadarEntry(
-              title: 'Тихий вечер',
-              subtitle: 'чаты появятся после встреч',
-              meta: '0 live',
-              color: BbV5Colors.inkMute,
-            ),
-          ]
-        : items
-            .map(
-              (item) => _V5NowRadarEntry(
-                title: item.title,
-                subtitle: item.subtitle,
-                meta: item.meta,
-                color: item.color,
-                item: item,
-              ),
-            )
-            .toList(growable: false);
-
-    return BbV5Card(
-      padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
-      radius: 26,
-      tint: BbV5Colors.terraSoft,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(child: BbV5Kicker('Сейчас')),
-              Container(
-                height: 24,
-                padding: const EdgeInsets.symmetric(horizontal: 9),
-                decoration: BoxDecoration(
-                  color: BbV5Colors.ink,
-                  borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '${items.length} live',
-                  style: AppTextStyles.caption.copyWith(
-                    fontFamily: 'Sora',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: BbV5Colors.paperHi,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            height: 118,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return Stack(
-                  children: [
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(22),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              BbV5Colors.paperHi.withValues(alpha: 0.72),
-                              BbV5Colors.paper.withValues(alpha: 0.42),
-                            ],
-                          ),
-                          border: Border.all(color: BbV5Colors.hairSoft),
-                        ),
-                      ),
-                    ),
-                    for (final mark in _radarMarks(
-                      entries,
-                      constraints.maxWidth,
-                    ))
-                      Positioned(
-                        left: mark.left,
-                        top: mark.top,
-                        child: _V5RadarPulse(
-                          color: mark.entry.color,
-                          active: mark.entry.item != null,
-                        ),
-                      ),
-                    Positioned.fill(
-                      child: Align(
-                        alignment: Alignment.center,
-                        child: Container(
-                          width: 58,
-                          height: 58,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: BbV5Colors.paperHi.withValues(alpha: 0.78),
-                            border: Border.all(color: BbV5Colors.hair),
-                          ),
-                          child: const Icon(
-                            LucideIcons.radar,
-                            size: 23,
-                            color: BbV5Colors.ink,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 54,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              clipBehavior: Clip.none,
-              itemCount: entries.length,
-              separatorBuilder: (context, index) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final entry = entries[index];
-                return _V5NowRadarChip(
-                  entry: entry,
-                  onTap: entry.item == null ? null : () => onTap(entry.item!),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<_V5RadarMark> _radarMarks(
-    List<_V5NowRadarEntry> entries,
-    double width,
-  ) {
-    const positions = [
-      Offset(0.08, 18),
-      Offset(0.7, 16),
-      Offset(0.2, 74),
-      Offset(0.86, 70),
-      Offset(0.47, 40),
-    ];
-    final availableWidth = width > 24 ? width - 24 : width;
-    return [
-      for (var index = 0;
-          index < entries.length && index < positions.length;
-          index++)
-        _V5RadarMark(
-          entry: entries[index],
-          left: availableWidth * positions[index].dx,
-          top: positions[index].dy,
-        ),
-    ];
-  }
-}
-
-class _V5NowRadarEntry {
-  const _V5NowRadarEntry({
-    required this.title,
-    required this.subtitle,
-    required this.meta,
-    required this.color,
-    this.item,
-  });
-
-  final String title;
-  final String subtitle;
-  final String meta;
-  final Color color;
-  final _V5NowRadarItem? item;
-}
-
-class _V5RadarMark {
-  const _V5RadarMark({
-    required this.entry,
-    required this.left,
-    required this.top,
-  });
-
-  final _V5NowRadarEntry entry;
-  final double left;
-  final double top;
-}
-
-class _V5RadarPulse extends StatelessWidget {
-  const _V5RadarPulse({
-    required this.color,
-    required this.active,
-  });
-
-  final Color color;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: active ? 22 : 18,
-      height: active ? 22 : 18,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withValues(alpha: active ? 0.18 : 0.1),
-        border: Border.all(color: color.withValues(alpha: 0.28)),
-      ),
-      child: Center(
-        child: Container(
-          width: active ? 8 : 6,
-          height: active ? 8 : 6,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color,
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.3),
-                blurRadius: 12,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _V5NowRadarChip extends StatelessWidget {
-  const _V5NowRadarChip({
-    required this.entry,
-    this.onTap,
-  });
-
-  final _V5NowRadarEntry entry;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final content = Container(
-      width: 170,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: BbV5Colors.paperHi.withValues(alpha: 0.84),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: BbV5Colors.hair),
-      ),
-      child: Row(
-        children: [
-          _PulseDot(color: entry.color, size: 8),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  entry.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: bbV5DisplayStyle(fontSize: 12.5),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${entry.subtitle} · ${entry.meta}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.caption.copyWith(
-                    color: BbV5Colors.inkMute,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (onTap == null) {
-      return content;
-    }
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: content,
-      ),
-    );
-  }
-}
-
-class _V5IcebreakersCard extends StatelessWidget {
-  const _V5IcebreakersCard({required this.onVoiceTap});
-
-  final VoidCallback onVoiceTap;
-
-  static const _prompts = [
-    'Кто рядом на кофе?',
-    'Куда после встречи?',
-    'Позови двоих из чата',
-    'Собери вечер без неловкости',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return BbV5Card(
-      padding: const EdgeInsets.all(16),
-      radius: 26,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(child: BbV5Kicker('Ледоколы')),
-              const Icon(
-                LucideIcons.sparkles,
-                size: 15,
-                color: BbV5Colors.terra,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'для первого сообщения',
-                style: AppTextStyles.caption.copyWith(
-                  color: BbV5Colors.inkMute,
-                  fontSize: 10.5,
-                  letterSpacing: 0,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final prompt in _prompts)
-                _V5IcebreakerChip(
-                  text: prompt,
-                  onTap: onVoiceTap,
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _V5IcebreakerChip extends StatelessWidget {
-  const _V5IcebreakerChip({
-    required this.text,
-    required this.onTap,
-  });
-
-  final String text;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(BbV5Radii.pill),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          decoration: BoxDecoration(
-            color: BbV5Colors.paperHi,
-            borderRadius: BorderRadius.circular(BbV5Radii.pill),
-            border: Border.all(color: BbV5Colors.hair),
-            boxShadow: BbV5Shadows.pill,
-          ),
-          child: Text(
-            text,
-            style: AppTextStyles.meta.copyWith(
-              color: BbV5Colors.inkSoft,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _V5AiCompassDock extends StatelessWidget {
-  const _V5AiCompassDock({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                child: Container(
-                  height: 56,
-                  padding: const EdgeInsets.fromLTRB(16, 8, 10, 8),
-                  decoration: BoxDecoration(
-                    color: BbV5Colors.ink,
-                    borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                    border: Border.all(
-                      color: BbV5Colors.paperHi.withValues(alpha: 0.24),
-                    ),
-                    boxShadow: BbV5Shadows.ink,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: BbV5Colors.accent,
-                          borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                        ),
-                        child: const Icon(
-                          LucideIcons.mic,
-                          size: 18,
-                          color: BbV5Colors.paperHi,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'AI compass',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: bbV5DisplayStyle(
-                                fontSize: 14,
-                                color: BbV5Colors.paperHi,
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            Text(
-                              'подскажет, что написать',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.caption.copyWith(
-                                color:
-                                    BbV5Colors.paperHi.withValues(alpha: 0.66),
-                                letterSpacing: 0,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: BbV5Colors.paperHi.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                        ),
-                        child: const Icon(
-                          LucideIcons.arrow_up_right,
-                          size: 17,
-                          color: BbV5Colors.paperHi,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -2380,57 +1756,6 @@ class _V5ChatState extends StatelessWidget {
               color: BbV5Colors.inkMute,
               fontSize: 13,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _V5AiChatCard extends StatelessWidget {
-  const _V5AiChatCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return BbV5Card(
-      tint: BbV5Colors.terraSoft,
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const BbV5Kicker('AI compass'),
-          const SizedBox(height: 8),
-          Text.rich(
-            TextSpan(
-              children: [
-                const TextSpan(text: 'Соберу чат\n'),
-                TextSpan(
-                  text: 'за тебя.',
-                  style: bbV5DisplayStyle(
-                    fontSize: 22,
-                    color: BbV5Colors.terra,
-                  ),
-                ),
-              ],
-            ),
-            style: bbV5DisplayStyle(fontSize: 22),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Знакомства, предложения встреч, ответы — на автопилоте.',
-            style: AppTextStyles.meta.copyWith(
-              color: BbV5Colors.inkSoft,
-              height: 1.625,
-            ),
-          ),
-          const SizedBox(height: 20),
-          BbV5PillButton(
-            label: 'Включить',
-            icon: LucideIcons.sparkles,
-            dark: true,
-            height: 44,
-            fontSize: 13,
-            onPressed: () {},
           ),
         ],
       ),

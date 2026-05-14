@@ -734,6 +734,7 @@ class BackendRepository {
       '/chats/meetups',
       queryParameters: {
         'limit': limit,
+        'includeSocial': false,
         if (cursor != null) 'cursor': cursor,
       },
     );

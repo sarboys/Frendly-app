@@ -1,4 +1,5 @@
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
+import 'package:big_break_mobile/features/chats/presentation/chats_providers.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_screen.dart';
 import 'package:big_break_mobile/features/communities/domain/community.dart';
 import 'package:big_break_mobile/features/communities/presentation/community_providers.dart';
@@ -434,7 +435,51 @@ void main() {
     expect(find.text('Личные чаты появляются после встреч.'), findsNothing);
   });
 
-  testWidgets('chats ai dock renders v5 launch CTA', (tester) async {
+  testWidgets('personal segment does not load meetup or club chat data',
+      (tester) async {
+    var meetupCalls = 0;
+    var personalCalls = 0;
+    var communityCalls = 0;
+
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        child: const ChatsScreen(),
+        targetText: 'unused',
+        extraOverrides: [
+          chatSegmentProvider.overrideWith((ref) => ChatSegment.personal),
+          meetupChatsProvider.overrideWith((ref) async {
+            meetupCalls += 1;
+            return const <MeetupChat>[];
+          }),
+          personalChatsProvider.overrideWith((ref) async {
+            personalCalls += 1;
+            return const [
+              PersonalChat(
+                id: 'pc-focused',
+                name: 'Аня',
+                lastMessage: 'Встретимся вечером',
+                lastTime: 'сейчас',
+                unread: 0,
+                online: true,
+              ),
+            ];
+          }),
+          communitiesProvider.overrideWith((ref) async {
+            communityCalls += 1;
+            return const <Community>[];
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Аня'), findsAtLeastNWidgets(1));
+    expect(personalCalls, 1);
+    expect(meetupCalls, 0);
+    expect(communityCalls, 0);
+  });
+
+  testWidgets('chats screen does not render removed ai dock', (tester) async {
     await tester.pumpWidget(
       _wrapWithRouter(
         child: const ChatsScreen(),
@@ -444,9 +489,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byIcon(LucideIcons.square_pen), findsNothing);
-    expect(find.text('AI compass'), findsOneWidget);
-    expect(find.text('подскажет, что написать'), findsOneWidget);
-    expect(find.byIcon(LucideIcons.mic), findsOneWidget);
+    expect(find.text('AI compass'), findsNothing);
+    expect(find.text('подскажет, что написать'), findsNothing);
+    expect(find.byIcon(LucideIcons.mic), findsNothing);
   });
 
   testWidgets('meetup chats are grouped by live, soon and upcoming phases',

@@ -37,6 +37,8 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
   Timer? _markReadTimer;
   CancelToken? _messagesCancelToken;
   String? _lastMarkedReadMessageId;
+  String? _olderMessagesCursor;
+  bool _loadingOlderMessages = false;
 
   Future<void> _init() async {
     PaginatedResponse<Message>? result;
@@ -51,6 +53,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         if (!mounted) {
           return;
         }
+        _olderMessagesCursor = result.nextCursor;
         state = AsyncValue.data(_decorateMessages(result.items));
         _warmRecentAttachments(result.items);
         _scheduleMarkRead();
@@ -145,6 +148,38 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
     );
     _upsertMessage(message);
     _refreshChatSummaryProviders(message);
+  }
+
+  Future<void> loadOlderMessages() async {
+    final cursor = _olderMessagesCursor;
+    if (cursor == null || _loadingOlderMessages) {
+      return;
+    }
+
+    _loadingOlderMessages = true;
+    try {
+      final result = await _fetchMessages(
+        limit: 20,
+        cursor: cursor,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      _olderMessagesCursor = result.nextCursor;
+      var merged = state.valueOrNull ?? const <Message>[];
+      for (final message in result.items) {
+        merged = _mergeMessageIntoSortedList(merged, message).messages;
+      }
+      state = AsyncValue.data(_decorateSortedMessages(merged));
+      _warmRecentAttachments(result.items);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+    } finally {
+      _loadingOlderMessages = false;
+    }
   }
 
   Future<void> editMessage(Message message, String text) async {
@@ -587,6 +622,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
     }
 
     state = AsyncValue.data(_decorateMessages(result.items));
+    _olderMessagesCursor = result.nextCursor;
     _warmRecentAttachments(result.items);
 
     final lastEventId = result.lastEventId;
@@ -604,8 +640,10 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
     _scheduleMarkRead();
   }
 
-  Future<PaginatedResponse<Message>> _fetchMessages(
-      {required int limit}) async {
+  Future<PaginatedResponse<Message>> _fetchMessages({
+    required int limit,
+    String? cursor,
+  }) async {
     _messagesCancelToken?.cancel('chat_thread_fetch_replaced');
     final cancelToken = CancelToken();
     _messagesCancelToken = cancelToken;
@@ -613,6 +651,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
     try {
       return await repository.fetchMessages(
         chatId,
+        cursor: cursor,
         limit: limit,
         cancelToken: cancelToken,
       );

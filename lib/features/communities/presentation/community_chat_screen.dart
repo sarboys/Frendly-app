@@ -501,6 +501,8 @@ class _CommunityChatScreenState extends ConsumerState<CommunityChatScreen> {
             onBack: _leaveChat,
           ),
           messagesAsync: messagesAsync,
+          onLoadOlderMessages: () =>
+              ref.read(chatThreadProvider(chatId).notifier).loadOlderMessages(),
           onMessageReply: (message) {
             setState(() {
               _replyTo = _toReplyPreview(message);

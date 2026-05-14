@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/create_meetup/presentation/evening_route_publish_draft.dart';
 import 'package:big_break_mobile/features/evening_plan/presentation/evening_plan_data.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
@@ -202,10 +203,16 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
       context.pushRoute(AppRoute.createMeetup);
       return;
     }
+    if (launch) {
+      context.pushRoute(
+        AppRoute.publishMeetup,
+        extra: publishDraftFromEveningRoute(route),
+      );
+      return;
+    }
     context.pushRoute(
       AppRoute.eveningPlan,
       pathParameters: {'routeId': route.id},
-      queryParameters: launch ? {'launch': '1'} : const {},
     );
   }
 

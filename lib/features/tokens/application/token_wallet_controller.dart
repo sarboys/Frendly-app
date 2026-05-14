@@ -1,3 +1,4 @@
+import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/payments.dart';
@@ -195,8 +196,11 @@ class TokenWalletController extends StateNotifier<TokenWalletState> {
       state = state.copyWith(loading: false);
       return;
     }
+    if (ref.read(authTokensProvider) == null) {
+      state = state.copyWith(loading: false);
+      return;
+    }
     try {
-      await ref.read(authBootstrapProvider.future);
       final repository = ref.read(backendRepositoryProvider);
       final wallet = await repository.fetchTokenWallet();
       state = _fromData(wallet);

@@ -9,6 +9,7 @@ import 'package:big_break_mobile/shared/widgets/bb_chat_bubble.dart';
 import 'package:big_break_mobile/shared/widgets/bb_swipeable_message.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ChatThreadScreen extends StatefulWidget {
@@ -23,6 +24,7 @@ class ChatThreadScreen extends StatefulWidget {
     required this.onVoiceResolvePath,
     required this.onVoiceResolveRemoteUrl,
     super.key,
+    this.onLoadOlderMessages,
     this.onAuthorAvatarTap,
     this.topContent,
     this.compactTopContent,
@@ -53,6 +55,7 @@ class ChatThreadScreen extends StatefulWidget {
       onVoiceResolvePath;
   final Future<String?> Function(MessageAttachment attachment)?
       onVoiceResolveRemoteUrl;
+  final Future<void> Function()? onLoadOlderMessages;
   final void Function(String userId)? onAuthorAvatarTap;
   final Widget Function(List<Message> messages)? trailingStatus;
 
@@ -68,6 +71,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   bool _topScrollScheduled = false;
   bool _hadScrollableTopContent = false;
   bool _showCompactTopContent = false;
+  bool _olderLoadInFlight = false;
+  bool _userScrollActive = false;
+  bool _olderLoadRequestedDuringGesture = false;
   String? _replyTargetMessageId;
   GlobalKey? _replyTargetKey;
 
@@ -109,116 +115,120 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                       final hasTrailingStatus = widget.trailingStatus != null;
                       final topContentInList =
                           widget.scrollTopContent && widget.topContent != null;
-                      return ListView.separated(
-                        controller: _scrollController,
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior.manual,
-                        padding: EdgeInsets.fromLTRB(
-                          20,
-                          16,
-                          20,
-                          widget.compactTopContent == null ? 18 : 72,
-                        ),
-                        itemCount: (topContentInList ? 1 : 0) +
-                            1 +
-                            messages.length +
-                            (hasTrailingStatus ? 1 : 0),
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: AppSpacing.xs),
-                        itemBuilder: (context, index) {
-                          if (topContentInList && index == 0) {
-                            return widget.topContent!;
-                          }
-
-                          final shiftedIndex =
-                              index - (topContentInList ? 1 : 0);
-                          if (shiftedIndex == 0) {
-                            return Row(
-                              children: [
-                                const Expanded(
-                                  child: Divider(color: BbV5Colors.hair),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  child: Text(
-                                    'Сегодня',
-                                    style: bbV5KickerStyle().copyWith(
-                                      fontSize: 9.5,
-                                      letterSpacing: 2.09,
-                                    ),
-                                  ),
-                                ),
-                                const Expanded(
-                                  child: Divider(color: BbV5Colors.hair),
-                                ),
-                              ],
-                            );
-                          }
-
-                          final messageIndex = shiftedIndex - 1;
-                          if (messageIndex < messages.length) {
-                            final message = messages[messageIndex];
-                            if (message.isSystem) {
-                              return _SystemPill(message: message);
+                      return NotificationListener<ScrollNotification>(
+                        onNotification: _handleScrollNotification,
+                        child: ListView.separated(
+                          controller: _scrollController,
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.manual,
+                          padding: EdgeInsets.fromLTRB(
+                            20,
+                            16,
+                            20,
+                            widget.compactTopContent == null ? 18 : 72,
+                          ),
+                          itemCount: (topContentInList ? 1 : 0) +
+                              1 +
+                              messages.length +
+                              (hasTrailingStatus ? 1 : 0),
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(height: AppSpacing.xs),
+                          itemBuilder: (context, index) {
+                            if (topContentInList && index == 0) {
+                              return widget.topContent!;
                             }
 
-                            final row = SizedBox(
-                              key: Key('chat-message-${message.id}'),
-                              child: BbSwipeableMessage(
-                                onReply: () => widget.onMessageReply(message),
-                                onLongPress: () =>
-                                    widget.onMessageLongPress(message),
-                                child: BbChatBubble(
-                                  chatId: message.chatId,
-                                  messageClientId: message.clientMessageId,
-                                  authorId: message.authorId,
-                                  author: message.author,
-                                  authorAvatarUrl: message.authorAvatarUrl,
-                                  authorAvatarVariants:
-                                      message.authorAvatarVariants,
-                                  text: message.text,
-                                  time: message.time,
-                                  isMine: message.mine,
-                                  showAuthor: message.showAuthor,
-                                  showAvatar: message.showAvatar,
-                                  isPending: message.isPending,
-                                  replyTo: message.replyTo,
-                                  attachments: message.attachments,
-                                  onAttachmentTap: widget.onAttachmentTap,
-                                  onAttachmentDownloadTap:
-                                      widget.onAttachmentDownloadTap,
-                                  onImageResolveLocalPath:
-                                      widget.onImageResolvePath,
-                                  onImageResolveRemoteUrl:
-                                      widget.onImageResolveRemoteUrl,
-                                  onVoiceResolvePath: widget.onVoiceResolvePath,
-                                  onVoiceResolveRemoteUrl:
-                                      widget.onVoiceResolveRemoteUrl,
-                                  onAuthorAvatarTap: widget.onAuthorAvatarTap,
-                                  onReplyTap: (replyTo) {
-                                    unawaited(
-                                      _scrollToMessage(replyTo.id, messages),
-                                    );
-                                  },
-                                ),
-                              ),
-                            );
-
-                            if (message.id == _replyTargetMessageId &&
-                                _replyTargetKey != null) {
-                              return KeyedSubtree(
-                                key: _replyTargetKey,
-                                child: row,
+                            final shiftedIndex =
+                                index - (topContentInList ? 1 : 0);
+                            if (shiftedIndex == 0) {
+                              return Row(
+                                children: [
+                                  const Expanded(
+                                    child: Divider(color: BbV5Colors.hair),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
+                                    child: Text(
+                                      'Сегодня',
+                                      style: bbV5KickerStyle().copyWith(
+                                        fontSize: 9.5,
+                                        letterSpacing: 2.09,
+                                      ),
+                                    ),
+                                  ),
+                                  const Expanded(
+                                    child: Divider(color: BbV5Colors.hair),
+                                  ),
+                                ],
                               );
                             }
 
-                            return row;
-                          }
+                            final messageIndex = shiftedIndex - 1;
+                            if (messageIndex < messages.length) {
+                              final message = messages[messageIndex];
+                              if (message.isSystem) {
+                                return _SystemPill(message: message);
+                              }
 
-                          return widget.trailingStatus!(messages);
-                        },
+                              final row = SizedBox(
+                                key: Key('chat-message-${message.id}'),
+                                child: BbSwipeableMessage(
+                                  onReply: () => widget.onMessageReply(message),
+                                  onLongPress: () =>
+                                      widget.onMessageLongPress(message),
+                                  child: BbChatBubble(
+                                    chatId: message.chatId,
+                                    messageClientId: message.clientMessageId,
+                                    authorId: message.authorId,
+                                    author: message.author,
+                                    authorAvatarUrl: message.authorAvatarUrl,
+                                    authorAvatarVariants:
+                                        message.authorAvatarVariants,
+                                    text: message.text,
+                                    time: message.time,
+                                    isMine: message.mine,
+                                    showAuthor: message.showAuthor,
+                                    showAvatar: message.showAvatar,
+                                    isPending: message.isPending,
+                                    replyTo: message.replyTo,
+                                    attachments: message.attachments,
+                                    onAttachmentTap: widget.onAttachmentTap,
+                                    onAttachmentDownloadTap:
+                                        widget.onAttachmentDownloadTap,
+                                    onImageResolveLocalPath:
+                                        widget.onImageResolvePath,
+                                    onImageResolveRemoteUrl:
+                                        widget.onImageResolveRemoteUrl,
+                                    onVoiceResolvePath:
+                                        widget.onVoiceResolvePath,
+                                    onVoiceResolveRemoteUrl:
+                                        widget.onVoiceResolveRemoteUrl,
+                                    onAuthorAvatarTap: widget.onAuthorAvatarTap,
+                                    onReplyTap: (replyTo) {
+                                      unawaited(
+                                        _scrollToMessage(replyTo.id, messages),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              );
+
+                              if (message.id == _replyTargetMessageId &&
+                                  _replyTargetKey != null) {
+                                return KeyedSubtree(
+                                  key: _replyTargetKey,
+                                  child: row,
+                                );
+                              }
+
+                              return row;
+                            }
+
+                            return widget.trailingStatus!(messages);
+                          },
+                        ),
                       );
                     },
                   ),
@@ -271,6 +281,51 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     setState(() {
       _showCompactTopContent = next;
     });
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      _userScrollActive = true;
+      _olderLoadRequestedDuringGesture = false;
+    }
+    if (notification is UserScrollNotification) {
+      if (notification.direction == ScrollDirection.idle) {
+        _userScrollActive = false;
+        _olderLoadRequestedDuringGesture = false;
+      } else {
+        _userScrollActive = true;
+      }
+    }
+    if (!_userScrollActive ||
+        _olderLoadRequestedDuringGesture ||
+        notification.metrics.pixels > 96) {
+      return false;
+    }
+    _olderLoadRequestedDuringGesture = true;
+    unawaited(_requestOlderMessages());
+    return false;
+  }
+
+  Future<void> _requestOlderMessages() async {
+    final onLoadOlderMessages = widget.onLoadOlderMessages;
+    if (onLoadOlderMessages == null || _olderLoadInFlight) {
+      return;
+    }
+
+    _olderLoadInFlight = true;
+    try {
+      await onLoadOlderMessages();
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+    } finally {
+      _olderLoadInFlight = false;
+    }
   }
 
   void _handleMessagesRendered(List<Message> messages) {

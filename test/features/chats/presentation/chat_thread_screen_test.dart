@@ -168,6 +168,36 @@ void main() {
     expect(tappedUserId, 'user-anya');
   });
 
+  testWidgets('chat asks to load older messages near top after user scroll',
+      (tester) async {
+    var loadOlderCalls = 0;
+
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 640);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: _ChatHarness(
+            onLoadOlderMessages: () async {
+              loadOlderCalls += 1;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (var index = 0; index < 8 && loadOlderCalls == 0; index += 1) {
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, 700));
+      await tester.pumpAndSettle();
+    }
+
+    expect(loadOlderCalls, 1);
+  });
+
   testWidgets('system messages render as centered pills', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -197,10 +227,12 @@ class _ChatHarness extends StatefulWidget {
   const _ChatHarness({
     this.initialMessages,
     this.onAuthorAvatarTap,
+    this.onLoadOlderMessages,
   });
 
   final List<Message>? initialMessages;
   final void Function(String userId)? onAuthorAvatarTap;
+  final Future<void> Function()? onLoadOlderMessages;
 
   @override
   State<_ChatHarness> createState() => _ChatHarnessState();
@@ -260,6 +292,7 @@ class _ChatHarnessState extends State<_ChatHarness> {
       onVoiceResolvePath: (_) async => null,
       onVoiceResolveRemoteUrl: (_) async => null,
       onAuthorAvatarTap: widget.onAuthorAvatarTap,
+      onLoadOlderMessages: widget.onLoadOlderMessages,
     );
   }
 

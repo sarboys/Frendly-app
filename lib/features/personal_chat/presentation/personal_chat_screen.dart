@@ -589,6 +589,9 @@ class _PersonalChatScreenState extends ConsumerState<PersonalChatScreen> {
             )
           : const SizedBox.shrink(),
       messagesAsync: messagesAsync,
+      onLoadOlderMessages: () => ref
+          .read(chatThreadProvider(widget.chatId).notifier)
+          .loadOlderMessages(),
       onMessageReply: (message) {
         setState(() {
           _replyTo = _toReplyPreview(message);
