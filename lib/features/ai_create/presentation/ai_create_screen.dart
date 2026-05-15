@@ -65,8 +65,6 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
       final json = await ref.read(backendRepositoryProvider).createAiRouteDraft(
             prompt: prompt,
             city: manualLocation?.city,
-            latitude: manualLocation?.latitude,
-            longitude: manualLocation?.longitude,
             cancelToken: cancelToken,
           );
       if (!mounted ||

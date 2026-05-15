@@ -123,8 +123,8 @@ void main() {
     expect(repository.lastBudget, isNull);
     expect(repository.lastStepCount, isNull);
     expect(repository.lastCity, 'Москва');
-    expect(repository.lastLatitude, 55.7298);
-    expect(repository.lastLongitude, 37.6011);
+    expect(repository.lastLatitude, isNull);
+    expect(repository.lastLongitude, isNull);
     expect(find.text('Backend Bar'), findsOneWidget);
     expect(find.text('План пока не собран'), findsNothing);
   });

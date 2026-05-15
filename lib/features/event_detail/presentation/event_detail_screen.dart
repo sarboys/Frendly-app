@@ -7,6 +7,7 @@ import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/event_detail.dart';
 import 'package:big_break_mobile/shared/utils/event_time_labels.dart';
+import 'package:big_break_mobile/shared/utils/tomesto_promo_display.dart';
 import 'package:big_break_mobile/shared/widgets/async_value_view.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
@@ -911,7 +912,7 @@ class _V5BookingCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        promo.title,
+                        cleanTomestoPromoTitle(promo.title),
                         style: AppTextStyles.caption.copyWith(
                           color: BbV5Colors.ink,
                           fontWeight: FontWeight.w600,

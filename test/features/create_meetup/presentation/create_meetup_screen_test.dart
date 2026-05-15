@@ -14,8 +14,10 @@ import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/event_detail.dart';
 import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:big_break_mobile/shared/models/host_dashboard.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
@@ -60,6 +62,40 @@ class _FakeCreateMeetupRepository extends BackendRepository {
   int? lastUpdatedCapacity;
   String? lastUpdatedVisibilityMode;
   EventJoinMode? lastUpdatedJoinMode;
+
+  @override
+  Future<List<BackendPlacePromoListItem>> fetchPlacePromos({
+    String city = 'Москва',
+    double? latitude,
+    double? longitude,
+    int limit = 80,
+    String? category,
+    CancelToken? cancelToken,
+  }) async {
+    return const [
+      BackendPlacePromoListItem(
+        id: 'promo-real-venue',
+        title: 'Акции и скидки: Второй бокал бесплатно',
+        city: 'Москва',
+        venueName: 'Brix Wine',
+        placeName: 'Brix Wine',
+        address: 'Покровка 12',
+        placeCategory: 'bar',
+        placeKind: 'bar',
+        provider: 'ТоМесто',
+        distanceKm: 1.2,
+      ),
+      BackendPlacePromoListItem(
+        id: 'promo-generic-source',
+        title: 'Акции и скидки: Алкоголь Виски-карта',
+        city: 'Москва',
+        venueName: 'Tomesto',
+        placeName: 'Tomesto',
+        address: 'Москва',
+        provider: 'Tomesto',
+      ),
+    ];
+  }
 
   @override
   Future<EventDetail> createEvent({
@@ -485,8 +521,7 @@ void main() {
     description: 'description text field',
   );
   final placeSheetSearchField = find.byWidgetPredicate(
-    (widget) =>
-        widget is TextField && widget.decoration?.hintText == 'Найти...',
+    (widget) => widget is TextField && widget.decoration?.hintText == 'Найти…',
     description: 'place sheet search field',
   );
   Finder mainScrollable() {
@@ -640,6 +675,23 @@ void main() {
       find.text('Указать свой адрес или ориентир', skipOffstage: false),
       findsOneWidget,
     );
+  });
+
+  testWidgets(
+      'create meetup promo picker uses venues, clean promo text and categories',
+      (tester) async {
+    await tester.pumpWidget(_wrap((_) {}));
+    await tester.pumpAndSettle();
+
+    await scrollToAttachActions(tester);
+    await tester.tap(find.byTooltip('Промо'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Brix Wine'), findsWidgets);
+    expect(find.text('Tomesto'), findsNothing);
+    expect(find.textContaining('Бары'), findsWidgets);
+    expect(find.textContaining('Алкоголь Виски-карта'), findsWidgets);
+    expect(find.textContaining('Акции и скидки'), findsNothing);
   });
 
   testWidgets('create meetup keeps bottom fields above fixed CTA',
@@ -1147,6 +1199,39 @@ void main() {
     expect(find.text('Завтра'), findsNothing);
     expect(find.text('Послезавтра'), findsNothing);
     expect(find.byType(CalendarDatePicker), findsOneWidget);
+  });
+
+  testWidgets('create meetup place sheet matches v5 header and search metrics',
+      (tester) async {
+    await tester.pumpWidget(_wrap((_) {}));
+    await tester.pumpAndSettle();
+
+    await openPlaceSheet(tester);
+
+    final closeIcon = tester.widget<Icon>(find.byIcon(LucideIcons.x).last);
+    expect(closeIcon.size, 16);
+    expect(closeIcon.color, BbV5Colors.ink);
+
+    final closeButtonSize = tester.getSize(
+      find
+          .ancestor(
+            of: find.byIcon(LucideIcons.x).last,
+            matching: find.byType(SizedBox),
+          )
+          .first,
+    );
+    expect(closeButtonSize, const Size.square(36));
+
+    final searchIcon =
+        tester.widget<Icon>(find.byIcon(LucideIcons.search).last);
+    expect(searchIcon.size, 16);
+
+    final searchField = tester.widget<TextField>(placeSheetSearchField);
+    expect(searchField.style?.fontSize, 13);
+    expect(searchField.style?.height, 1.2);
+    expect(searchField.decoration?.isDense, isTrue);
+    expect(searchField.decoration?.contentPadding, EdgeInsets.zero);
+    expect(searchField.textAlignVertical, TextAlignVertical.center);
   });
 
   testWidgets('create meetup place sheet shows yandex search result',

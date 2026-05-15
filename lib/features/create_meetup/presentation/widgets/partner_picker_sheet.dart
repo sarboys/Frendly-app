@@ -5,6 +5,7 @@ import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/data/tomesto_promos_provider.dart';
+import 'package:big_break_mobile/shared/utils/tomesto_promo_display.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -741,9 +742,19 @@ class _PerkPill extends StatelessWidget {
 }
 
 PartnerVenue _venueFromPromo(BackendPlacePromoListItem promo) {
-  final category = _categoryKey(promo.placeKind ?? promo.placeCategory);
+  final cleanTitle = cleanTomestoPromoTitle(promo.title);
+  final category = tomestoPromoCategoryKey(
+    placeKind: promo.placeKind,
+    placeCategory: promo.placeCategory,
+    promoTitle: promo.title,
+    promoDescription: promo.description,
+  );
   final displayCategory = _categoryForKey(category);
-  final placeName = promo.placeName ?? promo.venueName ?? 'Tomesto';
+  final placeName = tomestoVenueDisplayName(
+    promoTitle: promo.title,
+    placeName: promo.placeName,
+    venueName: promo.venueName,
+  );
   final address = promo.address?.trim().isNotEmpty == true
       ? promo.address!.trim()
       : promo.city;
@@ -763,12 +774,12 @@ PartnerVenue _venueFromPromo(BackendPlacePromoListItem promo) {
     distance: distance,
     rating: 0,
     perk: [
-      promo.title,
+      cleanTitle,
       if ((promo.description ?? '').trim().isNotEmpty)
         promo.description!.trim(),
       if (averageCheck != null) averageCheck,
     ].join('\n'),
-    perkShort: promo.title,
+    perkShort: cleanTitle,
     verified: (promo.provider ?? '').trim().isNotEmpty,
     featured: true,
     externalPlaceId: promo.placeId,

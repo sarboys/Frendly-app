@@ -718,40 +718,12 @@ class BbV5LucideIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shouldMirror = icon.matchTextDirection &&
-        Directionality.of(context) == TextDirection.rtl;
-    final glyph = Text(
-      String.fromCharCode(icon.codePoint),
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        inherit: false,
-        fontFamily: _weightedLucideFontFamily(weight),
-        package: 'lucide_icons_flutter',
-        fontSize: size,
-        height: 1,
-        color: color ?? IconTheme.of(context).color,
-      ),
-    );
-    if (!shouldMirror) {
-      return glyph;
-    }
-    return Transform(
-      alignment: Alignment.center,
-      transform: Matrix4.diagonal3Values(-1, 1, 1),
-      child: glyph,
+    return Icon(
+      icon,
+      size: size,
+      color: color ?? IconTheme.of(context).color,
     );
   }
-}
-
-String _weightedLucideFontFamily(int weight) {
-  return switch (weight) {
-    <= 100 => 'Lucide100',
-    <= 200 => 'Lucide200',
-    <= 300 => 'Lucide300',
-    <= 400 => 'Lucide400',
-    <= 500 => 'Lucide500',
-    _ => 'Lucide600',
-  };
 }
 
 class BbV5PillButton extends StatelessWidget {

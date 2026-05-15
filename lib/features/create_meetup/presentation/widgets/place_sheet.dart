@@ -9,6 +9,7 @@ import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/utils/location_label.dart';
+import 'package:big_break_mobile/shared/utils/tomesto_promo_display.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
@@ -193,14 +194,19 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const BbV5Kicker('выбрать'),
-                            const SizedBox(height: 8),
+                            Text(
+                              'выбрать',
+                              style: bbV5KickerStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
                             Text(
                               'Где встречаемся',
                               style: bbV5DisplayStyle(
@@ -788,7 +794,7 @@ class _PlaceRow extends StatelessWidget {
                       if (place.promos.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Text(
-                          place.promos.first.title,
+                          cleanTomestoPromoTitle(place.promos.first.title),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.caption.copyWith(
@@ -889,11 +895,11 @@ class _PlaceSheetCloseButton extends StatelessWidget {
         customBorder: const CircleBorder(),
         onTap: onTap,
         child: const SizedBox(
-          width: 58,
-          height: 58,
+          width: 36,
+          height: 36,
           child: Icon(
             LucideIcons.x,
-            size: 26,
+            size: 16,
             color: BbV5Colors.ink,
           ),
         ),
@@ -917,7 +923,7 @@ class _PlaceSearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: BbV5Colors.paperHi,
         borderRadius: BorderRadius.circular(999),
@@ -935,34 +941,56 @@ class _PlaceSearchField extends StatelessWidget {
             child: TextField(
               controller: controller,
               onChanged: onChanged,
+              textAlignVertical: TextAlignVertical.center,
+              minLines: 1,
+              maxLines: 1,
+              cursorColor: BbV5Colors.ink,
+              cursorHeight: 16,
               decoration: InputDecoration(
+                isDense: true,
+                isCollapsed: true,
+                contentPadding: EdgeInsets.zero,
                 filled: false,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
                 disabledBorder: InputBorder.none,
-                hintText: 'Найти...',
+                hintText: 'Найти…',
                 hintStyle: AppTextStyles.body.copyWith(
                   color: BbV5Colors.inkMute.withValues(alpha: 0.72),
-                  fontSize: 13.5,
+                  fontSize: 13,
                   height: 1.2,
                 ),
               ),
               style: AppTextStyles.body.copyWith(
                 color: BbV5Colors.ink,
-                fontSize: 13.5,
+                fontSize: 13,
                 height: 1.2,
               ),
             ),
           ),
           if (controller.text.isNotEmpty)
-            IconButton(
-              tooltip: 'Очистить',
-              onPressed: onClear,
-              icon: const Icon(
-                LucideIcons.x,
-                size: 18,
-                color: BbV5Colors.inkMute,
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Tooltip(
+                message: 'Очистить',
+                child: Semantics(
+                  button: true,
+                  label: 'Очистить',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onClear,
+                    child: const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Icon(
+                        LucideIcons.x,
+                        size: 14,
+                        color: BbV5Colors.inkMute,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
         ],

@@ -3,6 +3,7 @@ import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/data/tomesto_promos_provider.dart';
+import 'package:big_break_mobile/shared/utils/tomesto_promo_display.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -170,11 +171,12 @@ class _PerksScreenState extends ConsumerState<PerksScreen> {
               category: category,
               redeemed: _redeemed.contains(promo.id),
               onRedeem: () {
+                final title = cleanTomestoPromoTitle(promo.title);
                 setState(() {
                   _redeemed.add(promo.id);
                 });
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${promo.title} активировано')),
+                  SnackBar(content: Text('$title активировано')),
                 );
               },
             );
@@ -259,7 +261,12 @@ class _PromoTicket extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final venue = promo.placeName ?? promo.venueName ?? 'Tomesto';
+    final venue = tomestoVenueDisplayName(
+      promoTitle: promo.title,
+      placeName: promo.placeName,
+      venueName: promo.venueName,
+    );
+    final title = cleanTomestoPromoTitle(promo.title);
     final meta = [
       if ((promo.address ?? '').trim().isNotEmpty) promo.address!.trim(),
       if (promo.distanceKm != null)
@@ -344,7 +351,7 @@ class _PromoTicket extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            promo.title,
+                            title,
                             style: bbV5DisplayStyle(
                               fontSize: 15.5,
                               height: 1.25,
@@ -498,9 +505,12 @@ _PromoCategory _categoryForPromo(BackendPlacePromoListItem promo) {
 }
 
 String _categoryKey(BackendPlacePromoListItem promo) {
-  final value =
-      (promo.placeKind ?? promo.placeCategory ?? 'promo').trim().toLowerCase();
-  return value.isEmpty ? 'promo' : value;
+  return tomestoPromoCategoryKey(
+    placeKind: promo.placeKind,
+    placeCategory: promo.placeCategory,
+    promoTitle: promo.title,
+    promoDescription: promo.description,
+  );
 }
 
 _PromoCategory _categoryForKey(String key) {
