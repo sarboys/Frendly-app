@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 class BackendConfig {
   const BackendConfig._();
 
@@ -28,9 +26,11 @@ class BackendConfig {
     defaultValue: false,
   );
 
+  static const localFirstCacheDefaultEnabled = true;
+
   static const localFirstCacheEnabled = bool.fromEnvironment(
     'BIG_BREAK_LOCAL_FIRST_CACHE',
-    defaultValue: !kReleaseMode,
+    defaultValue: localFirstCacheDefaultEnabled,
   );
 
   static const googleClientId = String.fromEnvironment(
