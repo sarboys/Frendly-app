@@ -32,6 +32,28 @@ void main() {
         InterceptorsWrapper(
           onRequest: (options, handler) {
             captured = options;
+            if (options.path.startsWith('/evening/routes/ai-drafts')) {
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: {
+                    'draftId': 'draft-1',
+                    'route': {
+                      'id': 'r-ai',
+                      'title': 'AI Route',
+                      'steps': [],
+                    },
+                    'acceptedStepIndexes': [0],
+                    'currentStepIndex': null,
+                    'canConfirm': true,
+                    'expiresAt': '2026-05-16T08:00:00.000Z',
+                    'warnings': [],
+                  },
+                ),
+              );
+              return;
+            }
             handler.resolve(
               Response<Map<String, dynamic>>(
                 requestOptions: options,
@@ -242,6 +264,28 @@ void main() {
               );
               return;
             }
+            if (options.path.startsWith('/evening/routes/ai-drafts')) {
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: {
+                    'draftId': 'draft-1',
+                    'route': {
+                      'id': 'r-ai',
+                      'title': 'AI Route',
+                      'steps': [],
+                    },
+                    'acceptedStepIndexes': [0],
+                    'currentStepIndex': null,
+                    'canConfirm': true,
+                    'expiresAt': '2026-05-16T08:00:00.000Z',
+                    'warnings': [],
+                  },
+                ),
+              );
+              return;
+            }
             handler.resolve(
               Response(
                 requestOptions: options,
@@ -277,11 +321,28 @@ void main() {
       longitude: 37.61,
     );
     final routeDetail = await repository.fetchEveningRoute('r-backend');
+    final draft = await repository.createAiRouteDraft(
+      prompt: 'Бар и стендап',
+      stepCount: 2,
+      city: 'Москва',
+    );
+    final draftDetail = await repository.fetchAiRouteDraft('draft-1');
+    final accepted = await repository.acceptAiRouteDraftStep('draft-1', 0);
+    final regenerated =
+        await repository.regenerateAiRouteDraftStep('draft-1', 0);
+    final regeneratedDraft = await repository.regenerateAiRouteDraft('draft-1');
+    final confirmed = await repository.confirmAiRouteDraft('draft-1');
 
     expect(apiRequests, [
       'GET /evening/options',
       'POST /evening/routes/resolve',
       'GET /evening/routes/r-backend',
+      'POST /evening/routes/ai-drafts',
+      'GET /evening/routes/ai-drafts/draft-1',
+      'POST /evening/routes/ai-drafts/draft-1/steps/0/accept',
+      'POST /evening/routes/ai-drafts/draft-1/steps/0/regenerate',
+      'POST /evening/routes/ai-drafts/draft-1/regenerate',
+      'POST /evening/routes/ai-drafts/draft-1/confirm',
     ]);
     expect(requestBodies[1], {
       'goal': 'newfriends',
@@ -297,6 +358,17 @@ void main() {
     expect(options['goals'], isA<List<dynamic>>());
     expect(route['id'], 'r-backend');
     expect(routeDetail['title'], 'Backend Route');
+    expect(requestBodies[3], {
+      'prompt': 'Бар и стендап',
+      'stepCount': 2,
+      'city': 'Москва',
+    });
+    expect(draft['draftId'], 'draft-1');
+    expect(draftDetail['canConfirm'], true);
+    expect(accepted['draftId'], 'draft-1');
+    expect(regenerated['draftId'], 'draft-1');
+    expect(regeneratedDraft['draftId'], 'draft-1');
+    expect(confirmed['route']['title'], 'AI Route');
   });
 
   test('fetch evening sessions parses summaries', () async {

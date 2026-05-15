@@ -6,6 +6,7 @@ import 'package:big_break_mobile/features/create_meetup/presentation/create_meet
 import 'package:big_break_mobile/features/create_meetup/presentation/publish_meetup_screen.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -67,7 +68,7 @@ void main() {
     expect(scrollRect.bottom, 820);
   });
 
-  testWidgets('ai create resolves typed prompt through backend', (
+  testWidgets('ai create creates route draft through backend', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -111,7 +112,8 @@ void main() {
     await tester.tap(find.text('Собрать план'));
     await tester.pumpAndSettle();
 
-    expect(repository.resolveCalls, 1);
+    expect(repository.createDraftCalls, 1);
+    expect(repository.resolveCalls, 0);
     expect(repository.lastPrompt, contains('Винный бар и джаз на двоих'));
     expect(repository.lastBudget, 'low');
     expect(repository.lastStepCount, 2);
@@ -168,6 +170,53 @@ void main() {
     expect(repository.lastCity, 'Москва');
     expect(repository.lastLatitude, 55.7298);
     expect(repository.lastLongitude, 37.6011);
+  });
+
+  testWidgets('ai create card refresh regenerates current draft', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    late _FakeAiRouteRepository repository;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          backendRepositoryProvider.overrideWith((ref) {
+            repository = _FakeAiRouteRepository(ref);
+            return repository;
+          }),
+        ],
+        child: const MaterialApp(home: AiCreateScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Бар и театр');
+    await _dragUntilVisible(tester, find.text('Собрать план'), 260);
+    await tester.tap(find.text('Собрать план'));
+    await tester.pumpAndSettle();
+
+    expect(repository.createDraftCalls, 1);
+    await _dragUntilVisible(tester, find.text('AI · план вечера'), 260);
+    await tester.tap(
+      find
+          .byWidgetPredicate(
+            (widget) =>
+                widget is BbV5IconButton &&
+                widget.icon == LucideIcons.refresh_cw,
+          )
+          .last,
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.createDraftCalls, 1);
+    expect(repository.regenerateDraftCalls, 1);
   });
 
   testWidgets('ai create mic action opens voice flow', (tester) async {
@@ -271,6 +320,10 @@ void main() {
     await tester.tap(find.text('Собрать план'));
     await tester.pumpAndSettle();
 
+    await _dragUntilVisible(tester, find.text('Принять шаг'), 260);
+    await tester.tap(find.text('Принять шаг'));
+    await tester.pumpAndSettle();
+
     await _dragUntilVisible(tester, find.text('Создать встречу'), 260);
     await tester.tap(find.text('Создать встречу'));
     await tester.pumpAndSettle();
@@ -305,6 +358,10 @@ class _FakeAiRouteRepository extends BackendRepository {
   _FakeAiRouteRepository(Ref ref) : super(ref: ref, dio: Dio());
 
   var resolveCalls = 0;
+  var createDraftCalls = 0;
+  var acceptCalls = 0;
+  var regenerateDraftCalls = 0;
+  var confirmCalls = 0;
   String? lastPrompt;
   String? lastBudget;
   int? lastStepCount;
@@ -335,7 +392,75 @@ class _FakeAiRouteRepository extends BackendRepository {
     lastLongitude = longitude;
     return _backendRouteJson;
   }
+
+  @override
+  Future<Map<String, dynamic>> createAiRouteDraft({
+    CancelToken? cancelToken,
+    String? goal,
+    String? mood,
+    String? budget,
+    String? format,
+    String? area,
+    String? prompt,
+    int? stepCount,
+    String? city,
+    double? latitude,
+    double? longitude,
+  }) async {
+    createDraftCalls += 1;
+    lastPrompt = prompt;
+    lastBudget = budget;
+    lastStepCount = stepCount;
+    lastCity = city;
+    lastLatitude = latitude;
+    lastLongitude = longitude;
+    return _draftJson(canConfirm: false);
+  }
+
+  @override
+  Future<Map<String, dynamic>> acceptAiRouteDraftStep(
+    String draftId,
+    int stepIndex, {
+    CancelToken? cancelToken,
+  }) async {
+    acceptCalls += 1;
+    return _draftJson(canConfirm: true);
+  }
+
+  @override
+  Future<Map<String, dynamic>> regenerateAiRouteDraft(
+    String draftId, {
+    CancelToken? cancelToken,
+  }) async {
+    regenerateDraftCalls += 1;
+    return _draftJson(canConfirm: false, title: 'Другой Backend Route');
+  }
+
+  @override
+  Future<Map<String, dynamic>> confirmAiRouteDraft(
+    String draftId, {
+    CancelToken? cancelToken,
+  }) async {
+    confirmCalls += 1;
+    return _draftJson(canConfirm: true);
+  }
 }
+
+Map<String, dynamic> _draftJson({
+  required bool canConfirm,
+  String title = 'Backend Route',
+}) => {
+      'draftId': 'draft-1',
+      'route': {
+        ..._backendRouteJson,
+        'title': title,
+      },
+      'acceptedStepIndexes': canConfirm ? [0] : [],
+      'currentStepIndex': canConfirm ? null : 0,
+      'canConfirm': canConfirm,
+      'expiresAt': '2026-05-16T08:00:00.000Z',
+      'warnings': [],
+    };
 
 const _backendRouteJson = {
   'id': 'backend-route',

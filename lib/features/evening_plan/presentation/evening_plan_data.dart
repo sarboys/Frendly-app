@@ -265,6 +265,53 @@ class EveningRouteData {
   }
 }
 
+class AiRouteDraft {
+  const AiRouteDraft({
+    required this.draftId,
+    required this.route,
+    required this.acceptedStepIndexes,
+    required this.currentStepIndex,
+    required this.canConfirm,
+    required this.expiresAt,
+    required this.warnings,
+  });
+
+  final String draftId;
+  final EveningRouteData route;
+  final Set<int> acceptedStepIndexes;
+  final int? currentStepIndex;
+  final bool canConfirm;
+  final DateTime? expiresAt;
+  final List<String> warnings;
+
+  factory AiRouteDraft.fromJson(Map<String, dynamic> json) {
+    final accepted = ((json['acceptedStepIndexes'] as List?) ?? const [])
+        .whereType<num>()
+        .map((value) => value.toInt())
+        .toSet();
+    final warnings = ((json['warnings'] as List?) ?? const [])
+        .map((warning) {
+          if (warning is Map) {
+            return warning['message'] as String? ?? warning['code'] as String?;
+          }
+          return warning?.toString();
+        })
+        .whereType<String>()
+        .toList(growable: false);
+    return AiRouteDraft(
+      draftId: json['draftId'] as String? ?? '',
+      route: eveningRouteFromJson(
+        Map<String, dynamic>.from((json['route'] as Map?) ?? const {}),
+      ),
+      acceptedStepIndexes: accepted,
+      currentStepIndex: (json['currentStepIndex'] as num?)?.toInt(),
+      canConfirm: json['canConfirm'] as bool? ?? false,
+      expiresAt: DateTime.tryParse(json['expiresAt'] as String? ?? ''),
+      warnings: warnings,
+    );
+  }
+}
+
 class EveningBuilderOptions {
   const EveningBuilderOptions({
     required this.goals,

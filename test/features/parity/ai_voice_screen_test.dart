@@ -39,7 +39,8 @@ void main() {
     await tester.tap(find.textContaining('Тихий ужин и долгая прогулка'));
     await tester.pump(const Duration(milliseconds: 1600));
 
-    expect(repository.resolveCalls, 1);
+    expect(repository.createDraftCalls, 1);
+    expect(repository.resolveCalls, 0);
     expect(repository.lastPrompt, 'Тихий ужин и долгая прогулка, не громко');
     expect(find.text('Backend Bar'), findsOneWidget);
     expect(find.text('Маршрут появится после ответа сервера.'), findsNothing);
@@ -99,6 +100,10 @@ void main() {
     await tester.tap(find.textContaining('Тихий ужин и долгая прогулка'));
     await tester.pump(const Duration(milliseconds: 1600));
 
+    await tester.ensureVisible(find.text('Принять шаг'));
+    await tester.tap(find.text('Принять шаг'));
+    await tester.pump(const Duration(milliseconds: 100));
+
     await tester.ensureVisible(find.text('Превратить в встречу'));
     await tester.tap(find.text('Превратить в встречу'));
     await tester.pumpAndSettle();
@@ -113,6 +118,9 @@ class _FakeAiVoiceRepository extends BackendRepository {
   _FakeAiVoiceRepository(Ref ref) : super(ref: ref, dio: Dio());
 
   var resolveCalls = 0;
+  var createDraftCalls = 0;
+  var acceptCalls = 0;
+  var confirmCalls = 0;
   String? lastPrompt;
 
   @override
@@ -133,7 +141,55 @@ class _FakeAiVoiceRepository extends BackendRepository {
     lastPrompt = prompt;
     return _backendRouteJson;
   }
+
+  @override
+  Future<Map<String, dynamic>> createAiRouteDraft({
+    CancelToken? cancelToken,
+    String? goal,
+    String? mood,
+    String? budget,
+    String? format,
+    String? area,
+    String? prompt,
+    int? stepCount,
+    String? city,
+    double? latitude,
+    double? longitude,
+  }) async {
+    createDraftCalls += 1;
+    lastPrompt = prompt;
+    return _draftJson(canConfirm: false);
+  }
+
+  @override
+  Future<Map<String, dynamic>> acceptAiRouteDraftStep(
+    String draftId,
+    int stepIndex, {
+    CancelToken? cancelToken,
+  }) async {
+    acceptCalls += 1;
+    return _draftJson(canConfirm: true);
+  }
+
+  @override
+  Future<Map<String, dynamic>> confirmAiRouteDraft(
+    String draftId, {
+    CancelToken? cancelToken,
+  }) async {
+    confirmCalls += 1;
+    return _draftJson(canConfirm: true);
+  }
 }
+
+Map<String, dynamic> _draftJson({required bool canConfirm}) => {
+      'draftId': 'voice-draft',
+      'route': _backendRouteJson,
+      'acceptedStepIndexes': canConfirm ? [0] : [],
+      'currentStepIndex': canConfirm ? null : 0,
+      'canConfirm': canConfirm,
+      'expiresAt': '2026-05-16T08:00:00.000Z',
+      'warnings': [],
+    };
 
 const _backendRouteJson = {
   'id': 'voice-route',

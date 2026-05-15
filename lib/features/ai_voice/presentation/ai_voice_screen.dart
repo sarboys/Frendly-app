@@ -37,7 +37,9 @@ class _AiVoiceScreenState extends ConsumerState<AiVoiceScreen>
   _VoicePhase _phase = _VoicePhase.idle;
   String _transcript = '';
   String? _errorText;
-  EveningRouteData? _route;
+  AiRouteDraft? _draft;
+  int? _busyStepIndex;
+  var _confirming = false;
 
   @override
   void initState() {
@@ -147,18 +149,26 @@ class _AiVoiceScreenState extends ConsumerState<AiVoiceScreen>
             if (_phase == _VoicePhase.ready) ...[
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
               SliverToBoxAdapter(
-                child: _RoutePlan(route: _route, onReset: _reset),
+                child: _RoutePlan(
+                  draft: _draft,
+                  busyStepIndex: _busyStepIndex,
+                  onAcceptStep: _acceptStep,
+                  onRegenerateStep: _regenerateStep,
+                  onReset: _reset,
+                ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
               SliverToBoxAdapter(
                 child: BbV5PillButton(
-                  label: 'Превратить в встречу',
+                  label: _confirming ? 'Готовлю…' : 'Превратить в встречу',
                   icon: LucideIcons.send,
                   dark: true,
                   height: 56,
                   fontSize: 14,
                   expanded: true,
-                  onPressed: _route == null ? null : _openRoute,
+                  onPressed: _draft?.canConfirm == true && !_confirming
+                      ? _openRoute
+                      : null,
                 ),
               ),
             ],
@@ -199,7 +209,7 @@ class _AiVoiceScreenState extends ConsumerState<AiVoiceScreen>
     setState(() {
       _phase = _VoicePhase.listening;
       _transcript = '';
-      _route = null;
+      _draft = null;
       _errorText = null;
     });
 
@@ -237,7 +247,7 @@ class _AiVoiceScreenState extends ConsumerState<AiVoiceScreen>
     setState(() {
       _transcript = text;
       _phase = _VoicePhase.thinking;
-      _route = null;
+      _draft = null;
       _errorText = null;
     });
     unawaited(_resolveVoicePrompt(text, generation));
@@ -254,7 +264,7 @@ class _AiVoiceScreenState extends ConsumerState<AiVoiceScreen>
     }
     try {
       final json =
-          await ref.read(backendRepositoryProvider).resolveEveningRoute(
+          await ref.read(backendRepositoryProvider).createAiRouteDraft(
                 goal: _goalKeyForPrompt(text),
                 mood: _moodKeyForPrompt(text),
                 budget: _budgetKeyForPrompt(text),
@@ -268,8 +278,8 @@ class _AiVoiceScreenState extends ConsumerState<AiVoiceScreen>
           !identical(_resolveCancelToken, cancelToken)) {
         return;
       }
-      final route = eveningRouteFromJson(json);
-      if (route.steps.isEmpty) {
+      final draft = AiRouteDraft.fromJson(json);
+      if (draft.route.steps.isEmpty) {
         setState(() {
           _phase = _VoicePhase.idle;
           _errorText = 'Маршрут не собрался. Попробуй сказать чуть подробнее.';
@@ -280,7 +290,7 @@ class _AiVoiceScreenState extends ConsumerState<AiVoiceScreen>
         return;
       }
       setState(() {
-        _route = route;
+        _draft = draft;
         _phase = _VoicePhase.ready;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -314,7 +324,7 @@ class _AiVoiceScreenState extends ConsumerState<AiVoiceScreen>
     setState(() {
       _phase = _VoicePhase.idle;
       _transcript = '';
-      _route = null;
+      _draft = null;
       _errorText = null;
     });
   }
@@ -326,15 +336,97 @@ class _AiVoiceScreenState extends ConsumerState<AiVoiceScreen>
     }
   }
 
-  void _openRoute() {
-    final route = _route;
-    if (route == null || route.id.isEmpty) {
+  Future<void> _acceptStep(int index) async {
+    final draft = _draft;
+    if (draft == null || _busyStepIndex != null) {
       return;
     }
-    context.pushRoute(
-      AppRoute.publishMeetup,
-      extra: publishDraftFromEveningRoute(route),
-    );
+    setState(() => _busyStepIndex = index);
+    try {
+      final json = await ref
+          .read(backendRepositoryProvider)
+          .acceptAiRouteDraftStep(draft.draftId, index);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _draft = AiRouteDraft.fromJson(json);
+        _busyStepIndex = null;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _busyStepIndex = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось принять шаг')),
+      );
+    }
+  }
+
+  Future<void> _regenerateStep(int index) async {
+    final draft = _draft;
+    if (draft == null || _busyStepIndex != null) {
+      return;
+    }
+    setState(() => _busyStepIndex = index);
+    try {
+      final json = await ref
+          .read(backendRepositoryProvider)
+          .regenerateAiRouteDraftStep(draft.draftId, index);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _draft = AiRouteDraft.fromJson(json);
+        _busyStepIndex = null;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _busyStepIndex = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось заменить шаг')),
+      );
+    }
+  }
+
+  Future<void> _openRoute() async {
+    final draft = _draft;
+    if (draft == null || !draft.canConfirm || _confirming) {
+      return;
+    }
+    setState(() => _confirming = true);
+    try {
+      final json = await ref
+          .read(backendRepositoryProvider)
+          .confirmAiRouteDraft(draft.draftId);
+      if (!mounted) {
+        return;
+      }
+      final confirmed = AiRouteDraft.fromJson(json);
+      setState(() {
+        _draft = confirmed;
+        _confirming = false;
+      });
+      final route = confirmed.route;
+      if (route.id.isEmpty) {
+        return;
+      }
+      context.pushRoute(
+        AppRoute.publishMeetup,
+        extra: publishDraftFromEveningRoute(route),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _confirming = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось подтвердить маршрут')),
+      );
+    }
   }
 }
 
@@ -505,15 +597,22 @@ class _PromptPreset extends StatelessWidget {
 
 class _RoutePlan extends StatelessWidget {
   const _RoutePlan({
-    required this.route,
+    required this.draft,
+    required this.busyStepIndex,
+    required this.onAcceptStep,
+    required this.onRegenerateStep,
     required this.onReset,
   });
 
-  final EveningRouteData? route;
+  final AiRouteDraft? draft;
+  final int? busyStepIndex;
+  final ValueChanged<int> onAcceptStep;
+  final ValueChanged<int> onRegenerateStep;
   final VoidCallback onReset;
 
   @override
   Widget build(BuildContext context) {
+    final route = draft?.route;
     final steps = route?.steps ?? const <EveningRouteStep>[];
     return BbV5Section(
       title: 'Маршрут',
@@ -548,8 +647,17 @@ class _RoutePlan extends StatelessWidget {
                 children: [
                   for (var index = 0; index < steps.length; index++)
                     _StopRow(
+                      index: index,
                       stop: steps[index],
                       showLine: index < steps.length - 1,
+                      accepted:
+                          draft?.acceptedStepIndexes.contains(index) ?? false,
+                      active: draft?.currentStepIndex == index,
+                      busy: busyStepIndex == index,
+                      locked: draft?.currentStepIndex != null &&
+                          index > draft!.currentStepIndex!,
+                      onAccept: () => onAcceptStep(index),
+                      onRegenerate: () => onRegenerateStep(index),
                     ),
                 ],
               ),
@@ -560,12 +668,26 @@ class _RoutePlan extends StatelessWidget {
 
 class _StopRow extends StatelessWidget {
   const _StopRow({
+    required this.index,
     required this.stop,
     required this.showLine,
+    required this.accepted,
+    required this.active,
+    required this.busy,
+    required this.locked,
+    required this.onAccept,
+    required this.onRegenerate,
   });
 
+  final int index;
   final EveningRouteStep stop;
   final bool showLine;
+  final bool accepted;
+  final bool active;
+  final bool busy;
+  final bool locked;
+  final VoidCallback onAccept;
+  final VoidCallback onRegenerate;
 
   @override
   Widget build(BuildContext context) {
@@ -577,82 +699,142 @@ class _StopRow extends StatelessWidget {
             ? stop.address
             : stop.distance;
 
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Column(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  _stopIcon(stop.kind),
-                  size: 20,
-                  color: BbV5Colors.paperHi,
-                ),
-              ),
-              if (showLine)
-                Container(
-                  width: 1,
-                  height: 36,
-                  margin: const EdgeInsets.only(top: 8),
-                  color: BbV5Colors.hair,
-                ),
-            ],
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
+    return Opacity(
+      opacity: locked ? 0.58 : 1,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Column(
                   children: [
-                    Text(
-                      stop.time,
-                      style: AppTextStyles.caption.copyWith(
-                        fontFamily: 'Sora',
+                    Container(
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
                         color: color,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.1,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        _stopIcon(stop.kind),
+                        size: 20,
+                        color: BbV5Colors.paperHi,
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '· ${eveningKindLabel(stop.kind)}',
-                      style: AppTextStyles.caption.copyWith(
-                        fontSize: 10,
-                        color: BbV5Colors.inkMute,
-                        letterSpacing: 0,
+                    if (showLine)
+                      Container(
+                        width: 1,
+                        height: 36,
+                        margin: const EdgeInsets.only(top: 8),
+                        color: BbV5Colors.hair,
                       ),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  place,
-                  style: bbV5DisplayStyle(fontSize: 15, height: 1.25),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: AppTextStyles.caption.copyWith(
-                    fontSize: 11.5,
-                    color: BbV5Colors.inkMute,
-                    letterSpacing: 0,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            stop.time,
+                            style: AppTextStyles.caption.copyWith(
+                              fontFamily: 'Sora',
+                              color: color,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.1,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '· ${eveningKindLabel(stop.kind)}',
+                            style: AppTextStyles.caption.copyWith(
+                              fontSize: 10,
+                              color: BbV5Colors.inkMute,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                          if (accepted) ...[
+                            const SizedBox(width: 8),
+                            const Icon(
+                              LucideIcons.check,
+                              size: 14,
+                              color: BbV5Colors.accent,
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        place,
+                        style: bbV5DisplayStyle(fontSize: 15, height: 1.25),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: AppTextStyles.caption.copyWith(
+                          fontSize: 11.5,
+                          color: BbV5Colors.inkMute,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-        ],
+            if (active && !accepted) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: BbV5PillButton(
+                      label: busy ? 'Меняю…' : 'Заменить',
+                      height: 40,
+                      fontSize: 12,
+                      expanded: true,
+                      onPressed: busy ? null : onRegenerate,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: BbV5PillButton(
+                      label: busy ? 'Сохраняю…' : 'Принять шаг',
+                      dark: true,
+                      height: 40,
+                      fontSize: 12,
+                      expanded: true,
+                      onPressed: busy ? null : onAccept,
+                    ),
+                  ),
+                ],
+              ),
+            ] else if (locked) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 56),
+                  child: Text(
+                    'Сначала прими предыдущий шаг',
+                    style: AppTextStyles.caption.copyWith(
+                      color: BbV5Colors.inkMute,
+                      fontSize: 11,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -1336,6 +1336,119 @@ class BackendRepository {
     return response.data!;
   }
 
+  Future<Map<String, dynamic>> createAiRouteDraft({
+    String? goal,
+    String? mood,
+    String? budget,
+    String? format,
+    String? area,
+    String? prompt,
+    int? stepCount,
+    String? city,
+    double? latitude,
+    double? longitude,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await dio.post<Map<String, dynamic>>(
+      '/evening/routes/ai-drafts',
+      data: {
+        if (goal != null && goal.isNotEmpty) 'goal': goal,
+        if (mood != null && mood.isNotEmpty) 'mood': mood,
+        if (budget != null && budget.isNotEmpty) 'budget': budget,
+        if (format != null && format.isNotEmpty) 'format': format,
+        if (area != null && area.isNotEmpty) 'area': area,
+        if (prompt != null && prompt.trim().isNotEmpty) 'prompt': prompt.trim(),
+        if (stepCount != null) 'stepCount': stepCount,
+        if (city != null && city.isNotEmpty) 'city': city,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+      },
+      options: Options(
+        connectTimeout: const Duration(seconds: 4),
+        receiveTimeout: const Duration(seconds: 8),
+      ),
+      cancelToken: cancelToken,
+    );
+    return response.data!;
+  }
+
+  Future<Map<String, dynamic>> fetchAiRouteDraft(
+    String draftId, {
+    CancelToken? cancelToken,
+  }) async {
+    final response = await dio.get<Map<String, dynamic>>(
+      '/evening/routes/ai-drafts/$draftId',
+      options: Options(
+        connectTimeout: const Duration(seconds: 4),
+        receiveTimeout: const Duration(seconds: 6),
+      ),
+      cancelToken: cancelToken,
+    );
+    return response.data!;
+  }
+
+  Future<Map<String, dynamic>> acceptAiRouteDraftStep(
+    String draftId,
+    int stepIndex, {
+    CancelToken? cancelToken,
+  }) async {
+    final response = await dio.post<Map<String, dynamic>>(
+      '/evening/routes/ai-drafts/$draftId/steps/$stepIndex/accept',
+      options: Options(
+        connectTimeout: const Duration(seconds: 4),
+        receiveTimeout: const Duration(seconds: 6),
+      ),
+      cancelToken: cancelToken,
+    );
+    return response.data!;
+  }
+
+  Future<Map<String, dynamic>> regenerateAiRouteDraftStep(
+    String draftId,
+    int stepIndex, {
+    CancelToken? cancelToken,
+  }) async {
+    final response = await dio.post<Map<String, dynamic>>(
+      '/evening/routes/ai-drafts/$draftId/steps/$stepIndex/regenerate',
+      options: Options(
+        connectTimeout: const Duration(seconds: 4),
+        receiveTimeout: const Duration(seconds: 8),
+      ),
+      cancelToken: cancelToken,
+    );
+    return response.data!;
+  }
+
+  Future<Map<String, dynamic>> regenerateAiRouteDraft(
+    String draftId, {
+    CancelToken? cancelToken,
+  }) async {
+    final response = await dio.post<Map<String, dynamic>>(
+      '/evening/routes/ai-drafts/$draftId/regenerate',
+      options: Options(
+        connectTimeout: const Duration(seconds: 4),
+        receiveTimeout: const Duration(seconds: 8),
+      ),
+      cancelToken: cancelToken,
+    );
+    return response.data!;
+  }
+
+  Future<Map<String, dynamic>> confirmAiRouteDraft(
+    String draftId, {
+    CancelToken? cancelToken,
+  }) async {
+    final response = await dio.post<Map<String, dynamic>>(
+      '/evening/routes/ai-drafts/$draftId/confirm',
+      options: Options(
+        connectTimeout: const Duration(seconds: 4),
+        receiveTimeout: const Duration(seconds: 8),
+      ),
+      cancelToken: cancelToken,
+    );
+    return response.data!;
+  }
+
   Future<Map<String, dynamic>> fetchEveningRoute(
     String routeId, {
     CancelToken? cancelToken,

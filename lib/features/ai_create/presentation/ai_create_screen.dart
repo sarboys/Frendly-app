@@ -50,8 +50,10 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
   var _size = '3–4';
   var _stepCount = 2;
   var _loading = false;
+  var _confirming = false;
+  int? _busyStepIndex;
   String? _errorText;
-  EveningRouteData? _route;
+  AiRouteDraft? _draft;
 
   @override
   void dispose() {
@@ -84,14 +86,14 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
 
     setState(() {
       _loading = true;
-      _route = null;
+      _draft = null;
       _errorText = null;
     });
 
     try {
       final manualLocation = ref.read(manualLocationProvider);
       final json =
-          await ref.read(backendRepositoryProvider).resolveEveningRoute(
+          await ref.read(backendRepositoryProvider).createAiRouteDraft(
                 goal: _goalKey,
                 mood: _moodKey,
                 budget: _budgetKey,
@@ -108,8 +110,8 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
           !identical(_resolveCancelToken, cancelToken)) {
         return;
       }
-      final route = eveningRouteFromJson(json);
-      if (route.steps.isEmpty) {
+      final draft = AiRouteDraft.fromJson(json);
+      if (draft.route.steps.isEmpty) {
         setState(() {
           _loading = false;
           _errorText = 'Не удалось собрать маршрут. Попробуй уточнить запрос.';
@@ -121,10 +123,12 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
       }
       setState(() {
         _loading = false;
-        _route = route;
+        _draft = draft;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Готово · ${route.steps.length} шага собраны')),
+        SnackBar(
+          content: Text('Готово · ${draft.route.steps.length} шага собраны'),
+        ),
       );
     } catch (_) {
       if (!mounted ||
@@ -143,6 +147,49 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
       if (identical(_resolveCancelToken, cancelToken)) {
         _resolveCancelToken = null;
       }
+    }
+  }
+
+  Future<void> _regenerateDraftPlan() async {
+    final draft = _draft;
+    if (draft == null) {
+      await _generatePlan();
+      return;
+    }
+    if (_loading || _busyStepIndex != null) {
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _errorText = null;
+    });
+
+    try {
+      final json = await ref
+          .read(backendRepositoryProvider)
+          .regenerateAiRouteDraft(draft.draftId);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _draft = AiRouteDraft.fromJson(json);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Собрал другой вариант')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _errorText = 'Не удалось заменить маршрут. Попробуй еще раз.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось заменить маршрут')),
+      );
     }
   }
 
@@ -207,6 +254,99 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
     }
   }
 
+  Future<void> _acceptStep(int index) async {
+    final draft = _draft;
+    if (draft == null || _busyStepIndex != null) {
+      return;
+    }
+    setState(() => _busyStepIndex = index);
+    try {
+      final json = await ref
+          .read(backendRepositoryProvider)
+          .acceptAiRouteDraftStep(draft.draftId, index);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _draft = AiRouteDraft.fromJson(json);
+        _busyStepIndex = null;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _busyStepIndex = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось принять шаг')),
+      );
+    }
+  }
+
+  Future<void> _regenerateStep(int index) async {
+    final draft = _draft;
+    if (draft == null || _busyStepIndex != null) {
+      return;
+    }
+    setState(() => _busyStepIndex = index);
+    try {
+      final json = await ref
+          .read(backendRepositoryProvider)
+          .regenerateAiRouteDraftStep(draft.draftId, index);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _draft = AiRouteDraft.fromJson(json);
+        _busyStepIndex = null;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _busyStepIndex = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось заменить шаг')),
+      );
+    }
+  }
+
+  Future<void> _openDraftRoute({required bool launch}) async {
+    final draft = _draft;
+    if (draft == null || _confirming) {
+      return;
+    }
+    if (!draft.canConfirm) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сначала прими все шаги маршрута')),
+      );
+      return;
+    }
+
+    setState(() => _confirming = true);
+    try {
+      final json = await ref
+          .read(backendRepositoryProvider)
+          .confirmAiRouteDraft(draft.draftId);
+      if (!mounted) {
+        return;
+      }
+      final confirmed = AiRouteDraft.fromJson(json);
+      setState(() {
+        _draft = confirmed;
+        _confirming = false;
+      });
+      _openRoute(confirmed.route, launch: launch);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _confirming = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось подтвердить маршрут')),
+      );
+    }
+  }
+
   void _openRoute(EveningRouteData route, {required bool launch}) {
     if (route.id.isEmpty) {
       context.pushRoute(AppRoute.createMeetup);
@@ -227,7 +367,8 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final route = _route;
+    final draft = _draft;
+    final route = draft?.route;
     final bottomPadding = 120 + MediaQuery.paddingOf(context).bottom;
 
     return BbV5Scaffold(
@@ -460,10 +601,16 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
                   padding: const EdgeInsets.only(top: 20),
                   child: _GeneratedPlanCard(
                     time: _time,
+                    draft: draft!,
                     route: route,
-                    onRefresh: _generatePlan,
-                    onEdit: () => _openRoute(route, launch: false),
-                    onCreate: () => _openRoute(route, launch: true),
+                    busyStepIndex: _busyStepIndex,
+                    confirming: _confirming,
+                    refreshing: _loading,
+                    onRefresh: _regenerateDraftPlan,
+                    onAcceptStep: _acceptStep,
+                    onRegenerateStep: _regenerateStep,
+                    onEdit: () => _openDraftRoute(launch: false),
+                    onCreate: () => _openDraftRoute(launch: true),
                   ),
                 ),
               ),
@@ -626,15 +773,27 @@ class _ParamDivider extends StatelessWidget {
 class _GeneratedPlanCard extends StatelessWidget {
   const _GeneratedPlanCard({
     required this.time,
+    required this.draft,
     required this.route,
+    required this.busyStepIndex,
+    required this.confirming,
+    required this.refreshing,
     required this.onRefresh,
+    required this.onAcceptStep,
+    required this.onRegenerateStep,
     required this.onEdit,
     required this.onCreate,
   });
 
   final String time;
+  final AiRouteDraft draft;
   final EveningRouteData route;
+  final int? busyStepIndex;
+  final bool confirming;
+  final bool refreshing;
   final VoidCallback onRefresh;
+  final ValueChanged<int> onAcceptStep;
+  final ValueChanged<int> onRegenerateStep;
   final VoidCallback onEdit;
   final VoidCallback onCreate;
 
@@ -670,7 +829,7 @@ class _GeneratedPlanCard extends StatelessWidget {
                   icon: LucideIcons.refresh_cw,
                   size: 36,
                   iconSize: 14,
-                  onPressed: onRefresh,
+                  onPressed: refreshing ? null : onRefresh,
                 ),
               ],
             ),
@@ -687,7 +846,18 @@ class _GeneratedPlanCard extends StatelessWidget {
               ),
             )
           else
-            for (final step in steps) _PlanStepRow(step: step),
+            for (final entry in steps.asMap().entries)
+              _PlanStepRow(
+                index: entry.key,
+                step: entry.value,
+                accepted: draft.acceptedStepIndexes.contains(entry.key),
+                active: draft.currentStepIndex == entry.key,
+                busy: busyStepIndex == entry.key,
+                locked: draft.currentStepIndex != null &&
+                    entry.key > draft.currentStepIndex!,
+                onAccept: () => onAcceptStep(entry.key),
+                onRegenerate: () => onRegenerateStep(entry.key),
+              ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -698,19 +868,23 @@ class _GeneratedPlanCard extends StatelessWidget {
                     height: 48,
                     fontSize: 12.5,
                     expanded: true,
-                    onPressed: hasPlan ? onEdit : null,
+                    onPressed: hasPlan && draft.canConfirm && !confirming
+                        ? onEdit
+                        : null,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.xs),
                 Expanded(
                   child: BbV5PillButton(
-                    label: 'Создать встречу',
+                    label: confirming ? 'Готовлю…' : 'Создать встречу',
                     icon: LucideIcons.arrow_up_right,
                     dark: true,
                     height: 48,
                     fontSize: 12.5,
                     expanded: true,
-                    onPressed: hasPlan ? onCreate : null,
+                    onPressed: hasPlan && draft.canConfirm && !confirming
+                        ? onCreate
+                        : null,
                   ),
                 ),
               ],
@@ -723,9 +897,25 @@ class _GeneratedPlanCard extends StatelessWidget {
 }
 
 class _PlanStepRow extends StatelessWidget {
-  const _PlanStepRow({required this.step});
+  const _PlanStepRow({
+    required this.index,
+    required this.step,
+    required this.accepted,
+    required this.active,
+    required this.busy,
+    required this.locked,
+    required this.onAccept,
+    required this.onRegenerate,
+  });
 
+  final int index;
   final EveningRouteStep step;
+  final bool accepted;
+  final bool active;
+  final bool busy;
+  final bool locked;
+  final VoidCallback onAccept;
+  final VoidCallback onRegenerate;
 
   @override
   Widget build(BuildContext context) {
@@ -741,81 +931,128 @@ class _PlanStepRow extends StatelessWidget {
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: BbV5Colors.hairSoft)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 48,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: Opacity(
+        opacity: locked ? 0.58 : 1,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            children: [
+              Row(
                 children: [
-                  Text(
-                    step.time,
-                    style: AppTextStyles.body.copyWith(
-                      fontFamily: 'Sora',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      height: 1,
-                      color: BbV5Colors.ink,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                  SizedBox(
+                    width: 48,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          step.time,
+                          style: AppTextStyles.body.copyWith(
+                            fontFamily: 'Sora',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            height: 1,
+                            color: BbV5Colors.ink,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          eveningKindLabel(step.kind).toUpperCase(),
+                          style: AppTextStyles.caption.copyWith(
+                            color: color,
+                            fontSize: 9,
+                            letterSpacing: 1.44,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    eveningKindLabel(step.kind).toUpperCase(),
-                    style: AppTextStyles.caption.copyWith(
-                      color: color,
-                      fontSize: 9,
-                      letterSpacing: 1.44,
-                      fontWeight: FontWeight.w600,
+                  Container(
+                    width: 1,
+                    height: 40,
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    color: color,
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          place,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.body.copyWith(
+                            fontFamily: 'Sora',
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            height: 1.25,
+                            color: BbV5Colors.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.caption.copyWith(
+                            color: BbV5Colors.inkMute,
+                            fontSize: 11,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                  Icon(
+                    accepted ? LucideIcons.check : LucideIcons.arrow_up_right,
+                    size: accepted ? 18 : 14,
+                    color: accepted ? BbV5Colors.accent : BbV5Colors.inkMute,
                   ),
                 ],
               ),
-            ),
-            Container(
-              width: 1,
-              height: 40,
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              color: color,
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    place,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.body.copyWith(
-                      fontFamily: 'Sora',
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      height: 1.25,
-                      color: BbV5Colors.ink,
+              if (active && !accepted) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: BbV5PillButton(
+                        label: busy ? 'Меняю…' : 'Заменить',
+                        height: 40,
+                        fontSize: 12,
+                        expanded: true,
+                        onPressed: busy ? null : onRegenerate,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: BbV5PillButton(
+                        label: busy ? 'Сохраняю…' : 'Принять шаг',
+                        dark: true,
+                        height: 40,
+                        fontSize: 12,
+                        expanded: true,
+                        onPressed: busy ? null : onAccept,
+                      ),
+                    ),
+                  ],
+                ),
+              ] else if (locked) ...[
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Сначала прими предыдущий шаг',
                     style: AppTextStyles.caption.copyWith(
                       color: BbV5Colors.inkMute,
                       fontSize: 11,
                       letterSpacing: 0,
                     ),
                   ),
-                ],
-              ),
-            ),
-            const Icon(
-              LucideIcons.arrow_up_right,
-              size: 14,
-              color: BbV5Colors.inkMute,
-            ),
-          ],
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
