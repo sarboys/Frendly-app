@@ -124,6 +124,10 @@ class _FakeAiVoiceRepository extends BackendRepository {
     String? format,
     String? area,
     String? prompt,
+    int? stepCount,
+    String? city,
+    double? latitude,
+    double? longitude,
   }) async {
     resolveCalls += 1;
     lastPrompt = prompt;

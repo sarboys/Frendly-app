@@ -5,6 +5,7 @@ import 'package:big_break_mobile/features/ai_voice/presentation/ai_voice_screen.
 import 'package:big_break_mobile/features/create_meetup/presentation/create_meetup_draft.dart';
 import 'package:big_break_mobile/features/create_meetup/presentation/publish_meetup_screen.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -81,6 +82,17 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          manualLocationProvider.overrideWith((ref) {
+            return ManualLocationController(null)
+              ..setLocation(
+                const ManualLocation(
+                  label: 'Парк Горького',
+                  latitude: 55.7298,
+                  longitude: 37.6011,
+                  city: 'Москва',
+                ),
+              );
+          }),
           backendRepositoryProvider.overrideWith((ref) {
             repository = _FakeAiRouteRepository(ref);
             return repository;
@@ -102,8 +114,60 @@ void main() {
     expect(repository.resolveCalls, 1);
     expect(repository.lastPrompt, contains('Винный бар и джаз на двоих'));
     expect(repository.lastBudget, 'low');
+    expect(repository.lastStepCount, 2);
     expect(find.text('Backend Bar'), findsOneWidget);
     expect(find.text('План пока не собран'), findsNothing);
+  });
+
+  testWidgets('ai create sends selected step count to backend', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    late _FakeAiRouteRepository repository;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          manualLocationProvider.overrideWith((ref) {
+            return ManualLocationController(null)
+              ..setLocation(
+                const ManualLocation(
+                  label: 'Парк Горького',
+                  latitude: 55.7298,
+                  longitude: 37.6011,
+                  city: 'Москва',
+                ),
+              );
+          }),
+          backendRepositoryProvider.overrideWith((ref) {
+            repository = _FakeAiRouteRepository(ref);
+            return repository;
+          }),
+        ],
+        child: const MaterialApp(home: AiCreateScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Спорт + бранч');
+    await _dragUntilVisible(tester, find.text('шагов'), 220);
+    await tester.ensureVisible(find.text('4'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('4'));
+    await _dragUntilVisible(tester, find.text('Собрать план'), 260);
+    await tester.tap(find.text('Собрать план'));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastStepCount, 4);
+    expect(repository.lastCity, 'Москва');
+    expect(repository.lastLatitude, 55.7298);
+    expect(repository.lastLongitude, 37.6011);
   });
 
   testWidgets('ai create mic action opens voice flow', (tester) async {
@@ -243,6 +307,10 @@ class _FakeAiRouteRepository extends BackendRepository {
   var resolveCalls = 0;
   String? lastPrompt;
   String? lastBudget;
+  int? lastStepCount;
+  String? lastCity;
+  double? lastLatitude;
+  double? lastLongitude;
 
   @override
   Future<Map<String, dynamic>> resolveEveningRoute({
@@ -253,10 +321,18 @@ class _FakeAiRouteRepository extends BackendRepository {
     String? format,
     String? area,
     String? prompt,
+    int? stepCount,
+    String? city,
+    double? latitude,
+    double? longitude,
   }) async {
     resolveCalls += 1;
     lastPrompt = prompt;
     lastBudget = budget;
+    lastStepCount = stepCount;
+    lastCity = city;
+    lastLatitude = latitude;
+    lastLongitude = longitude;
     return _backendRouteJson;
   }
 }

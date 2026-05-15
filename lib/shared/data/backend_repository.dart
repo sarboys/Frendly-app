@@ -1307,6 +1307,10 @@ class BackendRepository {
     String? format,
     String? area,
     String? prompt,
+    int? stepCount,
+    String? city,
+    double? latitude,
+    double? longitude,
     CancelToken? cancelToken,
   }) async {
     final response = await dio.post<Map<String, dynamic>>(
@@ -1318,6 +1322,10 @@ class BackendRepository {
         if (format != null && format.isNotEmpty) 'format': format,
         if (area != null && area.isNotEmpty) 'area': area,
         if (prompt != null && prompt.trim().isNotEmpty) 'prompt': prompt.trim(),
+        if (stepCount != null) 'stepCount': stepCount,
+        if (city != null && city.isNotEmpty) 'city': city,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
       },
       options: Options(
         connectTimeout: const Duration(seconds: 4),

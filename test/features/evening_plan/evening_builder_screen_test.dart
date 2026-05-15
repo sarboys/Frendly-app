@@ -276,6 +276,10 @@ class _FakeEveningBuilderRepository extends BackendRepository {
     String? format,
     String? area,
     String? prompt,
+    int? stepCount,
+    String? city,
+    double? latitude,
+    double? longitude,
   }) async {
     resolveCalls += 1;
     lastResolvePayload = {
@@ -338,6 +342,10 @@ class _DefaultEveningBuilderRepository extends BackendRepository {
     String? format,
     String? area,
     String? prompt,
+    int? stepCount,
+    String? city,
+    double? latitude,
+    double? longitude,
   }) async {
     return _routeJson(testCozyEveningRoute);
   }

@@ -271,6 +271,10 @@ void main() {
       budget: 'mid',
       format: 'bar',
       area: 'center',
+      stepCount: 4,
+      city: 'Москва',
+      latitude: 55.75,
+      longitude: 37.61,
     );
     final routeDetail = await repository.fetchEveningRoute('r-backend');
 
@@ -285,6 +289,10 @@ void main() {
       'budget': 'mid',
       'format': 'bar',
       'area': 'center',
+      'stepCount': 4,
+      'city': 'Москва',
+      'latitude': 55.75,
+      'longitude': 37.61,
     });
     expect(options['goals'], isA<List<dynamic>>());
     expect(route['id'], 'r-backend');

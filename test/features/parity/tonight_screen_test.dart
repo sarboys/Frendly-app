@@ -637,6 +637,16 @@ void main() {
     expect(sessionReads, 0);
   });
 
+  testWidgets('tonight metric cards do not overflow on phone width', (
+    tester,
+  ) async {
+    await _pumpTonightDirect(tester);
+
+    await _dragUntilVisible(tester, find.text('Сводка'), 420);
+
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('tonight pulse shows top five active non-full events', (
     tester,
   ) async {

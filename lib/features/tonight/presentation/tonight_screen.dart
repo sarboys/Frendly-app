@@ -3377,13 +3377,15 @@ class _TonightMetricsSection extends StatelessWidget {
           child: BbV5Kicker('Сводка'),
         ),
         const SizedBox(height: AppSpacing.sm),
-        GridView.count(
-          crossAxisCount: 2,
+        GridView(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: AppSpacing.sm,
-          crossAxisSpacing: AppSpacing.sm,
-          childAspectRatio: 1.62,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: AppSpacing.sm,
+            crossAxisSpacing: AppSpacing.sm,
+            mainAxisExtent: 116,
+          ),
           children: [
             const _MetricCard(
               title: 'Pulse',

@@ -4,6 +4,7 @@ import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/create_meetup/presentation/evening_route_publish_draft.dart';
 import 'package:big_break_mobile/features/evening_plan/presentation/evening_plan_data.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/data/location_override_provider.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +31,7 @@ const _aiVibes = [
 const _aiTimes = ['Сейчас', 'Вечером', 'Завтра', 'На выходных'];
 const _aiSizes = ['2', '3–4', '5–8', '9+'];
 const _aiBudgets = ['Бесплатно', 'до 1500', '1500–3500', '3500+'];
+const _aiStepCounts = ['2', '3', '4'];
 
 class AiCreateScreen extends ConsumerStatefulWidget {
   const AiCreateScreen({super.key});
@@ -46,6 +48,7 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
   var _budget = 'до 1500';
   var _time = 'Вечером';
   var _size = '3–4';
+  var _stepCount = 2;
   var _loading = false;
   String? _errorText;
   EveningRouteData? _route;
@@ -86,6 +89,7 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
     });
 
     try {
+      final manualLocation = ref.read(manualLocationProvider);
       final json =
           await ref.read(backendRepositoryProvider).resolveEveningRoute(
                 goal: _goalKey,
@@ -93,6 +97,10 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
                 budget: _budgetKey,
                 format: _formatKey,
                 prompt: _resolvePrompt,
+                stepCount: _stepCount,
+                city: manualLocation?.city,
+                latitude: manualLocation?.latitude,
+                longitude: manualLocation?.longitude,
                 cancelToken: cancelToken,
               );
       if (!mounted ||
@@ -145,6 +153,7 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
       'Когда: $_time',
       'Сколько людей: $_size',
       'Бюджет: $_budget',
+      'Шагов: $_stepCount',
     ].where((part) => part.trim().isNotEmpty).toList(growable: false);
     return parts.join('. ');
   }
@@ -372,6 +381,15 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
                         values: _aiBudgets,
                         selected: _budget,
                         onChanged: (value) => setState(() => _budget = value),
+                      ),
+                      const _ParamDivider(),
+                      _ParamChips(
+                        title: 'шагов',
+                        values: _aiStepCounts,
+                        selected: _stepCount.toString(),
+                        onChanged: (value) => setState(
+                          () => _stepCount = int.tryParse(value) ?? 2,
+                        ),
                       ),
                     ],
                   ),
