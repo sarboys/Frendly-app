@@ -29,7 +29,9 @@ Widget _wrapPhoneViewport(Widget child) {
 }
 
 void main() {
-  testWidgets('ai create uses compact v5 mood tiles', (tester) async {
+  testWidgets('ai create shows prompt guide instead of filters', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
@@ -40,13 +42,12 @@ void main() {
     await tester.pumpWidget(_wrap(const AiCreateScreen()));
     await tester.pumpAndSettle();
 
-    final wineTile = find.ancestor(
-      of: find.text('Вино'),
-      matching: find.byType(InkWell),
-    );
-
-    expect(wineTile, findsOneWidget);
-    expect(tester.getSize(wineTile).height, lessThanOrEqualTo(76));
+    expect(find.text('что написать'), findsOneWidget);
+    expect(find.text('примеры хороших запросов'), findsOneWidget);
+    expect(find.textContaining('недорогая паста до 1500'), findsOneWidget);
+    expect(find.text('настроение'), findsNothing);
+    expect(find.text('бюджет'), findsNothing);
+    expect(find.text('шагов'), findsNothing);
   });
 
   testWidgets('ai create scroll viewport fills the phone window', (
@@ -108,20 +109,27 @@ void main() {
       find.byType(TextField),
       'Винный бар и джаз на двоих',
     );
+    await tester.pump();
+    expect(find.text('настроение'), findsNothing);
+    expect(find.text('бюджет'), findsNothing);
+    expect(find.text('шагов'), findsNothing);
     await _dragUntilVisible(tester, find.text('Собрать план'), 260);
     await tester.tap(find.text('Собрать план'));
     await tester.pumpAndSettle();
 
     expect(repository.createDraftCalls, 1);
     expect(repository.resolveCalls, 0);
-    expect(repository.lastPrompt, contains('Винный бар и джаз на двоих'));
-    expect(repository.lastBudget, 'low');
-    expect(repository.lastStepCount, 2);
+    expect(repository.lastPrompt, 'Винный бар и джаз на двоих');
+    expect(repository.lastBudget, isNull);
+    expect(repository.lastStepCount, isNull);
+    expect(repository.lastCity, 'Москва');
+    expect(repository.lastLatitude, 55.7298);
+    expect(repository.lastLongitude, 37.6011);
     expect(find.text('Backend Bar'), findsOneWidget);
     expect(find.text('План пока не собран'), findsNothing);
   });
 
-  testWidgets('ai create sends selected step count to backend', (
+  testWidgets('ai create requires a prompt before backend call', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -131,7 +139,7 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    late _FakeAiRouteRepository repository;
+    _FakeAiRouteRepository? repository;
 
     await tester.pumpWidget(
       ProviderScope(
@@ -148,8 +156,9 @@ void main() {
               );
           }),
           backendRepositoryProvider.overrideWith((ref) {
-            repository = _FakeAiRouteRepository(ref);
-            return repository;
+            final fakeRepository = _FakeAiRouteRepository(ref);
+            repository = fakeRepository;
+            return fakeRepository;
           }),
         ],
         child: const MaterialApp(home: AiCreateScreen()),
@@ -157,19 +166,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'Спорт + бранч');
-    await _dragUntilVisible(tester, find.text('шагов'), 220);
-    await tester.ensureVisible(find.text('4'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('4'));
     await _dragUntilVisible(tester, find.text('Собрать план'), 260);
     await tester.tap(find.text('Собрать план'));
     await tester.pumpAndSettle();
 
-    expect(repository.lastStepCount, 4);
-    expect(repository.lastCity, 'Москва');
-    expect(repository.lastLatitude, 55.7298);
-    expect(repository.lastLongitude, 37.6011);
+    expect(repository?.createDraftCalls ?? 0, 0);
+    expect(find.text('Опиши вечер, чтобы AI собрал маршрут'), findsOneWidget);
   });
 
   testWidgets('ai create card refresh regenerates current draft', (
@@ -449,7 +451,8 @@ class _FakeAiRouteRepository extends BackendRepository {
 Map<String, dynamic> _draftJson({
   required bool canConfirm,
   String title = 'Backend Route',
-}) => {
+}) =>
+    {
       'draftId': 'draft-1',
       'route': {
         ..._backendRouteJson,

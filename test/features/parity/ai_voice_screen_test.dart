@@ -42,6 +42,8 @@ void main() {
     expect(repository.createDraftCalls, 1);
     expect(repository.resolveCalls, 0);
     expect(repository.lastPrompt, 'Тихий ужин и долгая прогулка, не громко');
+    expect(repository.lastBudget, isNull);
+    expect(repository.lastStepCount, isNull);
     expect(find.text('Backend Bar'), findsOneWidget);
     expect(find.text('Маршрут появится после ответа сервера.'), findsNothing);
   });
@@ -122,6 +124,8 @@ class _FakeAiVoiceRepository extends BackendRepository {
   var acceptCalls = 0;
   var confirmCalls = 0;
   String? lastPrompt;
+  String? lastBudget;
+  int? lastStepCount;
 
   @override
   Future<Map<String, dynamic>> resolveEveningRoute({
@@ -139,6 +143,8 @@ class _FakeAiVoiceRepository extends BackendRepository {
   }) async {
     resolveCalls += 1;
     lastPrompt = prompt;
+    lastBudget = budget;
+    lastStepCount = stepCount;
     return _backendRouteJson;
   }
 
@@ -158,6 +164,8 @@ class _FakeAiVoiceRepository extends BackendRepository {
   }) async {
     createDraftCalls += 1;
     lastPrompt = prompt;
+    lastBudget = budget;
+    lastStepCount = stepCount;
     return _draftJson(canConfirm: false);
   }
 

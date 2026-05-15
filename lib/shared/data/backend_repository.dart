@@ -209,6 +209,77 @@ class BackendPlaceSearchResult {
   }
 }
 
+class BackendPlacePromoListItem {
+  const BackendPlacePromoListItem({
+    required this.id,
+    required this.title,
+    required this.city,
+    this.description,
+    this.validUntil,
+    this.bookingUrl,
+    this.sourceUrl,
+    this.venueName,
+    this.address,
+    this.placeId,
+    this.placeName,
+    this.placeCategory,
+    this.placeKind,
+    this.placeBookingUrl,
+    this.latitude,
+    this.longitude,
+    this.averageCheck,
+    this.currency,
+    this.provider,
+    this.distanceKm,
+  });
+
+  final String id;
+  final String title;
+  final String city;
+  final String? description;
+  final String? validUntil;
+  final String? bookingUrl;
+  final String? sourceUrl;
+  final String? venueName;
+  final String? address;
+  final String? placeId;
+  final String? placeName;
+  final String? placeCategory;
+  final String? placeKind;
+  final String? placeBookingUrl;
+  final double? latitude;
+  final double? longitude;
+  final int? averageCheck;
+  final String? currency;
+  final String? provider;
+  final double? distanceKm;
+
+  factory BackendPlacePromoListItem.fromJson(Map<String, dynamic> json) {
+    return BackendPlacePromoListItem(
+      id: json['id'] as String,
+      title: json['title'] as String? ?? '',
+      description: json['description'] as String?,
+      validUntil: json['validUntil'] as String?,
+      bookingUrl: json['bookingUrl'] as String?,
+      sourceUrl: json['sourceUrl'] as String?,
+      city: json['city'] as String? ?? '',
+      venueName: json['venueName'] as String?,
+      address: json['address'] as String?,
+      placeId: json['placeId'] as String?,
+      placeName: json['placeName'] as String?,
+      placeCategory: json['placeCategory'] as String?,
+      placeKind: json['placeKind'] as String?,
+      placeBookingUrl: json['placeBookingUrl'] as String?,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      averageCheck: (json['averageCheck'] as num?)?.toInt(),
+      currency: json['currency'] as String?,
+      provider: json['provider'] as String?,
+      distanceKm: (json['distanceKm'] as num?)?.toDouble(),
+    );
+  }
+}
+
 class BackendRepository {
   BackendRepository({
     required this.ref,
@@ -246,6 +317,36 @@ class BackendRepository {
         .whereType<Map>()
         .map(
           (item) => BackendPlaceSearchResult.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<List<BackendPlacePromoListItem>> fetchPlacePromos({
+    String city = 'Москва',
+    double? latitude,
+    double? longitude,
+    int limit = 80,
+    String? category,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await dio.get<List<dynamic>>(
+      '/places/promos',
+      queryParameters: {
+        if (city.trim().isNotEmpty) 'city': city.trim(),
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+        'limit': limit,
+        if (category != null && category.trim().isNotEmpty)
+          'category': category.trim(),
+      },
+      cancelToken: cancelToken,
+    );
+    return (response.data ?? const [])
+        .whereType<Map>()
+        .map(
+          (item) => BackendPlacePromoListItem.fromJson(
             Map<String, dynamic>.from(item),
           ),
         )

@@ -228,7 +228,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     visibility = event.visibilityMode ?? 'public';
     lifestyle = event.lifestyle ?? 'neutral';
     priceMode = event.priceMode ?? 'free';
-    accessMode = event.accessMode ?? 'open';
+    accessMode = event.accessMode == 'request' ? 'request' : 'open';
     genderMode = event.genderMode ?? 'all';
     capacity = event.capacity <= 0 ? 8 : event.capacity.toDouble();
     unlimited = false;
@@ -341,7 +341,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                       _buildV5DescriptionSection(
                         isDatingMode: isDatingMode,
                       ),
-                      _buildV5AiHelper(),
                       _buildV5VisibilitySection(
                         isDatingMode: isDatingMode,
                       ),
@@ -664,7 +663,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
               Expanded(
                 child: _V5AttachButton(
                   icon: LucideIcons.gift,
-                  label: 'Партнёр',
+                  label: 'Промо',
                   active: _partnerVenue != null,
                   onTap: _openPartnerPicker,
                 ),
@@ -702,7 +701,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
           else if (_partnerVenue != null)
             _V5AttachedSourceCard(
               icon: LucideIcons.gift,
-              kicker: 'партнёр frendly',
+              kicker: 'промо tomesto',
               title: '${_partnerVenue!.name} · ${_partnerVenue!.perkShort}',
               onOpen: _openPartnerPicker,
               onClear: () => setState(_clearSourceSelection),
@@ -1007,19 +1006,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
               subtitle: 'Ты подтверждаешь каждого участника',
               onTap: () => setState(() => accessMode = 'request'),
             ),
-            if (!isDatingMode) ...[
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: Divider(height: 1, color: BbV5Colors.hairSoft),
-              ),
-              _V5AccessRow(
-                active: accessMode == 'free',
-                icon: LucideIcons.globe,
-                title: 'Свободный приход',
-                subtitle: 'Без подтверждения, можно прийти и уйти',
-                onTap: () => setState(() => accessMode = 'free'),
-              ),
-            ],
           ],
         ),
       ),
@@ -1159,53 +1145,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
               ],
             );
           },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildV5AiHelper() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 24),
-      child: BbV5Card(
-        radius: BbV5Radii.md,
-        borderColor: BbV5Colors.hair,
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            const _V5IconBubble(
-              icon: LucideIcons.sparkles,
-              color: BbV5Colors.terra,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const BbV5Kicker('AI compass'),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Напишет описание за тебя',
-                    style: bbV5DisplayStyle(fontSize: 13, height: 1.25),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'в твоём тоне, на основе вайба и места',
-                    style: AppTextStyles.caption.copyWith(
-                      color: BbV5Colors.inkMute,
-                      fontSize: 10.5,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              LucideIcons.arrow_up_right,
-              size: 16,
-              color: BbV5Colors.inkMute,
-            ),
-          ],
         ),
       ),
     );
@@ -1393,8 +1332,6 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     switch (accessMode) {
       case 'request':
         return 'по заявке';
-      case 'free':
-        return 'свободный приход';
       case 'open':
       default:
         return 'открытая';
@@ -1660,7 +1597,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
           ? EventJoinMode.request
           : EventJoinMode.open,
       afficheEventId: _afficheEvent?.id,
-      externalPlaceId: _afficheEvent == null ? submitPlace.externalPlaceId : null,
+      externalPlaceId:
+          _afficheEvent == null ? submitPlace.externalPlaceId : null,
       routeId:
           _routeSelection?.custom == true ? null : _routeSelection?.routeId,
       route: _routeSelection?.toCustomPayload(),
@@ -1680,7 +1618,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
       return 'Маршрут · ${_routeSelection!.title}';
     }
     if (_partnerVenue != null) {
-      return 'Партнёр · ${_partnerVenue!.name}';
+      return 'Промо · ${_partnerVenue!.name}';
     }
     return null;
   }
@@ -1769,8 +1707,12 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
       address: venue.address,
       distance: venue.distance,
       distanceKm: _distanceKmFromLabel(venue.distance),
-      category: 'Партнёр Frendly',
+      latitude: venue.latitude,
+      longitude: venue.longitude,
+      category: 'Промо Tomesto',
       emoji: venue.emoji,
+      externalPlaceId: venue.externalPlaceId,
+      bookingUrl: venue.bookingUrl,
     );
     _placeController.text = _placeLabel();
     emoji = venue.emoji;

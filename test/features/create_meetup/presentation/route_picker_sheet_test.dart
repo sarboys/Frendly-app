@@ -31,36 +31,35 @@ Widget _wrap() {
 }
 
 void main() {
-  testWidgets('ready route picker mirrors front compact rows', (tester) async {
+  testWidgets('ready route picker mirrors front v5 sheet', (tester) async {
     await tester.pumpWidget(_wrap());
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Маршрут вечера'), findsOneWidget);
-    expect(
-      find.text('Готовый или свой — несколько мест за вечер'),
-      findsOneWidget,
-    );
-    expect(find.text('Создать свой маршрут'), findsNothing);
+    expect(find.text('выбрать'), findsOneWidget);
+    expect(find.text('Маршруты вечера'), findsOneWidget);
+    expect(find.text('Маршрут вечера'), findsNothing);
+    expect(find.text('Готовые'), findsNothing);
+    expect(find.text('Свой'), findsNothing);
+    expect(find.text('Создать свой маршрут'), findsOneWidget);
     expect(
       find.text('Из 2–6 шагов · сохраним в твоей коллекции'),
-      findsNothing,
+      findsOneWidget,
     );
-    expect(find.text('Найти маршрут или место'), findsOneWidget);
+    expect(find.text('Найти…'), findsOneWidget);
     expect(find.text('Тёплый круг на Покровке'), findsOneWidget);
-    expect(find.text('3 шагов'), findsOneWidget);
-    expect(find.text('−650 ₽'), findsOneWidget);
+    expect(find.text('Бар → Шоу → Афтер · 19:00 — 00:30'), findsOneWidget);
   });
 
-  testWidgets('custom route tab shows the v5 route constructor', (
+  testWidgets('create route action shows the v5 route constructor', (
     tester,
   ) async {
     await tester.pumpWidget(_wrap());
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Свой'));
+    await tester.tap(find.text('Создать свой маршрут'));
     await tester.pumpAndSettle();
 
     expect(find.text('Свой маршрут'), findsAtLeastNWidgets(1));
@@ -77,7 +76,7 @@ void main() {
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Свой'));
+    await tester.tap(find.text('Создать свой маршрут'));
     await tester.pumpAndSettle();
 
     final fields =
@@ -98,7 +97,7 @@ void main() {
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Свой'));
+    await tester.tap(find.text('Создать свой маршрут'));
     await tester.pumpAndSettle();
 
     expect(find.byIcon(LucideIcons.coffee), findsOneWidget);

@@ -8,6 +8,7 @@ import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
+import 'package:big_break_mobile/shared/utils/location_label.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
@@ -165,10 +166,10 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 440),
           child: Container(
-            height: MediaQuery.sizeOf(context).height * 0.9,
+            height: MediaQuery.sizeOf(context).height * 0.85,
             decoration: const BoxDecoration(
               color: BbV5Colors.paper,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(34)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
               boxShadow: [
                 BoxShadow(
                   color: Color(0x4D000000),
@@ -190,7 +191,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 18),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -203,8 +204,8 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                             Text(
                               'Где встречаемся',
                               style: bbV5DisplayStyle(
-                                fontSize: 24,
-                                height: 1.05,
+                                fontSize: 20,
+                                height: 1.2,
                               ),
                             ),
                           ],
@@ -217,7 +218,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 22),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                   child: _PlaceSearchField(
                     controller: _queryController,
                     onChanged: _handleQueryChanged,
@@ -239,7 +240,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                       else
                         ...filtered.map(
                           (place) => Padding(
-                            padding: const EdgeInsets.only(bottom: 14),
+                            padding: const EdgeInsets.only(bottom: 10),
                             child: _PlaceRow(
                               place: place,
                               selected: _samePlace(
@@ -252,7 +253,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                         ),
                       if (query.isEmpty) ...[
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.only(bottom: 10),
                           child: _PlaceRow(
                             place: PlaceSelection(
                               name: 'Моё местоположение',
@@ -271,7 +272,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                         ),
                         if (widget.onPickAfficheEvent != null)
                           Padding(
-                            padding: const EdgeInsets.only(bottom: 14),
+                            padding: const EdgeInsets.only(bottom: 10),
                             child: _PlaceRow(
                               place: const PlaceSelection(
                                 name: 'Афиша города',
@@ -287,7 +288,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                         if (_recentPlaces.isNotEmpty)
                           ..._recentPlaces.map(
                             (place) => Padding(
-                              padding: const EdgeInsets.only(bottom: 14),
+                              padding: const EdgeInsets.only(bottom: 10),
                               child: _PlaceRow(
                                 place: place,
                                 selected:
@@ -351,6 +352,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
         ref.read(appAddressGeocodingServiceProvider);
     final repository = ref.read(backendRepositoryProvider);
     final near = _manualLocationSearchPoint();
+    final city = _manualLocationSearchCity();
     late final Timer searchTimer;
     searchTimer = Timer(const Duration(milliseconds: 300), () async {
       if (!mounted || !identical(_searchDebounce, searchTimer)) {
@@ -363,6 +365,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
         addressGeocodingService,
         repository: repository,
         near: near,
+        city: city,
       );
 
       if (!mounted ||
@@ -432,11 +435,13 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
     AppAddressGeocodingService addressGeocodingService, {
     required BackendRepository repository,
     Point? near,
+    required String city,
   }) async {
     final backendPlaces = await _searchBackendPlaces(
       query,
       repository,
       near: near,
+      city: city,
     );
     if (backendPlaces.isNotEmpty) {
       return backendPlaces;
@@ -462,11 +467,13 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
     String query,
     BackendRepository repository, {
     Point? near,
+    required String city,
   }) async {
     try {
       final places = await repository
           .searchPlaces(
             query: query,
+            city: city,
             latitude: near?.latitude,
             longitude: near?.longitude,
             limit: 10,
@@ -540,6 +547,19 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
       latitude: location.latitude,
       longitude: location.longitude,
     );
+  }
+
+  String _manualLocationSearchCity() {
+    final location = ref.read(manualLocationProvider);
+    if (location == null || !isSupportedManualLocation(location)) {
+      return 'Москва';
+    }
+    final city = normalizeCityLabel(location.city);
+    if (city.isNotEmpty) {
+      return city;
+    }
+    final label = normalizeCityLabel(location.label);
+    return label.isEmpty ? 'Москва' : label;
   }
 
   Future<PlaceSelection?> _geocodeTypedAddress(
@@ -685,16 +705,18 @@ class _PlaceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: selected ? BbV5Colors.paperDeep : BbV5Colors.paperHi,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 84),
-          padding: const EdgeInsets.fromLTRB(14, 14, 18, 14),
+          constraints: const BoxConstraints(minHeight: 68),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: BbV5Colors.hair),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? BbV5Colors.accent : BbV5Colors.hair,
+            ),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x0FFFFFFF),
@@ -706,8 +728,8 @@ class _PlaceRow extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 54,
-                height: 54,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: BbV5Colors.paper,
                   shape: BoxShape.circle,
@@ -716,11 +738,11 @@ class _PlaceRow extends StatelessWidget {
                 alignment: Alignment.center,
                 child: Icon(
                   current ? LucideIcons.locate_fixed : LucideIcons.map_pin,
-                  size: 22,
+                  size: 16,
                   color: BbV5Colors.terra,
                 ),
               ),
-              const SizedBox(width: 18),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -729,20 +751,20 @@ class _PlaceRow extends StatelessWidget {
                       place.name,
                       style: AppTextStyles.body.copyWith(
                         fontFamily: 'Sora',
-                        fontSize: 17,
-                        height: 1.18,
+                        fontSize: 13.5,
+                        height: 1.25,
                         fontWeight: FontWeight.w600,
                         color: BbV5Colors.ink,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 3),
                     Text(
                       _placeSubtitle(place),
                       style: AppTextStyles.meta.copyWith(
                         color: BbV5Colors.inkMute,
-                        fontSize: 13.5,
+                        fontSize: 11,
                         height: 1.25,
                         fontWeight: FontWeight.w400,
                       ),
@@ -894,21 +916,21 @@ class _PlaceSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 18),
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: BbV5Colors.paperHi,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(999),
         border: Border.all(color: BbV5Colors.hair),
       ),
       child: Row(
         children: [
           const Icon(
             LucideIcons.search,
-            size: 23,
+            size: 16,
             color: BbV5Colors.inkMute,
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: controller,
@@ -922,13 +944,13 @@ class _PlaceSearchField extends StatelessWidget {
                 hintText: 'Найти...',
                 hintStyle: AppTextStyles.body.copyWith(
                   color: BbV5Colors.inkMute.withValues(alpha: 0.72),
-                  fontSize: 16,
+                  fontSize: 13.5,
                   height: 1.2,
                 ),
               ),
               style: AppTextStyles.body.copyWith(
                 color: BbV5Colors.ink,
-                fontSize: 16,
+                fontSize: 13.5,
                 height: 1.2,
               ),
             ),

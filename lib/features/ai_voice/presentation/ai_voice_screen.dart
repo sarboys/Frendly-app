@@ -101,7 +101,7 @@ class _AiVoiceScreenState extends ConsumerState<AiVoiceScreen>
                     const SizedBox(height: 12),
                     if (_transcript.isEmpty)
                       Text(
-                        'Скажи, какой вечер хочешь. Я соберу 2-3 места и предложу людей рядом.',
+                        'Скажи, какой вечер хочешь. Я соберу до 5 мест и предложу людей рядом.',
                         textAlign: TextAlign.center,
                         style: AppTextStyles.meta.copyWith(
                           fontSize: 13,
@@ -263,15 +263,10 @@ class _AiVoiceScreenState extends ConsumerState<AiVoiceScreen>
       });
     }
     try {
-      final json =
-          await ref.read(backendRepositoryProvider).createAiRouteDraft(
-                goal: _goalKeyForPrompt(text),
-                mood: _moodKeyForPrompt(text),
-                budget: _budgetKeyForPrompt(text),
-                format: _formatKeyForPrompt(text),
-                prompt: text,
-                cancelToken: cancelToken,
-              );
+      final json = await ref.read(backendRepositoryProvider).createAiRouteDraft(
+            prompt: text,
+            cancelToken: cancelToken,
+          );
       if (!mounted ||
           generation != _voiceGeneration ||
           cancelToken.isCancelled ||
@@ -428,56 +423,6 @@ class _AiVoiceScreenState extends ConsumerState<AiVoiceScreen>
       );
     }
   }
-}
-
-String _goalKeyForPrompt(String prompt) {
-  final text = prompt.toLowerCase();
-  if (text.contains('дво') || text.contains('свид')) {
-    return 'date';
-  }
-  if (text.contains('компан') || text.contains('4') || text.contains('5')) {
-    return 'company';
-  }
-  return 'newfriends';
-}
-
-String _moodKeyForPrompt(String prompt) {
-  final text = prompt.toLowerCase();
-  if (text.contains('тих') || text.contains('спокой')) {
-    return 'chill';
-  }
-  if (text.contains('свид') || text.contains('роман')) {
-    return 'date';
-  }
-  return 'social';
-}
-
-String _budgetKeyForPrompt(String prompt) {
-  final text = prompt.toLowerCase();
-  if (text.contains('бесплат')) {
-    return 'free';
-  }
-  if (text.contains('1500') || text.contains('2000')) {
-    return 'low';
-  }
-  if (text.contains('3500')) {
-    return 'mid';
-  }
-  return 'mid';
-}
-
-String _formatKeyForPrompt(String prompt) {
-  final text = prompt.toLowerCase();
-  if (text.contains('бар') || text.contains('вин')) {
-    return 'bar';
-  }
-  if (text.contains('джаз') || text.contains('концерт')) {
-    return 'show';
-  }
-  if (text.contains('прогул') || text.contains('спорт')) {
-    return 'active';
-  }
-  return 'mixed';
 }
 
 class _MicButton extends StatelessWidget {

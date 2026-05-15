@@ -11,27 +11,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-const _aiPromptTemplates = [
-  'Винный бар, потом джаз и тихое место для разговора',
-  'Утро субботы: пробежка, кофе, выставка',
-  'Свидание · уютный ужин и долгая прогулка',
-  'After work · 4 человека, бар у работы, до полуночи',
-  'Спорт + бранч в воскресенье',
+const _aiPromptExamples = [
+  '2 человека, вечер пятницы. Хочу 4 точки: прогулка по центру, недорогая паста до 1500, театр, потом тихий бар. Без музеев и катков.',
+  'Компания 4 человека, суббота. 5 точек: кофе, выставка, прогулка у воды, ужин 1500-3500, джаз. Район Патрики или центр.',
+  'Свидание на двоих завтра вечером. 3 точки: красивый парк, итальянский ресторан, спектакль. Бюджет средний, не шумно.',
 ];
-
-const _aiVibes = [
-  _AiVibe(icon: LucideIcons.wine, label: 'Вино'),
-  _AiVibe(icon: LucideIcons.music, label: 'Музыка'),
-  _AiVibe(icon: LucideIcons.coffee, label: 'Кофе'),
-  _AiVibe(icon: LucideIcons.film, label: 'Кино'),
-  _AiVibe(icon: LucideIcons.footprints, label: 'Прогулка'),
-  _AiVibe(icon: LucideIcons.heart, label: 'Свидание'),
-];
-
-const _aiTimes = ['Сейчас', 'Вечером', 'Завтра', 'На выходных'];
-const _aiSizes = ['2', '3–4', '5–8', '9+'];
-const _aiBudgets = ['Бесплатно', 'до 1500', '1500–3500', '3500+'];
-const _aiStepCounts = ['2', '3', '4'];
 
 class AiCreateScreen extends ConsumerStatefulWidget {
   const AiCreateScreen({super.key});
@@ -42,13 +26,8 @@ class AiCreateScreen extends ConsumerStatefulWidget {
 
 class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
   final _promptController = TextEditingController();
-  final _selectedVibes = <String>{};
   CancelToken? _resolveCancelToken;
 
-  var _budget = 'до 1500';
-  var _time = 'Вечером';
-  var _size = '3–4';
-  var _stepCount = 2;
   var _loading = false;
   var _confirming = false;
   int? _busyStepIndex;
@@ -62,20 +41,11 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
     super.dispose();
   }
 
-  void _toggleVibe(String vibe) {
-    setState(() {
-      if (_selectedVibes.contains(vibe)) {
-        _selectedVibes.remove(vibe);
-      } else {
-        _selectedVibes.add(vibe);
-      }
-    });
-  }
-
   Future<void> _generatePlan() async {
-    if (_promptController.text.trim().isEmpty && _selectedVibes.isEmpty) {
+    final prompt = _resolvePrompt;
+    if (prompt.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Опиши вечер или выбери настроение')),
+        const SnackBar(content: Text('Опиши вечер, чтобы AI собрал маршрут')),
       );
       return;
     }
@@ -92,19 +62,13 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
 
     try {
       final manualLocation = ref.read(manualLocationProvider);
-      final json =
-          await ref.read(backendRepositoryProvider).createAiRouteDraft(
-                goal: _goalKey,
-                mood: _moodKey,
-                budget: _budgetKey,
-                format: _formatKey,
-                prompt: _resolvePrompt,
-                stepCount: _stepCount,
-                city: manualLocation?.city,
-                latitude: manualLocation?.latitude,
-                longitude: manualLocation?.longitude,
-                cancelToken: cancelToken,
-              );
+      final json = await ref.read(backendRepositoryProvider).createAiRouteDraft(
+            prompt: prompt,
+            city: manualLocation?.city,
+            latitude: manualLocation?.latitude,
+            longitude: manualLocation?.longitude,
+            cancelToken: cancelToken,
+          );
       if (!mounted ||
           cancelToken.isCancelled ||
           !identical(_resolveCancelToken, cancelToken)) {
@@ -194,57 +158,7 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
   }
 
   String get _resolvePrompt {
-    final parts = <String>[
-      _promptController.text.trim(),
-      if (_selectedVibes.isNotEmpty) 'Настроение: ${_selectedVibes.join(', ')}',
-      'Когда: $_time',
-      'Сколько людей: $_size',
-      'Бюджет: $_budget',
-      'Шагов: $_stepCount',
-    ].where((part) => part.trim().isNotEmpty).toList(growable: false);
-    return parts.join('. ');
-  }
-
-  String get _goalKey {
-    if (_selectedVibes.contains('Свидание') || _size == '2') {
-      return 'date';
-    }
-    if (_size == '5–8' || _size == '9+') {
-      return 'company';
-    }
-    return 'newfriends';
-  }
-
-  String get _moodKey {
-    if (_selectedVibes.contains('Свидание')) {
-      return 'date';
-    }
-    if (_selectedVibes.contains('Музыка') || _selectedVibes.contains('Вино')) {
-      return 'social';
-    }
-    return 'chill';
-  }
-
-  String get _formatKey {
-    if (_selectedVibes.contains('Вино')) {
-      return 'bar';
-    }
-    if (_selectedVibes.contains('Музыка') || _selectedVibes.contains('Кино')) {
-      return 'show';
-    }
-    if (_selectedVibes.contains('Прогулка')) {
-      return 'active';
-    }
-    return 'mixed';
-  }
-
-  String get _budgetKey {
-    return switch (_budget) {
-      'Бесплатно' => 'free',
-      'до 1500' => 'low',
-      '1500–3500' => 'mid',
-      _ => 'high',
-    };
+    return _promptController.text.trim();
   }
 
   void _cancelResolveRequest(String reason) {
@@ -382,8 +296,8 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
                 padding: const EdgeInsets.only(bottom: 20),
                 child: BbV5TopBar(
                   kicker: 'Frendly · AI compass',
-                  title: 'Опиши вечер —',
-                  accent: 'соберу план',
+                  title: 'Опиши вечер',
+                  accent: 'я соберу план',
                   right: BbV5IconButton(
                     icon: LucideIcons.sparkles,
                     dark: true,
@@ -435,7 +349,7 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
                       maxLines: 5,
                       decoration: InputDecoration(
                         hintText:
-                            'Например: винный бар, джаз и долгий разговор у воды',
+                            'Например: 2 человека, вечер пятницы, прогулка по центру, паста до 1500, театр, без музеев',
                         hintStyle: AppTextStyles.body.copyWith(
                           color: BbV5Colors.inkMute,
                         ),
@@ -451,89 +365,26 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
                     const SizedBox(height: 14),
                     const Divider(height: 1, color: BbV5Colors.hairSoft),
                     const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        for (final prompt in _aiPromptTemplates)
-                          _PromptTemplateChip(
-                            label: prompt,
-                            onTap: () {
-                              _promptController.text = prompt;
-                              _promptController.selection =
-                                  TextSelection.collapsed(
-                                offset: prompt.length,
-                              );
-                            },
-                          ),
-                      ],
-                    ),
+                    const _PromptGuideBlock(),
                   ],
                 ),
               ),
             ),
             SliverToBoxAdapter(
               child: BbV5Section(
-                title: 'настроение',
+                title: 'примеры хороших запросов',
                 margin: const EdgeInsets.only(top: 16),
-                child: GridView.count(
-                  crossAxisCount: 3,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                  childAspectRatio: 1.72,
+                child: Column(
                   children: [
-                    for (final vibe in _aiVibes)
-                      _VibeTile(
-                        vibe: vibe,
-                        active: _selectedVibes.contains(vibe.label),
-                        onTap: () => _toggleVibe(vibe.label),
+                    for (final entry in _aiPromptExamples.asMap().entries) ...[
+                      _PromptExampleCard(
+                        index: entry.key + 1,
+                        text: entry.value,
                       ),
-                  ],
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: BbV5Card(
-                  padding: const EdgeInsets.all(16),
-                  radius: 24,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _ParamChips(
-                        title: 'когда',
-                        values: _aiTimes,
-                        selected: _time,
-                        onChanged: (value) => setState(() => _time = value),
-                      ),
-                      const _ParamDivider(),
-                      _ParamChips(
-                        title: 'сколько вас',
-                        values: _aiSizes,
-                        selected: _size,
-                        onChanged: (value) => setState(() => _size = value),
-                      ),
-                      const _ParamDivider(),
-                      _ParamChips(
-                        title: 'бюджет',
-                        values: _aiBudgets,
-                        selected: _budget,
-                        onChanged: (value) => setState(() => _budget = value),
-                      ),
-                      const _ParamDivider(),
-                      _ParamChips(
-                        title: 'шагов',
-                        values: _aiStepCounts,
-                        selected: _stepCount.toString(),
-                        onChanged: (value) => setState(
-                          () => _stepCount = int.tryParse(value) ?? 2,
-                        ),
-                      ),
+                      if (entry.key != _aiPromptExamples.length - 1)
+                        const SizedBox(height: 8),
                     ],
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -600,7 +451,6 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
                 child: Padding(
                   padding: const EdgeInsets.only(top: 20),
                   child: _GeneratedPlanCard(
-                    time: _time,
                     draft: draft!,
                     route: route,
                     busyStepIndex: _busyStepIndex,
@@ -622,157 +472,169 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
   }
 }
 
-class _AiVibe {
-  const _AiVibe({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-}
-
-class _PromptTemplateChip extends StatelessWidget {
-  const _PromptTemplateChip({
-    required this.label,
-    required this.onTap,
-  });
-
-  final String label;
-  final VoidCallback onTap;
+class _PromptGuideBlock extends StatelessWidget {
+  const _PromptGuideBlock();
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        height: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: BbV5Colors.paper,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: BbV5Colors.hair),
-        ),
-        child: Text(
-          label,
-          style: AppTextStyles.caption.copyWith(
-            color: BbV5Colors.inkSoft,
-            fontSize: 11,
-            letterSpacing: 0,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _VibeTile extends StatelessWidget {
-  const _VibeTile({
-    required this.vibe,
-    required this.active,
-    required this.onTap,
-  });
-
-  final _AiVibe vibe;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: active ? BbV5Colors.accent : BbV5Colors.paperHi,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: active ? BbV5Colors.accent : BbV5Colors.hair,
-          ),
-          boxShadow: active ? BbV5Shadows.ink : BbV5Shadows.pill,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              vibe.icon,
-              size: 16,
-              color: active ? BbV5Colors.paperHi : BbV5Colors.ink,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              vibe.label,
-              style: AppTextStyles.caption.copyWith(
-                fontFamily: 'Sora',
-                fontSize: 11,
-                letterSpacing: 0,
-                fontWeight: FontWeight.w600,
-                color: active ? BbV5Colors.paperHi : BbV5Colors.ink,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ParamChips extends StatelessWidget {
-  const _ParamChips({
-    required this.title,
-    required this.values,
-    required this.selected,
-    required this.onChanged,
-  });
-
-  final String title;
-  final List<String> values;
-  final String selected;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
+    return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        BbV5Kicker(title),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            for (final value in values)
-              BbV5Chip(
-                label: value,
-                active: selected == value,
-                onTap: () => onChanged(value),
-              ),
-          ],
+        BbV5Kicker('что написать'),
+        SizedBox(height: 8),
+        Text(
+          'Опиши вечер одним сообщением. Чем больше деталей, тем точнее AI подберет места.',
+          style: TextStyle(
+            color: BbV5Colors.inkSoft,
+            fontSize: 12.5,
+            height: 1.4,
+            letterSpacing: 0,
+          ),
+        ),
+        SizedBox(height: 12),
+        _PromptGuideLine(
+          icon: LucideIcons.users,
+          title: 'Люди',
+          text: 'сколько вас и какой формат, свидание, друзья или компания',
+        ),
+        _PromptGuideLine(
+          icon: LucideIcons.map_pin,
+          title: 'Места',
+          text: 'район, тип точек, что обязательно добавить и что исключить',
+        ),
+        _PromptGuideLine(
+          icon: LucideIcons.wallet,
+          title: 'Бюджет',
+          text: 'бесплатно, недорого, до 1500, средний или без лимита',
+        ),
+        _PromptGuideLine(
+          icon: LucideIcons.route,
+          title: 'Маршрут',
+          text: 'сколько точек нужно и в каком порядке они должны идти',
         ),
       ],
     );
   }
 }
 
-class _ParamDivider extends StatelessWidget {
-  const _ParamDivider();
+class _PromptGuideLine extends StatelessWidget {
+  const _PromptGuideLine({
+    required this.icon,
+    required this.title,
+    required this.text,
+  });
+
+  final IconData icon;
+  final String title;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 14),
-      child: Divider(height: 1, color: BbV5Colors.hairSoft),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: BbV5Colors.paperHi,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: BbV5Colors.hair),
+            ),
+            child: Icon(icon, size: 14, color: BbV5Colors.accent),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: AppTextStyles.caption.copyWith(
+                  color: BbV5Colors.inkSoft,
+                  fontSize: 12,
+                  height: 1.35,
+                  letterSpacing: 0,
+                ),
+                children: [
+                  TextSpan(
+                    text: '$title: ',
+                    style: const TextStyle(
+                      color: BbV5Colors.ink,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  TextSpan(text: text),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PromptExampleCard extends StatelessWidget {
+  const _PromptExampleCard({
+    required this.index,
+    required this.text,
+  });
+
+  final int index;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: BbV5Colors.paperHi.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: BbV5Colors.hair),
+        boxShadow: BbV5Shadows.pill,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: BbV5Colors.accent,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '$index',
+              style: AppTextStyles.caption.copyWith(
+                color: BbV5Colors.paperHi,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: AppTextStyles.meta.copyWith(
+                color: BbV5Colors.ink,
+                height: 1.42,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _GeneratedPlanCard extends StatelessWidget {
   const _GeneratedPlanCard({
-    required this.time,
     required this.draft,
     required this.route,
     required this.busyStepIndex,
@@ -785,7 +647,6 @@ class _GeneratedPlanCard extends StatelessWidget {
     required this.onCreate,
   });
 
-  final String time;
   final AiRouteDraft draft;
   final EveningRouteData route;
   final int? busyStepIndex;
@@ -818,7 +679,7 @@ class _GeneratedPlanCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         hasPlan
-                            ? '${steps.length} шага · ${time.toLowerCase()}'
+                            ? '${steps.length} шага · AI маршрут'
                             : 'План пока не собран',
                         style: bbV5DisplayStyle(fontSize: 20),
                       ),

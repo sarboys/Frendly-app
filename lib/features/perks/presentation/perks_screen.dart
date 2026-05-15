@@ -1,38 +1,31 @@
-import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/data/location_override_provider.dart';
+import 'package:big_break_mobile/shared/data/tomesto_promos_provider.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class PerksScreen extends StatefulWidget {
+class PerksScreen extends ConsumerStatefulWidget {
   const PerksScreen({super.key});
 
   @override
-  State<PerksScreen> createState() => _PerksScreenState();
+  ConsumerState<PerksScreen> createState() => _PerksScreenState();
 }
 
-class _PerksScreenState extends State<PerksScreen> {
+class _PerksScreenState extends ConsumerState<PerksScreen> {
   final _redeemed = <String>{};
-  String _filter = 'all';
-
-  static const _perks = <_PerkData>[];
-
-  List<_PerkData> get _filtered {
-    return _perks.where((perk) {
-      if (_filter == 'available') {
-        return perk.available && !_redeemed.contains(perk.id);
-      }
-      if (_filter == 'used') {
-        return _redeemed.contains(perk.id);
-      }
-      return true;
-    }).toList(growable: false);
-  }
+  String _category = 'all';
 
   @override
   Widget build(BuildContext context) {
+    final manualLocation = ref.watch(manualLocationProvider);
+    final query = TomestoPromosQuery.fromManualLocation(manualLocation);
+    final promosAsync = ref.watch(tomestoPromosProvider(query));
+
     return BbV5Scaffold(
       child: BbV5Page(
         padding: const EdgeInsets.fromLTRB(20, 32, 20, 120),
@@ -40,9 +33,9 @@ class _PerksScreenState extends State<PerksScreen> {
           slivers: [
             SliverToBoxAdapter(
               child: BbV5TopBar(
-                kicker: 'От заведений',
-                title: 'Перки',
-                accent: 'вечера',
+                kicker: query.city,
+                title: 'Промо',
+                accent: 'Tomesto',
                 onBack: () => context.pop(),
               ),
             ),
@@ -50,7 +43,7 @@ class _PerksScreenState extends State<PerksScreen> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(4, 20, 4, 16),
                 child: Text(
-                  'Закреплённые бонусы за check-in компанией. Чем больше людей пришло, тем больше открыто.',
+                  'Акции заведений в выбранном городе. Категории берём из Tomesto мест.',
                   style: AppTextStyles.meta.copyWith(
                     color: BbV5Colors.inkSoft,
                     height: 1.625,
@@ -58,134 +51,233 @@ class _PerksScreenState extends State<PerksScreen> {
                 ),
               ),
             ),
-            SliverToBoxAdapter(
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  BbV5Chip(
-                    label: 'Все',
-                    active: _filter == 'all',
-                    onTap: () => setState(() => _filter = 'all'),
-                  ),
-                  BbV5Chip(
-                    label: 'Доступно',
-                    active: _filter == 'available',
-                    onTap: () => setState(() => _filter = 'available'),
-                  ),
-                  BbV5Chip(
-                    label: 'Использовано',
-                    active: _filter == 'used',
-                    onTap: () => setState(() => _filter = 'used'),
-                  ),
-                ],
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            if (_filtered.isEmpty)
-              SliverToBoxAdapter(
-                child: BbV5Card(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'Перков пока нет.',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.meta.copyWith(
-                      color: BbV5Colors.inkMute,
-                    ),
+            ...promosAsync.when(
+              loading: () => [
+                const SliverToBoxAdapter(child: _PromoLoadingCard()),
+              ],
+              error: (_, __) => [
+                SliverToBoxAdapter(
+                  child: _PromoEmptyCard(
+                    title: 'Не удалось загрузить промо.',
+                    actionLabel: 'Повторить',
+                    onAction: () =>
+                        ref.invalidate(tomestoPromosProvider(query)),
                   ),
                 ),
-              )
-            else
-              SliverList.separated(
-                itemCount: _filtered.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: AppSpacing.sm),
-                itemBuilder: (context, index) {
-                  final perk = _filtered[index];
-                  return _PerkTicket(
-                    perk: perk,
-                    redeemed: _redeemed.contains(perk.id),
-                    onRedeem: !perk.available || _redeemed.contains(perk.id)
-                        ? null
-                        : () {
-                            setState(() {
-                              _redeemed.add(perk.id);
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('${perk.perk} активирован'),
-                              ),
-                            );
-                          },
-                  );
-                },
-              ),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-            SliverToBoxAdapter(
-              child: BbV5PillButton(
-                label: 'Открыть ещё через Streak',
-                icon: LucideIcons.sparkles,
-                height: 48,
-                fontSize: 13,
-                expanded: true,
-                onPressed: () => context.pushRoute(AppRoute.streak),
-              ),
+              ],
+              data: (promos) => _buildPromoSlivers(promos, query.city),
             ),
           ],
         ),
       ),
     );
   }
+
+  List<Widget> _buildPromoSlivers(
+    List<BackendPlacePromoListItem> promos,
+    String city,
+  ) {
+    final categories = _promoCategories(promos);
+    if (_category != 'all' &&
+        !categories.any((category) => category.key == _category)) {
+      _category = 'all';
+    }
+
+    final visible = _category == 'all'
+        ? promos
+        : promos
+            .where((promo) => _categoryForPromo(promo).key == _category)
+            .toList(growable: false);
+
+    return [
+      SliverToBoxAdapter(
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            BbV5Chip(
+              label: 'Все',
+              active: _category == 'all',
+              onTap: () => setState(() => _category = 'all'),
+            ),
+            for (final category in categories)
+              BbV5Chip(
+                label: category.label,
+                active: _category == category.key,
+                onTap: () => setState(() => _category = category.key),
+              ),
+          ],
+        ),
+      ),
+      const SliverToBoxAdapter(child: SizedBox(height: 16)),
+      if (promos.isEmpty)
+        SliverToBoxAdapter(
+          child: _PromoEmptyCard(
+            title: 'Акций пока нет для $city.',
+          ),
+        )
+      else if (_category == 'all')
+        for (final category in categories)
+          ..._categorySlivers(
+            category,
+            promos
+                .where((promo) => _categoryForPromo(promo).key == category.key)
+                .toList(growable: false),
+          )
+      else
+        ..._categorySlivers(
+          categories.firstWhere((category) => category.key == _category),
+          visible,
+        ),
+    ];
+  }
+
+  List<Widget> _categorySlivers(
+    _PromoCategory category,
+    List<BackendPlacePromoListItem> promos,
+  ) {
+    if (promos.isEmpty) {
+      return const [];
+    }
+    return [
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            children: [
+              Icon(category.icon, size: 14, color: category.color),
+              const SizedBox(width: 6),
+              Text(
+                category.label,
+                style: bbV5KickerStyle(
+                  color: BbV5Colors.inkMute,
+                  letterSpacing: 1.8,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            if (index.isOdd) {
+              return const SizedBox(height: AppSpacing.sm);
+            }
+            final promo = promos[index ~/ 2];
+            return _PromoTicket(
+              promo: promo,
+              category: category,
+              redeemed: _redeemed.contains(promo.id),
+              onRedeem: () {
+                setState(() {
+                  _redeemed.add(promo.id);
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('${promo.title} активировано')),
+                );
+              },
+            );
+          },
+          childCount: promos.length * 2 - 1,
+        ),
+      ),
+      const SliverToBoxAdapter(child: SizedBox(height: 18)),
+    ];
+  }
 }
 
-class _PerkData {
-  const _PerkData({
-    required this.id,
-    required this.venue,
-    required this.type,
-    required this.perk,
-    required this.condition,
-    required this.expires,
-    required this.icon,
-    required this.color,
-    required this.available,
+class _PromoLoadingCard extends StatelessWidget {
+  const _PromoLoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const BbV5Card(
+      padding: EdgeInsets.all(24),
+      child: Center(
+        child: CircularProgressIndicator(
+          color: BbV5Colors.ink,
+          strokeWidth: 2,
+        ),
+      ),
+    );
+  }
+}
+
+class _PromoEmptyCard extends StatelessWidget {
+  const _PromoEmptyCard({
+    required this.title,
+    this.actionLabel,
+    this.onAction,
   });
 
-  final String id;
-  final String venue;
-  final String type;
-  final String perk;
-  final String condition;
-  final String expires;
-  final IconData icon;
-  final Color color;
-  final bool available;
+  final String title;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5Card(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.meta.copyWith(
+              color: BbV5Colors.inkMute,
+            ),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 14),
+            BbV5PillButton(
+              label: actionLabel!,
+              icon: LucideIcons.refresh_cw,
+              height: 38,
+              fontSize: 12,
+              onPressed: onAction,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
-class _PerkTicket extends StatelessWidget {
-  const _PerkTicket({
-    required this.perk,
+class _PromoTicket extends StatelessWidget {
+  const _PromoTicket({
+    required this.promo,
+    required this.category,
     required this.redeemed,
     required this.onRedeem,
   });
 
-  final _PerkData perk;
+  final BackendPlacePromoListItem promo;
+  final _PromoCategory category;
   final bool redeemed;
-  final VoidCallback? onRedeem;
+  final VoidCallback onRedeem;
 
   @override
   Widget build(BuildContext context) {
+    final venue = promo.placeName ?? promo.venueName ?? 'Tomesto';
+    final meta = [
+      if ((promo.address ?? '').trim().isNotEmpty) promo.address!.trim(),
+      if (promo.distanceKm != null)
+        '${promo.distanceKm!.toStringAsFixed(1)} км',
+      if ((promo.provider ?? '').trim().isNotEmpty) promo.provider!.trim(),
+    ].join(' · ');
+
     return BbV5Card(
       radius: 24,
       padding: EdgeInsets.zero,
       child: Stack(
         children: [
-          Positioned(
+          const Positioned(
             left: -10,
             top: 66,
             child: _TicketNotch(),
           ),
-          Positioned(
+          const Positioned(
             right: -10,
             top: 66,
             child: _TicketNotch(),
@@ -202,26 +294,18 @@ class _PerkTicket extends StatelessWidget {
                       height: 56,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        gradient: perk.available
-                            ? LinearGradient(
-                                colors: [
-                                  perk.color,
-                                  perk.color.withValues(alpha: 0.86),
-                                ],
-                              )
-                            : null,
-                        color: perk.available ? null : BbV5Colors.paperHi,
+                        gradient: LinearGradient(
+                          colors: [
+                            category.color,
+                            category.color.withValues(alpha: 0.86),
+                          ],
+                        ),
                         borderRadius: BorderRadius.circular(16),
-                        border: perk.available
-                            ? null
-                            : Border.all(color: BbV5Colors.hair),
                       ),
                       child: Icon(
-                        perk.icon,
+                        category.icon,
                         size: 24,
-                        color: perk.available
-                            ? BbV5Colors.paperHi
-                            : BbV5Colors.inkMute,
+                        color: BbV5Colors.paperHi,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -233,49 +317,24 @@ class _PerkTicket extends StatelessWidget {
                             children: [
                               Flexible(
                                 child: Text(
-                                  perk.venue.toUpperCase(),
+                                  venue.toUpperCase(),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: bbV5KickerStyle(
-                                    color: perk.color,
+                                    color: category.color,
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 1.8,
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                '· ${perk.type}',
-                                style: AppTextStyles.caption.copyWith(
-                                  fontSize: 10,
-                                  color: BbV5Colors.inkMute,
-                                  letterSpacing: 0,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            perk.perk,
-                            style: bbV5DisplayStyle(
-                              fontSize: 15.5,
-                              height: 1.25,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(
-                                LucideIcons.users,
-                                size: 12,
-                                color: BbV5Colors.inkMute,
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
+                              Flexible(
                                 child: Text(
-                                  perk.condition,
+                                  '· ${category.label}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: AppTextStyles.caption.copyWith(
-                                    fontSize: 11.5,
+                                    fontSize: 10,
                                     color: BbV5Colors.inkMute,
                                     letterSpacing: 0,
                                   ),
@@ -283,6 +342,37 @@ class _PerkTicket extends StatelessWidget {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 4),
+                          Text(
+                            promo.title,
+                            style: bbV5DisplayStyle(
+                              fontSize: 15.5,
+                              height: 1.25,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          if ((promo.description ?? '').trim().isNotEmpty)
+                            Text(
+                              promo.description!.trim(),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.caption.copyWith(
+                                fontSize: 11.5,
+                                color: BbV5Colors.inkMute,
+                                letterSpacing: 0,
+                              ),
+                            )
+                          else if (meta.isNotEmpty)
+                            Text(
+                              meta,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.caption.copyWith(
+                                fontSize: 11.5,
+                                color: BbV5Colors.inkMute,
+                                letterSpacing: 0,
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -312,7 +402,7 @@ class _PerkTicket extends StatelessWidget {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        perk.expires,
+                        _validUntilLabel(promo.validUntil),
                         style: AppTextStyles.caption.copyWith(
                           color: BbV5Colors.inkMute,
                           letterSpacing: 0,
@@ -329,7 +419,7 @@ class _PerkTicket extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            'Активирован',
+                            'Активировано',
                             style: AppTextStyles.caption.copyWith(
                               fontFamily: 'Sora',
                               fontSize: 11.5,
@@ -340,7 +430,7 @@ class _PerkTicket extends StatelessWidget {
                           ),
                         ],
                       )
-                    else if (perk.available)
+                    else
                       BbV5PillButton(
                         label: 'Активировать',
                         icon: LucideIcons.gift,
@@ -350,16 +440,6 @@ class _PerkTicket extends StatelessWidget {
                         iconSize: 12,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         onPressed: onRedeem,
-                      )
-                    else
-                      Text(
-                        'ЗАБЛОКИРОВАНО',
-                        style: AppTextStyles.caption.copyWith(
-                          fontSize: 10.5,
-                          color: BbV5Colors.inkMute,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.05,
-                        ),
                       ),
                   ],
                 ),
@@ -373,6 +453,8 @@ class _PerkTicket extends StatelessWidget {
 }
 
 class _TicketNotch extends StatelessWidget {
+  const _TicketNotch();
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -385,4 +467,104 @@ class _TicketNotch extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PromoCategory {
+  const _PromoCategory({
+    required this.key,
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  final String key;
+  final String label;
+  final IconData icon;
+  final Color color;
+}
+
+List<_PromoCategory> _promoCategories(List<BackendPlacePromoListItem> promos) {
+  final keys = promos
+      .map((promo) => _categoryForPromo(promo).key)
+      .toSet()
+      .toList(growable: false)
+    ..sort((left, right) =>
+        _categoryForKey(left).label.compareTo(_categoryForKey(right).label));
+  return keys.map(_categoryForKey).toList(growable: false);
+}
+
+_PromoCategory _categoryForPromo(BackendPlacePromoListItem promo) {
+  return _categoryForKey(_categoryKey(promo));
+}
+
+String _categoryKey(BackendPlacePromoListItem promo) {
+  final value =
+      (promo.placeKind ?? promo.placeCategory ?? 'promo').trim().toLowerCase();
+  return value.isEmpty ? 'promo' : value;
+}
+
+_PromoCategory _categoryForKey(String key) {
+  final normalized = key.trim().toLowerCase();
+  if (normalized.contains('bar') ||
+      normalized.contains('wine') ||
+      normalized.contains('pub')) {
+    return const _PromoCategory(
+      key: 'bar',
+      label: 'Бары',
+      icon: LucideIcons.wine,
+      color: BbV5Colors.accent,
+    );
+  }
+  if (normalized.contains('restaurant') ||
+      normalized.contains('food') ||
+      normalized.contains('cafe') ||
+      normalized.contains('coffee')) {
+    return const _PromoCategory(
+      key: 'food',
+      label: 'Еда и кофе',
+      icon: LucideIcons.utensils,
+      color: BbV5Colors.brandDeep,
+    );
+  }
+  if (normalized.contains('club') ||
+      normalized.contains('night') ||
+      normalized.contains('music') ||
+      normalized.contains('karaoke')) {
+    return const _PromoCategory(
+      key: 'night',
+      label: 'Музыка',
+      icon: LucideIcons.music,
+      color: BbV5Colors.rose,
+    );
+  }
+  if (normalized.contains('culture') ||
+      normalized.contains('museum') ||
+      normalized.contains('theatre')) {
+    return const _PromoCategory(
+      key: 'culture',
+      label: 'Культура',
+      icon: LucideIcons.palette,
+      color: BbV5Colors.ink,
+    );
+  }
+  return const _PromoCategory(
+    key: 'promo',
+    label: 'Промо',
+    icon: LucideIcons.gift,
+    color: BbV5Colors.gold,
+  );
+}
+
+String _validUntilLabel(String? value) {
+  if (value == null || value.trim().isEmpty) {
+    return 'акция активна';
+  }
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) {
+    return value;
+  }
+  final local = parsed.toLocal();
+  final day = local.day.toString().padLeft(2, '0');
+  final month = local.month.toString().padLeft(2, '0');
+  return 'до $day.$month';
 }

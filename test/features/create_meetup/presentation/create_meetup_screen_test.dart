@@ -630,11 +630,12 @@ void main() {
     await scrollToAttachActions(tester);
 
     expect(find.byTooltip('Афиша'), findsOneWidget);
-    expect(find.byTooltip('Партнёр'), findsOneWidget);
+    expect(find.byTooltip('Промо'), findsOneWidget);
     expect(find.byTooltip('Маршрут'), findsOneWidget);
     expect(find.text('Афиша'), findsOneWidget);
-    expect(find.text('Партнёр'), findsOneWidget);
+    expect(find.text('Промо'), findsOneWidget);
     expect(find.text('Маршрут'), findsOneWidget);
+    expect(find.text('Партнёр'), findsNothing);
     expect(
       find.text('Указать свой адрес или ориентир', skipOffstage: false),
       findsOneWidget,
@@ -860,6 +861,19 @@ void main() {
     expect(find.text('Отдельный сценарий свидания'), findsNothing);
   });
 
+  testWidgets('create meetup hides free access and ai helper cards',
+      (tester) async {
+    await tester.pumpWidget(_wrap((_) {}));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Свободный приход', skipOffstage: false), findsNothing);
+    expect(find.text('AI compass', skipOffstage: false), findsNothing);
+    expect(
+      find.text('Напишет описание за тебя', skipOffstage: false),
+      findsNothing,
+    );
+  });
+
   testWidgets('create meetup sends request join mode for invite visibility',
       (tester) async {
     _FakeCreateMeetupRepository? repository;
@@ -1081,7 +1095,7 @@ void main() {
     await enterTitle(tester, 'Свой вечер');
     await scrollToAttachActions(tester);
     await tapAttachIconButton(tester, 'Маршрут');
-    await tester.tap(find.text('Свой'));
+    await tester.tap(find.text('Создать свой маршрут'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextField, 'Slow night на Патриках'),
