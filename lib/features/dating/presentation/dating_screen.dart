@@ -24,21 +24,39 @@ const _datingInterestFilters = [
   'wellness',
   'юмор',
   'книги',
+  'театр',
+  'выставки',
+  'прогулки',
+  'музыка',
+  'танцы',
+  'еда',
+  'джаз',
 ];
-const _datingAreaFilters = [
-  'Все',
-  'Центр',
-  'Патрики',
-  'Чистые пруды',
-  'Тверская',
-  'Хамовники',
-];
-const _datingTimeFilters = [
-  'Сейчас',
-  'Сегодня вечером',
-  'Эти выходные',
-  'Всегда онлайн',
-];
+const _datingDefaultAgeRange = RangeValues(22, 35);
+const _datingDefaultRadiusKm = 10.0;
+const _datingMinRadiusKm = 1.0;
+const _datingMaxRadiusKm = 50.0;
+
+double? _parseDatingDistanceKm(String label) {
+  final normalized = label.trim().toLowerCase().replaceAll(',', '.');
+  if (normalized.isEmpty || normalized.contains('рядом')) {
+    return null;
+  }
+
+  final match = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(normalized);
+  final value = match == null ? null : double.tryParse(match.group(1)!);
+  if (value == null) {
+    return null;
+  }
+
+  if (normalized.contains('км') || normalized.contains('km')) {
+    return value;
+  }
+  if (normalized.contains('м') || normalized.contains('m')) {
+    return value / 1000;
+  }
+  return value;
+}
 
 class DatingScreen extends ConsumerStatefulWidget {
   const DatingScreen({
@@ -61,9 +79,8 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
   final Set<String> _savedProfileIds = <String>{};
   List<DatingProfileData> _lastDiscoverProfiles = const [];
   final Set<String> _filterInterests = <String>{};
-  String _filterArea = 'Все';
-  String _filterTime = 'Сегодня вечером';
-  RangeValues _filterAge = const RangeValues(22, 35);
+  RangeValues _filterAge = _datingDefaultAgeRange;
+  double _filterRadiusKm = _datingDefaultRadiusKm;
 
   @override
   Widget build(BuildContext context) {
@@ -200,7 +217,7 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
           return const _DatingEmptyState(
             icon: LucideIcons.sparkles,
             title: 'Никого под фильтр',
-            subtitle: 'Попробуй сбросить интересы или район',
+            subtitle: 'Попробуй сбросить интересы или радиус',
           );
         }
 
@@ -596,15 +613,16 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
         return false;
       }
 
-      if (_filterArea != 'Все') {
-        final area = (profile.area ?? '').toLowerCase();
-        if (area.isNotEmpty && !area.contains(_filterArea.toLowerCase())) {
-          return false;
-        }
+      final distanceKm = _parseDatingDistanceKm(profile.distance);
+      if (distanceKm != null && distanceKm > _filterRadiusKm) {
+        return false;
       }
 
       if (_filterInterests.isNotEmpty) {
-        final tags = profile.tags.map((tag) => tag.toLowerCase()).toSet();
+        final tags = profile.tags
+            .map((tag) => tag.trim().toLowerCase())
+            .where((tag) => tag.isNotEmpty)
+            .toSet();
         final hasCommonInterest = _filterInterests.any(
           (interest) => tags.contains(interest.toLowerCase()),
         );
@@ -618,11 +636,10 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
   }
 
   bool get _filtersActive {
-    return _filterArea != 'Все' ||
-        _filterTime != 'Сегодня вечером' ||
-        _filterInterests.isNotEmpty ||
-        _filterAge.start.round() != 22 ||
-        _filterAge.end.round() != 35;
+    return _filterInterests.isNotEmpty ||
+        _filterAge.start.round() != _datingDefaultAgeRange.start.round() ||
+        _filterAge.end.round() != _datingDefaultAgeRange.end.round() ||
+        _filterRadiusKm.round() != _datingDefaultRadiusKm.round();
   }
 
   void _openFilters(BuildContext context) {
@@ -681,44 +698,6 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          const BbV5Kicker('Район'),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: _datingAreaFilters
-                                .map(
-                                  (area) => _DatingFilterChip(
-                                    group: 'Район',
-                                    label: area,
-                                    active: _filterArea == area,
-                                    onTap: () => update(() {
-                                      _filterArea = area;
-                                    }),
-                                  ),
-                                )
-                                .toList(growable: false),
-                          ),
-                          const SizedBox(height: 16),
-                          const BbV5Kicker('Когда'),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: _datingTimeFilters
-                                .map(
-                                  (time) => _DatingFilterChip(
-                                    group: 'Когда',
-                                    label: time,
-                                    active: _filterTime == time,
-                                    onTap: () => update(() {
-                                      _filterTime = time;
-                                    }),
-                                  ),
-                                )
-                                .toList(growable: false),
-                          ),
-                          const SizedBox(height: 16),
                           const BbV5Kicker('Интересы'),
                           const SizedBox(height: 8),
                           Wrap(
@@ -763,6 +742,29 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                               _filterAge = values;
                             }),
                           ),
+                          const SizedBox(height: 16),
+                          BbV5Kicker(
+                            'Радиус · ${_filterRadiusKm.round()} км',
+                          ),
+                          const SizedBox(height: 8),
+                          Semantics(
+                            label: 'Радиус дейтинга',
+                            value: '${_filterRadiusKm.round()} км',
+                            child: Slider(
+                              min: _datingMinRadiusKm,
+                              max: _datingMaxRadiusKm,
+                              divisions:
+                                  (_datingMaxRadiusKm - _datingMinRadiusKm)
+                                      .round(),
+                              value: _filterRadiusKm,
+                              activeColor: BbV5Colors.accent,
+                              inactiveColor: BbV5Colors.hair,
+                              label: '${_filterRadiusKm.round()} км',
+                              onChanged: (value) => update(() {
+                                _filterRadiusKm = value;
+                              }),
+                            ),
+                          ),
                           const SizedBox(height: 20),
                           Row(
                             children: [
@@ -770,10 +772,9 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                                 child: BbV5PillButton(
                                   label: 'Сбросить',
                                   onPressed: () => update(() {
-                                    _filterArea = 'Все';
-                                    _filterTime = 'Сегодня вечером';
                                     _filterInterests.clear();
-                                    _filterAge = const RangeValues(22, 35);
+                                    _filterAge = _datingDefaultAgeRange;
+                                    _filterRadiusKm = _datingDefaultRadiusKm;
                                   }),
                                   height: 48,
                                   fontSize: 13,

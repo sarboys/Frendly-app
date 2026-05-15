@@ -245,8 +245,7 @@ void main() {
     expect(likesReads, 0);
   });
 
-  testWidgets('dating filter controls expose labels and selected state',
-      (tester) async {
+  testWidgets('dating filter keeps interests and radius only', (tester) async {
     final semantics = tester.ensureSemantics();
 
     await tester.pumpWidget(
@@ -261,8 +260,46 @@ void main() {
               trialEndsAt: null,
             ),
           ),
+          backendRepositoryProvider.overrideWith(
+            (ref) => _FakeDatingRepository(ref: ref, dio: Dio()),
+          ),
           datingDiscoverProvider.overrideWith(
-            (ref) async => const [_sonyaProfile],
+            (ref) async => const [
+              DatingProfileData(
+                userId: 'user-sonya',
+                name: 'Соня',
+                age: 26,
+                distance: '1 км',
+                about: 'Люблю тихие ужины plus длинные разговоры.',
+                tags: ['ужины', 'джаз'],
+                prompt: 'Лучший first date без спешки.',
+                photoEmoji: '🕯️',
+                avatarUrl: null,
+                likedYou: false,
+                premium: true,
+                vibe: 'Спокойно',
+                area: 'Замоскворечье',
+                verified: true,
+                online: true,
+              ),
+              DatingProfileData(
+                userId: 'user-far',
+                name: 'Марина',
+                age: 29,
+                distance: '4.5 км',
+                about: 'Театр, прогулки, спокойные бары.',
+                tags: ['театр', 'прогулки'],
+                prompt: 'Лучше встретиться на час, чем неделю переписываться.',
+                photoEmoji: '🎭',
+                avatarUrl: null,
+                likedYou: false,
+                premium: true,
+                vibe: 'Спокойно',
+                area: 'Патрики',
+                verified: true,
+                online: true,
+              ),
+            ],
           ),
           datingLikesProvider.overrideWith((ref) async => const []),
         ],
@@ -273,16 +310,11 @@ void main() {
     await tester.tap(find.bySemanticsLabel('Фильтры дейтинга'));
     await tester.pumpAndSettle();
 
-    expect(
-      tester.getSemantics(find.bySemanticsLabel('Район Все')),
-      matchesSemantics(
-        label: 'Район Все',
-        isButton: true,
-        hasSelectedState: true,
-        isSelected: true,
-        hasTapAction: true,
-      ),
-    );
+    expect(find.text('Район'), findsNothing);
+    expect(find.text('Когда'), findsNothing);
+    expect(find.text('#театр'), findsOneWidget);
+    expect(find.text('#прогулки'), findsOneWidget);
+    expect(find.text('Радиус · 10 км'), findsOneWidget);
 
     expect(
       tester.getSemantics(find.bySemanticsLabel('Интерес кофе')),
@@ -294,6 +326,20 @@ void main() {
         hasTapAction: true,
       ),
     );
+
+    await tester.drag(find.byType(Slider), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Показать'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Соня, 26'), findsOneWidget);
+    await tester.ensureVisible(find.bySemanticsLabel('Лайк'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Лайк'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Марина, 29'), findsNothing);
+    expect(find.text('Пока нет новых профилей'), findsOneWidget);
 
     semantics.dispose();
   });

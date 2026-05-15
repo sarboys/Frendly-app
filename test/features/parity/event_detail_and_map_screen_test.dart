@@ -44,18 +44,29 @@ class _NoLocationService implements AppLocationService {
 }
 
 void main() {
-  testWidgets('event detail uses total going count in attendee summary',
+  testWidgets('event detail uses new compact meetup detail layout',
       (tester) async {
     await tester.pumpWidget(_wrap(const EventDetailScreen(eventId: 'e1')));
     await tester.pumpAndSettle();
 
     await tester.dragUntilVisible(
-      find.text('Кто идёт · 6'),
+      find.text('Место'),
+      find.byType(CustomScrollView),
+      const Offset(0, -180),
+    );
+
+    expect(find.text('Место'), findsOneWidget);
+    expect(find.text('Когда'), findsNothing);
+    expect(find.text('Где'), findsNothing);
+    expect(find.text('Длительность'), findsNothing);
+
+    await tester.dragUntilVisible(
+      find.text('Идут · 6'),
       find.byType(CustomScrollView),
       const Offset(0, -240),
     );
 
-    expect(find.text('Кто идёт · 6'), findsOneWidget);
+    expect(find.text('Идут · 6'), findsOneWidget);
 
     await tester.dragUntilVisible(
       find.text('Бонус от Brix Wine'),
@@ -70,6 +81,94 @@ void main() {
       const Offset(0, -240),
     );
     expect(find.text('Включить Safe Walk'), findsOneWidget);
+  });
+
+  testWidgets('event detail renders interactive evening route stops',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...buildTestOverrides(),
+          eventDetailProvider.overrideWith((ref, eventId) async {
+            return const EventDetail(
+              id: 'e-route',
+              title: 'Винный вечер на крыше',
+              emoji: '🍷',
+              time: 'Сегодня · 20:00',
+              place: 'Маршрут: Тверская в огнях',
+              distance: '0.0 км',
+              vibe: 'Спокойно',
+              description: 'Идем по маршруту вечера.',
+              hostNote: null,
+              joined: true,
+              partnerName: null,
+              partnerOffer: null,
+              capacity: 10,
+              going: 6,
+              chatId: 'mc-route',
+              routeId: 'route-mc1',
+              host: EventHost(
+                id: 'user-anya',
+                displayName: 'Аня К',
+                verified: true,
+                rating: 4.9,
+                meetupCount: 23,
+                avatarUrl: null,
+              ),
+              attendees: [],
+            );
+          }),
+          eventDetailRouteStopsProvider.overrideWith((ref, routeId) async {
+            return const [
+              EventDetailRouteStop(
+                title: 'Brix Wine',
+                subtitle: 'Покровка 12',
+                time: '20:00',
+                note: 'Стартуем у барной стойки',
+                emoji: '🍷',
+              ),
+              EventDetailRouteStop(
+                title: 'Прогулка по Покровке',
+                subtitle: '15 минут пешком',
+                time: '21:30',
+                note: 'Идем до второй точки',
+                emoji: '🚶',
+              ),
+              EventDetailRouteStop(
+                title: 'Late jazz в Aglio',
+                subtitle: 'Маросейка 6',
+                time: '22:00',
+                note: 'Опционально после бара',
+                emoji: '🎷',
+              ),
+            ];
+          }),
+        ],
+        child: const MaterialApp(
+          home: EventDetailScreen(eventId: 'e-route'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.dragUntilVisible(
+      find.text('Маршрут вечера'),
+      find.byType(CustomScrollView),
+      const Offset(0, -180),
+    );
+
+    expect(find.text('Маршрут вечера'), findsOneWidget);
+    expect(find.text('3 ОСТАНОВКИ'), findsOneWidget);
+    expect(find.text('Brix Wine'), findsOneWidget);
+    expect(find.text('Прогулка по Покровке'), findsOneWidget);
+    expect(find.text('Late jazz в Aglio'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Прогулка по Покровке'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Прогулка по Покровке'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Идем до второй точки'), findsOneWidget);
   });
 
   testWidgets('event detail shows criteria as muted chips', (tester) async {
@@ -338,7 +437,7 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('event detail place row opens map focused on event',
+  testWidgets('event detail route button opens external map options',
       (tester) async {
     final router = GoRouter(
       initialLocation: '/',
@@ -364,31 +463,32 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.dragUntilVisible(
-      find.text('Brix Wine, Покровка 12'),
+      find.text('Brix Wine'),
       find.byType(CustomScrollView),
       const Offset(0, -240),
     );
-    await tester.ensureVisible(find.text('Brix Wine, Покровка 12'));
+    await tester.ensureVisible(find.text('Brix Wine'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Маршрут'));
     await tester.pumpAndSettle();
 
-    expect(find.text('map-opened-e1'), findsOneWidget);
+    expect(find.text('Открыть адрес'), findsOneWidget);
+    expect(find.text('Google Карты'), findsOneWidget);
   });
 
-  testWidgets('event detail place text opens external map options',
+  testWidgets('event detail route action opens external map options',
       (tester) async {
     await tester.pumpWidget(_wrap(const EventDetailScreen(eventId: 'e1')));
     await tester.pumpAndSettle();
 
     await tester.dragUntilVisible(
-      find.text('Brix Wine, Покровка 12'),
+      find.text('Brix Wine'),
       find.byType(CustomScrollView),
       const Offset(0, -240),
     );
-    await tester.ensureVisible(find.text('Brix Wine, Покровка 12'));
+    await tester.ensureVisible(find.text('Brix Wine'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Brix Wine, Покровка 12'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Маршрут'));
     await tester.pumpAndSettle();
 
     expect(find.text('Открыть адрес'), findsOneWidget);
@@ -402,7 +502,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.dragUntilVisible(
-      find.text('Кто идёт · 6'),
+      find.text('Идут · 6'),
       find.byType(CustomScrollView),
       const Offset(0, -240),
     );
@@ -566,6 +666,8 @@ void main() {
       find.byType(CustomScrollView),
       const Offset(0, -240),
     );
+    await tester.ensureVisible(find.text('Профиль'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Профиль'));
     await tester.pumpAndSettle();
 
@@ -651,6 +753,8 @@ void main() {
       find.byType(CustomScrollView),
       const Offset(0, -240),
     );
+    await tester.ensureVisible(find.text('Профиль'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Профиль'));
     await tester.pumpAndSettle();
 

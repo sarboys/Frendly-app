@@ -20,6 +20,8 @@ class EventDetail {
     required this.capacity,
     required this.going,
     required this.chatId,
+    this.routeId,
+    this.routeStops = const [],
     required this.host,
     required this.attendees,
     this.lifestyle,
@@ -67,6 +69,8 @@ class EventDetail {
   final int capacity;
   final int going;
   final String? chatId;
+  final String? routeId;
+  final List<EventDetailRouteStop> routeStops;
   final EventHost host;
   final List<EventAttendee> attendees;
   final String? lifestyle;
@@ -122,6 +126,8 @@ class EventDetail {
       capacity: (json['capacity'] as num?)?.toInt() ?? 0,
       going: (json['going'] as num?)?.toInt() ?? 0,
       chatId: json['chatId'] as String?,
+      routeId: json['routeId'] as String?,
+      routeStops: _eventDetailRouteStopsFromJson(json),
       host: EventHost.fromJson(json['host'] as Map<String, dynamic>),
       attendees: ((json['attendees'] as List?) ?? const [])
           .whereType<Map>()
@@ -166,6 +172,107 @@ class EventDetail {
           .toList(growable: false),
     );
   }
+}
+
+List<EventDetailRouteStop> _eventDetailRouteStopsFromJson(
+  Map<String, dynamic> json,
+) {
+  final direct = json['routeStops'];
+  if (direct is List) {
+    return EventDetailRouteStop.listFromJson(direct);
+  }
+
+  final route = json['route'];
+  if (route is Map) {
+    final steps = route['steps'];
+    if (steps is List) {
+      return EventDetailRouteStop.listFromJson(steps);
+    }
+  }
+
+  return const [];
+}
+
+class EventDetailRouteStop {
+  const EventDetailRouteStop({
+    required this.title,
+    required this.subtitle,
+    required this.time,
+    this.note,
+    this.emoji = '📍',
+  });
+
+  final String title;
+  final String subtitle;
+  final String time;
+  final String? note;
+  final String emoji;
+
+  String get mapQuery {
+    final parts = <String>[title, subtitle]
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    return parts.join(', ');
+  }
+
+  factory EventDetailRouteStop.fromJson(Map<String, dynamic> json) {
+    final venue = _stringFromJson(json['venue']);
+    final address = _stringFromJson(json['address']);
+    final rawTitle = _firstNonEmpty([
+      _stringFromJson(json['title']),
+      venue,
+      address,
+    ]);
+    final title = rawTitle.isEmpty ? 'Место встречи' : rawTitle;
+    final subtitle = _firstNonEmpty([
+      if (venue.isNotEmpty && venue != title) venue,
+      address,
+      _stringFromJson(json['distance']),
+    ]);
+    return EventDetailRouteStop(
+      title: title,
+      subtitle: subtitle,
+      time: _firstNonEmpty([
+        _stringFromJson(json['time']),
+        _stringFromJson(json['timeLabel']),
+      ]),
+      note: _nullableStringFromJson(json['description']),
+      emoji: _firstNonEmpty([
+        _stringFromJson(json['emoji']),
+        '📍',
+      ]),
+    );
+  }
+
+  static List<EventDetailRouteStop> listFromJson(List<dynamic> items) {
+    return items
+        .whereType<Map>()
+        .map((item) => EventDetailRouteStop.fromJson(
+              Map<String, dynamic>.from(item),
+            ))
+        .where((item) => item.title.trim().isNotEmpty)
+        .toList(growable: false);
+  }
+}
+
+String _stringFromJson(Object? value) {
+  return value is String ? value.trim() : '';
+}
+
+String? _nullableStringFromJson(Object? value) {
+  final text = _stringFromJson(value);
+  return text.isEmpty ? null : text;
+}
+
+String _firstNonEmpty(Iterable<String> values) {
+  for (final value in values) {
+    final trimmed = value.trim();
+    if (trimmed.isNotEmpty) {
+      return trimmed;
+    }
+  }
+  return '';
 }
 
 class EventHost {

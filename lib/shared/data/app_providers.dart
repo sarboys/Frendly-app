@@ -575,6 +575,23 @@ final eventDetailProvider = FutureProvider.autoDispose
   return repository.fetchEventDetail(eventId, cancelToken: cancelToken);
 });
 
+final eventDetailRouteStopsProvider = FutureProvider.autoDispose
+    .family<List<EventDetailRouteStop>, String>((ref, routeId) async {
+  final authBootstrap = ref.watch(authBootstrapProvider.future);
+  final repository = ref.read(backendRepositoryProvider);
+  final cancelToken = _autoDisposeCancelToken(ref);
+  await authBootstrap;
+  final routeJson = await repository.fetchEveningRoute(
+    routeId,
+    cancelToken: cancelToken,
+  );
+  final steps = routeJson['steps'];
+  if (steps is! List) {
+    return const [];
+  }
+  return EventDetailRouteStop.listFromJson(steps);
+});
+
 class AfficheEventsQuery {
   const AfficheEventsQuery({
     required this.city,

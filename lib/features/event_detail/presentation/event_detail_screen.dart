@@ -231,36 +231,27 @@ class _EventDetailBody extends StatelessWidget {
                         icon: LucideIcons.arrow_left,
                         onPressed: () => context.pop(),
                       ),
-                      const SizedBox(width: AppSpacing.xs),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            BbV5Kicker('Встреча · ${event.distance}'),
-                            const SizedBox(height: 2),
-                            Text(
-                              event.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: bbV5DisplayStyle(fontSize: 14),
-                            ),
-                          ],
-                        ),
-                      ),
+                      const Spacer(),
                       if (event.isHost) ...[
-                        BbV5IconButton(
-                          icon: LucideIcons.pencil,
-                          onPressed: () => context.pushRoute(
-                            AppRoute.createMeetup,
-                            queryParameters: {'editEventId': event.id},
+                        Tooltip(
+                          message: 'Редактировать',
+                          child: BbV5IconButton(
+                            icon: LucideIcons.pencil,
+                            onPressed: () => context.pushRoute(
+                              AppRoute.createMeetup,
+                              queryParameters: {'editEventId': event.id},
+                            ),
                           ),
                         ),
                         const SizedBox(width: AppSpacing.xs),
                       ],
                       if (onInvite != null) ...[
-                        BbV5IconButton(
-                          icon: LucideIcons.user_plus,
-                          onPressed: onInvite,
+                        Tooltip(
+                          message: 'Добавить пользователя',
+                          child: BbV5IconButton(
+                            icon: LucideIcons.user_plus,
+                            onPressed: onInvite,
+                          ),
                         ),
                         const SizedBox(width: AppSpacing.xs),
                       ],
@@ -295,15 +286,15 @@ class _EventDetailBody extends StatelessWidget {
                   ),
                 ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 0, 0),
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
                 sliver: SliverToBoxAdapter(
-                  child: _V5AttendeesRail(event: event),
+                  child: _V5RouteSection(event: event),
                 ),
               ),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
                 sliver: SliverToBoxAdapter(
-                  child: _V5MiniMapCard(event: event),
+                  child: _V5AttendeesRail(event: event),
                 ),
               ),
               if (event.hasTableBooking)
@@ -605,7 +596,7 @@ class _V5MeetupHeroCard extends StatelessWidget {
       child: Column(
         children: [
           AspectRatio(
-            aspectRatio: 1.5,
+            aspectRatio: 1.7,
             child: Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
@@ -618,11 +609,29 @@ class _V5MeetupHeroCard extends StatelessWidget {
               child: Stack(
                 children: [
                   Positioned(
-                    right: 0,
-                    top: 0,
+                    right: -10,
+                    top: -12,
                     child: Text(
                       event.emoji,
-                      style: const TextStyle(fontSize: 104, height: 1),
+                      style: const TextStyle(fontSize: 132, height: 1),
+                    ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _V5HeroPill(
+                          label: eventDayLabel(
+                            time: event.time,
+                            startsAtIso: event.startsAtIso,
+                          ),
+                          showDot: true,
+                        ),
+                        _V5HeroPill(label: _seatPillLabel(event)),
+                      ],
                     ),
                   ),
                   Align(
@@ -631,8 +640,6 @@ class _V5MeetupHeroCard extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        BbV5Kicker('${event.vibe} · ${event.time}'),
-                        const SizedBox(height: 6),
                         BbV5HeroTitle(
                           title: _titleLead(event.title),
                           accent: _titleAccent(event.title),
@@ -647,42 +654,28 @@ class _V5MeetupHeroCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(20),
-            child: GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              childAspectRatio: 1.55,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                _V5InfoTile(
-                  icon: LucideIcons.calendar,
-                  label: 'Когда',
-                  value: eventDayLabel(
-                    time: event.time,
-                    startsAtIso: event.startsAtIso,
-                  ),
-                  subtitle: eventClockLabel(event.time),
-                ),
-                _V5InfoTile(
-                  icon: LucideIcons.map_pin,
-                  label: 'Где',
-                  value: _shortPlace(event.place),
-                  subtitle: event.distance,
-                ),
-                _V5InfoTile(
-                  icon: LucideIcons.users,
-                  label: 'Идут',
-                  value: '${event.going}/${event.capacity}',
-                  subtitle:
-                      event.accessMode == 'request' ? 'По заявке' : 'Открытое',
-                ),
-                const _V5InfoTile(
+                _V5MetaItem(
                   icon: LucideIcons.clock,
-                  label: 'Длительность',
-                  value: '≈ 2 часа',
-                  subtitle: 'до 23:00',
+                  value: eventClockLabel(event.time).isEmpty
+                      ? event.time
+                      : eventClockLabel(event.time),
+                ),
+                const _V5MetaDot(),
+                _V5MetaItem(
+                  icon: LucideIcons.map_pin,
+                  value: _shortPlace(event.place),
+                ),
+                const _V5MetaDot(),
+                _V5MetaItem(
+                  icon: LucideIcons.users,
+                  value: '${event.going}/${event.capacity}',
+                  suffix: _accessMetaLabel(event),
                 ),
               ],
             ),
@@ -693,69 +686,128 @@ class _V5MeetupHeroCard extends StatelessWidget {
   }
 }
 
-class _V5InfoTile extends StatelessWidget {
-  const _V5InfoTile({
-    required this.icon,
+class _V5HeroPill extends StatelessWidget {
+  const _V5HeroPill({
     required this.label,
+    this.showDot = false,
+  });
+
+  final String label;
+  final bool showDot;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: BbV5Colors.paperHi,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: BbV5Colors.hair),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showDot) ...[
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: BbV5Colors.brand,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              style: bbV5KickerStyle(
+                color: BbV5Colors.ink,
+                fontSize: 10,
+                letterSpacing: 0.6,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _V5MetaItem extends StatelessWidget {
+  const _V5MetaItem({
+    required this.icon,
     required this.value,
-    required this.subtitle,
+    this.suffix,
   });
 
   final IconData icon;
-  final String label;
   final String value;
-  final String subtitle;
+  final String? suffix;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: BbV5Colors.inkMute),
+        const SizedBox(width: 6),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: bbV5DisplayStyle(fontSize: 12.5, height: 1.2).copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+        if (suffix != null) ...[
+          const SizedBox(width: 4),
+          Text(
+            '· $suffix',
+            style: AppTextStyles.caption.copyWith(
+              color: BbV5Colors.inkMute,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _V5MetaDot extends StatelessWidget {
+  const _V5MetaDot();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      width: 4,
+      height: 4,
       decoration: BoxDecoration(
-        color: BbV5Colors.paper,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: BbV5Colors.hair),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: BbV5Colors.inkMute),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: bbV5KickerStyle(letterSpacing: 1.4),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: bbV5DisplayStyle(fontSize: 13, height: 1.25).copyWith(
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.caption.copyWith(
-              color: BbV5Colors.inkMute,
-              letterSpacing: 0,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-        ],
+        color: BbV5Colors.inkMute.withValues(alpha: 0.5),
+        shape: BoxShape.circle,
       ),
     );
   }
+}
+
+String _seatPillLabel(EventDetail event) {
+  if (event.capacity <= 0) {
+    return '${event.going} идут';
+  }
+  return '${event.going}/${event.capacity} мест';
+}
+
+String _accessMetaLabel(EventDetail event) {
+  if (event.accessMode == 'request' ||
+      event.joinMode == EventJoinMode.request) {
+    return 'по заявке';
+  }
+  if (event.visibilityMode == 'friends') {
+    return 'по приглашению';
+  }
+  return 'открыто';
 }
 
 class _V5TicketBottomAction extends StatelessWidget {
@@ -937,88 +989,92 @@ class _V5HostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BbV5Card(
-      radius: 24,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      radius: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
         children: [
-          const BbV5Kicker('Хост вечера'),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              BbAvatar(
-                name: event.host.displayName,
-                size: BbAvatarSize.lg,
-                online: true,
-                imageUrl: event.host.avatarUrl,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          BbAvatar(
+            name: event.host.displayName,
+            size: BbAvatarSize.md,
+            online: true,
+            imageUrl: event.host.avatarUrl,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            event.host.displayName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: bbV5DisplayStyle(fontSize: 14),
-                          ),
-                        ),
-                        if (event.host.verified) ...[
-                          const SizedBox(width: 6),
-                          const Icon(
-                            LucideIcons.badge_check,
-                            size: 15,
-                            color: BbV5Colors.brandDeep,
-                          ),
-                        ],
-                      ],
+                    Flexible(
+                      child: Text(
+                        event.host.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: bbV5DisplayStyle(fontSize: 13.5),
+                      ),
                     ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        const Icon(
-                          LucideIcons.star,
-                          size: 13,
-                          color: BbV5Colors.gold,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${event.host.rating.toStringAsFixed(1)} · ${event.host.meetupCount} встреч',
-                          style: AppTextStyles.caption.copyWith(
-                            color: BbV5Colors.inkMute,
-                            letterSpacing: 0,
-                            fontFeatures: const [
-                              FontFeature.tabularFigures(),
-                            ],
-                          ),
-                        ),
-                      ],
+                    if (event.host.verified) ...[
+                      const SizedBox(width: 6),
+                      const Icon(
+                        LucideIcons.badge_check,
+                        size: 14,
+                        color: BbV5Colors.brandDeep,
+                      ),
+                    ],
+                    Text(
+                      ' · хост',
+                      style: AppTextStyles.caption.copyWith(
+                        color: BbV5Colors.inkMute,
+                        letterSpacing: 0,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              BbV5PillButton(
-                label: 'Профиль',
-                height: 36,
-                fontSize: 11.5,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                onPressed: () {
-                  if (event.isHost) {
-                    context.pushRoute(AppRoute.profile);
-                    return;
-                  }
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    const Icon(
+                      LucideIcons.star,
+                      size: 12,
+                      color: BbV5Colors.gold,
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        '${event.host.rating.toStringAsFixed(1)} · ${event.host.meetupCount} встреч',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.caption.copyWith(
+                          color: BbV5Colors.inkMute,
+                          fontSize: 10.5,
+                          letterSpacing: 0,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          BbV5PillButton(
+            label: 'Профиль',
+            height: 32,
+            fontSize: 11,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            onPressed: () {
+              if (event.isHost) {
+                context.pushRoute(AppRoute.profile);
+                return;
+              }
 
-                  context.pushRoute(
-                    AppRoute.userProfile,
-                    pathParameters: {'userId': event.host.id},
-                  );
-                },
-              ),
-            ],
+              context.pushRoute(
+                AppRoute.userProfile,
+                pathParameters: {'userId': event.host.id},
+              );
+            },
           ),
         ],
       ),
@@ -1090,14 +1146,18 @@ class _V5AttendeesRail extends StatelessWidget {
       );
     }
     final count = event.going > 0 ? event.going : cards.length;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(right: 20),
-          child: Row(
+    final preview = cards.skip(1).take(2).toList(growable: false);
+    final names = preview.map((item) => item.name).join(', ');
+    final remaining = (count - preview.length).clamp(0, count);
+
+    return BbV5Card(
+      radius: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        children: [
+          Row(
             children: [
-              Expanded(child: BbV5Kicker('Кто идёт · $count')),
+              Expanded(child: BbV5Kicker('Идут · $count')),
               Text(
                 'Все ›',
                 style: AppTextStyles.caption.copyWith(
@@ -1110,35 +1170,71 @@ class _V5AttendeesRail extends StatelessWidget {
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 148,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.only(right: 20),
-            itemCount: cards.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 10),
-            itemBuilder: (context, index) {
-              final attendee = cards[index];
-              return _V5AttendeeCard(
-                attendee: attendee,
-                index: index,
-                onTap: () {
-                  if (attendee.id == event.host.id && event.isHost) {
-                    context.pushRoute(AppRoute.profile);
-                    return;
-                  }
-                  context.pushRoute(
-                    AppRoute.userProfile,
-                    pathParameters: {'userId': attendee.id},
-                  );
-                },
-              );
-            },
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              SizedBox(
+                width: 42 + (cards.take(5).length - 1) * 26,
+                height: 42,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    for (final entry in cards.take(5).indexed)
+                      Positioned(
+                        left: entry.$1 * 26,
+                        child: _V5StackedAttendeeAvatar(
+                          attendee: entry.$2,
+                          onTap: () {
+                            if (entry.$2.id == event.host.id && event.isHost) {
+                              context.pushRoute(AppRoute.profile);
+                              return;
+                            }
+                            context.pushRoute(
+                              AppRoute.userProfile,
+                              pathParameters: {'userId': entry.$2.id},
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      if (names.isNotEmpty)
+                        TextSpan(
+                          text: names,
+                          style: const TextStyle(
+                            color: BbV5Colors.ink,
+                            fontFamily: 'Sora',
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      if (remaining > 0)
+                        TextSpan(
+                          text: names.isEmpty
+                              ? _attendeeFallbackLabel(count)
+                              : ' и ещё $remaining',
+                        ),
+                    ],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption.copyWith(
+                    color: BbV5Colors.inkSoft,
+                    fontSize: 11.5,
+                    height: 1.35,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -1159,15 +1255,20 @@ class _V5AttendeeData {
   final bool verified;
 }
 
-class _V5AttendeeCard extends StatelessWidget {
-  const _V5AttendeeCard({
+String _attendeeFallbackLabel(int count) {
+  if (count <= 1) {
+    return 'Пока только хост';
+  }
+  return 'Ещё $count участников';
+}
+
+class _V5StackedAttendeeAvatar extends StatelessWidget {
+  const _V5StackedAttendeeAvatar({
     required this.attendee,
-    required this.index,
     required this.onTap,
   });
 
   final _V5AttendeeData attendee;
-  final int index;
   final VoidCallback onTap;
 
   @override
@@ -1176,63 +1277,43 @@ class _V5AttendeeCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          width: 112,
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: BbV5Colors.paperHi,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: BbV5Colors.hair),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        customBorder: const CircleBorder(),
+        child: SizedBox(
+          width: 42,
+          height: 42,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              Expanded(
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: BbAvatar(
-                        name: attendee.name,
-                        imageUrl: attendee.avatarUrl,
-                        size: BbAvatarSize.xl,
-                      ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: BbV5Colors.paperHi,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: BbV5Colors.paperHi, width: 2),
+                  ),
+                  child: BbAvatar(
+                    name: attendee.name,
+                    imageUrl: attendee.avatarUrl,
+                    size: BbAvatarSize.md,
+                  ),
+                ),
+              ),
+              if (attendee.verified)
+                const Positioned(
+                  right: -1,
+                  bottom: -1,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: BbV5Colors.paperHi,
+                      shape: BoxShape.circle,
                     ),
-                    if (attendee.verified)
-                      const Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: Icon(
-                          LucideIcons.badge_check,
-                          color: BbV5Colors.brandDeep,
-                          size: 20,
-                        ),
-                      ),
-                  ],
+                    child: Icon(
+                      LucideIcons.badge_check,
+                      color: BbV5Colors.brandDeep,
+                      size: 14,
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${attendee.name}${index == 0 ? '' : ', ${24 + index}'}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.caption.copyWith(
-                  fontFamily: 'Sora',
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0,
-                  color: BbV5Colors.ink,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                attendee.role,
-                style: AppTextStyles.caption.copyWith(
-                  color: BbV5Colors.inkMute,
-                  fontSize: 10,
-                  letterSpacing: 0,
-                ),
-              ),
             ],
           ),
         ),
@@ -1241,10 +1322,86 @@ class _V5AttendeeCard extends StatelessWidget {
   }
 }
 
-class _V5MiniMapCard extends StatelessWidget {
-  const _V5MiniMapCard({required this.event});
+class _V5RouteSection extends ConsumerStatefulWidget {
+  const _V5RouteSection({required this.event});
 
   final EventDetail event;
+
+  @override
+  ConsumerState<_V5RouteSection> createState() => _V5RouteSectionState();
+}
+
+class _V5RouteSectionState extends ConsumerState<_V5RouteSection> {
+  int _activeIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final event = widget.event;
+    final routeId = event.routeId?.trim();
+    final shouldLoadRoute =
+        event.routeStops.isEmpty && routeId != null && routeId.isNotEmpty;
+    final routeAsync = !shouldLoadRoute
+        ? null
+        : ref.watch(eventDetailRouteStopsProvider(routeId));
+    final fallbackStops = event.routeStops.isNotEmpty
+        ? event.routeStops
+        : [_singleEventStop(event)];
+    final stops = routeAsync?.maybeWhen(
+          data: (items) => items.isEmpty ? fallbackStops : items,
+          orElse: () => fallbackStops,
+        ) ??
+        fallbackStops;
+    final activeIndex =
+        _activeIndex >= stops.length ? stops.length - 1 : _activeIndex;
+    final routeExpected = shouldLoadRoute || event.routeStops.length > 1;
+    final multi = routeExpected || stops.length > 1;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          child: Row(
+            children: [
+              Expanded(child: BbV5Kicker(multi ? 'Маршрут вечера' : 'Место')),
+              if (stops.length > 1)
+                Text(
+                  '${stops.length} ОСТАНОВКИ',
+                  style: bbV5KickerStyle(
+                    fontSize: 10,
+                    letterSpacing: 1.6,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        _V5RouteCard(
+          event: event,
+          stops: stops,
+          activeIndex: activeIndex,
+          onSelect: (index) {
+            setState(() {
+              _activeIndex = index;
+            });
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _V5RouteCard extends StatelessWidget {
+  const _V5RouteCard({
+    required this.event,
+    required this.stops,
+    required this.activeIndex,
+    required this.onSelect,
+  });
+
+  final EventDetail event;
+  final List<EventDetailRouteStop> stops;
+  final int activeIndex;
+  final ValueChanged<int> onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -1253,99 +1410,320 @@ class _V5MiniMapCard extends StatelessWidget {
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          SizedBox(
-            height: 140,
-            child: Stack(
-              children: [
-                const Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        center: Alignment(-0.4, -0.2),
-                        radius: 1.0,
-                        colors: [BbV5Colors.brandSoft, BbV5Colors.terraSoft],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: CustomPaint(painter: _MiniMapPainter()),
-                ),
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 42,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: BbV5Colors.accent,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: BbV5Colors.paperHi.withValues(alpha: 0.7),
-                        width: 6,
-                        strokeAlign: BorderSide.strokeAlignOutside,
-                      ),
-                      boxShadow: BbV5Shadows.ink,
-                    ),
-                    child: const Icon(
-                      LucideIcons.map_pin,
-                      size: 18,
-                      color: BbV5Colors.paperHi,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          _V5RouteMapPreview(
+            stops: stops,
+            activeIndex: activeIndex,
+            onSelect: onSelect,
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _showEventMapOptions(context, event),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          event.place,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: bbV5DisplayStyle(fontSize: 13.5),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${event.distance} · в 15 минутах от тебя',
-                          style: AppTextStyles.caption.copyWith(
-                            color: BbV5Colors.inkMute,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                BbV5PillButton(
-                  label: 'Маршрут',
-                  icon: LucideIcons.navigation,
-                  height: 40,
-                  fontSize: 12,
-                  onPressed: () => _showEventMapOptions(context, event),
-                ),
-              ],
+          for (final entry in stops.indexed)
+            _V5RouteStopRow(
+              event: event,
+              stop: entry.$2,
+              index: entry.$1,
+              active: entry.$1 == activeIndex,
+              last: entry.$1 == stops.length - 1,
+              onTap: () => onSelect(entry.$1),
             ),
-          ),
         ],
       ),
     );
   }
 }
 
+class _V5RouteMapPreview extends StatelessWidget {
+  const _V5RouteMapPreview({
+    required this.stops,
+    required this.activeIndex,
+    required this.onSelect,
+  });
+
+  final List<EventDetailRouteStop> stops;
+  final int activeIndex;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 130,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              const Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment(-0.4, -0.2),
+                      radius: 1.0,
+                      colors: [BbV5Colors.brandSoft, BbV5Colors.terraSoft],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _RouteMapPainter(multi: stops.length > 1),
+                ),
+              ),
+              for (final entry in stops.indexed)
+                _V5RoutePin(
+                  index: entry.$1,
+                  active: entry.$1 == activeIndex,
+                  point: _routePinPoint(entry.$1, stops.length),
+                  size: Size(constraints.maxWidth, constraints.maxHeight),
+                  onTap: () => onSelect(entry.$1),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _V5RoutePin extends StatelessWidget {
+  const _V5RoutePin({
+    required this.index,
+    required this.active,
+    required this.point,
+    required this.size,
+    required this.onTap,
+  });
+
+  final int index;
+  final bool active;
+  final Offset point;
+  final Size size;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final pinSize = active ? 32.0 : 24.0;
+    return Positioned(
+      left: size.width * point.dx - pinSize / 2,
+      top: size.height * point.dy - pinSize / 2,
+      width: pinSize,
+      height: pinSize,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: active ? BbV5Colors.accent : BbV5Colors.paperHi,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: active ? BbV5Colors.accent : BbV5Colors.hair,
+              width: 1.5,
+            ),
+            boxShadow: active ? BbV5Shadows.ink : BbV5Shadows.pill,
+          ),
+          child: Text(
+            '${index + 1}',
+            style: bbV5DisplayStyle(
+              fontSize: active ? 12 : 10.5,
+              color: active ? BbV5Colors.paperHi : BbV5Colors.ink,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _V5RouteStopRow extends StatelessWidget {
+  const _V5RouteStopRow({
+    required this.event,
+    required this.stop,
+    required this.index,
+    required this.active,
+    required this.last,
+    required this.onTap,
+  });
+
+  final EventDetail event;
+  final EventDetailRouteStop stop;
+  final int index;
+  final bool active;
+  final bool last;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: active ? BbV5Colors.paperHi : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(
+                color: index == 0 ? Colors.transparent : BbV5Colors.hair,
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 36,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.topCenter,
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: active ? BbV5Colors.accent : BbV5Colors.paper,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: active ? BbV5Colors.accent : BbV5Colors.hair,
+                          ),
+                        ),
+                        child: Text(
+                          stop.emoji,
+                          style: const TextStyle(fontSize: 16, height: 1),
+                        ),
+                      ),
+                      if (!last)
+                        Positioned(
+                          top: 38,
+                          child: Container(
+                            width: 1,
+                            height: 18,
+                            color: BbV5Colors.hair,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              stop.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: bbV5DisplayStyle(
+                                fontSize: 13.5,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                          if (stop.time.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              stop.time,
+                              style: AppTextStyles.caption.copyWith(
+                                color: BbV5Colors.inkMute,
+                                fontFamily: 'Sora',
+                                fontSize: 11,
+                                letterSpacing: 0,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (stop.subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          stop.subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.caption.copyWith(
+                            color: BbV5Colors.inkMute,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
+                      if (active && (stop.note ?? '').isNotEmpty) ...[
+                        const SizedBox(height: 7),
+                        Text(
+                          stop.note!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.caption.copyWith(
+                            color: BbV5Colors.inkSoft,
+                            fontSize: 11.5,
+                            height: 1.35,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (active) ...[
+                  const SizedBox(width: 10),
+                  BbV5PillButton(
+                    label: 'Маршрут',
+                    icon: LucideIcons.navigation,
+                    height: 34,
+                    fontSize: 11,
+                    padding: const EdgeInsets.symmetric(horizontal: 11),
+                    iconSize: 14,
+                    iconGap: 4,
+                    onPressed: () => _showEventMapOptions(
+                      context,
+                      event,
+                      stop: stop,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+EventDetailRouteStop _singleEventStop(EventDetail event) {
+  final place = event.place.trim();
+  final comma = place.indexOf(',');
+  final title = comma <= 0 ? place : place.substring(0, comma).trim();
+  final subtitle =
+      comma <= 0 ? event.distance : place.substring(comma + 1).trim();
+  return EventDetailRouteStop(
+    title: title.isEmpty ? 'Место встречи' : title,
+    subtitle: subtitle,
+    time: eventClockLabel(event.time),
+    note: event.description,
+    emoji: event.emoji,
+  );
+}
+
+Offset _routePinPoint(int index, int count) {
+  if (count <= 1) {
+    return const Offset(0.5, 0.56);
+  }
+
+  final progress = index / (count - 1);
+  final x = 0.18 + progress * 0.64;
+  final yOffsets = [0.62, 0.48, 0.56, 0.42, 0.58];
+  return Offset(x, yOffsets[index % yOffsets.length]);
+}
+
 Future<void> _showEventMapOptions(
   BuildContext context,
-  EventDetail event,
-) async {
-  final query = event.place.trim();
+  EventDetail event, {
+  EventDetailRouteStop? stop,
+}) async {
+  final query = (stop?.mapQuery ?? event.place).trim();
   if (query.isEmpty) {
     return;
   }
@@ -1545,7 +1923,11 @@ class _EventMapOption extends StatelessWidget {
   }
 }
 
-class _MiniMapPainter extends CustomPainter {
+class _RouteMapPainter extends CustomPainter {
+  const _RouteMapPainter({required this.multi});
+
+  final bool multi;
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
@@ -1568,10 +1950,35 @@ class _MiniMapPainter extends CustomPainter {
       Offset(size.width * 0.56, size.height),
       paint,
     );
+    if (!multi) {
+      return;
+    }
+
+    final routePaint = Paint()
+      ..color = BbV5Colors.terra.withValues(alpha: 0.72)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final routePath = Path()
+      ..moveTo(size.width * 0.18, size.height * 0.62)
+      ..quadraticBezierTo(
+        size.width * 0.36,
+        size.height * 0.32,
+        size.width * 0.5,
+        size.height * 0.5,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.66,
+        size.height * 0.68,
+        size.width * 0.82,
+        size.height * 0.44,
+      );
+    canvas.drawPath(routePath, routePaint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _RouteMapPainter oldDelegate) {
+    return oldDelegate.multi != multi;
+  }
 }
 
 class _V5PerkCard extends StatelessWidget {
