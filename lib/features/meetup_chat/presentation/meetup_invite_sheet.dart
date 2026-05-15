@@ -213,6 +213,7 @@ class _MeetupInviteSheetState extends ConsumerState<_MeetupInviteSheet> {
         _sentIds.add(person.id);
         _sendingIds.remove(person.id);
       });
+      Navigator.of(context).pop();
     } catch (_) {
       if (!mounted) {
         return;

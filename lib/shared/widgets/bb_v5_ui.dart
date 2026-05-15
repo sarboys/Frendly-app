@@ -691,7 +691,7 @@ class BbV5IconButton extends StatelessWidget {
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           onPressed: onPressed,
-          icon: Icon(
+          icon: BbV5LucideIcon(
             icon,
             size: iconSize,
             color: color ?? (dark ? BbV5Colors.paperHi : BbV5Colors.ink),
@@ -700,6 +700,58 @@ class BbV5IconButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class BbV5LucideIcon extends StatelessWidget {
+  const BbV5LucideIcon(
+    this.icon, {
+    this.size = 17,
+    this.color,
+    this.weight = 300,
+    super.key,
+  });
+
+  final IconData icon;
+  final double size;
+  final Color? color;
+  final int weight;
+
+  @override
+  Widget build(BuildContext context) {
+    final shouldMirror = icon.matchTextDirection &&
+        Directionality.of(context) == TextDirection.rtl;
+    final glyph = Text(
+      String.fromCharCode(icon.codePoint),
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        inherit: false,
+        fontFamily: _weightedLucideFontFamily(weight),
+        package: 'lucide_icons_flutter',
+        fontSize: size,
+        height: 1,
+        color: color ?? IconTheme.of(context).color,
+      ),
+    );
+    if (!shouldMirror) {
+      return glyph;
+    }
+    return Transform(
+      alignment: Alignment.center,
+      transform: Matrix4.diagonal3Values(-1, 1, 1),
+      child: glyph,
+    );
+  }
+}
+
+String _weightedLucideFontFamily(int weight) {
+  return switch (weight) {
+    <= 100 => 'Lucide100',
+    <= 200 => 'Lucide200',
+    <= 300 => 'Lucide300',
+    <= 400 => 'Lucide400',
+    <= 500 => 'Lucide500',
+    _ => 'Lucide600',
+  };
 }
 
 class BbV5PillButton extends StatelessWidget {
@@ -761,7 +813,7 @@ class BbV5PillButton extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: iconSize, color: iconColor),
+              BbV5LucideIcon(icon!, size: iconSize, color: iconColor),
               SizedBox(width: iconGap),
             ],
             Flexible(
@@ -779,7 +831,11 @@ class BbV5PillButton extends StatelessWidget {
             ),
             if (trailingIcon != null) ...[
               SizedBox(width: iconGap),
-              Icon(trailingIcon, size: iconSize, color: trailingIconColor),
+              BbV5LucideIcon(
+                trailingIcon!,
+                size: iconSize,
+                color: trailingIconColor,
+              ),
             ],
           ],
         ),

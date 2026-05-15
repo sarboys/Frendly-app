@@ -3383,7 +3383,7 @@ class _TonightMetricsSection extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: AppSpacing.sm,
           crossAxisSpacing: AppSpacing.sm,
-          childAspectRatio: 1.34,
+          childAspectRatio: 1.62,
           children: [
             const _MetricCard(
               title: 'Pulse',

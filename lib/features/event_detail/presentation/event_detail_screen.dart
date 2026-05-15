@@ -1118,10 +1118,23 @@ class _V5AttendeesRail extends StatelessWidget {
             padding: const EdgeInsets.only(right: 20),
             itemCount: cards.length,
             separatorBuilder: (context, index) => const SizedBox(width: 10),
-            itemBuilder: (context, index) => _V5AttendeeCard(
-              attendee: cards[index],
-              index: index,
-            ),
+            itemBuilder: (context, index) {
+              final attendee = cards[index];
+              return _V5AttendeeCard(
+                attendee: attendee,
+                index: index,
+                onTap: () {
+                  if (attendee.id == event.host.id && event.isHost) {
+                    context.pushRoute(AppRoute.profile);
+                    return;
+                  }
+                  context.pushRoute(
+                    AppRoute.userProfile,
+                    pathParameters: {'userId': attendee.id},
+                  );
+                },
+              );
+            },
           ),
         ),
       ],
@@ -1149,70 +1162,79 @@ class _V5AttendeeCard extends StatelessWidget {
   const _V5AttendeeCard({
     required this.attendee,
     required this.index,
+    required this.onTap,
   });
 
   final _V5AttendeeData attendee;
   final int index;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 112,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: BbV5Colors.paperHi,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: BbV5Colors.hair),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: BbAvatar(
-                    name: attendee.name,
-                    imageUrl: attendee.avatarUrl,
-                    size: BbAvatarSize.xl,
-                  ),
-                ),
-                if (attendee.verified)
-                  const Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Icon(
-                      LucideIcons.badge_check,
-                      color: BbV5Colors.brandDeep,
-                      size: 20,
+        child: Container(
+          width: 112,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: BbV5Colors.paperHi,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: BbV5Colors.hair),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: BbAvatar(
+                        name: attendee.name,
+                        imageUrl: attendee.avatarUrl,
+                        size: BbAvatarSize.xl,
+                      ),
                     ),
-                  ),
-              ],
-            ),
+                    if (attendee.verified)
+                      const Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Icon(
+                          LucideIcons.badge_check,
+                          color: BbV5Colors.brandDeep,
+                          size: 20,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${attendee.name}${index == 0 ? '' : ', ${24 + index}'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(
+                  fontFamily: 'Sora',
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                  color: BbV5Colors.ink,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                attendee.role,
+                style: AppTextStyles.caption.copyWith(
+                  color: BbV5Colors.inkMute,
+                  fontSize: 10,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            '${attendee.name}${index == 0 ? '' : ', ${24 + index}'}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.caption.copyWith(
-              fontFamily: 'Sora',
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0,
-              color: BbV5Colors.ink,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            attendee.role,
-            style: AppTextStyles.caption.copyWith(
-              color: BbV5Colors.inkMute,
-              fontSize: 10,
-              letterSpacing: 0,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1307,10 +1329,7 @@ class _V5MiniMapCard extends StatelessWidget {
                   icon: LucideIcons.navigation,
                   height: 40,
                   fontSize: 12,
-                  onPressed: () => context.pushRoute(
-                    AppRoute.map,
-                    queryParameters: {'eventId': event.id},
-                  ),
+                  onPressed: () => _showEventMapOptions(context, event),
                 ),
               ],
             ),
