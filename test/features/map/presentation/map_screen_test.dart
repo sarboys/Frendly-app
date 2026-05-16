@@ -367,10 +367,10 @@ void main() {
     );
   });
 
-  test('radar category counts are calculated from loaded map events', () {
+  test('radar category counts split meetups, routes and affiche', () {
     const events = [
       Event(
-        id: 'bar-1',
+        id: 'meetup-1',
         title: 'Brix',
         emoji: '🍷',
         time: 'Сегодня · 20:00',
@@ -384,7 +384,7 @@ void main() {
         joined: false,
       ),
       Event(
-        id: 'route-backed-meetup-1',
+        id: 'single-point-route-meetup-1',
         title: 'Тверская в огнях',
         emoji: '✨',
         time: 'Сегодня · 20:30',
@@ -396,47 +396,49 @@ void main() {
         vibe: 'Маршрут',
         tone: EventTone.evening,
         routeId: 'r-lights',
+        routePointCount: 1,
         joined: false,
       ),
       Event(
-        id: 'date-1',
-        title: 'Дейтинг рядом',
-        emoji: '💫',
+        id: 'route-meetup-1',
+        title: 'Три места за вечер',
+        emoji: '🚶',
         time: 'Сегодня · 21:00',
         place: 'Центр',
         distance: '0.9 км',
         attendees: [],
-        going: 2,
-        capacity: 2,
-        vibe: 'Свидание',
+        going: 5,
+        capacity: 8,
+        vibe: 'Маршрут',
         tone: EventTone.warm,
-        isDate: true,
+        routeId: 'r-three-points',
+        routePointCount: 3,
         joined: false,
       ),
       Event(
-        id: 'poster-1',
-        title: 'Стендап',
+        id: 'affiche-backed-1',
+        title: 'Выставка',
         emoji: '🎟️',
         time: 'Сегодня · 22:00',
-        place: 'Клуб',
+        place: 'Галерея',
         distance: '1.1 км',
         attendees: [],
         going: 14,
         capacity: 30,
         vibe: 'Афиша',
         tone: EventTone.sage,
-        ticketSourceKind: EventTicketSourceKind.affiche,
+        isAfficheBacked: true,
         joined: false,
       ),
     ];
 
     final counts = buildRadarCategoryCounts(events);
 
-    expect(counts['all'], 4);
-    expect(counts['bars'], 3);
-    expect(counts['routes'], 0);
+    expect(counts['meetups'], 2);
+    expect(counts['routes'], 1);
     expect(counts.containsKey('dating'), isFalse);
     expect(counts['affiche'], 1);
+    expect(counts.containsKey('all'), isFalse);
   });
 
   test('map prefers manual location over device GPS', () {
@@ -625,7 +627,7 @@ void main() {
     expect(placemarks.last.text, isNull);
   });
 
-  test('radarPinKindForEvent keeps route-backed meetups as meetup pins', () {
+  test('radarPinKindForEvent keeps one-point route meetups as meetup pins', () {
     const event = Event(
       id: 'route-backed-meetup-1',
       title: 'Маршрут',
@@ -639,14 +641,40 @@ void main() {
       vibe: 'Маршрут',
       tone: EventTone.sage,
       routeId: 'route-template-1',
+      routePointCount: 1,
       latitude: 55.75,
       longitude: 37.61,
       joined: false,
     );
 
-    expect(radarCategoryForEvent(event), 'bars');
+    expect(radarCategoryForEvent(event), 'meetups');
     expect(radarPinKindForEvent(event), RadarMapPinKind.bars);
-    expect(radarCardSubtypeForEvent(event), 'встреча по маршруту');
+    expect(radarCardSubtypeForEvent(event), 'встреча');
+  });
+
+  test('radarPinKindForEvent maps multi-point meetups to route pins', () {
+    const event = Event(
+      id: 'route-backed-meetup-2',
+      title: 'Маршрут',
+      emoji: '🚶',
+      time: 'Сегодня',
+      place: 'Москва',
+      distance: '1 км',
+      attendees: [],
+      going: 0,
+      capacity: 8,
+      vibe: 'Маршрут',
+      tone: EventTone.sage,
+      routeId: 'route-template-2',
+      routePointCount: 3,
+      latitude: 55.75,
+      longitude: 37.61,
+      joined: false,
+    );
+
+    expect(radarCategoryForEvent(event), 'routes');
+    expect(radarPinKindForEvent(event), RadarMapPinKind.footprints);
+    expect(radarCardSubtypeForEvent(event), 'маршрут · Маршрут');
   });
 
   test('radarPinKindForEvent maps ticket events to affiche pins', () {
@@ -668,6 +696,30 @@ void main() {
       joined: false,
     );
 
+    expect(radarPinKindForEvent(event), RadarMapPinKind.affiche);
+  });
+
+  test('radarPinKindForEvent maps free affiche-backed events to affiche pins',
+      () {
+    const event = Event(
+      id: 'affiche-2',
+      title: 'Открытая лекция',
+      emoji: '🎟️',
+      time: 'Сегодня',
+      place: 'Москва',
+      distance: '1 км',
+      attendees: [],
+      going: 0,
+      capacity: 8,
+      vibe: 'Афиша',
+      tone: EventTone.warm,
+      isAfficheBacked: true,
+      latitude: 55.75,
+      longitude: 37.61,
+      joined: false,
+    );
+
+    expect(radarCategoryForEvent(event), 'affiche');
     expect(radarPinKindForEvent(event), RadarMapPinKind.affiche);
   });
 
@@ -1210,6 +1262,68 @@ void main() {
       );
       expect(find.byIcon(LucideIcons.chevron_up), findsNothing);
       expect(find.byIcon(LucideIcons.chevron_down), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('map opens the selected route event even with meetups default',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ..._mapTestOverrides(),
+            mapEventsProvider.overrideWith(
+              (ref, query) async => const [
+                Event(
+                  id: 'meetup-1',
+                  title: 'Одна точка',
+                  emoji: '☕',
+                  time: 'Сегодня · 12:00',
+                  place: 'Москва',
+                  distance: '0.5 км',
+                  attendees: ['Аня'],
+                  going: 1,
+                  capacity: 4,
+                  vibe: 'Спокойно',
+                  tone: EventTone.warm,
+                  latitude: 55.75,
+                  longitude: 37.61,
+                  joined: false,
+                ),
+                Event(
+                  id: 'route-1',
+                  title: 'Три точки',
+                  emoji: '🚶',
+                  time: 'Сегодня · 20:00',
+                  place: 'Москва',
+                  distance: '1.0 км',
+                  attendees: ['Ира'],
+                  going: 2,
+                  capacity: 8,
+                  vibe: 'Маршрут',
+                  tone: EventTone.evening,
+                  routeId: 'route-1',
+                  routePointCount: 3,
+                  latitude: 55.76,
+                  longitude: 37.64,
+                  joined: false,
+                ),
+              ],
+            ),
+          ],
+          child: const MaterialApp(
+            home: MapScreen(initialEventId: 'route-1'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Три точки'), findsOneWidget);
+      expect(find.text('Одна точка'), findsNothing);
+      expect(find.text('Маршруты · 1'), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

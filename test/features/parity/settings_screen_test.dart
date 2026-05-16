@@ -2,6 +2,7 @@ import 'package:big_break_mobile/features/settings/presentation/settings_screen.
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/user_settings.dart';
+import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,7 +36,7 @@ Widget _wrap() {
 }
 
 void main() {
-  testWidgets('settings matches v5 user-facing groups', (tester) async {
+  testWidgets('settings removes noisy profile settings rows', (tester) async {
     await tester.pumpWidget(_wrap());
     await tester.pumpAndSettle();
 
@@ -46,11 +47,17 @@ void main() {
     expect(find.text('Wallet'), findsOneWidget);
     expect(find.text('Верификация'), findsOneWidget);
     expect(find.text('SOS'), findsOneWidget);
-    expect(find.text('Вечера и поиск'), findsOneWidget);
-    expect(find.text('Радар рядом'), findsOneWidget);
-    expect(find.text('AI compass'), findsOneWidget);
-    expect(find.text('Авто-вечер'), findsOneWidget);
-    expect(find.text('After Dark'), findsOneWidget);
+    expect(find.text('Вечера и поиск'), findsNothing);
+    expect(find.text('Радар рядом'), findsNothing);
+    expect(find.text('AI compass'), findsNothing);
+    expect(find.text('Авто-вечер'), findsNothing);
+    expect(find.text('After Dark'), findsNothing);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -360));
+    await tester.pumpAndSettle();
+    expect(find.text('Доступ к контактам'), findsNothing);
+    expect(find.text('Приглашения'), findsNothing);
+    expect(find.text('Чаты'), findsNothing);
 
     await tester.scrollUntilVisible(
       find.text('Удаление аккаунта'),
@@ -64,6 +71,19 @@ void main() {
     expect(find.text('Удаление аккаунта'), findsOneWidget);
     expect(find.text('Frendly+ доступ'), findsNothing);
     expect(find.text('After Dark доступ'), findsNothing);
+  });
+
+  testWidgets('settings active toggles use v5 accent color', (tester) async {
+    await tester.pumpWidget(_wrap());
+    await tester.pumpAndSettle();
+
+    final animatedContainerColors = tester
+        .widgetList<AnimatedContainer>(find.byType(AnimatedContainer))
+        .map((widget) => widget.decoration)
+        .whereType<BoxDecoration>()
+        .map((decoration) => decoration.color);
+
+    expect(animatedContainerColors, contains(BbV5Colors.accent));
   });
 
   testWidgets('settings screen keeps content visible while request is loading',
@@ -84,7 +104,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Настройки аккаунта'), findsOneWidget);
-    expect(find.text('Вечера и поиск'), findsOneWidget);
+    expect(find.text('Приватность'), findsOneWidget);
   });
 
   testWidgets('settings language row opens selector sheet', (tester) async {

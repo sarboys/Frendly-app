@@ -88,43 +88,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ],
                 _SettingsGroup(
-                  title: 'Вечера и поиск',
-                  children: [
-                    _SettingsRow(
-                      label: 'Радар рядом',
-                      sub: current.allowLocation
-                          ? 'Геолокация включена'
-                          : 'Включи доступ к месту',
-                      icon: LucideIcons.radar,
-                      chevron: true,
-                      onTap: () => context.pushRoute(AppRoute.map),
-                    ),
-                    _SettingsRow(
-                      label: 'AI compass',
-                      sub: 'Собрать вечер по настроению',
-                      icon: LucideIcons.compass,
-                      chevron: true,
-                      onTap: () => context.pushRoute(AppRoute.aiCreate),
-                    ),
-                    _SettingsToggle(
-                      label: 'Авто-вечер',
-                      sub: 'Делиться планами с компанией',
-                      icon: LucideIcons.calendar_clock,
-                      value: current.autoSharePlans,
-                      enabled: !isLoadingRemote && !hasRemoteError,
-                      onChanged: (v) =>
-                          _saveSettings(current.copyWith(autoSharePlans: v)),
-                    ),
-                    _SettingsRow(
-                      label: 'After Dark',
-                      sub: 'Ночной режим 18+',
-                      icon: LucideIcons.moon_star,
-                      chevron: true,
-                      onTap: () => context.pushRoute(AppRoute.afterDark),
-                    ),
-                  ],
-                ),
-                _SettingsGroup(
                   title: 'Приватность',
                   children: [
                     _SettingsToggle(
@@ -153,15 +116,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       onChanged: (v) =>
                           _saveSettings(current.copyWith(hideExactLocation: v)),
                     ),
-                    _SettingsToggle(
-                      label: 'Доступ к контактам',
-                      sub: 'Для быстрых приглашений',
-                      icon: LucideIcons.contact,
-                      value: current.allowContacts,
-                      enabled: !isLoadingRemote && !hasRemoteError,
-                      onChanged: (v) =>
-                          _saveSettings(current.copyWith(allowContacts: v)),
-                    ),
                     _SettingsRow(
                       label: 'Заблокированные',
                       icon: LucideIcons.user_x,
@@ -180,24 +134,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       value: current.allowPush,
                       enabled: !isLoadingRemote && !hasRemoteError,
                       onChanged: (v) => _handlePushToggle(current, v),
-                    ),
-                    _SettingsRow(
-                      label: 'Приглашения',
-                      sub: current.allowPush
-                          ? 'Заявки, гости, ответы хоста'
-                          : 'Отключены главным тумблером',
-                      icon: LucideIcons.ticket_check,
-                      chevron: true,
-                      onTap: () => context.pushRoute(AppRoute.notifications),
-                    ),
-                    _SettingsRow(
-                      label: 'Чаты',
-                      sub: current.allowPush
-                          ? 'Сообщения и новые ветки'
-                          : 'Отключены главным тумблером',
-                      icon: LucideIcons.messages_square,
-                      chevron: true,
-                      onTap: () => context.pushRoute(AppRoute.notifications),
                     ),
                     _SettingsToggle(
                       label: 'Тихие часы',
@@ -1317,7 +1253,7 @@ class _SettingsToggle extends StatelessWidget {
                 padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
                   color: value
-                      ? BbV5Colors.ink
+                      ? BbV5Colors.accent
                       : const Color(0x2E3C281C)
                           .withValues(alpha: enabled ? 1 : 0.55),
                   borderRadius: BorderRadius.circular(999),

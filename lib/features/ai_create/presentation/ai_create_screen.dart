@@ -330,36 +330,7 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        const Expanded(child: BbV5Kicker('твой запрос')),
-                        SizedBox(
-                          width: 34,
-                          height: 34,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: BbV5Colors.paperHi,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: BbV5Colors.hair),
-                              boxShadow: BbV5Shadows.pill,
-                            ),
-                            child: IconButton(
-                              tooltip: 'Сказать вслух',
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () => context.pushRoute(
-                                AppRoute.aiVoice,
-                              ),
-                              icon: const Icon(
-                                LucideIcons.mic,
-                                size: 15,
-                                color: BbV5Colors.ink,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    const BbV5Kicker('твой запрос'),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _promptController,

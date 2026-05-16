@@ -63,6 +63,8 @@ class Event {
     this.requiresVerification = false,
     this.requiresFrendlyPlus = false,
     this.routeId,
+    this.routePointCount,
+    this.isAfficheBacked = false,
     this.isDate = false,
     this.hostNote,
     this.latitude,
@@ -110,6 +112,8 @@ class Event {
   final bool requiresVerification;
   final bool requiresFrendlyPlus;
   final String? routeId;
+  final int? routePointCount;
+  final bool isAfficheBacked;
   final bool isDate;
   final String? hostNote;
   final double? latitude;
@@ -167,6 +171,8 @@ class Event {
       requiresVerification: (json['requiresVerification'] as bool?) ?? false,
       requiresFrendlyPlus: (json['requiresFrendlyPlus'] as bool?) ?? false,
       routeId: json['routeId'] as String?,
+      routePointCount: (json['routePointCount'] as num?)?.toInt(),
+      isAfficheBacked: (json['isAfficheBacked'] as bool?) ?? false,
       isDate: (json['isDate'] as bool?) ?? false,
       hostNote: json['hostNote'] as String?,
       latitude: (json['latitude'] as num?)?.toDouble(),

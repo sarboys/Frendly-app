@@ -419,7 +419,7 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
                   onOpenStreak: () => context.pushRoute(AppRoute.streak),
                   onOpenPerks: () => context.pushRoute(AppRoute.perks),
                   onOpenMap: () => context.pushRoute(AppRoute.memoryMap),
-                  onOpenVoice: () => context.pushRoute(AppRoute.aiVoice),
+                  onOpenAiBuilder: () => context.pushRoute(AppRoute.aiCreate),
                 ),
               ),
             ),
@@ -432,7 +432,7 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
                       context,
                       ref,
                       featureName: 'Frendly Вечер',
-                      route: AppRoute.aiVoice,
+                      route: AppRoute.aiCreate,
                     ),
                   ),
                 ),
@@ -3624,7 +3624,7 @@ class _TonightPersonalSection extends StatelessWidget {
     required this.onOpenStreak,
     required this.onOpenPerks,
     required this.onOpenMap,
-    required this.onOpenVoice,
+    required this.onOpenAiBuilder,
   });
 
   final String streakSubtitle;
@@ -3633,7 +3633,7 @@ class _TonightPersonalSection extends StatelessWidget {
   final VoidCallback onOpenStreak;
   final VoidCallback onOpenPerks;
   final VoidCallback onOpenMap;
-  final VoidCallback onOpenVoice;
+  final VoidCallback onOpenAiBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -3682,11 +3682,11 @@ class _TonightPersonalSection extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: BbV5PillButton(
-              label: 'Сказать вслух',
-              icon: LucideIcons.mic,
+              label: 'AI билдер',
+              icon: LucideIcons.sparkles,
               height: 38,
               fontSize: 12,
-              onPressed: onOpenVoice,
+              onPressed: onOpenAiBuilder,
             ),
           ),
         ],
@@ -3776,12 +3776,12 @@ class _TonightAiCta extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const BbV5Kicker('AI · голос'),
+          const BbV5Kicker('AI · билдер'),
           const SizedBox(height: 8),
           Text.rich(
             TextSpan(
               children: [
-                const TextSpan(text: 'Скажи вечер —\n'),
+                const TextSpan(text: 'Опиши вечер,\n'),
                 TextSpan(
                   text: 'соберу за минуту.',
                   style: bbV5DisplayStyle(
@@ -3802,7 +3802,7 @@ class _TonightAiCta extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '«Винчик и джаз на двоих в центре до 23» — маршрут + люди рядом.',
+            '«Винчик и джаз на двоих в центре до 23», маршрут и люди рядом.',
             style: AppTextStyles.meta.copyWith(
               fontSize: 12,
               height: 1.55,
@@ -3828,13 +3828,13 @@ class _TonightAiCta extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(
-                      LucideIcons.mic,
+                      LucideIcons.sparkles,
                       size: 16,
                       color: BbV5Colors.paperHi,
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Сказать вслух',
+                      'Открыть билдер',
                       style: AppTextStyles.button.copyWith(
                         fontSize: 13,
                         height: 1,

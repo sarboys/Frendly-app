@@ -136,7 +136,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   ym.Point? _searchPoint;
   ym.Point? _userPoint;
   String selected = '';
-  String filter = 'all';
+  String filter = 'meetups';
   bool _primingInitialLocation = false;
   bool _didPrimeInitialLocation = false;
   bool _triedInitialLocation = false;
@@ -208,7 +208,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     if (mapEventsAsync.hasValue) {
       _lastMapEvents = events;
     }
-    final filteredEvents = _filteredEvents(events, filter);
+    final effectiveFilter = _effectiveRadarFilter(events);
+    final filteredEvents = _filteredEvents(events, effectiveFilter);
     final liveEvenings =
         (ref.watch(eveningSessionsProvider).valueOrNull ?? const [])
             .where((session) => session.phase == EveningSessionPhase.live)
@@ -234,7 +235,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       onSessionTap: _openEveningPreview,
     );
     _syncPagerToSelected(filteredEvents, selectedId);
-    _scheduleViewportFit(filteredEvents);
+    _scheduleViewportFit(filteredEvents, effectiveFilter);
     final topInset = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
@@ -268,7 +269,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             top: topInset + 12,
             child: _RadarTopControls(
               events: events,
-              filter: filter,
+              filter: effectiveFilter,
               radiusKm: nearbyRadiusKm,
               onBack: _handleBack,
               onSelectFilter: (nextFilter) => _selectFilter(
@@ -1050,8 +1051,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
-  void _scheduleViewportFit(List<Event> events) {
-    final fitKey = buildMapViewportFitKey(events, filter);
+  void _scheduleViewportFit(List<Event> events, String currentFilter) {
+    final fitKey = buildMapViewportFitKey(events, currentFilter);
     if (!shouldScheduleMapViewportFit(
       supportsNativeMap: _supportsNativeMap,
       hasMapController: _mapController != null,
@@ -1127,11 +1128,36 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     return _pointForEventModel(event);
   }
 
-  List<Event> _filteredEvents(List<Event> events, String currentFilter) {
-    if (currentFilter == 'all') {
-      return events;
+  String _effectiveRadarFilter(List<Event> events) {
+    if (selected.isEmpty) {
+      return filter;
     }
+    if (_filteredEvents(events, filter).any((event) => event.id == selected)) {
+      return filter;
+    }
+    final selectedEvent = events
+        .where((event) => event.id == selected)
+        .cast<Event?>()
+        .firstOrNull;
+    if (selectedEvent == null) {
+      return filter;
+    }
+    final nextFilter = radarCategoryForEvent(selectedEvent);
+    if (nextFilter == filter ||
+        !_radarFilters.any((item) => item.key == nextFilter)) {
+      return filter;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && filter != nextFilter) {
+        setState(() {
+          filter = nextFilter;
+        });
+      }
+    });
+    return nextFilter;
+  }
 
+  List<Event> _filteredEvents(List<Event> events, String currentFilter) {
     return events
         .where((event) => radarCategoryForEvent(event) == currentFilter)
         .toList(growable: false);
@@ -1584,8 +1610,7 @@ class _RadarFilterDefinition {
 }
 
 const _radarFilters = [
-  _RadarFilterDefinition(key: 'all', title: 'Все'),
-  _RadarFilterDefinition(key: 'bars', title: 'Бары'),
+  _RadarFilterDefinition(key: 'meetups', title: 'Встречи'),
   _RadarFilterDefinition(key: 'routes', title: 'Маршруты'),
   _RadarFilterDefinition(key: 'affiche', title: 'Афиша'),
 ];
@@ -1595,7 +1620,6 @@ Map<String, int> buildRadarCategoryCounts(List<Event> events) {
   final counts = <String, int>{
     for (final filter in _radarFilters) filter.key: 0,
   };
-  counts['all'] = events.length;
   for (final event in events) {
     final category = radarCategoryForEvent(event);
     counts[category] = (counts[category] ?? 0) + 1;
@@ -1605,11 +1629,19 @@ Map<String, int> buildRadarCategoryCounts(List<Event> events) {
 
 @visibleForTesting
 String radarCategoryForEvent(Event event) {
-  if (event.ticketSourceKind != null ||
+  if (event.isAfficheBacked ||
+      event.ticketSourceKind != null ||
       (event.ticketUrl ?? '').trim().isNotEmpty) {
     return 'affiche';
   }
-  return 'bars';
+  if ((event.routePointCount ?? 0) > 1) {
+    return 'routes';
+  }
+  if (event.routePointCount == null &&
+      (event.routeId ?? '').trim().isNotEmpty) {
+    return 'routes';
+  }
+  return 'meetups';
 }
 
 @visibleForTesting
@@ -2386,10 +2418,11 @@ String radarCardSubtypeForEvent(Event event) {
     case 'affiche':
       return (event.time.trim().isEmpty ? 'афиша' : 'афиша · ${event.time}')
           .trim();
-    case 'bars':
+    case 'meetups':
     default:
-      if ((event.routeId ?? '').trim().isNotEmpty) {
-        return 'встреча по маршруту';
+      if ((event.routeId ?? '').trim().isNotEmpty &&
+          (event.routePointCount ?? 1) <= 1) {
+        return 'встреча';
       }
       return event.vibe.trim().isEmpty ? 'встреча' : event.vibe.trim();
   }

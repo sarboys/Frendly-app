@@ -365,6 +365,8 @@ Map<String, dynamic> _eventToCacheJson(Event event) {
     'requiresVerification': event.requiresVerification,
     'requiresFrendlyPlus': event.requiresFrendlyPlus,
     'routeId': event.routeId,
+    'routePointCount': event.routePointCount,
+    'isAfficheBacked': event.isAfficheBacked,
     'isDate': event.isDate,
     'hostNote': event.hostNote,
     'latitude': event.latitude,
