@@ -1,5 +1,7 @@
+import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/event_detail/presentation/event_entry_requirements_card.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
@@ -50,6 +52,46 @@ class _JoinRequestScreenState extends ConsumerState<JoinRequestScreen> {
                 event.joinRequestStatus == EventJoinRequestStatus.pending;
             final isApproved =
                 event.joinRequestStatus == EventJoinRequestStatus.approved;
+            final entryLocked = !event.isHost &&
+                !event.joined &&
+                !event.entryRequirements.canJoin;
+
+            if (entryLocked) {
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+                    child: BbV5TopBar(
+                      kicker: 'ЗАКРЫТАЯ ВСТРЕЧА',
+                      title: 'Доступ',
+                      onBack: () => context.pop(),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+                      children: [
+                        _EventCard(event: event),
+                        const SizedBox(height: AppSpacing.lg),
+                        EventEntryRequirementsCard(
+                          requirements: event.entryRequirements,
+                        ),
+                      ],
+                    ),
+                  ),
+                  SafeArea(
+                    top: false,
+                    child: BbV5FixedBottomBar(
+                      child: EventEntryRequirementActions(
+                        requirements: event.entryRequirements,
+                        onTap: (requirement) =>
+                            _openEntryRequirement(event, requirement),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
 
             return Column(
               children: [
@@ -310,6 +352,22 @@ class _JoinRequestScreenState extends ConsumerState<JoinRequestScreen> {
   int _compatibility(EventDetail event) {
     final base = 68 + event.attendees.length * 4;
     return base.clamp(68, 95);
+  }
+
+  Future<void> _openEntryRequirement(
+    EventDetail event,
+    EventEntryRequirement requirement,
+  ) async {
+    final route = requirement == EventEntryRequirement.verification
+        ? AppRoute.verification
+        : AppRoute.paywall;
+    await context.pushRoute(route);
+    if (!mounted) {
+      return;
+    }
+    ref.invalidate(verificationProvider);
+    ref.invalidate(subscriptionStateProvider);
+    ref.invalidate(eventDetailProvider(event.id));
   }
 }
 

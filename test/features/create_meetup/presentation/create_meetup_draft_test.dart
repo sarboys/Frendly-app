@@ -61,6 +61,16 @@ void main() {
     expect(coordinates?.latitude, 55.7601);
     expect(coordinates?.longitude, 37.6302);
   });
+
+  test('draft keeps event entry requirement flags for publish payload', () {
+    final draft = _draft(
+      requiresVerification: true,
+      requiresFrendlyPlus: true,
+    );
+
+    expect(draft.requiresVerification, isTrue);
+    expect(draft.requiresFrendlyPlus, isTrue);
+  });
 }
 
 CreateMeetupDraft _draft({
@@ -69,6 +79,8 @@ CreateMeetupDraft _draft({
   String place = 'Brix',
   double? latitude,
   double? longitude,
+  bool requiresVerification = false,
+  bool requiresFrendlyPlus = false,
 }) {
   return CreateMeetupDraft(
     title: 'Кофе',
@@ -85,6 +97,8 @@ CreateMeetupDraft _draft({
     genderMode: 'all',
     visibilityMode: 'public',
     joinMode: EventJoinMode.open,
+    requiresVerification: requiresVerification,
+    requiresFrendlyPlus: requiresFrendlyPlus,
     idempotencyKey: 'test-key',
     latitude: latitude,
     longitude: longitude,

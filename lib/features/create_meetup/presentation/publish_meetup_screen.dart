@@ -285,6 +285,8 @@ class _PreviewCard extends StatelessWidget {
               _SmallTag(
                 draft.visibilityMode == 'friends' ? 'по ссылке' : 'открытая',
               ),
+              if (draft.requiresVerification) const _SmallTag('верификация'),
+              if (draft.requiresFrendlyPlus) const _SmallTag('Frendly+'),
             ],
           ),
           if (draft.attachmentTitle != null) ...[

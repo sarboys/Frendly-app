@@ -869,9 +869,13 @@ void main() {
       place: 'Brix',
       startsAt: DateTime(2026, 5, 12, 17),
       capacity: 6,
+      requiresVerification: true,
+      requiresFrendlyPlus: true,
     );
 
     expect(requestBody, containsPair('startsAt', '2026-05-12T17:00:00.000Z'));
+    expect(requestBody, containsPair('requiresVerification', true));
+    expect(requestBody, containsPair('requiresFrendlyPlus', true));
   });
 
   test('host event update sends edited fields to host endpoint', () async {
@@ -928,6 +932,8 @@ void main() {
       distanceKm: 1.2,
       latitude: 55.7605,
       longitude: 37.6442,
+      requiresVerification: true,
+      requiresFrendlyPlus: true,
     );
 
     expect(apiRequests.single.method, 'PATCH');
@@ -942,6 +948,8 @@ void main() {
     expect(requestBody, containsPair('genderMode', 'female'));
     expect(requestBody, containsPair('visibilityMode', 'friends'));
     expect(requestBody, containsPair('joinMode', 'request'));
+    expect(requestBody, containsPair('requiresVerification', true));
+    expect(requestBody, containsPair('requiresFrendlyPlus', true));
     expect(requestBody, containsPair('latitude', 55.7605));
     expect(requestBody, containsPair('longitude', 37.6442));
   });

@@ -1,6 +1,57 @@
 import 'package:big_break_mobile/shared/models/backend_url.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 
+enum EventEntryRequirement { verification, frendlyPlus }
+
+class EventEntryRequirements {
+  const EventEntryRequirements({
+    required this.canJoin,
+    required this.missing,
+  });
+
+  static const allowed = EventEntryRequirements(
+    canJoin: true,
+    missing: [],
+  );
+
+  final bool canJoin;
+  final List<EventEntryRequirement> missing;
+
+  bool get missingVerification =>
+      missing.contains(EventEntryRequirement.verification);
+
+  bool get missingFrendlyPlus =>
+      missing.contains(EventEntryRequirement.frendlyPlus);
+
+  bool get hasMissing => missing.isNotEmpty;
+
+  factory EventEntryRequirements.fromJson(Object? json) {
+    if (json is! Map) {
+      return allowed;
+    }
+    final payload = Map<String, dynamic>.from(json);
+    return EventEntryRequirements(
+      canJoin: (payload['canJoin'] as bool?) ?? true,
+      missing: ((payload['missing'] as List?) ?? const [])
+          .whereType<String>()
+          .map(_parseEventEntryRequirement)
+          .whereType<EventEntryRequirement>()
+          .toList(growable: false),
+    );
+  }
+}
+
+EventEntryRequirement? _parseEventEntryRequirement(String raw) {
+  switch (raw) {
+    case 'verification':
+      return EventEntryRequirement.verification;
+    case 'frendly_plus':
+      return EventEntryRequirement.frendlyPlus;
+    default:
+      return null;
+  }
+}
+
 class EventDetail {
   const EventDetail({
     required this.id,
@@ -31,6 +82,9 @@ class EventDetail {
     this.accessMode,
     this.genderMode,
     this.visibilityMode,
+    this.requiresVerification = false,
+    this.requiresFrendlyPlus = false,
+    this.entryRequirements = EventEntryRequirements.allowed,
     this.latitude,
     this.longitude,
     this.joinMode = EventJoinMode.open,
@@ -80,6 +134,9 @@ class EventDetail {
   final String? accessMode;
   final String? genderMode;
   final String? visibilityMode;
+  final bool requiresVerification;
+  final bool requiresFrendlyPlus;
+  final EventEntryRequirements entryRequirements;
   final double? latitude;
   final double? longitude;
   final EventJoinMode joinMode;
@@ -141,6 +198,10 @@ class EventDetail {
       accessMode: json['accessMode'] as String?,
       genderMode: json['genderMode'] as String?,
       visibilityMode: json['visibilityMode'] as String?,
+      requiresVerification: (json['requiresVerification'] as bool?) ?? false,
+      requiresFrendlyPlus: (json['requiresFrendlyPlus'] as bool?) ?? false,
+      entryRequirements:
+          EventEntryRequirements.fromJson(json['entryRequirements']),
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       joinMode: Event.parseJoinMode(json['joinMode'] as String?),

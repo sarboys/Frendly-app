@@ -353,6 +353,8 @@ Map<String, dynamic> _eventToCacheJson(Event event) {
     'accessMode': event.accessMode,
     'genderMode': event.genderMode,
     'visibilityMode': event.visibilityMode,
+    'requiresVerification': event.requiresVerification,
+    'requiresFrendlyPlus': event.requiresFrendlyPlus,
     'routeId': event.routeId,
     'isDate': event.isDate,
     'hostNote': event.hostNote,

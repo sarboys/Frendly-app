@@ -31,6 +31,8 @@ class CreateMeetupDraft {
     required this.visibilityMode,
     required this.joinMode,
     required this.idempotencyKey,
+    this.requiresVerification = false,
+    this.requiresFrendlyPlus = false,
     this.priceAmountFrom,
     this.priceAmountTo,
     this.inviteeUserId,
@@ -68,6 +70,8 @@ class CreateMeetupDraft {
   final String genderMode;
   final String visibilityMode;
   final EventJoinMode joinMode;
+  final bool requiresVerification;
+  final bool requiresFrendlyPlus;
   final String? inviteeUserId;
   final String? afficheEventId;
   final String? externalPlaceId;
@@ -153,6 +157,8 @@ class CreateMeetupDraft {
       genderMode: genderMode,
       visibilityMode: visibilityMode ?? this.visibilityMode,
       joinMode: joinMode ?? this.joinMode,
+      requiresVerification: requiresVerification,
+      requiresFrendlyPlus: requiresFrendlyPlus,
       inviteeUserId: inviteeUserId,
       afficheEventId: afficheEventId,
       externalPlaceId: externalPlaceId,
@@ -201,6 +207,8 @@ Future<EventDetail> submitCreateMeetupDraft(
     genderMode: draft.genderMode,
     visibilityMode: draft.visibilityMode,
     joinMode: draft.joinMode,
+    requiresVerification: draft.requiresVerification,
+    requiresFrendlyPlus: draft.requiresFrendlyPlus,
     inviteeUserId: draft.inviteeUserId,
     afficheEventId: draft.afficheEventId,
     externalPlaceId: draft.externalPlaceId,

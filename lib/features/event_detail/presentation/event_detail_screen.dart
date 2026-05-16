@@ -1,6 +1,7 @@
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/event_detail/presentation/event_entry_requirements_card.dart';
 import 'package:big_break_mobile/features/meetup_chat/presentation/meetup_invite_sheet.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
@@ -42,10 +43,13 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         data: (event) {
           final hasPendingJoinRequest = !event.joined &&
               event.joinRequestStatus == EventJoinRequestStatus.pending;
+          final entryLocked = _entryLocked(event);
           return _EventDetailBody(
             event: event,
             actionBusy: _actionBusy,
-            onJoinOrOpen: _actionBusy || hasPendingJoinRequest
+            onEntryRequirementTap: (requirement) =>
+                _openEntryRequirement(event, requirement),
+            onJoinOrOpen: _actionBusy || hasPendingJoinRequest || entryLocked
                 ? null
                 : () async {
                     final requiresRequest =
@@ -191,6 +195,26 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       ),
     );
   }
+
+  bool _entryLocked(EventDetail event) {
+    return !event.isHost && !event.joined && !event.entryRequirements.canJoin;
+  }
+
+  Future<void> _openEntryRequirement(
+    EventDetail event,
+    EventEntryRequirement requirement,
+  ) async {
+    final route = requirement == EventEntryRequirement.verification
+        ? AppRoute.verification
+        : AppRoute.paywall;
+    await context.pushRoute(route);
+    if (!mounted) {
+      return;
+    }
+    ref.invalidate(verificationProvider);
+    ref.invalidate(subscriptionStateProvider);
+    ref.invalidate(eventDetailProvider(event.id));
+  }
 }
 
 class _EventDetailBody extends StatelessWidget {
@@ -198,6 +222,7 @@ class _EventDetailBody extends StatelessWidget {
     required this.event,
     required this.onJoinOrOpen,
     required this.actionBusy,
+    required this.onEntryRequirementTap,
     this.onInvite,
     this.onSecondaryAction,
   });
@@ -205,6 +230,7 @@ class _EventDetailBody extends StatelessWidget {
   final EventDetail event;
   final Future<void> Function()? onJoinOrOpen;
   final bool actionBusy;
+  final ValueChanged<EventEntryRequirement> onEntryRequirementTap;
   final VoidCallback? onInvite;
   final Future<void> Function()? onSecondaryAction;
 
@@ -215,6 +241,8 @@ class _EventDetailBody extends StatelessWidget {
         event.visibilityMode == 'friends';
     final hasPendingJoinRequest = !event.joined &&
         event.joinRequestStatus == EventJoinRequestStatus.pending;
+    final entryLocked =
+        !event.isHost && !event.joined && !event.entryRequirements.canJoin;
     final criteria = _buildCriteria(event);
     return Stack(
       children: [
@@ -283,6 +311,15 @@ class _EventDetailBody extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                   sliver: SliverToBoxAdapter(
                     child: _V5HostQuote(note: event.hostNote!),
+                  ),
+                ),
+              if (entryLocked)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: EventEntryRequirementsCard(
+                      requirements: event.entryRequirements,
+                    ),
                   ),
                 ),
               SliverPadding(
@@ -390,7 +427,15 @@ class _EventDetailBody extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: AppSpacing.xs),
                         child: _V5BookingBottomAction(event: event),
                       ),
-                    if (onSecondaryAction != null)
+                    if (entryLocked)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                        child: EventEntryRequirementActions(
+                          requirements: event.entryRequirements,
+                          onTap: onEntryRequirementTap,
+                        ),
+                      )
+                    else if (onSecondaryAction != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.xs),
                         child: TextButton(
@@ -407,68 +452,71 @@ class _EventDetailBody extends StatelessWidget {
                           ),
                         ),
                       ),
-                    Row(
-                      children: [
-                        Container(
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: BbV5Colors.paperHi,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: BbV5Colors.hair),
-                            boxShadow: BbV5Shadows.pill,
-                          ),
-                          child: IconButton(
-                            onPressed: event.chatId == null
-                                ? null
-                                : () => context.pushRoute(
-                                      AppRoute.meetupChat,
-                                      pathParameters: {'chatId': event.chatId!},
-                                    ),
-                            icon: const Icon(LucideIcons.message_circle),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Expanded(
-                          child: SizedBox(
+                    if (!entryLocked)
+                      Row(
+                        children: [
+                          Container(
+                            width: 56,
                             height: 56,
-                            child: FilledButton(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: event.joined
-                                    ? BbV5Colors.ink
-                                    : hasPendingJoinRequest
-                                        ? BbV5Colors.inkSoft
-                                        : BbV5Colors.accent,
-                                disabledBackgroundColor: hasPendingJoinRequest
-                                    ? BbV5Colors.inkSoft
-                                    : null,
-                                disabledForegroundColor: BbV5Colors.paperHi,
-                                foregroundColor: BbV5Colors.paperHi,
-                                shape: const StadiumBorder(),
-                              ),
-                              onPressed: onJoinOrOpen,
-                              child: Text(
-                                actionBusy
-                                    ? 'Подождите'
-                                    : event.isHost
-                                        ? 'Открыть хост-панель'
-                                        : event.joined
-                                            ? 'Начать вечер'
-                                            : hasPendingJoinRequest
-                                                ? 'Заявка отправлена'
-                                                : requiresRequest
-                                                    ? 'Отправить заявку'
-                                                    : 'Присоединиться',
-                                style: AppTextStyles.button.copyWith(
-                                  color: BbV5Colors.paperHi,
-                                  fontSize: 14,
+                            decoration: BoxDecoration(
+                              color: BbV5Colors.paperHi,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: BbV5Colors.hair),
+                              boxShadow: BbV5Shadows.pill,
+                            ),
+                            child: IconButton(
+                              onPressed: event.chatId == null
+                                  ? null
+                                  : () => context.pushRoute(
+                                        AppRoute.meetupChat,
+                                        pathParameters: {
+                                          'chatId': event.chatId!,
+                                        },
+                                      ),
+                              icon: const Icon(LucideIcons.message_circle),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: SizedBox(
+                              height: 56,
+                              child: FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: event.joined
+                                      ? BbV5Colors.ink
+                                      : hasPendingJoinRequest
+                                          ? BbV5Colors.inkSoft
+                                          : BbV5Colors.accent,
+                                  disabledBackgroundColor: hasPendingJoinRequest
+                                      ? BbV5Colors.inkSoft
+                                      : null,
+                                  disabledForegroundColor: BbV5Colors.paperHi,
+                                  foregroundColor: BbV5Colors.paperHi,
+                                  shape: const StadiumBorder(),
+                                ),
+                                onPressed: onJoinOrOpen,
+                                child: Text(
+                                  actionBusy
+                                      ? 'Подождите'
+                                      : event.isHost
+                                          ? 'Открыть хост-панель'
+                                          : event.joined
+                                              ? 'Начать вечер'
+                                              : hasPendingJoinRequest
+                                                  ? 'Заявка отправлена'
+                                                  : requiresRequest
+                                                      ? 'Отправить заявку'
+                                                      : 'Присоединиться',
+                                  style: AppTextStyles.button.copyWith(
+                                    color: BbV5Colors.paperHi,
+                                    fontSize: 14,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                   ],
                 ),
               ),

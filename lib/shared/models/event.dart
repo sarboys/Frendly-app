@@ -60,6 +60,8 @@ class Event {
     this.accessMode,
     this.genderMode,
     this.visibilityMode,
+    this.requiresVerification = false,
+    this.requiresFrendlyPlus = false,
     this.routeId,
     this.isDate = false,
     this.hostNote,
@@ -105,6 +107,8 @@ class Event {
   final String? accessMode;
   final String? genderMode;
   final String? visibilityMode;
+  final bool requiresVerification;
+  final bool requiresFrendlyPlus;
   final String? routeId;
   final bool isDate;
   final String? hostNote;
@@ -160,6 +164,8 @@ class Event {
       accessMode: json['accessMode'] as String?,
       genderMode: json['genderMode'] as String?,
       visibilityMode: json['visibilityMode'] as String?,
+      requiresVerification: (json['requiresVerification'] as bool?) ?? false,
+      requiresFrendlyPlus: (json['requiresFrendlyPlus'] as bool?) ?? false,
       routeId: json['routeId'] as String?,
       isDate: (json['isDate'] as bool?) ?? false,
       hostNote: json['hostNote'] as String?,

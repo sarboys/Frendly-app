@@ -363,6 +363,60 @@ void main() {
     expect(pendingButton.onPressed, isNull);
   });
 
+  testWidgets(
+      'event detail shows verification CTA when verification is missing',
+      (tester) async {
+    await _pumpLockedEventDetail(
+      tester,
+      requirements: const EventEntryRequirements(
+        canJoin: false,
+        missing: [EventEntryRequirement.verification],
+      ),
+      requiresVerification: true,
+    );
+
+    expect(find.text('Пройти верификацию'), findsOneWidget);
+    expect(find.text('Оформить Frendly+'), findsNothing);
+    expect(find.text('Присоединиться'), findsNothing);
+  });
+
+  testWidgets('event detail shows plus CTA when Frendly Plus is missing',
+      (tester) async {
+    await _pumpLockedEventDetail(
+      tester,
+      requirements: const EventEntryRequirements(
+        canJoin: false,
+        missing: [EventEntryRequirement.frendlyPlus],
+      ),
+      requiresFrendlyPlus: true,
+    );
+
+    expect(find.text('Оформить Frendly+'), findsOneWidget);
+    expect(find.text('Пройти верификацию'), findsNothing);
+    expect(find.text('Присоединиться'), findsNothing);
+  });
+
+  testWidgets('event detail shows two CTAs when both requirements are missing',
+      (tester) async {
+    await _pumpLockedEventDetail(
+      tester,
+      requirements: const EventEntryRequirements(
+        canJoin: false,
+        missing: [
+          EventEntryRequirement.verification,
+          EventEntryRequirement.frendlyPlus,
+        ],
+      ),
+      requiresVerification: true,
+      requiresFrendlyPlus: true,
+    );
+
+    expect(find.text('Пройти верификацию'), findsOneWidget);
+    expect(find.text('Оформить Frendly+'), findsOneWidget);
+    expect(find.text('Отправить заявку'), findsNothing);
+    expect(find.text('Присоединиться'), findsNothing);
+  });
+
   testWidgets('event detail shows buy ticket button for paid affiche meetup',
       (tester) async {
     await tester.pumpWidget(
@@ -761,4 +815,54 @@ void main() {
     expect(find.text('Написать'), findsOneWidget);
     expect(find.text('Аня К'), findsWidgets);
   });
+}
+
+Future<void> _pumpLockedEventDetail(
+  WidgetTester tester, {
+  required EventEntryRequirements requirements,
+  bool requiresVerification = false,
+  bool requiresFrendlyPlus = false,
+}) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        ...buildTestOverrides(),
+        eventDetailProvider.overrideWith((ref, eventId) async {
+          return EventDetail(
+            id: 'e-locked',
+            title: 'Закрытый ужин',
+            emoji: '🍷',
+            time: 'Сегодня · 20:00',
+            place: 'Brix Wine, Покровка 12',
+            distance: '1.2 км',
+            vibe: 'Спокойно',
+            description: 'Только для гостей с доступом.',
+            hostNote: null,
+            joined: false,
+            partnerName: null,
+            partnerOffer: null,
+            capacity: 8,
+            going: 2,
+            chatId: null,
+            requiresVerification: requiresVerification,
+            requiresFrendlyPlus: requiresFrendlyPlus,
+            entryRequirements: requirements,
+            host: const EventHost(
+              id: 'user-host',
+              displayName: 'Мира',
+              verified: true,
+              rating: 4.9,
+              meetupCount: 10,
+              avatarUrl: null,
+            ),
+            attendees: const [],
+          );
+        }),
+      ],
+      child: const MaterialApp(
+        home: EventDetailScreen(eventId: 'e-locked'),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
 }

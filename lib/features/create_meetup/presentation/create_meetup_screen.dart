@@ -135,6 +135,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
   String priceMode = 'free';
   String accessMode = 'open';
   String genderMode = 'all';
+  bool requiresVerification = false;
+  bool requiresFrendlyPlus = false;
   String priceFrom = '';
   String priceTo = '';
   String dateIdea = _dateIdeas.first.$1;
@@ -230,6 +232,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     priceMode = event.priceMode ?? 'free';
     accessMode = event.accessMode == 'request' ? 'request' : 'open';
     genderMode = event.genderMode ?? 'all';
+    requiresVerification = event.requiresVerification;
+    requiresFrendlyPlus = event.requiresFrendlyPlus;
     capacity = event.capacity <= 0 ? 8 : event.capacity.toDouble();
     unlimited = false;
     _titleController.text = event.title;
@@ -276,9 +280,9 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     }
     final isEditMode = widget.editEventId != null;
     final isDatingMode = _mode == CreateMeetupMode.dating;
-    final subscription = !isEditMode && isDatingMode
-        ? ref.watch(subscriptionStateProvider).valueOrNull
-        : null;
+    final verification = ref.watch(verificationProvider).valueOrNull;
+    final subscription = ref.watch(subscriptionStateProvider).valueOrNull;
+    final hostVerified = verification?.status == 'verified';
     final isPremium =
         subscription?.status == 'trial' || subscription?.status == 'active';
     final titleText = isEditMode
@@ -335,6 +339,10 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
                       _buildV5PriceSection(isDatingMode: isDatingMode),
                       _buildV5AccessSection(
                         isDatingMode: isDatingMode,
+                      ),
+                      _buildV5EntryRequirementsSection(
+                        hostVerified: hostVerified,
+                        hostPlus: isPremium,
                       ),
                       if (!isDatingMode) _buildV5GenderSection(),
                       if (isDatingMode) _buildV5DateIdeasSection(),
@@ -489,6 +497,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
               _V5Tag(vibe),
               if (!isDatingMode) _V5Tag(_lifestyleTag()),
               _V5Tag(_accessTag(isDatingMode)),
+              if (requiresVerification) const _V5Tag('верификация'),
+              if (requiresFrendlyPlus) const _V5Tag('Frendly+'),
               _V5Tag(_priceTag()),
             ],
           ),
@@ -1012,6 +1022,93 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
     );
   }
 
+  Widget _buildV5EntryRequirementsSection({
+    required bool hostVerified,
+    required bool hostPlus,
+  }) {
+    return BbV5Section(
+      title: 'Кто может вступить',
+      child: BbV5Card(
+        radius: BbV5Radii.md,
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            _V5AccessRow(
+              active: requiresVerification,
+              icon: LucideIcons.badge_check,
+              title: 'Только верифицированные',
+              subtitle: hostVerified
+                  ? 'Вступить смогут только люди с проверенным профилем'
+                  : 'Сначала пройди верификацию',
+              onTap: () => _toggleRequiresVerification(hostVerified),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Divider(height: 1, color: BbV5Colors.hairSoft),
+            ),
+            _V5AccessRow(
+              active: requiresFrendlyPlus,
+              icon: LucideIcons.sparkles,
+              title: 'Только Frendly+',
+              subtitle: hostPlus
+                  ? 'Вступить смогут только пользователи с Plus'
+                  : 'Нужен активный Frendly+',
+              onTap: () => _toggleRequiresFrendlyPlus(hostPlus),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleRequiresVerification(bool hostVerified) async {
+    if (requiresVerification) {
+      setState(() {
+        requiresVerification = false;
+      });
+      return;
+    }
+    if (hostVerified) {
+      setState(() {
+        requiresVerification = true;
+      });
+      return;
+    }
+    await context.pushRoute(AppRoute.verification);
+    if (!mounted) {
+      return;
+    }
+    ref.invalidate(verificationProvider);
+    ref.invalidate(subscriptionStateProvider);
+    if (widget.editEventId case final eventId?) {
+      ref.invalidate(eventDetailProvider(eventId));
+    }
+  }
+
+  Future<void> _toggleRequiresFrendlyPlus(bool hostPlus) async {
+    if (requiresFrendlyPlus) {
+      setState(() {
+        requiresFrendlyPlus = false;
+      });
+      return;
+    }
+    if (hostPlus) {
+      setState(() {
+        requiresFrendlyPlus = true;
+      });
+      return;
+    }
+    await context.pushRoute(AppRoute.paywall);
+    if (!mounted) {
+      return;
+    }
+    ref.invalidate(verificationProvider);
+    ref.invalidate(subscriptionStateProvider);
+    if (widget.editEventId case final eventId?) {
+      ref.invalidate(eventDetailProvider(eventId));
+    }
+  }
+
   Widget _buildV5GenderSection() {
     return BbV5Section(
       title: 'Кого приглашаешь',
@@ -1415,6 +1512,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
           accessMode: accessMode,
           genderMode: genderMode,
           visibilityMode: visibility,
+          requiresVerification: requiresVerification,
+          requiresFrendlyPlus: requiresFrendlyPlus,
           joinMode: visibility == 'friends' || accessMode == 'request'
               ? EventJoinMode.request
               : EventJoinMode.open,
@@ -1509,6 +1608,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
         accessMode: isDatingMode ? 'request' : accessMode,
         genderMode: genderMode,
         visibilityMode: isDatingMode ? 'friends' : visibility,
+        requiresVerification: requiresVerification,
+        requiresFrendlyPlus: requiresFrendlyPlus,
         joinMode:
             isDatingMode || visibility == 'friends' || accessMode == 'request'
                 ? EventJoinMode.request
@@ -1593,6 +1694,8 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
       accessMode: accessMode,
       genderMode: genderMode,
       visibilityMode: visibility,
+      requiresVerification: requiresVerification,
+      requiresFrendlyPlus: requiresFrendlyPlus,
       joinMode: visibility == 'friends' || accessMode == 'request'
           ? EventJoinMode.request
           : EventJoinMode.open,
