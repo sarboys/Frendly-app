@@ -47,15 +47,12 @@ enum MeetupsSortForTest { time, near, popular }
 final _meetupsFeedProvider =
     FutureProvider.autoDispose.family<List<Event>, _MeetupsQuery>(
   (ref, query) async {
-    final authBootstrap = ref.watch(authBootstrapProvider.future);
     final manualLocation = ref.watch(manualLocationProvider);
     final repository = ref.read(backendRepositoryProvider);
     final locationService =
         manualLocation == null ? ref.read(appLocationServiceProvider) : null;
     final cancelToken = CancelToken();
     ref.onDispose(cancelToken.cancel);
-
-    await authBootstrap;
 
     final location = await _meetupsLocation(manualLocation, locationService);
     if (location == null) {
@@ -118,10 +115,7 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
       access: _access,
       radiusKm: _radiusKm.round(),
     );
-    final usesSharedNearbyFeed = _usesSharedNearbyFeed;
-    final feedAsync = usesSharedNearbyFeed
-        ? ref.watch(eventsProvider('nearby'))
-        : ref.watch(_meetupsFeedProvider(query));
+    final feedAsync = ref.watch(_meetupsFeedProvider(query));
     if (_lastQuery != query) {
       _lastQuery = query;
       _lastEvents = null;
@@ -236,8 +230,7 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
                             Expanded(
                               child: RefreshIndicator(
                                 color: BbV5Colors.accent,
-                                onRefresh: () => _refreshMeetups(
-                                    query, usesSharedNearbyFeed),
+                                onRefresh: () => _refreshMeetups(query),
                                 child: ListView.separated(
                                   key: const PageStorageKey<String>(
                                     'meetups-v5-list',
@@ -277,10 +270,6 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
                       if (feedAsync.hasError) {
                         return _MeetupsErrorState(
                           onRetry: () {
-                            if (usesSharedNearbyFeed) {
-                              ref.invalidate(eventsProvider('nearby'));
-                              return;
-                            }
                             ref.invalidate(_meetupsFeedProvider(query));
                           },
                         );
@@ -297,16 +286,6 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
     );
   }
 
-  bool get _usesSharedNearbyFeed {
-    return _q.trim().isEmpty &&
-        _when == _whenOptions.first &&
-        _categories.isEmpty &&
-        _vibes.isEmpty &&
-        _timeOfDay.isEmpty &&
-        _access.isEmpty &&
-        _radiusKm.round() == nearbyEventsDefaultRadiusKm.round();
-  }
-
   int get _activeFilterCount {
     return _categories.length +
         _vibes.length +
@@ -316,10 +295,7 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
         (_radiusKm.round() == nearbyEventsDefaultRadiusKm.round() ? 0 : 1);
   }
 
-  Future<void> _refreshMeetups(
-    _MeetupsQuery query,
-    bool usesSharedNearbyFeed,
-  ) async {
+  Future<void> _refreshMeetups(_MeetupsQuery query) async {
     if (_manualRefreshError != null && mounted) {
       setState(() {
         _manualRefreshError = null;
@@ -327,14 +303,9 @@ class _MeetupsScreenState extends ConsumerState<MeetupsScreen> {
     }
 
     try {
-      final events = usesSharedNearbyFeed
-          ? await ref.read(eventsForceRefreshProvider('nearby').future)
-          : await _refreshFilteredMeetups(query);
+      final events = await _refreshFilteredMeetups(query);
       if (!mounted) {
         return;
-      }
-      if (usesSharedNearbyFeed) {
-        ref.invalidate(eventsProvider('nearby'));
       }
       setState(() {
         _lastEvents = events;

@@ -314,6 +314,7 @@ class _ProfileHeroCard extends StatelessWidget {
             displayName: title,
             photos: photos,
             photoPreviews: photoPreviews,
+            badges: _profileBadges(profile),
             height: 356,
           ),
           const SizedBox(height: AppSpacing.md),
@@ -343,14 +344,6 @@ class _ProfileHeroCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          if (profile.verified) ...[
-                            const SizedBox(width: 8),
-                            const Icon(
-                              LucideIcons.shield_check,
-                              size: 17,
-                              color: BbV5Colors.brand,
-                            ),
-                          ],
                         ],
                       ),
               ),
@@ -369,6 +362,91 @@ class _ProfileHeroCard extends StatelessWidget {
             signalRow!,
           ],
         ],
+      ),
+    );
+  }
+}
+
+List<Widget> _profileBadges(ProfileData profile) {
+  return [
+    if (profile.verified)
+      const _ProfileTrustBadge(
+        label: 'Verified',
+        icon: LucideIcons.shield_check,
+        backgroundStart: Color(0xFFE8F0E3),
+        backgroundEnd: Color(0xAAC9D5BE),
+        foreground: BbV5Colors.brandDeep,
+        border: Color(0x384F6A53),
+      ),
+    if (profile.frendlyPlus)
+      const _ProfileTrustBadge(
+        label: 'Frendly+',
+        icon: LucideIcons.crown,
+        backgroundStart: Color(0xFFF6D8B5),
+        backgroundEnd: BbV5Colors.terraSoft,
+        foreground: Color(0xFF7A3F22),
+        border: Color(0x4DB26F4A),
+      ),
+  ];
+}
+
+class _ProfileTrustBadge extends StatelessWidget {
+  const _ProfileTrustBadge({
+    required this.label,
+    required this.icon,
+    required this.backgroundStart,
+    required this.backgroundEnd,
+    required this.foreground,
+    required this.border,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color backgroundStart;
+  final Color backgroundEnd;
+  final Color foreground;
+  final Color border;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: label == 'Verified'
+          ? 'Профиль верифицирован'
+          : 'Подписка Frendly+',
+      child: Container(
+        height: 24,
+        padding: const EdgeInsets.only(left: 7, right: 9),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [backgroundStart, backgroundEnd],
+          ),
+          borderRadius: BorderRadius.circular(BbV5Radii.pill),
+          border: Border.all(color: border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.white.withValues(alpha: 0.22),
+              blurRadius: 0,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: foreground),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: AppTextStyles.meta.copyWith(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: foreground,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -43,6 +43,7 @@ void main() {
         previous.steps.first.copyWith(
           time: '19:30',
           venue: 'Brix Wine Bar',
+          address: 'Покровка 16',
           ticketPrice: 500,
         ),
         ...previous.steps.skip(1),
@@ -70,6 +71,10 @@ void main() {
     expect(diff, contains('Доступ: открытый → по заявке'));
     expect(diff, contains('Лимит мест: 8 → без лимита'));
     expect(diff.any((line) => line.startsWith('Шаг 1:')), isTrue);
+    expect(
+      diff.any((line) => line.contains('адрес: Покровка 12 → Покровка 16')),
+      isTrue,
+    );
   });
 
   test('next time adds thirty minutes', () {

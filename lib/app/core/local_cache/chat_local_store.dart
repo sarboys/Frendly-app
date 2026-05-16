@@ -42,6 +42,31 @@ class ChatLocalStore {
         );
   }
 
+  Future<void> replaceSummariesForKind({
+    required AppCacheUserScope userScope,
+    required ChatSummaryKind kind,
+    required List<ChatSummaryCachePayload> summaries,
+  }) async {
+    await _database.transaction(() async {
+      await (_database.delete(_database.chatSummaries)
+            ..where(
+              (table) =>
+                  table.userId.equals(userScope.storageId) &
+                  table.chatKind.equals(kind.value),
+            ))
+          .go();
+      for (final summary in summaries) {
+        await upsertSummary(
+          userScope: userScope,
+          kind: kind,
+          chatId: summary.chatId,
+          summaryJson: summary.summaryJson,
+          updatedAt: summary.updatedAt,
+        );
+      }
+    });
+  }
+
   Future<List<Map<String, dynamic>>> readSummaries({
     required AppCacheUserScope userScope,
     ChatSummaryKind? kind,
@@ -239,4 +264,16 @@ class ChatLocalStore {
     }
     return _now();
   }
+}
+
+class ChatSummaryCachePayload {
+  const ChatSummaryCachePayload({
+    required this.chatId,
+    required this.summaryJson,
+    required this.updatedAt,
+  });
+
+  final String chatId;
+  final Map<String, dynamic> summaryJson;
+  final DateTime updatedAt;
 }

@@ -339,6 +339,88 @@ void main() {
     );
   });
 
+  testWidgets('all chats keep archived meetup chats below active chats',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        child: const ChatsScreen(),
+        targetText: 'unused',
+        extraOverrides: [
+          meetupChatsProvider.overrideWith(
+            (ref) async => const [
+              MeetupChat(
+                id: 'mc-archive-1',
+                eventId: 'event-archive-1',
+                title: 'Старый винный круг',
+                emoji: '🍷',
+                time: '19:00',
+                lastMessage: 'Спасибо за вечер',
+                lastAuthor: 'Аня',
+                lastTime: 'сейчас',
+                unread: 0,
+                members: ['Ты', 'Аня'],
+                phase: MeetupPhase.done,
+              ),
+              MeetupChat(
+                id: 'mc-active',
+                eventId: 'event-active',
+                title: 'Сегодня кофе',
+                emoji: '☕',
+                time: '20:00',
+                lastMessage: 'Я уже рядом',
+                lastAuthor: 'Марк',
+                lastTime: '2 ч',
+                unread: 0,
+                members: ['Ты', 'Марк'],
+                phase: MeetupPhase.upcoming,
+              ),
+              MeetupChat(
+                id: 'mc-archive-2',
+                eventId: 'event-archive-2',
+                title: 'Прошлая прогулка',
+                emoji: '🚶',
+                time: '18:00',
+                lastMessage: 'Фото классные',
+                lastAuthor: 'Лена',
+                lastTime: '15 мин',
+                unread: 0,
+                members: ['Ты', 'Лена'],
+                phase: MeetupPhase.done,
+              ),
+            ],
+          ),
+          personalChatsProvider.overrideWith(
+            (ref) async => const [
+              PersonalChat(
+                id: 'pc-anna',
+                name: 'Аня, 26',
+                lastMessage: 'Кофе?',
+                lastTime: '12 мин',
+                unread: 0,
+                online: true,
+              ),
+            ],
+          ),
+          communitiesProvider.overrideWith((ref) async => const []),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _scrollUntilVisible(tester, find.text('АРХИВ'));
+
+    final activeTop = tester.getTopLeft(find.text('Сегодня кофе').last).dy;
+    final personalTop = tester.getTopLeft(find.text('Аня, 26').last).dy;
+    final archiveHeaderTop = tester.getTopLeft(find.text('АРХИВ')).dy;
+    final oldWineTop = tester.getTopLeft(find.text('Старый винный круг')).dy;
+    final walkTop = tester.getTopLeft(find.text('Прошлая прогулка')).dy;
+
+    expect(activeTop, lessThan(archiveHeaderTop));
+    expect(personalTop, lessThan(archiveHeaderTop));
+    expect(archiveHeaderTop, lessThan(oldWineTop));
+    expect(oldWineTop, lessThan(walkTop));
+  });
+
   testWidgets('all chats keep current rows during provider refresh',
       (tester) async {
     final pendingRefresh = Completer<List<MeetupChat>>();

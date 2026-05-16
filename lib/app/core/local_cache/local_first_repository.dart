@@ -40,7 +40,7 @@ class LocalFirstRepository {
     bool forceRefresh = false,
   }) async {
     if (!forceRefresh) {
-      final cached = await _store.readAny(
+      final cached = await _store.readFresh(
         userScope: userScope,
         namespace: namespace,
         cacheKey: cacheKey,

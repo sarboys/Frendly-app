@@ -165,6 +165,9 @@ List<String> buildEveningEditDiff({
     if (previousStep.venue != nextStep.venue) {
       changes.add('место: ${previousStep.venue} → ${nextStep.venue}');
     }
+    if (previousStep.address != nextStep.address) {
+      changes.add('адрес: ${previousStep.address} → ${nextStep.address}');
+    }
     if (previousStep.perk != nextStep.perk) {
       changes
           .add(nextStep.perk == null ? 'перк убран' : 'перк: ${nextStep.perk}');

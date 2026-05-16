@@ -17,6 +17,7 @@ class BbProfilePhotoGallery extends StatefulWidget {
     this.height = 320,
     this.initialPage = 0,
     this.photoPreviews = const {},
+    this.badges = const [],
     this.onPageChanged,
   });
 
@@ -25,6 +26,7 @@ class BbProfilePhotoGallery extends StatefulWidget {
   final double height;
   final int initialPage;
   final Map<String, Uint8List> photoPreviews;
+  final List<Widget> badges;
   final ValueChanged<int>? onPageChanged;
 
   @override
@@ -157,12 +159,28 @@ class _BbProfilePhotoGalleryState extends State<BbProfilePhotoGallery> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          widget.displayName,
-                          style: AppTextStyles.sectionTitle.copyWith(
-                            color: Colors.white,
-                            fontSize: 22,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              widget.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.sectionTitle.copyWith(
+                                color: Colors.white,
+                                fontSize: 22,
+                              ),
+                            ),
+                            if (widget.badges.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: widget.badges,
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                       if (widget.photos.isNotEmpty)

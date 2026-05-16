@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 class EveningEditScreen extends ConsumerStatefulWidget {
   const EveningEditScreen({
@@ -72,176 +71,194 @@ class _EveningEditScreenState extends ConsumerState<EveningEditScreen> {
     final canSave = chat?.phase != MeetupPhase.done;
 
     return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            _Header(
-              canSave: canSave,
-              phase: chat?.phase,
-              onBack: _pop,
-              onSave: _save,
-            ),
-            Expanded(
-              child: Stack(
-                children: [
-                  ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 112),
+      backgroundColor: colors.paper,
+      body: Stack(
+        children: [
+          const _V5WashBackground(),
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                _Header(
+                  canSave: canSave,
+                  phase: chat?.phase,
+                  onBack: _pop,
+                  onSave: _save,
+                ),
+                Expanded(
+                  child: Stack(
                     children: [
-                      if (chat?.phase == MeetupPhase.live)
-                        const _PhaseBanner(
-                          icon: LucideIcons.circle_alert,
-                          text:
-                              'Вечер уже идёт. Можно править только будущие шаги',
-                        ),
-                      if (chat?.phase == MeetupPhase.done)
-                        const _PhaseBanner(
-                          icon: LucideIcons.lock,
-                          text: 'Вечер завершён. Редактирование закрыто',
-                        ),
-                      _Section(
-                        title: 'Основное',
-                        disabled: !policy.meta,
+                      ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 112),
                         children: [
-                          _Field(
-                            label: 'Название',
-                            child: _TextInput(
-                              controller: _titleController,
-                              enabled: policy.meta,
+                          if (chat?.phase == MeetupPhase.live)
+                            const _PhaseBanner(
+                              icon: LucideIcons.circle_alert,
+                              text:
+                                  'Вечер уже идёт. Можно править только будущие шаги',
                             ),
-                          ),
-                          _Field(
-                            label: 'Описание',
-                            child: _TextInput(
-                              controller: _blurbController,
-                              enabled: policy.meta,
-                              maxLines: 2,
+                          if (chat?.phase == MeetupPhase.done)
+                            const _PhaseBanner(
+                              icon: LucideIcons.lock,
+                              text: 'Вечер завершён. Редактирование закрыто',
                             ),
-                          ),
-                          Row(
+                          _Section(
+                            title: 'Основное',
+                            disabled: !policy.meta,
                             children: [
-                              Expanded(
-                                child: _Field(
-                                  label: 'Район',
-                                  child: _TextInput(
-                                    controller: _areaController,
-                                    enabled: policy.meta,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(
-                                child: _Field(
-                                  label: 'Время',
-                                  child: _TextInput(
-                                    controller: _durationController,
-                                    enabled: policy.meta,
-                                  ),
+                              _V5Card(
+                                child: Column(
+                                  children: [
+                                    _Field(
+                                      label: 'Название',
+                                      child: _TextInput(
+                                        controller: _titleController,
+                                        enabled: policy.meta,
+                                      ),
+                                    ),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    _Field(
+                                      label: 'Описание',
+                                      child: _TextInput(
+                                        controller: _blurbController,
+                                        enabled: policy.meta,
+                                        maxLines: 2,
+                                      ),
+                                    ),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _Field(
+                                            label: 'Район',
+                                            child: _TextInput(
+                                              controller: _areaController,
+                                              enabled: policy.meta,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: AppSpacing.sm),
+                                        Expanded(
+                                          child: _Field(
+                                            label: 'Время',
+                                            child: _TextInput(
+                                              controller: _durationController,
+                                              enabled: policy.meta,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    _PremiumToggle(
+                                      value: _premium,
+                                      enabled: policy.meta,
+                                      onChanged: (value) =>
+                                          setState(() => _premium = value),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                          _PremiumToggle(
-                            value: _premium,
-                            enabled: policy.meta,
-                            onChanged: (value) =>
-                                setState(() => _premium = value),
-                          ),
-                        ],
-                      ),
-                      _Section(
-                        title: 'Кто может вписаться',
-                        disabled: !policy.meta,
-                        children: [
-                          _PrivacyOption(
-                            icon: LucideIcons.globe,
-                            label: 'Открытый',
-                            hint: 'Любой может присоединиться',
-                            active: _privacy == EveningPrivacy.open,
-                            enabled: policy.meta,
-                            onTap: () => setState(
-                              () => _privacy = EveningPrivacy.open,
-                            ),
-                          ),
-                          _PrivacyOption(
-                            icon: LucideIcons.user_plus,
-                            label: 'По заявке',
-                            hint: 'Хост одобряет каждую заявку',
-                            active: _privacy == EveningPrivacy.request,
-                            enabled: policy.meta,
-                            onTap: () => setState(
-                              () => _privacy = EveningPrivacy.request,
-                            ),
-                          ),
-                          _PrivacyOption(
-                            icon: LucideIcons.lock,
-                            label: 'По приглашениям',
-                            hint: 'Только приглашённые видят встречу',
-                            active: _privacy == EveningPrivacy.invite,
-                            enabled: policy.meta,
-                            onTap: () => setState(
-                              () => _privacy = EveningPrivacy.invite,
-                            ),
-                          ),
-                          _GuestLimitControl(
-                            value: _maxGuests,
-                            enabled: policy.meta,
-                            onChanged: (value) =>
-                                setState(() => _maxGuests = value),
-                          ),
-                        ],
-                      ),
-                      _Section(
-                        title: 'Маршрут',
-                        children: [
-                          for (var i = 0; i < _steps.length; i++)
-                            _StepEditorCard(
-                              key: ValueKey(_steps[i].id),
-                              step: _steps[i],
-                              index: i,
-                              total: _steps.length,
-                              editable: policy.stepEditable(
-                                i,
-                                currentStep: chat?.currentStep,
+                          _Section(
+                            title: 'Кто может вписаться',
+                            disabled: !policy.meta,
+                            children: [
+                              _PrivacyOption(
+                                icon: LucideIcons.globe,
+                                label: 'Открытый',
+                                hint: 'Любой может присоединиться',
+                                active: _privacy == EveningPrivacy.open,
+                                enabled: policy.meta,
+                                onTap: () => setState(
+                                  () => _privacy = EveningPrivacy.open,
+                                ),
                               ),
-                              passed: chat?.phase == MeetupPhase.live &&
-                                  !policy.stepEditable(
+                              _PrivacyOption(
+                                icon: LucideIcons.user_plus,
+                                label: 'По заявке',
+                                hint: 'Хост одобряет каждую заявку',
+                                active: _privacy == EveningPrivacy.request,
+                                enabled: policy.meta,
+                                onTap: () => setState(
+                                  () => _privacy = EveningPrivacy.request,
+                                ),
+                              ),
+                              _PrivacyOption(
+                                icon: LucideIcons.lock,
+                                label: 'По приглашениям',
+                                hint: 'Только приглашённые видят встречу',
+                                active: _privacy == EveningPrivacy.invite,
+                                enabled: policy.meta,
+                                onTap: () => setState(
+                                  () => _privacy = EveningPrivacy.invite,
+                                ),
+                              ),
+                              _GuestLimitControl(
+                                value: _maxGuests,
+                                enabled: policy.meta,
+                                onChanged: (value) =>
+                                    setState(() => _maxGuests = value),
+                              ),
+                            ],
+                          ),
+                          _Section(
+                            title:
+                                'Маршрут · ${_steps.length} ${_pluralStops(_steps.length)}',
+                            children: [
+                              for (var i = 0; i < _steps.length; i++)
+                                _StepEditorCard(
+                                  key: ValueKey(_steps[i].id),
+                                  step: _steps[i],
+                                  index: i,
+                                  total: _steps.length,
+                                  editable: policy.stepEditable(
                                     i,
                                     currentStep: chat?.currentStep,
                                   ),
-                              expanded: _openStepId == _steps[i].id,
-                              canMoveUp: policy.reorderStep && i > 0,
-                              canMoveDown:
-                                  policy.reorderStep && i < _steps.length - 1,
-                              canRemove: policy.removeStep,
-                              onToggle: () => setState(() {
-                                _openStepId = _openStepId == _steps[i].id
-                                    ? null
-                                    : _steps[i].id;
-                              }),
-                              onChanged: (step) => _replaceStep(i, step),
-                              onMoveUp: () => _moveStep(i, -1, policy, chat),
-                              onMoveDown: () => _moveStep(i, 1, policy, chat),
-                              onRemove: () => _removeStep(i, policy, chat),
-                            ),
-                          if (policy.addStep) _AddStepButton(onTap: _addStep),
+                                  passed: chat?.phase == MeetupPhase.live &&
+                                      !policy.stepEditable(
+                                        i,
+                                        currentStep: chat?.currentStep,
+                                      ),
+                                  expanded: _openStepId == _steps[i].id,
+                                  canMoveUp: policy.reorderStep && i > 0,
+                                  canMoveDown: policy.reorderStep &&
+                                      i < _steps.length - 1,
+                                  canRemove: policy.removeStep,
+                                  onToggle: () => setState(() {
+                                    _openStepId = _openStepId == _steps[i].id
+                                        ? null
+                                        : _steps[i].id;
+                                  }),
+                                  onChanged: (step) => _replaceStep(i, step),
+                                  onMoveUp: () =>
+                                      _moveStep(i, -1, policy, chat),
+                                  onMoveDown: () =>
+                                      _moveStep(i, 1, policy, chat),
+                                  onRemove: () => _removeStep(i, policy, chat),
+                                ),
+                              if (policy.addStep)
+                                _AddStepButton(onTap: _addStep),
+                            ],
+                          ),
                         ],
                       ),
+                      if (canSave)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: _StickySave(onTap: _save),
+                        ),
                     ],
                   ),
-                  if (canSave)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: _StickySave(onTap: _save),
-                    ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -385,16 +402,16 @@ class _EveningEditScreenState extends ConsumerState<EveningEditScreen> {
 
     final chatId = widget.chatId ?? chat?.id;
     if (chatId != null) {
-      _patchChatSummary(
-        chatId: chatId,
-        route: nextRoute,
-        diff: diff,
-      );
       if (diff.isNotEmpty) {
         ref
             .read(chatThreadProvider(chatId).notifier)
             .addLocalSystemMessage(_diffMessage(diff));
       }
+      _patchChatSummary(
+        chatId: chatId,
+        route: nextRoute,
+        diff: diff,
+      );
     }
 
     _pop();
@@ -478,10 +495,82 @@ class _EveningEditScreenState extends ConsumerState<EveningEditScreen> {
     return trimmed.isEmpty ? fallback : trimmed;
   }
 
-  void _pop() {
-    if (context.canPop()) {
-      context.pop();
+  String _pluralStops(int count) {
+    final mod10 = count % 10;
+    final mod100 = count % 100;
+    if (mod10 == 1 && mod100 != 11) {
+      return 'остановка';
     }
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+      return 'остановки';
+    }
+    return 'остановок';
+  }
+
+  void _pop() {
+    final navigator = Navigator.maybeOf(context);
+    if (navigator?.canPop() ?? false) {
+      navigator!.pop();
+    }
+  }
+}
+
+class _V5WashBackground extends StatelessWidget {
+  const _V5WashBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Positioned.fill(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              colors.warmStart,
+              colors.paper,
+              colors.warmEnd,
+            ],
+            stops: const [0, 0.56, 1],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _V5Card extends StatelessWidget {
+  const _V5Card({
+    required this.child,
+  });
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [colors.card, colors.paper],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1F241D).withValues(alpha: 0.14),
+            blurRadius: 48,
+            offset: const Offset(0, 24),
+            spreadRadius: -28,
+          ),
+        ],
+      ),
+      child: child,
+    );
   }
 }
 
@@ -505,24 +594,50 @@ class _Header extends StatelessWidget {
         ? 'Live · правка только будущих шагов'
         : 'Изменения уйдут в чат участников';
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
-        color: colors.background.withValues(alpha: 0.95),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            colors.card.withValues(alpha: 0.96),
+            colors.paper.withValues(alpha: 0.92),
+          ],
+        ),
         border: Border(
           bottom: BorderSide(color: colors.border.withValues(alpha: 0.6)),
         ),
       ),
       child: Row(
         children: [
-          IconButton(
+          _RoundIconButton(
             onPressed: onBack,
             icon: const Icon(LucideIcons.chevron_left, size: 22),
           ),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Редактировать вечер', style: AppTextStyles.itemTitle),
+                const _Kicker('Вечер'),
+                const SizedBox(height: 2),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(text: 'Редактировать '),
+                      TextSpan(
+                        text: 'вечер',
+                        style: AppTextStyles.itemTitle.copyWith(
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.itemTitle.copyWith(fontSize: 17),
+                ),
                 Text(
                   subtitle,
                   maxLines: 1,
@@ -537,14 +652,77 @@ class _Header extends StatelessWidget {
             icon: const Icon(LucideIcons.check, size: 16),
             label: const Text('Сохранить'),
             style: FilledButton.styleFrom(
+              backgroundColor: colors.accent,
+              foregroundColor: colors.card,
+              disabledBackgroundColor: colors.card,
+              disabledForegroundColor: colors.inkMute,
               minimumSize: const Size(0, 36),
               padding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: const StadiumBorder(),
               textStyle: AppTextStyles.meta.copyWith(
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _RoundIconButton extends StatelessWidget {
+  const _RoundIconButton({
+    required this.onPressed,
+    required this.icon,
+  });
+
+  final VoidCallback onPressed;
+  final Widget icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: colors.card,
+          shape: BoxShape.circle,
+          border: Border.all(color: colors.border),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1F241D).withValues(alpha: 0.12),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+              spreadRadius: -10,
+            ),
+          ],
+        ),
+        alignment: Alignment.center,
+        child: icon,
+      ),
+    );
+  }
+}
+
+class _Kicker extends StatelessWidget {
+  const _Kicker(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Text(
+      text.toUpperCase(),
+      style: AppTextStyles.caption.copyWith(
+        color: colors.inkMute,
+        fontSize: 10,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 2.4,
       ),
     );
   }
@@ -566,9 +744,17 @@ class _PhaseBanner extends StatelessWidget {
       margin: const EdgeInsets.only(top: AppSpacing.xs),
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
-        color: colors.warmStart,
+        color: colors.card,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1F241D).withValues(alpha: 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+            spreadRadius: -18,
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -603,13 +789,7 @@ class _Section extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  title,
-                  style: AppTextStyles.caption.copyWith(
-                    letterSpacing: 0,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                child: _Kicker(title),
               ),
               if (disabled)
                 Row(
@@ -655,7 +835,9 @@ class _Field extends StatelessWidget {
           label,
           style: AppTextStyles.caption.copyWith(
             color: colors.inkMute,
+            fontSize: 10.5,
             fontWeight: FontWeight.w600,
+            letterSpacing: 0.04,
           ),
         ),
         const SizedBox(height: 4),
@@ -727,9 +909,17 @@ class _PremiumToggle extends StatelessWidget {
         height: 44,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: value ? colors.foreground : colors.card,
+          color: value ? colors.accent : colors.card,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: value ? colors.foreground : colors.border),
+          border: Border.all(color: value ? colors.accent : colors.border),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1F241D).withValues(alpha: 0.12),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+              spreadRadius: -14,
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -782,15 +972,29 @@ class _PrivacyOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
+    const activeColor = Color(0xFFB26F4A);
     return InkWell(
       onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.sm),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
         decoration: BoxDecoration(
-          color: active ? colors.foreground : colors.card,
+          color: active ? activeColor : colors.card,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: active ? colors.foreground : colors.border),
+          border: Border.all(color: active ? activeColor : colors.border),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1F241D).withValues(
+                alpha: active ? 0.18 : 0.08,
+              ),
+              blurRadius: active ? 24 : 18,
+              offset: const Offset(0, 12),
+              spreadRadius: active ? -14 : -16,
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -850,7 +1054,7 @@ class _GuestLimitControl extends StatelessWidget {
           Row(
             children: [
               _SquareButton(
-                label: '−',
+                icon: LucideIcons.minus,
                 enabled: enabled,
                 onTap: () =>
                     onChanged((value ?? 6) <= 2 ? 2 : (value ?? 6) - 1),
@@ -860,19 +1064,30 @@ class _GuestLimitControl extends StatelessWidget {
                 child: Container(
                   height: 44,
                   decoration: BoxDecoration(
-                    color: colors.muted,
+                    color: colors.card,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: colors.border),
                   ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    value == null ? 'без лимита' : '$value мест',
-                    style: AppTextStyles.itemTitle.copyWith(fontSize: 14),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        LucideIcons.users,
+                        size: 16,
+                        color: colors.inkMute,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        value == null ? 'без лимита' : '$value мест',
+                        style: AppTextStyles.itemTitle.copyWith(fontSize: 14),
+                      ),
+                    ],
                   ),
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
               _SquareButton(
-                label: '+',
+                icon: LucideIcons.plus,
                 enabled: enabled,
                 onTap: () =>
                     onChanged((value ?? 6) >= 50 ? 50 : (value ?? 6) + 1),
@@ -892,12 +1107,12 @@ class _GuestLimitControl extends StatelessWidget {
 
 class _SquareButton extends StatelessWidget {
   const _SquareButton({
-    required this.label,
+    required this.icon,
     required this.enabled,
     required this.onTap,
   });
 
-  final String label;
+  final IconData icon;
   final bool enabled;
   final VoidCallback onTap;
 
@@ -916,7 +1131,7 @@ class _SquareButton extends StatelessWidget {
           border: Border.all(color: colors.border),
         ),
         alignment: Alignment.center,
-        child: Text(label, style: AppTextStyles.itemTitle),
+        child: Icon(icon, size: 17, color: colors.foreground),
       ),
     );
   }
@@ -964,12 +1179,24 @@ class _StepEditorCard extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: AppSpacing.xs),
         decoration: BoxDecoration(
-          color: colors.card,
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [colors.card, colors.paper],
+          ),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: colors.border,
             style: editable ? BorderStyle.solid : BorderStyle.solid,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1F241D).withValues(alpha: 0.1),
+              blurRadius: 28,
+              offset: const Offset(0, 16),
+              spreadRadius: -22,
+            ),
+          ],
         ),
         child: Column(
           children: [
@@ -984,11 +1211,20 @@ class _StepEditorCard extends StatelessWidget {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: colors.muted,
+                        color: expanded ? colors.accent : colors.card,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: expanded ? colors.accent : colors.border,
+                        ),
                       ),
                       alignment: Alignment.center,
-                      child: Text('${index + 1}', style: AppTextStyles.meta),
+                      child: Text(
+                        '${index + 1}',
+                        style: AppTextStyles.meta.copyWith(
+                          color: expanded ? colors.card : colors.foreground,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: AppSpacing.xs),
                     Text(step.emoji, style: const TextStyle(fontSize: 24)),
@@ -1004,13 +1240,53 @@ class _StepEditorCard extends StatelessWidget {
                             style:
                                 AppTextStyles.itemTitle.copyWith(fontSize: 14),
                           ),
-                          Text(
-                            '${step.time}${step.endTime == null ? '' : ' — ${step.endTime}'} · ${step.venue}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.caption.copyWith(
-                              color: colors.inkMute,
-                            ),
+                          Row(
+                            children: [
+                              Icon(
+                                LucideIcons.clock,
+                                size: 12,
+                                color: colors.inkMute,
+                              ),
+                              const SizedBox(width: 3),
+                              Flexible(
+                                child: Text(
+                                  '${step.time}${step.endTime == null ? '' : ' — ${step.endTime}'}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: colors.inkMute,
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 5),
+                                child: Text(
+                                  '·',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: colors.inkMute.withValues(
+                                      alpha: 0.45,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Icon(
+                                LucideIcons.map_pin,
+                                size: 12,
+                                color: colors.inkMute,
+                              ),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(
+                                  step.venue,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: colors.inkMute,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -1020,7 +1296,9 @@ class _StepEditorCard extends StatelessWidget {
                         'пройден',
                         style: AppTextStyles.caption.copyWith(
                           color: colors.inkMute,
+                          fontSize: 9.5,
                           fontWeight: FontWeight.w600,
+                          letterSpacing: 0.18,
                         ),
                       ),
                   ],
@@ -1028,8 +1306,15 @@ class _StepEditorCard extends StatelessWidget {
               ),
             ),
             if (expanded && editable)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color: colors.border.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                 child: Column(
                   children: [
                     Row(
@@ -1076,30 +1361,43 @@ class _StepEditorCard extends StatelessWidget {
                         const SizedBox(width: AppSpacing.xs),
                         Expanded(
                           child: _MiniField(
-                            label: 'Адрес',
-                            value: step.address,
-                            onChanged: (value) =>
-                                onChanged(step.copyWith(address: value)),
+                            label: 'Эмодзи',
+                            value: step.emoji,
+                            textAlign: TextAlign.center,
+                            onChanged: (value) => onChanged(
+                              step.copyWith(
+                                emoji: value.characters.take(2).toString(),
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
                     _MiniField(
-                      label: 'Перк',
-                      value: step.perk ?? '',
-                      onChanged: (value) => onChanged(
-                        step.copyWith(
-                          perk: value,
-                          clearPerk: value.trim().isEmpty,
-                          perkShort: value.trim().isEmpty
-                              ? null
-                              : step.perkShort ?? value.trim(),
-                          clearPerkShort: value.trim().isEmpty,
-                        ),
-                      ),
+                      label: 'Адрес',
+                      value: step.address,
+                      onChanged: (value) =>
+                          onChanged(step.copyWith(address: value)),
                     ),
                     Row(
                       children: [
+                        Expanded(
+                          child: _MiniField(
+                            label: 'Перк',
+                            value: step.perk ?? '',
+                            onChanged: (value) => onChanged(
+                              step.copyWith(
+                                perk: value,
+                                clearPerk: value.trim().isEmpty,
+                                perkShort: value.trim().isEmpty
+                                    ? null
+                                    : step.perkShort ?? value.trim(),
+                                clearPerkShort: value.trim().isEmpty,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
                         Expanded(
                           child: _MiniField(
                             label: 'Билет, ₽',
@@ -1112,19 +1410,6 @@ class _StepEditorCard extends StatelessWidget {
                               step.copyWith(
                                 ticketPrice: int.tryParse(value),
                                 clearTicketPrice: value.trim().isEmpty,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Expanded(
-                          child: _MiniField(
-                            label: 'Эмодзи',
-                            value: step.emoji,
-                            textAlign: TextAlign.center,
-                            onChanged: (value) => onChanged(
-                              step.copyWith(
-                                emoji: value.characters.take(2).toString(),
                               ),
                             ),
                           ),
@@ -1187,10 +1472,10 @@ class _MiniField extends StatelessWidget {
           Text(
             label,
             style: AppTextStyles.caption.copyWith(
-              fontSize: 10,
+              fontSize: 9.5,
               color: colors.inkMute,
               fontWeight: FontWeight.w600,
-              letterSpacing: 0,
+              letterSpacing: 1.6,
             ),
           ),
           const SizedBox(height: 4),
@@ -1203,7 +1488,7 @@ class _MiniField extends StatelessWidget {
             style: AppTextStyles.meta.copyWith(color: colors.foreground),
             decoration: InputDecoration(
               filled: true,
-              fillColor: colors.background,
+              fillColor: colors.card,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               border: OutlineInputBorder(
@@ -1236,7 +1521,7 @@ class _AddStepButton extends StatelessWidget {
       child: Container(
         height: 48,
         decoration: BoxDecoration(
-          color: colors.card.withValues(alpha: 0.55),
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: colors.border, width: 2),
         ),
@@ -1276,13 +1561,29 @@ class _StickySave extends StatelessWidget {
         20 + MediaQuery.paddingOf(context).bottom,
       ),
       decoration: BoxDecoration(
-        color: colors.background.withValues(alpha: 0.96),
-        border: Border(top: BorderSide(color: colors.border)),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            colors.paper.withValues(alpha: 0),
+            colors.paper,
+          ],
+          stops: const [0, 0.34],
+        ),
       ),
       child: FilledButton.icon(
         onPressed: onTap,
         icon: const Icon(LucideIcons.sparkles, size: 17),
         label: const Text('Сохранить и уведомить чат'),
+        style: FilledButton.styleFrom(
+          backgroundColor: colors.accent,
+          foregroundColor: colors.card,
+          minimumSize: const Size.fromHeight(48),
+          shape: const StadiumBorder(),
+          textStyle: AppTextStyles.meta.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }

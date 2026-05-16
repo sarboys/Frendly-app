@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/features/meetups/presentation/meetups_screen.dart';
-import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
@@ -142,6 +141,37 @@ void main() {
     expect(find.text('СЕГОДНЯ'), findsNothing);
   });
 
+  testWidgets('today meetups request includes backend date on initial load', (
+    tester,
+  ) async {
+    final requestedDates = <String?>[];
+    final now = DateTime.now();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authBootstrapProvider.overrideWith((ref) async {}),
+          appLocationServiceProvider.overrideWithValue(
+            const _FixedLocationService(),
+          ),
+          backendRepositoryProvider.overrideWith(
+            (ref) => _MeetupsRepository(
+              ref: ref,
+              dio: Dio(),
+              events: const [],
+              requestedDates: requestedDates,
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: MeetupsScreen()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(requestedDates, [_isoDateForTest(now)]);
+  });
+
   testWidgets('meetup list keeps rows and scroll offset during refresh', (
     tester,
   ) async {
@@ -161,23 +191,30 @@ void main() {
         overrides: [
           authBootstrapProvider.overrideWith((ref) async {}),
           appLocationServiceProvider.overrideWithValue(
-            const _NoLocationService(),
+            const _FixedLocationService(),
           ),
-          eventsProvider.overrideWith((ref, filter) {
-            final version = ref.watch(_meetupsRefreshVersionProvider);
-            if (version == 0) {
-              return Future.value(
-                List.generate(
-                  18,
-                  (index) => _event(
-                    'meetup-$index',
-                    today.add(Duration(minutes: index)),
-                  ),
-                ),
-              );
-            }
-            return pendingRefresh.future;
-          }),
+          backendRepositoryProvider.overrideWith(
+            (ref) => _MeetupsRepository(
+              ref: ref,
+              dio: Dio(),
+              eventsLoader: () {
+                final version =
+                    ref.read(_meetupsRefreshVersionProvider.notifier).state;
+                if (version == 0) {
+                  return Future.value(
+                    List.generate(
+                      18,
+                      (index) => _event(
+                        'meetup-$index',
+                        today.add(Duration(minutes: index)),
+                      ),
+                    ),
+                  );
+                }
+                return pendingRefresh.future;
+              },
+            ),
+          ),
         ],
         child: const MaterialApp(home: MeetupsScreen()),
       ),
@@ -197,6 +234,9 @@ void main() {
     ProviderScope.containerOf(context, listen: false)
         .read(_meetupsRefreshVersionProvider.notifier)
         .state = 1;
+    final refreshIndicator =
+        tester.widget<RefreshIndicator>(find.byType(RefreshIndicator));
+    final refreshFuture = refreshIndicator.onRefresh();
     await tester.pump();
 
     final during = tester.state<ScrollableState>(scrollable).position.pixels;
@@ -213,6 +253,7 @@ void main() {
         ),
       ),
     );
+    await refreshFuture;
     await tester.pumpAndSettle();
 
     final after = tester.state<ScrollableState>(scrollable).position.pixels;
@@ -247,10 +288,14 @@ class _MeetupsRepository extends BackendRepository {
   _MeetupsRepository({
     required super.ref,
     required super.dio,
-    required this.events,
+    this.events = const [],
+    this.eventsLoader,
+    this.requestedDates,
   });
 
   final List<Event> events;
+  final Future<List<Event>> Function()? eventsLoader;
+  final List<String?>? requestedDates;
 
   @override
   Future<PaginatedResponse<Event>> fetchEvents({
@@ -272,28 +317,19 @@ class _MeetupsRepository extends BackendRepository {
     double? northEastLongitude,
     CancelToken? cancelToken,
   }) async {
+    requestedDates?.add(date);
+    final loadedEvents = await eventsLoader?.call();
     return PaginatedResponse<Event>(
-      items: events,
+      items: loadedEvents ?? events,
       nextCursor: null,
     );
   }
 }
 
-class _NoLocationService implements AppLocationService {
-  const _NoLocationService();
-
-  @override
-  Future<Position?> getCurrentPosition() async => null;
-
-  @override
-  double distanceBetween({
-    required double startLatitude,
-    required double startLongitude,
-    required double endLatitude,
-    required double endLongitude,
-  }) {
-    return 0;
-  }
+String _isoDateForTest(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
 }
 
 class _FixedLocationService implements AppLocationService {

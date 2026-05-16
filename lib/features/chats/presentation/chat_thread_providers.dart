@@ -88,8 +88,9 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
           return;
         }
         _olderMessagesCursor = result.nextCursor;
-        state = AsyncValue.data(_decorateMessages(result.items));
-        await _replaceLocalMessages(result.items);
+        final messages = _mergeTransientLocalMessages(result.items);
+        state = AsyncValue.data(_decorateMessages(messages));
+        await _replaceLocalMessages(messages);
         final lastEventId = result.lastEventId;
         if (lastEventId != null) {
           await _rememberLocalSyncCursor(lastEventId);
@@ -898,6 +899,23 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
       _decorateMessagesAround(result.messages, result.changedIndices),
     );
     unawaited(_persistCurrentMessages());
+  }
+
+  List<Message> _mergeTransientLocalMessages(List<Message> remoteMessages) {
+    var merged = remoteMessages;
+    final current = state.valueOrNull ?? const <Message>[];
+    for (final message in current) {
+      if (!_isTransientLocalMessage(message)) {
+        continue;
+      }
+      merged = _mergeMessageIntoSortedList(merged, message).messages;
+    }
+    return merged;
+  }
+
+  bool _isTransientLocalMessage(Message message) {
+    return message.id.startsWith('local-') &&
+        (message.isPending || message.isSystem);
   }
 
   _MessageMergeResult _mergeMessageIntoSortedList(

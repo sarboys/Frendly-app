@@ -309,6 +309,7 @@ void main() {
               id: 'user-me',
               displayName: 'Никита М',
               verified: true,
+              frendlyPlus: true,
               online: true,
               age: 28,
               city: 'Москва',
@@ -328,6 +329,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Москва'), findsOneWidget);
+    expect(find.byTooltip('Профиль верифицирован'), findsOneWidget);
+    expect(find.byTooltip('Подписка Frendly+'), findsOneWidget);
     expect(find.textContaining('Чистые пруды'), findsNothing);
   });
 

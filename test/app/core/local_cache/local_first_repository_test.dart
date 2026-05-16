@@ -60,6 +60,31 @@ void main() {
     expect(cached?.payloadJson, '{"value":"network"}');
   });
 
+  test('skips stale cache and fetches network data', () async {
+    await store.write(
+      userScope: user,
+      namespace: AppCacheNamespace.tonight,
+      cacheKey: 'home',
+      payloadJson: '{"value":"stale"}',
+      policy: policy,
+    );
+    now = now.add(const Duration(minutes: 3));
+
+    final result = await repository.fetch<Map<String, dynamic>>(
+      userScope: user,
+      namespace: AppCacheNamespace.tonight,
+      cacheKey: 'home',
+      policy: policy,
+      networkFetch: () async => {'value': 'network'},
+      fromJson: (json) => Map<String, dynamic>.from(json as Map),
+      toJson: (value) => value,
+    );
+
+    expect(result.data, {'value': 'network'});
+    expect(result.fromCache, isFalse);
+    expect(result.refresh, isNull);
+  });
+
   test('keeps cached data when background refresh fails', () async {
     await store.write(
       userScope: user,

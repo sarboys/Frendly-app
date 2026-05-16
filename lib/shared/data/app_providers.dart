@@ -157,6 +157,7 @@ ProfileData _profileFromCacheJson(Object? json) {
     id: payload['id'] as String? ?? '',
     displayName: payload['displayName'] as String? ?? '',
     verified: payload['verified'] as bool? ?? false,
+    frendlyPlus: payload['frendlyPlus'] as bool? ?? false,
     online: payload['online'] as bool? ?? false,
     age: (payload['age'] as num?)?.toInt(),
     gender: payload['gender'] as String?,
@@ -179,6 +180,7 @@ Map<String, dynamic> _profileToCacheJson(ProfileData profile) {
     'id': profile.id,
     'displayName': profile.displayName,
     'verified': profile.verified,
+    'frendlyPlus': profile.frendlyPlus,
     'online': profile.online,
     'age': profile.age,
     'gender': profile.gender,
@@ -1594,15 +1596,20 @@ Future<void> _writeMeetupChatsCache(
   AppCacheUserScope userScope,
   List<MeetupChat> chats,
 ) async {
-  for (final chat in chats) {
-    await localStore.upsertSummary(
-      userScope: userScope,
-      kind: ChatSummaryKind.meetup,
-      chatId: chat.id,
-      summaryJson: meetupChatToCacheJson(chat),
-      updatedAt: DateTime.now(),
-    );
-  }
+  final now = DateTime.now();
+  await localStore.replaceSummariesForKind(
+    userScope: userScope,
+    kind: ChatSummaryKind.meetup,
+    summaries: chats
+        .map(
+          (chat) => ChatSummaryCachePayload(
+            chatId: chat.id,
+            summaryJson: meetupChatToCacheJson(chat),
+            updatedAt: chat.lastMessageAt ?? now,
+          ),
+        )
+        .toList(growable: false),
+  );
 }
 
 Future<void> _writePersonalChatsCache(
@@ -1610,15 +1617,20 @@ Future<void> _writePersonalChatsCache(
   AppCacheUserScope userScope,
   List<PersonalChat> chats,
 ) async {
-  for (final chat in chats) {
-    await localStore.upsertSummary(
-      userScope: userScope,
-      kind: ChatSummaryKind.personal,
-      chatId: chat.id,
-      summaryJson: personalChatToCacheJson(chat),
-      updatedAt: DateTime.now(),
-    );
-  }
+  final now = DateTime.now();
+  await localStore.replaceSummariesForKind(
+    userScope: userScope,
+    kind: ChatSummaryKind.personal,
+    summaries: chats
+        .map(
+          (chat) => ChatSummaryCachePayload(
+            chatId: chat.id,
+            summaryJson: personalChatToCacheJson(chat),
+            updatedAt: chat.lastMessageAt ?? now,
+          ),
+        )
+        .toList(growable: false),
+  );
 }
 
 final notificationsLocalStateProvider =

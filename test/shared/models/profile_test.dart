@@ -10,6 +10,7 @@ void main() {
         'id': 'user-me',
         'displayName': 'Никита М',
         'verified': true,
+        'frendlyPlus': true,
         'online': true,
         'rating': 4.8,
         'meetupCount': 12,
@@ -35,6 +36,7 @@ void main() {
     expect(profile.photos, hasLength(2));
     expect(profile.photos.first.id, 'ph1');
     expect(profile.avatarUrl, 'https://cdn.example.com/ph1.jpg');
+    expect(profile.frendlyPlus, isTrue);
   });
 
   test('profile resolves relative media urls through api base url', () {

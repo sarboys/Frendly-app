@@ -102,6 +102,7 @@ class ProfileData {
     required this.id,
     required this.displayName,
     required this.verified,
+    this.frendlyPlus = false,
     required this.online,
     required this.age,
     this.gender,
@@ -121,6 +122,7 @@ class ProfileData {
   final String id;
   final String displayName;
   final bool verified;
+  final bool frendlyPlus;
   final bool online;
   final int? age;
   final String? gender;
@@ -148,6 +150,7 @@ class ProfileData {
       id: profileJson['id'] as String,
       displayName: profileJson['displayName'] as String,
       verified: (profileJson['verified'] as bool?) ?? false,
+      frendlyPlus: (profileJson['frendlyPlus'] as bool?) ?? false,
       online: (profileJson['online'] as bool?) ?? false,
       age: profileJson['age'] as int?,
       gender: profileJson['gender'] as String?,
@@ -177,6 +180,7 @@ class ProfileData {
       id: json['id'] as String,
       displayName: json['displayName'] as String,
       verified: (json['verified'] as bool?) ?? false,
+      frendlyPlus: (json['frendlyPlus'] as bool?) ?? false,
       online: (json['online'] as bool?) ?? false,
       age: json['age'] as int?,
       gender: json['gender'] as String?,
@@ -200,6 +204,7 @@ class ProfileData {
   ProfileData copyWith({
     String? displayName,
     bool? verified,
+    bool? frendlyPlus,
     bool? online,
     int? age,
     String? gender,
@@ -219,6 +224,7 @@ class ProfileData {
       id: id,
       displayName: displayName ?? this.displayName,
       verified: verified ?? this.verified,
+      frendlyPlus: frendlyPlus ?? this.frendlyPlus,
       online: online ?? this.online,
       age: age ?? this.age,
       gender: gender ?? this.gender,

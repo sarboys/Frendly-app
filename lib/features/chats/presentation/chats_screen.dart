@@ -1063,8 +1063,20 @@ class _V5AllChatList extends StatelessWidget {
           meetupChats.length + personalChats.length + index,
         ),
     ];
-    entries.sort(_compareAllChatEntries);
-    final visibleEntries = entries.take(9).toList(growable: false);
+    final activeEntries = entries
+        .where((entry) => !entry.isArchivedMeetup)
+        .toList(growable: false)
+      ..sort(_compareAllChatEntries);
+    final archiveEntries = entries
+        .where((entry) => entry.isArchivedMeetup)
+        .toList(growable: false)
+      ..sort(_compareAllChatEntries);
+    final visibleActiveEntries = activeEntries.take(9).toList(growable: false);
+    final visibleEntries = [
+      ...visibleActiveEntries,
+      if (archiveEntries.isNotEmpty) const _V5AllChatEntry.archiveSection(),
+      ...archiveEntries,
+    ];
 
     return BbV5Card(
       radius: BbV5Radii.lg,
@@ -1084,7 +1096,10 @@ class _V5AllChatList extends StatelessWidget {
               onCommunityOpen: onCommunityOpen,
               onCommunityDelete: onCommunityDelete,
             ),
-            if (index < visibleEntries.length - 1) const _V5RowDivider(),
+            if (index < visibleEntries.length - 1 &&
+                !visibleEntries[index].isSection &&
+                !visibleEntries[index + 1].isSection)
+              const _V5RowDivider(),
           ],
         ],
       ),
@@ -1095,20 +1110,34 @@ class _V5AllChatList extends StatelessWidget {
 class _V5AllChatEntry {
   const _V5AllChatEntry.meetup(this.meetup, this.order)
       : personal = null,
-        community = null;
+        community = null,
+        sectionLabel = null;
 
   const _V5AllChatEntry.personal(this.personal, this.order)
       : meetup = null,
-        community = null;
+        community = null,
+        sectionLabel = null;
 
   const _V5AllChatEntry.community(this.community, this.order)
       : meetup = null,
-        personal = null;
+        personal = null,
+        sectionLabel = null;
+
+  const _V5AllChatEntry.archiveSection()
+      : meetup = null,
+        personal = null,
+        community = null,
+        order = -1,
+        sectionLabel = 'АРХИВ';
 
   final MeetupChat? meetup;
   final PersonalChat? personal;
   final Community? community;
   final int order;
+  final String? sectionLabel;
+
+  bool get isSection => sectionLabel != null;
+  bool get isArchivedMeetup => meetup?.phase == MeetupPhase.done;
 
   String get time =>
       meetup?.lastTime ?? personal?.lastTime ?? _communityLastTime(community);
@@ -1128,6 +1157,11 @@ class _V5AllChatEntry {
     required ValueChanged<Community> onCommunityOpen,
     required _AsyncValueChanged<Community> onCommunityDelete,
   }) {
+    final label = sectionLabel;
+    if (label != null) {
+      return _V5SectionLabel(label);
+    }
+
     final meetupChat = meetup;
     if (meetupChat != null) {
       final promoted = _isPromotedMeetupChat(meetupChat, promotedIds);

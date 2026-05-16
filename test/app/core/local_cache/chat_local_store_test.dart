@@ -42,6 +42,35 @@ void main() {
     expect(summaries.map((item) => item['id']), ['chat-new', 'chat-old']);
   });
 
+  test('replaceSummariesForKind removes summaries missing from fresh list',
+      () async {
+    await store.upsertSummary(
+      userScope: user,
+      kind: ChatSummaryKind.meetup,
+      chatId: 'chat-stale',
+      summaryJson: {'id': 'chat-stale', 'title': 'Stale'},
+      updatedAt: DateTime.utc(2026, 5, 14, 10),
+    );
+    await store.replaceSummariesForKind(
+      userScope: user,
+      kind: ChatSummaryKind.meetup,
+      summaries: [
+        ChatSummaryCachePayload(
+          chatId: 'chat-fresh',
+          summaryJson: {'id': 'chat-fresh', 'title': 'Fresh'},
+          updatedAt: DateTime.utc(2026, 5, 14, 11),
+        ),
+      ],
+    );
+
+    final meetupSummaries = await store.readSummaries(
+      userScope: user,
+      kind: ChatSummaryKind.meetup,
+    );
+
+    expect(meetupSummaries.map((item) => item['id']), ['chat-fresh']);
+  });
+
   test('merges messages by message id and client message id', () async {
     await store.upsertMessages(
       userScope: user,
