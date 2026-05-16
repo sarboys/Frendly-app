@@ -14,30 +14,6 @@ void main() {
 
     expect(
       appRouter.namedLocation(
-        AppRoute.checkIn.name,
-        pathParameters: const {'eventId': 'e1'},
-      ),
-      '/check-in/e1',
-    );
-
-    expect(
-      appRouter.namedLocation(
-        AppRoute.liveMeetup.name,
-        pathParameters: const {'eventId': 'e1'},
-      ),
-      '/live/e1',
-    );
-
-    expect(
-      appRouter.namedLocation(
-        AppRoute.afterParty.name,
-        pathParameters: const {'eventId': 'e1'},
-      ),
-      '/after-party/e1',
-    );
-
-    expect(
-      appRouter.namedLocation(
         AppRoute.eveningFlow.name,
         pathParameters: const {'eventId': 'e1'},
       ),

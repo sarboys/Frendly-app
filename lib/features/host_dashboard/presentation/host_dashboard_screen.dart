@@ -153,6 +153,7 @@ class _HostDashboardScreenState extends ConsumerState<HostDashboardScreen> {
                     pathParameters: {'eventId': event.id},
                   ),
                   onPromote: () => _openPromoteSheet(event),
+                  onFinish: () => _openFinishSheet(event),
                   onOpenChat: () => context.pushRoute(
                     AppRoute.meetupChat,
                     pathParameters: {'chatId': event.id},
@@ -192,6 +193,31 @@ class _HostDashboardScreenState extends ConsumerState<HostDashboardScreen> {
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Встреча продвигается · ${option.title}')),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _openFinishSheet(Event event) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: BbV5Colors.ink.withValues(alpha: 0.55),
+      builder: (sheetContext) => _FinishMeetupSheet(
+        event: event,
+        onFinished: () {
+          if (!mounted) {
+            return;
+          }
+          final container = ProviderScope.containerOf(context, listen: false);
+          container
+            ..invalidate(hostDashboardProvider)
+            ..invalidate(hostEventProvider(event.id))
+            ..invalidate(eventDetailProvider(event.id));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Вечер завершён')),
           );
         },
       ),
@@ -828,6 +854,7 @@ class _HostedEventTile extends StatelessWidget {
     required this.promoted,
     required this.onTap,
     required this.onPromote,
+    required this.onFinish,
     required this.onOpenChat,
   });
 
@@ -835,11 +862,13 @@ class _HostedEventTile extends StatelessWidget {
   final bool promoted;
   final VoidCallback onTap;
   final VoidCallback onPromote;
+  final VoidCallback onFinish;
   final VoidCallback onOpenChat;
 
   @override
   Widget build(BuildContext context) {
     final imageUrl = event.imageUrl?.trim();
+    final canFinish = _canFinishEvent(event);
 
     return BbV5Card(
       padding: const EdgeInsets.all(12),
@@ -970,11 +999,15 @@ class _HostedEventTile extends StatelessWidget {
             children: [
               Expanded(
                 child: BbV5PillButton(
-                  label: promoted ? 'Усилить ещё' : 'Продвигать',
-                  icon: LucideIcons.zap,
-                  dark: !promoted,
+                  label: canFinish
+                      ? 'Завершить вечер'
+                      : promoted
+                          ? 'Усилить ещё'
+                          : 'Продвигать',
+                  icon: canFinish ? LucideIcons.circle_check : LucideIcons.zap,
+                  dark: canFinish || !promoted,
                   expanded: true,
-                  onPressed: onPromote,
+                  onPressed: canFinish ? onFinish : onPromote,
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
@@ -986,6 +1019,297 @@ class _HostedEventTile extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FinishMeetupSheet extends ConsumerStatefulWidget {
+  const _FinishMeetupSheet({
+    required this.event,
+    required this.onFinished,
+  });
+
+  final Event event;
+  final VoidCallback onFinished;
+
+  @override
+  ConsumerState<_FinishMeetupSheet> createState() => _FinishMeetupSheetState();
+}
+
+class _FinishMeetupSheetState extends ConsumerState<_FinishMeetupSheet> {
+  Set<String>? _selectedUserIds;
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final eventAsync = ref.watch(hostEventProvider(widget.event.id));
+
+    return SafeArea(
+      top: false,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+            decoration: const BoxDecoration(
+              color: BbV5Colors.paper,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x4D000000),
+                  blurRadius: 40,
+                  spreadRadius: -10,
+                  offset: Offset(0, -20),
+                ),
+              ],
+            ),
+            child: eventAsync.when(
+              loading: () => const SizedBox(
+                height: 220,
+                child: Center(
+                  child: CircularProgressIndicator(color: BbV5Colors.accent),
+                ),
+              ),
+              error: (_, __) => _FinishMeetupError(
+                onRetry: () =>
+                    ref.invalidate(hostEventProvider(widget.event.id)),
+              ),
+              data: _buildContent,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(HostEventData eventData) {
+    final selectedUserIds = _selectedUserIds ?? const <String>{};
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Center(
+          child: Container(
+            width: 48,
+            height: 4,
+            decoration: BoxDecoration(
+              color: BbV5Colors.hair,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
+        const BbV5Kicker('Финал встречи'),
+        const SizedBox(height: 4),
+        const BbV5HeroTitle(
+          title: 'Кто был',
+          accent: 'на месте',
+          fontSize: 20,
+          maxLines: 1,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          widget.event.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.caption.copyWith(
+            color: BbV5Colors.inkMute,
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          'Отметь только тех, кто реально был. Им встреча попадёт в историю.',
+          style: AppTextStyles.bodySoft.copyWith(color: BbV5Colors.inkSoft),
+        ),
+        const SizedBox(height: 14),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 320),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: eventData.attendees.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final attendee = eventData.attendees[index];
+              final selected = selectedUserIds.contains(attendee.userId);
+              return _FinishAttendeeRow(
+                attendee: attendee,
+                selected: selected,
+                onTap: () => _toggleAttendee(attendee.userId),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+        BbV5PillButton(
+          label: _busy ? 'Завершаем' : 'Завершить вечер',
+          icon: LucideIcons.check,
+          dark: true,
+          height: 52,
+          expanded: true,
+          onPressed: _busy ? null : _finish,
+        ),
+        SizedBox(
+          width: double.infinity,
+          child: TextButton(
+            onPressed: _busy ? null : () => Navigator.of(context).pop(),
+            child: Text(
+              'Отмена',
+              style: AppTextStyles.button.copyWith(
+                color: BbV5Colors.inkMute,
+                fontSize: 12.5,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _toggleAttendee(String userId) {
+    setState(() {
+      final next = {...(_selectedUserIds ?? const <String>{})};
+      if (next.contains(userId)) {
+        next.remove(userId);
+      } else {
+        next.add(userId);
+      }
+      _selectedUserIds = next;
+    });
+  }
+
+  Future<void> _finish() async {
+    if (_busy) {
+      return;
+    }
+    final repository = ref.read(backendRepositoryProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      final selectedUserIds = (_selectedUserIds ?? const <String>{}).toList()
+        ..sort();
+      await repository.finishLiveMeetup(
+        widget.event.id,
+        attendedUserIds: selectedUserIds,
+      );
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop();
+      widget.onFinished();
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Не получилось завершить вечер')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+}
+
+class _FinishAttendeeRow extends StatelessWidget {
+  const _FinishAttendeeRow({
+    required this.attendee,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final HostEventAttendee attendee;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5Card(
+      radius: 18,
+      padding: const EdgeInsets.all(12),
+      onTap: onTap,
+      borderColor: selected ? BbV5Colors.accent : BbV5Colors.hair,
+      child: Row(
+        children: [
+          BbAvatar(name: attendee.displayName, imageUrl: attendee.avatarUrl),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  attendee.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.itemTitle.copyWith(fontSize: 14),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  attendee.online ? 'онлайн' : 'участник встречи',
+                  style: AppTextStyles.caption.copyWith(
+                    color: BbV5Colors.inkMute,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: selected ? BbV5Colors.accent : BbV5Colors.paperHi,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: selected ? BbV5Colors.accent : BbV5Colors.hair,
+              ),
+            ),
+            child: Icon(
+              LucideIcons.check,
+              size: 15,
+              color: selected ? BbV5Colors.paperHi : BbV5Colors.inkMute,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FinishMeetupError extends StatelessWidget {
+  const _FinishMeetupError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 220,
+      child: Center(
+        child: BbV5Card(
+          radius: 22,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Не получилось загрузить участников',
+                style: bbV5DisplayStyle(fontSize: 18, letterSpacing: 0),
+              ),
+              const SizedBox(height: 12),
+              BbV5PillButton(
+                label: 'Повторить',
+                icon: LucideIcons.refresh_cw,
+                onPressed: onRetry,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1292,6 +1616,17 @@ String _statusLabel(Event event) {
     return 'завершена';
   }
   return 'скоро';
+}
+
+bool _canFinishEvent(Event event) {
+  if (event.liveStatus == EventLiveStatus.finished) {
+    return false;
+  }
+  if (event.liveStatus == EventLiveStatus.live) {
+    return true;
+  }
+  final startsAt = DateTime.tryParse(event.startsAtIso ?? '');
+  return startsAt != null && startsAt.isBefore(DateTime.now());
 }
 
 LinearGradient _eventGradient(EventTone tone) {

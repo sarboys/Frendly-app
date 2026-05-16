@@ -1378,8 +1378,14 @@ class BackendRepository {
     await dio.post<Map<String, dynamic>>('/host/events/$eventId/live/start');
   }
 
-  Future<void> finishLiveMeetup(String eventId) async {
-    await dio.post<Map<String, dynamic>>('/host/events/$eventId/live/finish');
+  Future<void> finishLiveMeetup(
+    String eventId, {
+    List<String> attendedUserIds = const [],
+  }) async {
+    await dio.post<Map<String, dynamic>>(
+      '/host/events/$eventId/live/finish',
+      data: {'attendedUserIds': attendedUserIds},
+    );
   }
 
   Future<EveningPublishResult> publishEveningRoute(

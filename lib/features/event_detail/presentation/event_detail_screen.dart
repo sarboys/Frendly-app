@@ -501,7 +501,7 @@ class _EventDetailBody extends StatelessWidget {
                                       : event.isHost
                                           ? 'Открыть хост-панель'
                                           : event.joined
-                                              ? 'Начать вечер'
+                                              ? 'Открыть встречу'
                                               : hasPendingJoinRequest
                                                   ? 'Заявка отправлена'
                                                   : requiresRequest

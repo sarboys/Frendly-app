@@ -1,10 +1,7 @@
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/features/evening_flow/presentation/evening_flow_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
-import 'package:big_break_mobile/shared/data/backend_repository.dart';
-import 'package:big_break_mobile/shared/models/after_party_state.dart';
 import 'package:big_break_mobile/shared/models/event_detail.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,7 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../../test_overrides.dart';
 
 void main() {
-  testWidgets('evening flow renders v5 stage tabs and route stage',
+  testWidgets('evening flow shows participant hub without stage tabs',
       (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -25,19 +22,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Маршрут'), findsWidgets);
-    expect(find.text('Чек-ин'), findsOneWidget);
-    expect(find.text('Live'), findsOneWidget);
-    expect(find.text('After'), findsOneWidget);
-    expect(find.text('Итог'), findsOneWidget);
-    expect(find.text('Финал'), findsOneWidget);
     expect(find.text('Винный вечер на крыше'), findsWidgets);
-    expect(find.text('Начать чек-ин'), findsOneWidget);
+    expect(find.text('Открыть чат'), findsOneWidget);
+    expect(find.text('Чек-ин'), findsNothing);
+    expect(find.text('Live'), findsNothing);
+    expect(find.text('After'), findsNothing);
+    expect(find.text('Итог'), findsNothing);
+    expect(find.text('Финал'), findsNothing);
+    expect(find.text('Начать чек-ин'), findsNothing);
   });
 
-  testWidgets('evening flow keeps saved after-party feedback on done',
+  testWidgets('evening flow opens meetup chat from participant hub',
       (tester) async {
-    late _RecordingEveningFlowRepository repository;
     final router = GoRouter(
       initialLocation: '/evening/e1',
       routes: [
@@ -49,10 +45,10 @@ void main() {
           ),
         ),
         GoRoute(
-          path: AppRoute.tonight.path,
-          name: AppRoute.tonight.name,
+          path: AppRoute.meetupChat.path,
+          name: AppRoute.meetupChat.name,
           builder: (context, state) => const Scaffold(
-            body: Text('tonight'),
+            body: Text('chat-opened'),
           ),
         ),
       ],
@@ -61,15 +57,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          backendRepositoryProvider.overrideWith((ref) {
-            repository = _RecordingEveningFlowRepository(ref);
-            return repository;
-          }),
           eventDetailProvider.overrideWith(
             (ref, eventId) async => _eventDetail,
-          ),
-          afterPartyProvider.overrideWith(
-            (ref, eventId) async => _afterPartyWithSavedFeedback,
           ),
         ],
         child: MaterialApp.router(routerConfig: router),
@@ -77,24 +66,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.drag(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is SingleChildScrollView &&
-            widget.scrollDirection == Axis.horizontal,
-      ),
-      const Offset(-420, 0),
-    );
+    await tester.ensureVisible(find.text('Открыть чат'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Финал'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Готово'));
+    await tester.tap(find.text('Открыть чат'));
     await tester.pumpAndSettle();
 
-    expect(repository.savedVibe, 'warm');
-    expect(repository.savedHostRating, 4);
-    expect(repository.savedFavoriteUserIds, ['user-anya']);
-    expect(find.text('tonight'), findsOneWidget);
+    expect(find.text('chat-opened'), findsOneWidget);
   });
 }
 
@@ -130,42 +107,3 @@ const _eventDetail = EventDetail(
     ),
   ],
 );
-
-const _afterPartyWithSavedFeedback = AfterPartyData(
-  eventId: 'e1',
-  title: 'Винный вечер на крыше',
-  emoji: '🍷',
-  saved: true,
-  vibe: 'warm',
-  hostRating: 4,
-  note: null,
-  favoriteUserIds: ['user-anya'],
-  attendees: [
-    AfterPartyAttendee(
-      userId: 'user-anya',
-      displayName: 'Аня К',
-      avatarUrl: null,
-    ),
-  ],
-);
-
-class _RecordingEveningFlowRepository extends BackendRepository {
-  _RecordingEveningFlowRepository(Ref ref) : super(ref: ref, dio: Dio());
-
-  String? savedVibe;
-  int? savedHostRating;
-  List<String>? savedFavoriteUserIds;
-
-  @override
-  Future<void> saveAfterParty(
-    String eventId, {
-    required String vibe,
-    required int hostRating,
-    required List<String> favoriteUserIds,
-    String? note,
-  }) async {
-    savedVibe = vibe;
-    savedHostRating = hostRating;
-    savedFavoriteUserIds = favoriteUserIds;
-  }
-}

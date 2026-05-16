@@ -509,6 +509,44 @@ void main() {
     expect(feedbackBody, {'rating': 5, 'reaction': 'repeat'});
   });
 
+  test('finish live meetup sends host-selected attendees', () async {
+    RequestOptions? captured;
+    final apiDio = Dio(
+      BaseOptions(baseUrl: 'http://api.example.com'),
+    )..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            captured = options;
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: <String, dynamic>{},
+              ),
+            );
+          },
+        ),
+      );
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final repository = container.read(
+      Provider(
+        (ref) => BackendRepository(ref: ref, dio: apiDio),
+      ),
+    );
+
+    await repository.finishLiveMeetup(
+      'event-1',
+      attendedUserIds: ['user-anya', 'user-max'],
+    );
+
+    expect(captured?.method, 'POST');
+    expect(captured?.path, '/host/events/event-1/live/finish');
+    expect(captured?.data, {
+      'attendedUserIds': ['user-anya', 'user-max'],
+    });
+  });
+
   test('community creation sends idempotency key header', () async {
     final apiRequests = <_CapturedRequest>[];
     final apiDio = Dio(

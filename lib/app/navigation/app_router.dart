@@ -1,4 +1,3 @@
-import 'package:big_break_mobile/features/after_party/presentation/after_party_screen.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/navigation/app_shell.dart';
 import 'package:big_break_mobile/features/affiche/presentation/affiche_events_screen.dart';
@@ -7,7 +6,6 @@ import 'package:big_break_mobile/features/after_dark/presentation/after_dark_scr
 import 'package:big_break_mobile/features/ai_create/presentation/ai_create_screen.dart';
 import 'package:big_break_mobile/features/ai_voice/presentation/ai_voice_screen.dart';
 import 'package:big_break_mobile/features/add_photo/presentation/add_photo_screen.dart';
-import 'package:big_break_mobile/features/check_in/presentation/check_in_screen.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_screen.dart';
 import 'package:big_break_mobile/features/chat_location/presentation/chat_location_screen.dart';
 import 'package:big_break_mobile/features/communities/presentation/communities_screen.dart';
@@ -37,7 +35,6 @@ import 'package:big_break_mobile/features/evening_routes/presentation/partner_of
 import 'package:big_break_mobile/features/event_detail/presentation/event_detail_screen.dart';
 import 'package:big_break_mobile/features/host_dashboard/presentation/host_dashboard_screen.dart';
 import 'package:big_break_mobile/features/join_request/presentation/join_request_screen.dart';
-import 'package:big_break_mobile/features/live_meetup/presentation/live_meetup_screen.dart';
 import 'package:big_break_mobile/features/match/presentation/match_screen.dart';
 import 'package:big_break_mobile/features/map/presentation/map_screen.dart';
 import 'package:big_break_mobile/features/memory_map/presentation/memory_map_screen.dart';
@@ -592,33 +589,6 @@ GoRouter buildAppRouter({
         name: AppRoute.joinRequest.name,
         pageBuilder: (context, state) => _slidePage(
           JoinRequestScreen(
-            eventId: state.pathParameters['eventId']!,
-          ),
-        ),
-      ),
-      GoRoute(
-        path: AppRoute.checkIn.path,
-        name: AppRoute.checkIn.name,
-        pageBuilder: (context, state) => _slidePage(
-          CheckInScreen(
-            eventId: state.pathParameters['eventId']!,
-          ),
-        ),
-      ),
-      GoRoute(
-        path: AppRoute.liveMeetup.path,
-        name: AppRoute.liveMeetup.name,
-        pageBuilder: (context, state) => _slidePage(
-          LiveMeetupScreen(
-            eventId: state.pathParameters['eventId']!,
-          ),
-        ),
-      ),
-      GoRoute(
-        path: AppRoute.afterParty.path,
-        name: AppRoute.afterParty.name,
-        pageBuilder: (context, state) => _slidePage(
-          AfterPartyScreen(
             eventId: state.pathParameters['eventId']!,
           ),
         ),
