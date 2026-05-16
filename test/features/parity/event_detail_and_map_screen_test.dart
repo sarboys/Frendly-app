@@ -1,5 +1,7 @@
 import 'package:big_break_mobile/app/core/device/app_location_service.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
+import 'package:big_break_mobile/features/evening_plan/presentation/evening_edit_state.dart';
+import 'package:big_break_mobile/features/evening_plan/presentation/evening_plan_data.dart';
 import 'package:big_break_mobile/features/event_detail/presentation/event_detail_screen.dart';
 import 'package:big_break_mobile/features/map/presentation/map_screen.dart';
 import 'package:big_break_mobile/features/user_profile/presentation/user_profile_screen.dart';
@@ -481,6 +483,7 @@ void main() {
 
     expect(find.text('Все · 5'), findsOneWidget);
     expect(find.text('Бары · 5'), findsOneWidget);
+    expect(find.textContaining('Дейтинг'), findsNothing);
     expect(find.text('Винный вечер на крыше'), findsOneWidget);
 
     await tester.tap(find.text('Бары · 5'));
@@ -638,6 +641,101 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('edit-event-e-host'), findsOneWidget);
+  });
+
+  testWidgets('event host can open route editor from route block',
+      (tester) async {
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => ProviderScope(
+            overrides: [
+              ...buildTestOverrides(),
+              eveningRouteOverridesProvider.overrideWith(
+                (ref) => {
+                  'route-edit': emptyEveningRoute('route-edit').copyWith(
+                    title: 'Маршрут для правки',
+                    durationLabel: '2 остановки',
+                  ),
+                },
+              ),
+              eventDetailProvider.overrideWith((ref, eventId) async {
+                return const EventDetail(
+                  id: 'e-route-edit',
+                  title: 'Прогулка + Еда + Шоу',
+                  emoji: '🚶',
+                  time: 'Сегодня · 19:00',
+                  place: 'Маршрут: Прогулка + Еда + Шоу',
+                  distance: '0.0 км',
+                  vibe: 'Активно',
+                  description: 'Вечер с двумя остановками.',
+                  hostNote: null,
+                  joined: true,
+                  partnerName: null,
+                  partnerOffer: null,
+                  capacity: 8,
+                  going: 1,
+                  chatId: 'mc-route-edit',
+                  routeId: 'route-edit',
+                  isHost: true,
+                  routeStops: [
+                    EventDetailRouteStop(
+                      title: 'пространство Ха',
+                      subtitle: 'ул. Бакунинская',
+                      time: '19:00',
+                      note: 'Стартуем на свежем воздухе',
+                      emoji: '🏃',
+                    ),
+                    EventDetailRouteStop(
+                      title: 'ресторан Урюк',
+                      subtitle: 'пл. Семеновская',
+                      time: '21:03',
+                      note: null,
+                      emoji: '☕',
+                    ),
+                  ],
+                  host: EventHost(
+                    id: 'user-me',
+                    displayName: 'Сергей',
+                    verified: true,
+                    rating: 4.9,
+                    meetupCount: 12,
+                    avatarUrl: null,
+                  ),
+                  attendees: [],
+                );
+              }),
+            ],
+            child: const EventDetailScreen(eventId: 'e-route-edit'),
+          ),
+        ),
+        GoRoute(
+          path: '/evening-edit/:routeId',
+          name: 'eveningEdit',
+          builder: (context, state) => Text(
+            'edit-route-${state.pathParameters['routeId']}',
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    await tester.dragUntilVisible(
+      find.text('Маршрут вечера'),
+      find.byType(CustomScrollView),
+      const Offset(0, -180),
+    );
+
+    expect(find.widgetWithText(FilledButton, 'Править'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Править'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('edit-route-route-edit'), findsOneWidget);
   });
 
   testWidgets('event host profile button opens own v5 profile', (

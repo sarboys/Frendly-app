@@ -98,8 +98,8 @@ void main() {
     );
 
     expect(find.text('Streak'), findsOneWidget);
-    expect(find.text('Перки'), findsOneWidget);
-    expect(find.text('Карта'), findsOneWidget);
+    expect(find.text('Промо'), findsWidgets);
+    expect(find.text('История'), findsOneWidget);
     expect(find.text('Сказать вслух'), findsWidgets);
   });
 
@@ -1565,13 +1565,6 @@ Widget _wrapOnboardingFlow(
         ),
       ),
       GoRoute(
-        path: AppRoute.addPhoto.path,
-        name: AppRoute.addPhoto.name,
-        builder: (context, state) => const Scaffold(
-          body: Center(child: Text('add-photo-opened')),
-        ),
-      ),
-      GoRoute(
         path: AppRoute.tonight.path,
         name: AppRoute.tonight.name,
         builder: (context, state) => const Scaffold(
@@ -1629,13 +1622,6 @@ class _GuardedOnboardingAppState extends ConsumerState<_GuardedOnboardingApp> {
           path: AppRoute.onboarding.path,
           name: AppRoute.onboarding.name,
           builder: (context, state) => const OnboardingScreen(),
-        ),
-        GoRoute(
-          path: AppRoute.addPhoto.path,
-          name: AppRoute.addPhoto.name,
-          builder: (context, state) => const Scaffold(
-            body: Center(child: Text('add-photo-opened')),
-          ),
         ),
         GoRoute(
           path: AppRoute.tonight.path,

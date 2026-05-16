@@ -159,6 +159,43 @@ class _ProfileWithSharedOnboardingRepository extends BackendRepository {
   }
 }
 
+class _ProfileWithFailingOnboardingRepository extends BackendRepository {
+  _ProfileWithFailingOnboardingRepository({
+    required super.ref,
+    required super.dio,
+  });
+
+  var fetchMeCalls = 0;
+  var fetchOnboardingCalls = 0;
+
+  @override
+  Future<ProfileData> fetchMe() async {
+    fetchMeCalls += 1;
+    return const ProfileData(
+      id: 'user-me',
+      displayName: 'Никита М',
+      verified: true,
+      online: true,
+      age: 28,
+      city: 'Москва',
+      area: 'Патрики',
+      bio: 'bio',
+      vibe: 'calm',
+      rating: 4.8,
+      meetupCount: 12,
+      avatarUrl: 'https://cdn.example.com/me.jpg',
+      interests: [],
+      intent: [],
+    );
+  }
+
+  @override
+  Future<OnboardingData> fetchOnboarding() async {
+    fetchOnboardingCalls += 1;
+    throw StateError('onboarding request failed');
+  }
+}
+
 class _MapEventsRepository extends BackendRepository {
   _MapEventsRepository({
     required super.ref,
@@ -552,6 +589,10 @@ class _DelayedDatingRepository extends BackendRepository {
   Future<PaginatedResponse<DatingProfileData>> fetchDatingDiscover({
     String? cursor,
     int limit = 20,
+    int? ageMin,
+    int? ageMax,
+    double? radiusKm,
+    List<String> interests = const [],
     CancelToken? cancelToken,
   }) {
     discoverCalls += 1;
@@ -584,6 +625,10 @@ class _DatingPreviewRepository extends BackendRepository {
   Future<PaginatedResponse<DatingProfileData>> fetchDatingDiscover({
     String? cursor,
     int limit = 20,
+    int? ageMin,
+    int? ageMax,
+    double? radiusKm,
+    List<String> interests = const [],
     CancelToken? cancelToken,
   }) async {
     discoverLimit = limit;
@@ -789,6 +834,75 @@ void main() {
     expect(result.map((chat) => chat.id), ['mc-pinned', 'mc-new']);
   });
 
+  test('sortMeetupChatsByPinned orders each pin group by last message date',
+      () {
+    final chats = [
+      MeetupChat(
+        id: 'regular-old',
+        eventId: 'e1',
+        title: 'Старый',
+        emoji: '☕',
+        time: '18:00',
+        lastMessage: 'Старое',
+        lastAuthor: 'Аня',
+        lastTime: '1 ч',
+        lastMessageAt: DateTime.parse('2026-05-16T09:00:00.000Z'),
+        unread: 0,
+        members: const ['Аня', 'Ты'],
+      ),
+      MeetupChat(
+        id: 'pinned-old',
+        eventId: 'e2',
+        title: 'Закрепленный старый',
+        emoji: '📌',
+        time: '19:00',
+        lastMessage: 'Старое',
+        lastAuthor: 'Паша',
+        lastTime: '2 ч',
+        lastMessageAt: DateTime.parse('2026-05-16T08:00:00.000Z'),
+        unread: 0,
+        members: const ['Паша', 'Ты'],
+        isPinned: true,
+      ),
+      MeetupChat(
+        id: 'regular-new',
+        eventId: 'e3',
+        title: 'Свежий',
+        emoji: '🍷',
+        time: '20:00',
+        lastMessage: 'Новое',
+        lastAuthor: 'Соня',
+        lastTime: '5 мин',
+        lastMessageAt: DateTime.parse('2026-05-16T10:00:00.000Z'),
+        unread: 0,
+        members: const ['Соня', 'Ты'],
+      ),
+      MeetupChat(
+        id: 'pinned-new',
+        eventId: 'e4',
+        title: 'Закрепленный свежий',
+        emoji: '🎵',
+        time: '21:00',
+        lastMessage: 'Новое',
+        lastAuthor: 'Дима',
+        lastTime: 'сейчас',
+        lastMessageAt: DateTime.parse('2026-05-16T11:00:00.000Z'),
+        unread: 0,
+        members: const ['Дима', 'Ты'],
+        isPinned: true,
+      ),
+    ];
+
+    final result = sortMeetupChatsByPinned(chats);
+
+    expect(result.map((chat) => chat.id), [
+      'pinned-new',
+      'pinned-old',
+      'regular-new',
+      'regular-old',
+    ]);
+  });
+
   test('upsertMeetupChat inserts new chat and keeps existing chats', () {
     const chats = [
       MeetupChat(
@@ -938,6 +1052,59 @@ void main() {
     );
 
     expect(result.map((chat) => chat.id), ['p-pinned', 'p-new']);
+  });
+
+  test('sortPersonalChatsByPinned orders each pin group by last message date',
+      () {
+    final chats = [
+      PersonalChat(
+        id: 'regular-old',
+        name: 'Аня',
+        lastMessage: 'Старое',
+        lastTime: '1 ч',
+        lastMessageAt: DateTime.parse('2026-05-16T09:00:00.000Z'),
+        unread: 0,
+        online: false,
+      ),
+      PersonalChat(
+        id: 'pinned-old',
+        name: 'Паша',
+        lastMessage: 'Старое',
+        lastTime: '2 ч',
+        lastMessageAt: DateTime.parse('2026-05-16T08:00:00.000Z'),
+        unread: 0,
+        online: false,
+        isPinned: true,
+      ),
+      PersonalChat(
+        id: 'regular-new',
+        name: 'Соня',
+        lastMessage: 'Новое',
+        lastTime: '5 мин',
+        lastMessageAt: DateTime.parse('2026-05-16T10:00:00.000Z'),
+        unread: 0,
+        online: true,
+      ),
+      PersonalChat(
+        id: 'pinned-new',
+        name: 'Дима',
+        lastMessage: 'Новое',
+        lastTime: 'сейчас',
+        lastMessageAt: DateTime.parse('2026-05-16T11:00:00.000Z'),
+        unread: 0,
+        online: true,
+        isPinned: true,
+      ),
+    ];
+
+    final result = sortPersonalChatsByPinned(chats);
+
+    expect(result.map((chat) => chat.id), [
+      'pinned-new',
+      'pinned-old',
+      'regular-new',
+      'regular-old',
+    ]);
   });
 
   test('mapEventsProvider requests a bounded map page', () async {
@@ -1771,6 +1938,76 @@ void main() {
     expect(repository.calls, 1);
   });
 
+  test('eventsProvider fetches network when local cache cannot decode',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    await store.write(
+      userScope: AppCacheUserScope.user('user-me'),
+      namespace: AppCacheNamespace.meetups,
+      cacheKey: AppCacheKey.build(
+        path: '/events',
+        query: const {'filter': 'now'},
+      ),
+      payloadJson: jsonEncode([
+        {
+          'id': 'event-stale',
+        },
+      ]),
+      policy: AppCachePolicies.meetups,
+    );
+
+    final completer = Completer<PaginatedResponse<Event>>();
+    late _DelayedEventsRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _DelayedEventsRepository(
+            ref: ref,
+            dio: Dio(),
+            completer: completer,
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final future = container.read(eventsProvider('now').future);
+    completer.complete(
+      PaginatedResponse<Event>(
+        items: [
+          Event.fromJson(
+            {
+              'id': 'event-network',
+              'title': 'Network event',
+              'emoji': '🎟',
+              'time': '21:00',
+              'place': 'Mars',
+              'distance': '2 км',
+              'attendees': ['Лиза'],
+              'going': 2,
+              'capacity': 8,
+              'vibe': 'active',
+              'tone': 'warm',
+              'joined': false,
+            },
+          ),
+        ],
+        nextCursor: null,
+      ),
+    );
+
+    final events = await future;
+    expect(events.single.title, 'Network event');
+    expect(repository.calls, 1);
+  });
+
   test('events force refresh bypasses local cache and waits for network',
       () async {
     final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
@@ -2454,7 +2691,11 @@ void main() {
       namespace: AppCacheNamespace.dating,
       cacheKey: AppCacheKey.build(
         path: '/dating/discover',
-        query: const {'limit': 20},
+        query: const DatingDiscoverFilters(
+          ageMin: 22,
+          ageMax: 35,
+          radiusKm: 10,
+        ).toQuery(limit: 20),
       ),
       payloadJson: jsonEncode([_cachedDatingJson(userId: 'discover-cached')]),
       policy: AppCachePolicies.dating,
@@ -2722,6 +2963,31 @@ void main() {
     expect(repository.fetchMeCalls, 1);
     expect(repository.fetchOnboardingCalls, 1);
     expect(repository.fetchProfileCalls, 0);
+  });
+
+  test('profile provider keeps profile data when onboarding fails', () async {
+    late _ProfileWithFailingOnboardingRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _ProfileWithFailingOnboardingRepository(
+            ref: ref,
+            dio: Dio(),
+          );
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final profile = await container.read(profileProvider.future);
+
+    expect(profile.displayName, 'Никита М');
+    expect(profile.interests, isEmpty);
+    expect(profile.intent, isEmpty);
+    expect(repository.fetchMeCalls, 1);
+    expect(repository.fetchOnboardingCalls, 1);
   });
 
   test('profile provider reuses profile loaded by auth bootstrap', () async {

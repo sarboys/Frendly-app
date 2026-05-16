@@ -46,21 +46,29 @@ class LocalFirstRepository {
         cacheKey: cacheKey,
       );
       if (cached != null) {
-        final data = fromJson(jsonDecode(cached.payloadJson));
-        return LocalFirstResult<T>(
-          data: data,
-          fromCache: true,
-          isStale: cached.isStale,
-          refresh: _refresh(
+        try {
+          final data = fromJson(jsonDecode(cached.payloadJson));
+          return LocalFirstResult<T>(
+            data: data,
+            fromCache: true,
+            isStale: cached.isStale,
+            refresh: _refresh(
+              userScope: userScope,
+              namespace: namespace,
+              cacheKey: cacheKey,
+              policy: policy,
+              networkFetch: networkFetch,
+              toJson: toJson,
+              fallback: data,
+            ),
+          );
+        } catch (_) {
+          await _store.deleteKey(
             userScope: userScope,
             namespace: namespace,
             cacheKey: cacheKey,
-            policy: policy,
-            networkFetch: networkFetch,
-            toJson: toJson,
-            fallback: data,
-          ),
-        );
+          );
+        }
       }
     }
 

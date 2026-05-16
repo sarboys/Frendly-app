@@ -92,24 +92,44 @@ class _AiCreateScreenState extends ConsumerState<AiCreateScreen> {
           content: Text('Готово · ${draft.route.steps.length} шага собраны'),
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted ||
           cancelToken.isCancelled ||
           !identical(_resolveCancelToken, cancelToken)) {
         return;
       }
+      final errorText = _aiRouteDraftErrorText(error);
       setState(() {
         _loading = false;
-        _errorText = 'Сервер не ответил. Попробуй еще раз.';
+        _errorText = errorText;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось собрать маршрут')),
+        SnackBar(content: Text(errorText)),
       );
     } finally {
       if (identical(_resolveCancelToken, cancelToken)) {
         _resolveCancelToken = null;
       }
     }
+  }
+
+  String _aiRouteDraftErrorText(Object error) {
+    if (error is DioException &&
+        _apiErrorCode(error) == 'evening_ai_candidates_not_found') {
+      return 'В вашем регионе пока нет подходящих мест или событий. Попробуй другую дату или город.';
+    }
+    return 'Сервер не ответил. Попробуй еще раз.';
+  }
+
+  String? _apiErrorCode(DioException error) {
+    final data = error.response?.data;
+    if (data is Map) {
+      final code = data['code'];
+      if (code is String) {
+        return code;
+      }
+    }
+    return null;
   }
 
   Future<void> _regenerateDraftPlan() async {

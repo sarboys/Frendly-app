@@ -153,6 +153,8 @@ void main() {
     });
 
     final pendingRefresh = Completer<List<Event>>();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day, 18);
 
     await tester.pumpWidget(
       ProviderScope(
@@ -169,7 +171,7 @@ void main() {
                   18,
                   (index) => _event(
                     'meetup-$index',
-                    DateTime(2026, 5, 14, 18 + index),
+                    today.add(Duration(minutes: index)),
                   ),
                 ),
               );
@@ -207,7 +209,7 @@ void main() {
         18,
         (index) => _event(
           'meetup-$index',
-          DateTime(2026, 5, 14, 18 + index),
+          today.add(Duration(minutes: index)),
         ),
       ),
     );

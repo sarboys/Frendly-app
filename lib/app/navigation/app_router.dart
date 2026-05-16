@@ -5,7 +5,6 @@ import 'package:big_break_mobile/features/affiche/presentation/affiche_event_det
 import 'package:big_break_mobile/features/after_dark/presentation/after_dark_screen.dart';
 import 'package:big_break_mobile/features/ai_create/presentation/ai_create_screen.dart';
 import 'package:big_break_mobile/features/ai_voice/presentation/ai_voice_screen.dart';
-import 'package:big_break_mobile/features/add_photo/presentation/add_photo_screen.dart';
 import 'package:big_break_mobile/features/chats/presentation/chats_screen.dart';
 import 'package:big_break_mobile/features/chat_location/presentation/chat_location_screen.dart';
 import 'package:big_break_mobile/features/communities/presentation/communities_screen.dart';
@@ -19,7 +18,6 @@ import 'package:big_break_mobile/features/create_meetup/presentation/create_meet
 import 'package:big_break_mobile/features/create_meetup/presentation/publish_meetup_screen.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_screen.dart';
 import 'package:big_break_mobile/features/edit_profile/presentation/edit_profile_screen.dart';
-import 'package:big_break_mobile/features/evening_plan/presentation/evening_builder_screen.dart';
 import 'package:big_break_mobile/features/evening_plan/presentation/evening_after_party_screen.dart';
 import 'package:big_break_mobile/features/evening_plan/presentation/evening_edit_screen.dart';
 import 'package:big_break_mobile/features/evening_plan/presentation/evening_live_meetup_screen.dart';
@@ -46,7 +44,6 @@ import 'package:big_break_mobile/features/personal_chat/presentation/personal_ch
 import 'package:big_break_mobile/features/perks/presentation/perks_screen.dart';
 import 'package:big_break_mobile/features/paywall/presentation/paywall_screen.dart';
 import 'package:big_break_mobile/features/payments/presentation/payment_return_screen.dart';
-import 'package:big_break_mobile/features/permissions/presentation/permissions_screen.dart';
 import 'package:big_break_mobile/features/phone_auth/presentation/phone_auth_screen.dart';
 import 'package:big_break_mobile/features/profile/presentation/profile_screen.dart';
 import 'package:big_break_mobile/features/report/presentation/report_screen.dart';
@@ -298,14 +295,12 @@ GoRouter buildAppRouter({
         pageBuilder: (context, state) => _slidePage(const TelegramAuthScreen()),
       ),
       GoRoute(
-        path: AppRoute.permissions.path,
-        name: AppRoute.permissions.name,
-        pageBuilder: (context, state) => _slidePage(const PermissionsScreen()),
+        path: '/permissions',
+        redirect: (context, state) => AppRoute.onboarding.path,
       ),
       GoRoute(
-        path: AppRoute.addPhoto.path,
-        name: AppRoute.addPhoto.name,
-        pageBuilder: (context, state) => _slidePage(const AddPhotoScreen()),
+        path: '/add-photo',
+        redirect: (context, state) => AppRoute.onboarding.path,
       ),
       ShellRoute(
         builder: (context, state, child) => AppShell(
@@ -380,23 +375,19 @@ GoRouter buildAppRouter({
             _slidePage(const NotificationsScreen()),
       ),
       GoRoute(
-        path: AppRoute.tokensFocus.path,
-        name: AppRoute.tokensFocus.name,
+        path: '/tokens/focus',
         redirect: (context, state) => AppRoute.wallet.path,
       ),
       GoRoute(
-        path: AppRoute.tokensBalance.path,
-        name: AppRoute.tokensBalance.name,
+        path: '/tokens/balance',
         redirect: (context, state) => AppRoute.wallet.path,
       ),
       GoRoute(
-        path: AppRoute.tokensTopUp.path,
-        name: AppRoute.tokensTopUp.name,
+        path: '/tokens/top-up',
         redirect: (context, state) => AppRoute.wallet.path,
       ),
       GoRoute(
-        path: AppRoute.tokensBoost.path,
-        name: AppRoute.tokensBoost.name,
+        path: '/tokens/boost',
         redirect: (context, state) => AppRoute.wallet.path,
       ),
       GoRoute(
@@ -408,6 +399,10 @@ GoRouter buildAppRouter({
         path: AppRoute.aiCreate.path,
         name: AppRoute.aiCreate.name,
         pageBuilder: (context, state) => _slidePage(const AiCreateScreen()),
+      ),
+      GoRoute(
+        path: '/evening-builder',
+        redirect: (context, state) => AppRoute.aiCreate.path,
       ),
       GoRoute(
         path: AppRoute.afterDark.path,
@@ -433,12 +428,6 @@ GoRouter buildAppRouter({
         path: AppRoute.perks.path,
         name: AppRoute.perks.name,
         pageBuilder: (context, state) => _slidePage(const PerksScreen()),
-      ),
-      GoRoute(
-        path: AppRoute.eveningBuilder.path,
-        name: AppRoute.eveningBuilder.name,
-        pageBuilder: (context, state) =>
-            _slidePage(const EveningBuilderScreen()),
       ),
       GoRoute(
         path: AppRoute.eveningPlan.path,

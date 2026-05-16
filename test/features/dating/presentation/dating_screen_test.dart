@@ -1503,6 +1503,10 @@ class _MutableDatingRepository extends BackendRepository {
     CancelToken? cancelToken,
     String? cursor,
     int limit = 20,
+    int? ageMin,
+    int? ageMax,
+    double? radiusKm,
+    List<String> interests = const [],
   }) async {
     return PaginatedResponse(
       items: _profiles,

@@ -2,10 +2,10 @@ import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('meetup chat maps poster ticket url from backend payload', () {
+  test('meetup chat maps affiche ticket url from backend payload', () {
     final chat = MeetupChat.fromJson({
-      'id': 'chat-poster',
-      'eventId': 'event-poster',
+      'id': 'chat-affiche',
+      'eventId': 'event-affiche',
       'title': 'Концерт',
       'emoji': '🎟',
       'time': '20:00',
@@ -15,16 +15,16 @@ void main() {
       'unread': 0,
       'members': ['Ты'],
       'ticketUrl': 'https://tickets.example/show',
-      'ticketSourceKind': 'poster',
-      'ticketSourceId': 'poster-1',
+      'ticketSourceKind': 'affiche',
+      'ticketSourceId': 'affiche-1',
       'ticketPriceFrom': 1200,
       'ticketProvider': 'Kassir',
       'ticketVenue': 'Каро',
     });
 
     expect(chat.ticketUrl, 'https://tickets.example/show');
-    expect(chat.ticketSourceKind, MeetupChatTicketSourceKind.poster);
-    expect(chat.ticketSourceId, 'poster-1');
+    expect(chat.ticketSourceKind, MeetupChatTicketSourceKind.affiche);
+    expect(chat.ticketSourceId, 'affiche-1');
     expect(chat.ticketPriceFrom, 1200);
     expect(chat.ticketProvider, 'Kassir');
     expect(chat.ticketVenue, 'Каро');

@@ -8,6 +8,7 @@ class PersonalChat {
     required this.lastTime,
     required this.unread,
     required this.online,
+    this.lastMessageAt,
     this.lastMessageId,
     this.peerUserId,
     this.avatarUrl,
@@ -22,6 +23,7 @@ class PersonalChat {
   final String? lastMessageId;
   final String lastMessage;
   final String lastTime;
+  final DateTime? lastMessageAt;
   final int unread;
   final bool online;
   final String? fromMeetup;
@@ -36,6 +38,7 @@ class PersonalChat {
       lastMessageId: json['lastMessageId'] as String?,
       lastMessage: json['lastMessage'] as String? ?? '',
       lastTime: json['lastTime'] as String? ?? '',
+      lastMessageAt: _optionalDateTime(json['lastMessageAt']),
       unread: (json['unread'] as num?)?.toInt() ?? 0,
       online: (json['online'] as bool?) ?? false,
       fromMeetup: json['fromMeetup'] as String?,
@@ -51,6 +54,8 @@ class PersonalChat {
     String? lastMessageId,
     String? lastMessage,
     String? lastTime,
+    DateTime? lastMessageAt,
+    bool clearLastMessageAt = false,
     int? unread,
     bool? online,
     String? fromMeetup,
@@ -64,10 +69,19 @@ class PersonalChat {
       lastMessageId: lastMessageId ?? this.lastMessageId,
       lastMessage: lastMessage ?? this.lastMessage,
       lastTime: lastTime ?? this.lastTime,
+      lastMessageAt:
+          clearLastMessageAt ? null : lastMessageAt ?? this.lastMessageAt,
       unread: unread ?? this.unread,
       online: online ?? this.online,
       fromMeetup: fromMeetup ?? this.fromMeetup,
       isPinned: isPinned ?? this.isPinned,
     );
   }
+}
+
+DateTime? _optionalDateTime(Object? value) {
+  if (value is! String || value.isEmpty) {
+    return null;
+  }
+  return DateTime.tryParse(value)?.toLocal();
 }

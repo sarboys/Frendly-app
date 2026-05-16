@@ -103,9 +103,16 @@ final profileProvider = FutureProvider<ProfileData>((ref) async {
     fromJson: _profileFromCacheJson,
     toJson: _profileToCacheJson,
   );
-  final onboarding = await onboardingFuture;
+  OnboardingData? onboarding;
+  try {
+    onboarding = await onboardingFuture;
+  } catch (_) {
+    onboarding = null;
+  }
+  final mergedProfile =
+      onboarding == null ? profile : profile.withOnboarding(onboarding);
   return mergeProfileDraftPhotos(
-    profile.withOnboarding(onboarding),
+    mergedProfile,
     draftPhotos,
   );
 });
@@ -434,7 +441,6 @@ String _eventLiveStatusToJson(EventLiveStatus status) {
 
 String? _eventTicketSourceKindToJson(EventTicketSourceKind? kind) {
   return switch (kind) {
-    EventTicketSourceKind.poster => 'poster',
     EventTicketSourceKind.affiche => 'affiche',
     null => null,
   };
@@ -1274,7 +1280,9 @@ final meetupChatsProvider = FutureProvider<List<MeetupChat>>((ref) async {
     );
     if (cached.isNotEmpty) {
       unawaited(_refreshMeetupChatsCache(ref, localStore, userScope));
-      return cached.map(MeetupChat.fromJson).toList(growable: false);
+      return sortMeetupChatsByPinned(
+        cached.map(MeetupChat.fromJson).toList(growable: false),
+      );
     }
   }
   final repository = ref.read(backendRepositoryProvider);
@@ -1286,7 +1294,7 @@ final meetupChatsProvider = FutureProvider<List<MeetupChat>>((ref) async {
       ),
     );
   }
-  return result.items;
+  return sortMeetupChatsByPinned(result.items);
 });
 
 final meetupChatSummaryProvider =
@@ -1487,7 +1495,9 @@ final personalChatsProvider = FutureProvider<List<PersonalChat>>((ref) async {
     );
     if (cached.isNotEmpty) {
       unawaited(_refreshPersonalChatsCache(ref, localStore, userScope));
-      return cached.map(PersonalChat.fromJson).toList(growable: false);
+      return sortPersonalChatsByPinned(
+        cached.map(PersonalChat.fromJson).toList(growable: false),
+      );
     }
   }
   final repository = ref.read(backendRepositoryProvider);
@@ -1499,7 +1509,7 @@ final personalChatsProvider = FutureProvider<List<PersonalChat>>((ref) async {
       ),
     );
   }
-  return result.items;
+  return sortPersonalChatsByPinned(result.items);
 });
 
 final personalChatSummaryProvider =
@@ -1535,7 +1545,8 @@ Future<void> _refreshMeetupChatsCache(
   try {
     final result = await ref.read(backendRepositoryProvider).fetchMeetupChats();
     await _writeMeetupChatsCache(localStore, userScope, result.items);
-    ref.read(meetupChatsLocalStateProvider.notifier).state = result.items;
+    ref.read(meetupChatsLocalStateProvider.notifier).state =
+        sortMeetupChatsByPinned(result.items);
   } catch (_) {}
 }
 
@@ -1548,7 +1559,8 @@ Future<void> _refreshPersonalChatsCache(
     final result =
         await ref.read(backendRepositoryProvider).fetchPersonalChats();
     await _writePersonalChatsCache(localStore, userScope, result.items);
-    ref.read(personalChatsLocalStateProvider.notifier).state = result.items;
+    ref.read(personalChatsLocalStateProvider.notifier).state =
+        sortPersonalChatsByPinned(result.items);
   } catch (_) {}
 }
 
@@ -1785,6 +1797,7 @@ List<MeetupChat> upsertMeetupChatSummary(
   required String lastTime,
   required int unread,
   String? lastMessageId,
+  DateTime? lastMessageAt,
 }) {
   final updated = chats
       .map(
@@ -1794,6 +1807,7 @@ List<MeetupChat> upsertMeetupChatSummary(
                 lastMessageId: lastMessageId,
                 lastAuthor: lastAuthor,
                 lastTime: lastTime,
+                lastMessageAt: lastMessageAt ?? DateTime.now(),
                 unread: unread,
                 typing: false,
               )
@@ -1848,6 +1862,7 @@ List<PersonalChat> upsertPersonalChatSummary(
   required String lastTime,
   required int unread,
   String? lastMessageId,
+  DateTime? lastMessageAt,
 }) {
   final updated = chats
       .map(
@@ -1856,6 +1871,7 @@ List<PersonalChat> upsertPersonalChatSummary(
                 lastMessage: lastMessage,
                 lastMessageId: lastMessageId,
                 lastTime: lastTime,
+                lastMessageAt: lastMessageAt ?? DateTime.now(),
                 unread: unread,
               )
             : chat,
@@ -1875,17 +1891,57 @@ List<PersonalChat> upsertPersonalChatSummary(
 }
 
 List<MeetupChat> sortMeetupChatsByPinned(List<MeetupChat> chats) {
-  return [
-    ...chats.where((chat) => chat.isPinned),
-    ...chats.where((chat) => !chat.isPinned),
-  ];
+  final indexed = chats.indexed.toList(growable: false);
+  indexed.sort((left, right) {
+    final pinComparison = _comparePinned(left.$2.isPinned, right.$2.isPinned);
+    if (pinComparison != 0) {
+      return pinComparison;
+    }
+    final recencyComparison =
+        _compareNullableDateDesc(left.$2.lastMessageAt, right.$2.lastMessageAt);
+    if (recencyComparison != 0) {
+      return recencyComparison;
+    }
+    return left.$1.compareTo(right.$1);
+  });
+  return indexed.map((entry) => entry.$2).toList(growable: false);
 }
 
 List<PersonalChat> sortPersonalChatsByPinned(List<PersonalChat> chats) {
-  return [
-    ...chats.where((chat) => chat.isPinned),
-    ...chats.where((chat) => !chat.isPinned),
-  ];
+  final indexed = chats.indexed.toList(growable: false);
+  indexed.sort((left, right) {
+    final pinComparison = _comparePinned(left.$2.isPinned, right.$2.isPinned);
+    if (pinComparison != 0) {
+      return pinComparison;
+    }
+    final recencyComparison =
+        _compareNullableDateDesc(left.$2.lastMessageAt, right.$2.lastMessageAt);
+    if (recencyComparison != 0) {
+      return recencyComparison;
+    }
+    return left.$1.compareTo(right.$1);
+  });
+  return indexed.map((entry) => entry.$2).toList(growable: false);
+}
+
+int _comparePinned(bool left, bool right) {
+  if (left == right) {
+    return 0;
+  }
+  return left ? -1 : 1;
+}
+
+int _compareNullableDateDesc(DateTime? left, DateTime? right) {
+  if (left == null && right == null) {
+    return 0;
+  }
+  if (left == null) {
+    return 1;
+  }
+  if (right == null) {
+    return -1;
+  }
+  return right.compareTo(left);
 }
 
 List<MeetupChat> setMeetupChatTyping(
@@ -1951,6 +2007,7 @@ List<MeetupChat> updateMeetupChatFromRealtime(
                 lastMessageId: chat.lastMessageId,
                 lastAuthor: chat.lastAuthor,
                 lastTime: chat.lastTime,
+                lastMessageAt: chat.lastMessageAt,
                 unread: chat.unread,
                 members: chat.members,
                 memberProfiles: chat.memberProfiles,
@@ -2126,6 +2183,7 @@ class _ChatRealtimeSyncCoordinator {
         lastMessage: preview,
         lastAuthor: message.author,
         lastTime: message.time,
+        lastMessageAt: message.createdAt,
         unread: meetupChat.unread,
         lastMessageId: message.id,
       );
@@ -2142,6 +2200,7 @@ class _ChatRealtimeSyncCoordinator {
         chatId: chatId,
         lastMessage: preview,
         lastTime: message.time,
+        lastMessageAt: message.createdAt,
         unread: personalChat.unread,
         lastMessageId: message.id,
       );

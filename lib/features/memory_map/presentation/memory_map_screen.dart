@@ -1,25 +1,34 @@
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/shared/data/frendly_season_provider.dart';
+import 'package:big_break_mobile/shared/models/frendly_season.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class MemoryMapScreen extends StatefulWidget {
+class MemoryMapScreen extends ConsumerStatefulWidget {
   const MemoryMapScreen({super.key});
 
   @override
-  State<MemoryMapScreen> createState() => _MemoryMapScreenState();
+  ConsumerState<MemoryMapScreen> createState() => _MemoryMapScreenState();
 }
 
-class _MemoryMapScreenState extends State<MemoryMapScreen> {
+class _MemoryMapScreenState extends ConsumerState<MemoryMapScreen> {
   String _filter = 'all';
   int? _activePin;
 
-  static const _pins = <_MapPinData>[];
-
   @override
   Widget build(BuildContext context) {
-    final active = _activePin == null ? null : _pins[_activePin!];
+    final historyAsync = ref.watch(frendlyHistoryProvider);
+    final peopleAsync = ref.watch(frendlyPeopleProvider);
+    final history = historyAsync.valueOrNull?.items ?? const [];
+    final people = peopleAsync.valueOrNull?.items ?? const [];
+    final pins = _pinsFromHistory(history);
+    final active = _activePin == null || _activePin! >= pins.length
+        ? null
+        : pins[_activePin!];
+    final placesCount = history.map((item) => item.place).toSet().length;
 
     return BbV5Scaffold(
       child: BbV5Page(
@@ -29,8 +38,8 @@ class _MemoryMapScreenState extends State<MemoryMapScreen> {
             SliverToBoxAdapter(
               child: BbV5TopBar(
                 kicker: 'Дневник',
-                title: 'Карта',
-                accent: 'знакомств',
+                title: 'История',
+                accent: 'вечеров',
                 onBack: () => context.pop(),
               ),
             ),
@@ -57,16 +66,30 @@ class _MemoryMapScreenState extends State<MemoryMapScreen> {
                     onTap: () => setState(() => _filter = 'all'),
                   ),
                   BbV5Chip(
-                    label: 'Места · 0',
+                    label: 'Места · $placesCount',
                     active: _filter == 'places',
                     onTap: () => setState(() => _filter = 'places'),
                   ),
                   BbV5Chip(
-                    label: 'Люди · 0',
+                    label: 'Люди · ${people.length}',
                     active: _filter == 'people',
                     onTap: () => setState(() => _filter = 'people'),
                   ),
                 ],
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+            SliverToBoxAdapter(
+              child: _HistoryListCard(
+                history: history,
+                loading: historyAsync.isLoading,
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+            SliverToBoxAdapter(
+              child: _PeopleMetSection(
+                people: people,
+                loading: peopleAsync.isLoading,
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 16)),
@@ -82,12 +105,12 @@ class _MemoryMapScreenState extends State<MemoryMapScreen> {
                       return Stack(
                         children: [
                           const Positioned.fill(child: _MapTexture()),
-                          for (var index = 0; index < _pins.length; index++)
+                          for (var index = 0; index < pins.length; index++)
                             _MapPinButton(
-                              pin: _pins[index],
+                              pin: pins[index],
                               active: _activePin == index,
-                              left: size.width * _pins[index].x,
-                              top: size.height * _pins[index].y,
+                              left: size.width * pins[index].x,
+                              top: size.height * pins[index].y,
                               onTap: () {
                                 setState(() {
                                   _activePin =
@@ -131,7 +154,13 @@ class _MemoryMapScreenState extends State<MemoryMapScreen> {
               SliverToBoxAdapter(child: _ActivePinCard(pin: active)),
             ],
             const SliverToBoxAdapter(child: SizedBox(height: 20)),
-            const SliverToBoxAdapter(child: _MapStats()),
+            SliverToBoxAdapter(
+              child: _MapStats(
+                places: placesCount,
+                people: people.length,
+                evenings: history.length,
+              ),
+            ),
             const SliverToBoxAdapter(child: SizedBox(height: 20)),
             SliverToBoxAdapter(
               child: Row(
@@ -179,6 +208,238 @@ class _MapPinData {
   final String subtitle;
   final List<String> people;
   final Color color;
+}
+
+List<_MapPinData> _pinsFromHistory(List<FrendlyHistoryItemData> history) {
+  final withCoords = history
+      .where((item) => item.latitude != null && item.longitude != null)
+      .take(12)
+      .toList(growable: false);
+  if (withCoords.isEmpty) {
+    return const [];
+  }
+  final minLat = withCoords
+      .map((item) => item.latitude!)
+      .reduce((left, right) => left < right ? left : right);
+  final maxLat = withCoords
+      .map((item) => item.latitude!)
+      .reduce((left, right) => left > right ? left : right);
+  final minLng = withCoords
+      .map((item) => item.longitude!)
+      .reduce((left, right) => left < right ? left : right);
+  final maxLng = withCoords
+      .map((item) => item.longitude!)
+      .reduce((left, right) => left > right ? left : right);
+  final latSpan = (maxLat - minLat).abs();
+  final lngSpan = (maxLng - minLng).abs();
+  return [
+    for (var index = 0; index < withCoords.length; index++)
+      _MapPinData(
+        x: lngSpan == 0
+            ? 0.5
+            : 0.16 + ((withCoords[index].longitude! - minLng) / lngSpan) * 0.68,
+        y: latSpan == 0
+            ? 0.5
+            : 0.16 + ((maxLat - withCoords[index].latitude!) / latSpan) * 0.68,
+        icon: LucideIcons.map_pin,
+        title: withCoords[index].place,
+        subtitle: _historyDateLabel(withCoords[index].startsAt),
+        people: withCoords[index]
+            .people
+            .take(3)
+            .map((person) => _initials(person.displayName))
+            .toList(growable: false),
+        color: index.isEven ? BbV5Colors.accent : BbV5Colors.brandDeep,
+      ),
+  ];
+}
+
+class _HistoryListCard extends StatelessWidget {
+  const _HistoryListCard({
+    required this.history,
+    required this.loading,
+  });
+
+  final List<FrendlyHistoryItemData> history;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = history.take(4).toList(growable: false);
+    return BbV5Section(
+      title: 'Прошедшие встречи',
+      margin: EdgeInsets.zero,
+      child: BbV5Card(
+        radius: 24,
+        padding: const EdgeInsets.all(16),
+        child: visible.isEmpty
+            ? Text(
+                loading
+                    ? 'Загружаем историю...'
+                    : 'История появится после первого check-in.',
+                style: AppTextStyles.meta.copyWith(
+                  color: BbV5Colors.inkMute,
+                  height: 1.5,
+                ),
+              )
+            : Column(
+                children: [
+                  for (var index = 0; index < visible.length; index++) ...[
+                    _HistoryRow(item: visible[index]),
+                    if (index != visible.length - 1)
+                      const Divider(color: BbV5Colors.hairSoft),
+                  ],
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _HistoryRow extends StatelessWidget {
+  const _HistoryRow({required this.item});
+
+  final FrendlyHistoryItemData item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: BbV5Colors.terraSoft,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(
+            item.emoji.isEmpty ? 'Fr' : item.emoji,
+            style: AppTextStyles.caption.copyWith(
+              fontWeight: FontWeight.w700,
+              color: BbV5Colors.accentDeep,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: bbV5DisplayStyle(fontSize: 14, height: 1.25),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '${_historyDateLabel(item.startsAt)} · ${item.place}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(
+                  fontSize: 11,
+                  color: BbV5Colors.inkMute,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (item.people.isNotEmpty)
+          Text(
+            '+${item.people.length}',
+            style: AppTextStyles.caption.copyWith(
+              fontFamily: 'Sora',
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: BbV5Colors.inkSoft,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _PeopleMetSection extends StatelessWidget {
+  const _PeopleMetSection({
+    required this.people,
+    required this.loading,
+  });
+
+  final List<FrendlyPersonData> people;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = people.take(8).toList(growable: false);
+    return BbV5Section(
+      title: 'Люди с вечеров',
+      margin: EdgeInsets.zero,
+      child: BbV5Card(
+        radius: 24,
+        padding: const EdgeInsets.all(16),
+        child: visible.isEmpty
+            ? Text(
+                loading
+                    ? 'Собираем людей...'
+                    : 'Здесь появятся люди, с кем ты был на встречах.',
+                style: AppTextStyles.meta.copyWith(
+                  color: BbV5Colors.inkMute,
+                  height: 1.5,
+                ),
+              )
+            : Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final person in visible)
+                    _PersonChip(
+                      name: person.displayName,
+                      count: person.meetupsCount,
+                    ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _PersonChip extends StatelessWidget {
+  const _PersonChip({
+    required this.name,
+    required this.count,
+  });
+
+  final String name;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 6, 10, 6),
+      decoration: BoxDecoration(
+        color: BbV5Colors.paperHi,
+        borderRadius: BorderRadius.circular(BbV5Radii.pill),
+        border: Border.all(color: BbV5Colors.hair),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _PersonBubble(text: _initials(name)),
+          const SizedBox(width: 6),
+          Text(
+            count > 1 ? '$name · $count' : name,
+            style: AppTextStyles.caption.copyWith(
+              fontSize: 11.5,
+              color: BbV5Colors.inkSoft,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _MapTexture extends StatelessWidget {
@@ -416,21 +677,28 @@ class _PersonBubble extends StatelessWidget {
 }
 
 class _MapStats extends StatelessWidget {
-  const _MapStats();
+  const _MapStats({
+    required this.places,
+    required this.people,
+    required this.evenings,
+  });
 
-  static const List<({String value, String label, IconData icon})> _items = [
-    (value: '0', label: 'мест', icon: LucideIcons.map_pin),
-    (value: '0', label: 'людей', icon: LucideIcons.users),
-    (value: '0', label: 'вечеров', icon: LucideIcons.calendar),
-  ];
+  final int places;
+  final int people;
+  final int evenings;
 
   @override
   Widget build(BuildContext context) {
+    final items = [
+      (value: '$places', label: 'мест', icon: LucideIcons.map_pin),
+      (value: '$people', label: 'людей', icon: LucideIcons.users),
+      (value: '$evenings', label: 'вечеров', icon: LucideIcons.calendar),
+    ];
     return Row(
       children: [
-        for (final item in _items) ...[
+        for (final item in items) ...[
           Expanded(child: _StatCard(item: item)),
-          if (item != _items.last) const SizedBox(width: 10),
+          if (item != items.last) const SizedBox(width: 10),
         ],
       ],
     );
@@ -470,4 +738,26 @@ class _StatCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _historyDateLabel(DateTime? value) {
+  if (value == null) {
+    return 'вечер';
+  }
+  final local = value.toLocal();
+  final day = local.day.toString().padLeft(2, '0');
+  final month = local.month.toString().padLeft(2, '0');
+  return '$day.$month';
+}
+
+String _initials(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return 'Fr';
+  }
+  final parts = trimmed.split(RegExp(r'\s+'));
+  final first = parts.first.characters.first.toUpperCase();
+  final second =
+      parts.length > 1 ? parts[1].characters.first.toUpperCase() : '';
+  return '$first$second';
 }

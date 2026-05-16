@@ -8,7 +8,6 @@ import 'package:big_break_mobile/app/session/app_session_controller.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
-import 'package:big_break_mobile/app/theme/app_theme_mode.dart';
 import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
@@ -45,8 +44,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final wallet = ref.watch(tokenWalletProvider);
     final remoteSettings = settingsAsync.valueOrNull;
     if (remoteSettings != null && !_didHydrateFromRemote) {
-      _settings = remoteSettings;
-      _lastConfirmedSettings = remoteSettings;
+      final nextSettings = _withoutDarkMode(remoteSettings);
+      _settings = nextSettings;
+      _lastConfirmedSettings = nextSettings;
       _didHydrateFromRemote = true;
     }
     final current = _settings ?? UserSettingsData.fallback;
@@ -237,19 +237,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
                 _SettingsGroup(
-                  title: 'Внешний вид',
-                  children: [
-                    _SettingsToggle(
-                      label: 'Тёмная тема',
-                      icon: LucideIcons.moon,
-                      value: current.darkMode,
-                      enabled: !isLoadingRemote && !hasRemoteError,
-                      onChanged: (v) =>
-                          _saveSettings(current.copyWith(darkMode: v)),
-                    ),
-                  ],
-                ),
-                _SettingsGroup(
                   title: 'Опасная зона',
                   children: [
                     _SettingsRow(
@@ -293,11 +280,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   void _saveSettings(UserSettingsData next) {
+    final normalized = _withoutDarkMode(next);
     setState(() {
-      _settings = next;
+      _settings = normalized;
     });
-    ref.read(appThemeModeProvider.notifier).syncFromSettings(next);
-    _queuedSettings = next;
+    _queuedSettings = normalized;
     unawaited(_flushQueuedSettings());
   }
 
@@ -307,7 +294,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     final repository = ref.read(backendRepositoryProvider);
-    final themeMode = ref.read(appThemeModeProvider.notifier);
     _isSavingSettings = true;
     UserSettingsData? lastSavedSettings;
 
@@ -315,7 +301,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       while (_queuedSettings != null) {
         final next = _queuedSettings!;
         _queuedSettings = null;
-        lastSavedSettings = await repository.updateSettings(next);
+        lastSavedSettings =
+            _withoutDarkMode(await repository.updateSettings(next));
         if (!mounted) {
           return;
         }
@@ -339,7 +326,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         setState(() {
           _settings = fallback;
         });
-        themeMode.syncFromSettings(fallback);
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Не получилось сохранить настройки')),
@@ -347,6 +333,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } finally {
       _isSavingSettings = false;
     }
+  }
+
+  UserSettingsData _withoutDarkMode(UserSettingsData settings) {
+    return settings.darkMode ? settings.copyWith(darkMode: false) : settings;
   }
 
   Future<void> _logout() async {

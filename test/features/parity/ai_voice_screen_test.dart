@@ -40,7 +40,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1600));
 
     expect(repository.createDraftCalls, 1);
-    expect(repository.resolveCalls, 0);
     expect(repository.lastPrompt, 'Тихий ужин и долгая прогулка, не громко');
     expect(repository.lastBudget, isNull);
     expect(repository.lastStepCount, isNull);
@@ -119,34 +118,12 @@ void main() {
 class _FakeAiVoiceRepository extends BackendRepository {
   _FakeAiVoiceRepository(Ref ref) : super(ref: ref, dio: Dio());
 
-  var resolveCalls = 0;
   var createDraftCalls = 0;
   var acceptCalls = 0;
   var confirmCalls = 0;
   String? lastPrompt;
   String? lastBudget;
   int? lastStepCount;
-
-  @override
-  Future<Map<String, dynamic>> resolveEveningRoute({
-    CancelToken? cancelToken,
-    String? goal,
-    String? mood,
-    String? budget,
-    String? format,
-    String? area,
-    String? prompt,
-    int? stepCount,
-    String? city,
-    double? latitude,
-    double? longitude,
-  }) async {
-    resolveCalls += 1;
-    lastPrompt = prompt;
-    lastBudget = budget;
-    lastStepCount = stepCount;
-    return _backendRouteJson;
-  }
 
   @override
   Future<Map<String, dynamic>> createAiRouteDraft({

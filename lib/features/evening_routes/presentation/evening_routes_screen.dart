@@ -137,7 +137,7 @@ class _EveningRoutesScreenState extends ConsumerState<EveningRoutesScreen> {
   }
 
   void _openBuilder() {
-    context.pushRoute(AppRoute.eveningBuilder);
+    context.pushRoute(AppRoute.aiCreate);
   }
 
   void _goBack() {

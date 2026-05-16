@@ -787,6 +787,12 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
                                   label: 'Показать',
                                   onPressed: () {
                                     Navigator.of(sheetContext).pop();
+                                    ref
+                                        .read(
+                                          datingDiscoverFiltersProvider
+                                              .notifier,
+                                        )
+                                        .state = _currentDiscoverFilters;
                                     setState(() {
                                       _photoIndexes.clear();
                                     });
@@ -835,6 +841,15 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
     }
 
     return null;
+  }
+
+  DatingDiscoverFilters get _currentDiscoverFilters {
+    return DatingDiscoverFilters(
+      ageMin: _filterAge.start.round(),
+      ageMax: _filterAge.end.round(),
+      radiusKm: _filterRadiusKm.roundToDouble(),
+      interests: _filterInterests.toList(growable: false),
+    );
   }
 
   List<ProfilePhoto> _photosFor(DatingProfileData profile) {

@@ -10,7 +10,7 @@ enum EventAttendanceStatus { notCheckedIn, checkedIn, left }
 
 enum EventLiveStatus { idle, live, finished }
 
-enum EventTicketSourceKind { poster, affiche }
+enum EventTicketSourceKind { affiche }
 
 class EventBookingPromo {
   const EventBookingPromo({
@@ -265,8 +265,6 @@ class Event {
 
   static EventTicketSourceKind? parseTicketSourceKind(String? raw) {
     switch (raw) {
-      case 'poster':
-        return EventTicketSourceKind.poster;
       case 'affiche':
         return EventTicketSourceKind.affiche;
       default:

@@ -57,18 +57,33 @@ Android и iOS берут MapKit ключ из `BIG_BREAK_MAPKIT_API_KEY`.
 Для Android также работают переменная окружения и Gradle property.
 Реальный ключ не коммить.
 
+Если запускаешь iOS из Xcode, создай локальный файл:
+
+```bash
+cp ios/Flutter/Secrets.xcconfig.example ios/Flutter/Secrets.xcconfig
+```
+
+И впиши туда ключи:
+
+```xcconfig
+BIG_BREAK_MAPKIT_API_KEY=your-mapkit-key
+BIG_BREAK_YANDEX_CLIENT_ID=your-yandex-client-id
+```
+
+`Secrets.xcconfig` игнорируется git. После изменения ключа в Xcode сделай clean build.
+
 ## Сборка руками в Xcode
 
 1. Выполни подготовку из блока `Install`.
-2. Открой workspace, не project:
+2. Создай `ios/Flutter/Secrets.xcconfig`, если запускаешь из Xcode.
+3. Открой workspace, не project:
 
 ```bash
 open mobile/ios/Runner.xcworkspace
 ```
 
-3. В Xcode выбери scheme `Runner`.
-4. Выбери устройство или симулятор.
-5. Добавь `BIG_BREAK_MAPKIT_API_KEY` в `Edit Scheme` -> `Run` -> `Arguments` -> `Environment Variables` или в User-Defined build setting.
+4. В Xcode выбери scheme `Runner`.
+5. Выбери устройство или симулятор.
 6. Открой `Runner` -> `Signing & Capabilities`.
 7. Выбери свой `Team`.
 8. Если Xcode попросит, поменяй `Bundle Identifier` на уникальный.

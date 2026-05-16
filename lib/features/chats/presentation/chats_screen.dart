@@ -1113,6 +1113,9 @@ class _V5AllChatEntry {
   String get time =>
       meetup?.lastTime ?? personal?.lastTime ?? _communityLastTime(community);
 
+  DateTime? get lastMessageAt =>
+      meetup?.lastMessageAt ?? personal?.lastMessageAt;
+
   Widget buildRow({
     required BuildContext context,
     required Set<String> promotedIds,
@@ -1209,10 +1212,25 @@ int _compareAllChatEntries(_V5AllChatEntry left, _V5AllChatEntry right) {
     return leftPinned ? -1 : 1;
   }
 
-  final leftRank = _chatRecencyRank(left.time);
-  final rightRank = _chatRecencyRank(right.time);
-  if (leftRank != rightRank) {
-    return leftRank.compareTo(rightRank);
+  final leftDate = left.lastMessageAt;
+  final rightDate = right.lastMessageAt;
+  if (leftDate != null || rightDate != null) {
+    if (leftDate == null) {
+      return 1;
+    }
+    if (rightDate == null) {
+      return -1;
+    }
+    final dateComparison = rightDate.compareTo(leftDate);
+    if (dateComparison != 0) {
+      return dateComparison;
+    }
+  } else {
+    final leftRank = _chatRecencyRank(left.time);
+    final rightRank = _chatRecencyRank(right.time);
+    if (leftRank != rightRank) {
+      return leftRank.compareTo(rightRank);
+    }
   }
   return left.order.compareTo(right.order);
 }

@@ -771,6 +771,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         lastMessage: preview,
         lastAuthor: message.author,
         lastTime: message.time,
+        lastMessageAt: message.createdAt,
         unread: 0,
         lastMessageId: message.id,
       );
@@ -786,6 +787,7 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         chatId: chatId,
         lastMessage: preview,
         lastTime: message.time,
+        lastMessageAt: message.createdAt,
         unread: 0,
         lastMessageId: message.id,
       );
@@ -821,24 +823,28 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         replacement == null ? '' : _buildMessagePreview(replacement);
     final lastAuthor = replacement?.author ?? '';
     final lastTime = replacement?.time ?? '';
+    final lastMessageAt = replacement?.createdAt;
 
     final localMeetupChats = ref.read(meetupChatsLocalStateProvider);
     final meetupChats =
         localMeetupChats ?? ref.read(meetupChatsProvider).valueOrNull;
     if (meetupChats != null && meetupChats.any((chat) => chat.id == chatId)) {
-      ref.read(meetupChatsLocalStateProvider.notifier).state = meetupChats
-          .map(
-            (chat) => chat.id == chatId
-                ? chat.copyWith(
-                    lastMessage: lastMessage,
-                    lastAuthor: lastAuthor,
-                    lastTime: lastTime,
-                    unread: 0,
-                    typing: false,
-                  )
-                : chat,
-          )
-          .toList(growable: false);
+      ref.read(meetupChatsLocalStateProvider.notifier).state =
+          sortMeetupChatsByPinned(meetupChats
+              .map(
+                (chat) => chat.id == chatId
+                    ? chat.copyWith(
+                        lastMessage: lastMessage,
+                        lastAuthor: lastAuthor,
+                        lastTime: lastTime,
+                        lastMessageAt: lastMessageAt,
+                        clearLastMessageAt: replacement == null,
+                        unread: 0,
+                        typing: false,
+                      )
+                    : chat,
+              )
+              .toList(growable: false));
       return;
     }
 
@@ -847,17 +853,20 @@ class ChatThreadController extends StateNotifier<AsyncValue<List<Message>>> {
         localPersonalChats ?? ref.read(personalChatsProvider).valueOrNull;
     if (personalChats != null &&
         personalChats.any((chat) => chat.id == chatId)) {
-      ref.read(personalChatsLocalStateProvider.notifier).state = personalChats
-          .map(
-            (chat) => chat.id == chatId
-                ? chat.copyWith(
-                    lastMessage: lastMessage,
-                    lastTime: lastTime,
-                    unread: 0,
-                  )
-                : chat,
-          )
-          .toList(growable: false);
+      ref.read(personalChatsLocalStateProvider.notifier).state =
+          sortPersonalChatsByPinned(personalChats
+              .map(
+                (chat) => chat.id == chatId
+                    ? chat.copyWith(
+                        lastMessage: lastMessage,
+                        lastTime: lastTime,
+                        lastMessageAt: lastMessageAt,
+                        clearLastMessageAt: replacement == null,
+                        unread: 0,
+                      )
+                    : chat,
+              )
+              .toList(growable: false));
     }
   }
 

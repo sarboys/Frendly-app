@@ -118,7 +118,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.createDraftCalls, 1);
-    expect(repository.resolveCalls, 0);
     expect(repository.lastPrompt, 'Винный бар и джаз на двоих');
     expect(repository.lastBudget, isNull);
     expect(repository.lastStepCount, isNull);
@@ -359,7 +358,6 @@ Future<void> _dragUntilVisible(
 class _FakeAiRouteRepository extends BackendRepository {
   _FakeAiRouteRepository(Ref ref) : super(ref: ref, dio: Dio());
 
-  var resolveCalls = 0;
   var createDraftCalls = 0;
   var acceptCalls = 0;
   var regenerateDraftCalls = 0;
@@ -370,30 +368,6 @@ class _FakeAiRouteRepository extends BackendRepository {
   String? lastCity;
   double? lastLatitude;
   double? lastLongitude;
-
-  @override
-  Future<Map<String, dynamic>> resolveEveningRoute({
-    CancelToken? cancelToken,
-    String? goal,
-    String? mood,
-    String? budget,
-    String? format,
-    String? area,
-    String? prompt,
-    int? stepCount,
-    String? city,
-    double? latitude,
-    double? longitude,
-  }) async {
-    resolveCalls += 1;
-    lastPrompt = prompt;
-    lastBudget = budget;
-    lastStepCount = stepCount;
-    lastCity = city;
-    lastLatitude = latitude;
-    lastLongitude = longitude;
-    return _backendRouteJson;
-  }
 
   @override
   Future<Map<String, dynamic>> createAiRouteDraft({

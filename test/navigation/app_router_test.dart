@@ -114,26 +114,6 @@ void main() {
     );
 
     expect(
-      appRouter.namedLocation('tokensFocus'),
-      '/tokens/focus',
-    );
-
-    expect(
-      appRouter.namedLocation('tokensBalance'),
-      '/tokens/balance',
-    );
-
-    expect(
-      appRouter.namedLocation('tokensTopUp'),
-      '/tokens/top-up',
-    );
-
-    expect(
-      appRouter.namedLocation('tokensBoost'),
-      '/tokens/boost',
-    );
-
-    expect(
       appRouter.namedLocation(AppRoute.wallet.name),
       '/wallet',
     );
@@ -144,13 +124,6 @@ void main() {
         pathParameters: const {'communityId': 'c1'},
       ),
       '/community/c1/edit',
-    );
-
-    expect(
-      appRouter.namedLocation(
-        AppRoute.eveningBuilder.name,
-      ),
-      '/evening-builder',
     );
 
     expect(
@@ -221,14 +194,84 @@ void main() {
     expect(paths, isNot(contains('/search')));
     expect(paths, isNot(contains('/posters')));
     expect(paths, isNot(contains('/poster/:posterId')));
+    expect(paths, isNot(contains('/evening-builder')));
+    expect(paths, isNot(contains('/permissions')));
+    expect(paths, isNot(contains('/add-photo')));
+    expect(paths, isNot(contains('/tokens/focus')));
+    expect(paths, isNot(contains('/tokens/balance')));
+    expect(paths, isNot(contains('/tokens/top-up')));
+    expect(paths, isNot(contains('/tokens/boost')));
     expect(paths, isNot(contains('/after-dark/paywall')));
     expect(paths, isNot(contains('/after-dark/event/:eventId')));
     expect(paths, isNot(contains('/after-dark/verify')));
     expect(names, isNot(contains('afterDarkPaywall')));
     expect(names, isNot(contains('afterDarkEvent')));
     expect(names, isNot(contains('afterDarkVerify')));
+    expect(names, isNot(contains('eveningBuilder')));
+    expect(names, isNot(contains('permissions')));
+    expect(names, isNot(contains('addPhoto')));
+    expect(names, isNot(contains('tokensFocus')));
+    expect(names, isNot(contains('tokensBalance')));
+    expect(names, isNot(contains('tokensTopUp')));
+    expect(names, isNot(contains('tokensBoost')));
     expect(paths, contains('/after-dark'));
     expect(names, contains('afterDark'));
+  });
+
+  testWidgets('router redirects old evening builder to v5 AI create', (
+    tester,
+  ) async {
+    final router = buildAppRouter(
+      authenticated: true,
+      isAuthenticated: () => true,
+      pendingSetupPath: () => null,
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: buildTestOverrides(),
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+
+    router.go('/evening-builder');
+    await tester.pumpAndSettle();
+
+    expect(
+        router.routeInformationProvider.value.uri.path, AppRoute.aiCreate.path);
+  });
+
+  testWidgets('router redirects old token routes to wallet', (
+    tester,
+  ) async {
+    final router = buildAppRouter(
+      authenticated: true,
+      isAuthenticated: () => true,
+      pendingSetupPath: () => null,
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: buildTestOverrides(),
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+
+    for (final path in [
+      '/tokens/focus',
+      '/tokens/balance',
+      '/tokens/top-up',
+      '/tokens/boost',
+    ]) {
+      router.go(path);
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        AppRoute.wallet.path,
+      );
+    }
   });
 
   test(
@@ -353,12 +396,12 @@ void main() {
       ),
     );
 
-    router.go(AppRoute.addPhoto.path);
+    router.go('/add-photo');
     await tester.pumpAndSettle();
     expect(router.routeInformationProvider.value.uri.path,
         AppRoute.onboarding.path);
 
-    router.go(AppRoute.permissions.path);
+    router.go('/permissions');
     await tester.pumpAndSettle();
     expect(router.routeInformationProvider.value.uri.path,
         AppRoute.onboarding.path);
@@ -381,12 +424,12 @@ void main() {
       ),
     );
 
-    router.go(AppRoute.addPhoto.path);
+    router.go('/add-photo');
     await tester.pumpAndSettle();
     expect(
         router.routeInformationProvider.value.uri.path, AppRoute.tonight.path);
 
-    router.go(AppRoute.permissions.path);
+    router.go('/permissions');
     await tester.pumpAndSettle();
     expect(
         router.routeInformationProvider.value.uri.path, AppRoute.tonight.path);

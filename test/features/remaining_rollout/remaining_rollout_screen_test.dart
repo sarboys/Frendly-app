@@ -1,7 +1,5 @@
-import 'package:big_break_mobile/features/add_photo/presentation/add_photo_screen.dart';
 import 'package:big_break_mobile/features/match/presentation/match_screen.dart';
 import 'package:big_break_mobile/features/paywall/presentation/paywall_screen.dart';
-import 'package:big_break_mobile/features/permissions/presentation/permissions_screen.dart';
 import 'package:big_break_mobile/features/phone_auth/presentation/phone_auth_screen.dart';
 import 'package:big_break_mobile/features/report/presentation/report_screen.dart';
 import 'package:big_break_mobile/features/safety/presentation/safety_hub_screen.dart';
@@ -40,20 +38,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Получить код'), findsOneWidget);
-  });
-
-  testWidgets('permissions screen renders continue CTA', (tester) async {
-    await tester.pumpWidget(_wrap(const PermissionsScreen()));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Продолжить'), findsOneWidget);
-  });
-
-  testWidgets('add photo screen renders done CTA', (tester) async {
-    await tester.pumpWidget(_wrap(const AddPhotoScreen()));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Готово'), findsOneWidget);
   });
 
   testWidgets('verification screen renders upload CTA', (tester) async {

@@ -5,6 +5,7 @@ import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/features/communities/domain/community.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
+import 'package:big_break_mobile/shared/models/frendly_season.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
@@ -140,6 +141,245 @@ void main() {
     expect(result.items.single.ctaLabel, 'Купить билет');
   });
 
+  test('fetch dating discover sends backend filter params', () async {
+    Map<String, dynamic>? queryParameters;
+    final apiDio = Dio(
+      BaseOptions(baseUrl: 'http://api.example.com'),
+    )..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            queryParameters = Map<String, dynamic>.from(
+              options.queryParameters,
+            );
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 200,
+                data: const {
+                  'items': [],
+                  'nextCursor': null,
+                },
+              ),
+            );
+          },
+        ),
+      );
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final repository = container.read(
+      Provider(
+        (ref) => BackendRepository(ref: ref, dio: apiDio),
+      ),
+    );
+
+    await repository.fetchDatingDiscover(
+      limit: 20,
+      ageMin: 22,
+      ageMax: 35,
+      radiusKm: 10,
+      interests: const ['кофе', 'кино'],
+    );
+
+    expect(queryParameters, isNotNull);
+    expect(queryParameters, containsPair('limit', 20));
+    expect(queryParameters, containsPair('ageMin', 22));
+    expect(queryParameters, containsPair('ageMax', 35));
+    expect(queryParameters, containsPair('radiusKm', 10));
+    expect(queryParameters, containsPair('interests', 'кофе,кино'));
+  });
+
+  test('fetch Frendly season parses rewards and status', () async {
+    RequestOptions? captured;
+    final apiDio = Dio(
+      BaseOptions(baseUrl: 'http://api.example.com'),
+    )..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            captured = options;
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'seasonKey': '2026-05',
+                  'seasonLabel': 'Май · сезон',
+                  'checkedInCount': 3,
+                  'calendarDays': [3, 10, 15],
+                  'currentStatus': {
+                    'key': 'checkin-1',
+                    'title': 'Искра',
+                    'threshold': 1,
+                  },
+                  'nextReward': {
+                    'key': 'checkin-5',
+                    'threshold': 5,
+                    'statusTitle': 'Свой круг',
+                    'title': 'Свой круг',
+                    'description': '150 токенов за 5 вечеров',
+                    'rewardKind': 'tokens',
+                    'rewardAmount': 150,
+                    'unlocked': false,
+                    'claimed': false,
+                    'claimedAt': null,
+                  },
+                  'stats': {
+                    'checkIns': 3,
+                    'places': 2,
+                    'people': 4,
+                  },
+                  'rewards': [
+                    {
+                      'key': 'checkin-1',
+                      'threshold': 1,
+                      'statusTitle': 'Искра',
+                      'title': 'Первая искра',
+                      'description': '50 токенов',
+                      'rewardKind': 'tokens',
+                      'rewardAmount': 50,
+                      'unlocked': true,
+                      'claimed': true,
+                      'claimedAt': '2026-05-04T10:00:00.000Z',
+                    },
+                  ],
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final repository = container.read(
+      Provider(
+        (ref) => BackendRepository(ref: ref, dio: apiDio),
+      ),
+    );
+
+    final result = await repository.fetchFrendlySeason();
+
+    expect(captured?.path, '/profile/me/frendly-season');
+    expect(result.checkedInCount, 3);
+    expect(result.currentStatus.title, 'Искра');
+    expect(result.nextReward?.rewardKind, FrendlySeasonRewardKind.tokens);
+    expect(result.nextReward?.rewardAmount, 150);
+    expect(result.stats.people, 4);
+  });
+
+  test('claim Frendly season reward posts reward key', () async {
+    RequestOptions? captured;
+    final apiDio = Dio(
+      BaseOptions(baseUrl: 'http://api.example.com'),
+    )..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            captured = options;
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'claimed': true,
+                  'alreadyClaimed': false,
+                  'claimedAt': '2026-05-16T10:00:00.000Z',
+                  'reward': {
+                    'key': 'checkin-5',
+                    'threshold': 5,
+                    'statusTitle': 'Свой круг',
+                    'title': 'Свой круг',
+                    'description': '150 токенов',
+                    'rewardKind': 'tokens',
+                    'rewardAmount': 150,
+                    'unlocked': true,
+                    'claimed': true,
+                    'claimedAt': '2026-05-16T10:00:00.000Z',
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final repository = container.read(
+      Provider(
+        (ref) => BackendRepository(ref: ref, dio: apiDio),
+      ),
+    );
+
+    final result = await repository.claimFrendlySeasonReward('checkin-5');
+
+    expect(captured?.method, 'POST');
+    expect(
+      captured?.path,
+      '/profile/me/frendly-season/rewards/checkin-5/claim',
+    );
+    expect(result.reward.rewardAmount, 150);
+    expect(result.alreadyClaimed, false);
+  });
+
+  test('fetch Frendly history parses people and pagination', () async {
+    RequestOptions? captured;
+    final apiDio = Dio(
+      BaseOptions(baseUrl: 'http://api.example.com'),
+    )..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            captured = options;
+            handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'items': [
+                    {
+                      'eventId': 'event-1',
+                      'title': 'Кофе и прогулка',
+                      'emoji': '☕',
+                      'startsAt': '2026-05-15T18:00:00.000Z',
+                      'place': 'Brix',
+                      'latitude': 55.75,
+                      'longitude': 37.61,
+                      'chatId': 'chat-1',
+                      'people': [
+                        {
+                          'userId': 'user-2',
+                          'displayName': 'Мила',
+                          'avatarUrl': '/media/avatar-2',
+                          'verified': true,
+                          'online': false,
+                        },
+                      ],
+                    },
+                  ],
+                  'nextCursor': 'next-page',
+                },
+              ),
+            );
+          },
+        ),
+      );
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final repository = container.read(
+      Provider(
+        (ref) => BackendRepository(ref: ref, dio: apiDio),
+      ),
+    );
+
+    final result = await repository.fetchFrendlyHistory(
+      cursor: 'cursor-1',
+      limit: 10,
+    );
+
+    expect(captured?.path, '/profile/me/frendly-history');
+    expect(captured?.queryParameters, containsPair('cursor', 'cursor-1'));
+    expect(captured?.queryParameters, containsPair('limit', 10));
+    expect(result.nextCursor, 'next-page');
+    expect(result.items.single.people.single.displayName, 'Мила');
+  });
+
   test('evening publish sends privacy and returns session ids', () async {
     Object? requestBody;
     final apiDio = Dio(
@@ -240,7 +480,7 @@ void main() {
     expect(container.read(currentUserIdProvider), 'user-real');
   });
 
-  test('evening builder endpoints fetch options and resolve route', () async {
+  test('evening route and AI draft endpoints use current API', () async {
     final apiRequests = <String>[];
     final requestBodies = <Object?>[];
     final apiDio = Dio(
@@ -250,20 +490,6 @@ void main() {
           onRequest: (options, handler) {
             apiRequests.add('${options.method} ${options.path}');
             requestBodies.add(options.data);
-            if (options.path == '/evening/options') {
-              handler.resolve(
-                Response(
-                  requestOptions: options,
-                  statusCode: 200,
-                  data: {
-                    'goals': [
-                      {'key': 'newfriends', 'label': 'Новые друзья'},
-                    ],
-                  },
-                ),
-              );
-              return;
-            }
             if (options.path.startsWith('/evening/routes/ai-drafts')) {
               handler.resolve(
                 Response(
@@ -308,18 +534,6 @@ void main() {
       ),
     );
 
-    final options = await repository.fetchEveningOptions();
-    final route = await repository.resolveEveningRoute(
-      goal: 'newfriends',
-      mood: 'social',
-      budget: 'mid',
-      format: 'bar',
-      area: 'center',
-      stepCount: 4,
-      city: 'Москва',
-      latitude: 55.75,
-      longitude: 37.61,
-    );
     final routeDetail = await repository.fetchEveningRoute('r-backend');
     final draft = await repository.createAiRouteDraft(
       prompt: 'Бар и стендап',
@@ -334,8 +548,6 @@ void main() {
     final confirmed = await repository.confirmAiRouteDraft('draft-1');
 
     expect(apiRequests, [
-      'GET /evening/options',
-      'POST /evening/routes/resolve',
       'GET /evening/routes/r-backend',
       'POST /evening/routes/ai-drafts',
       'GET /evening/routes/ai-drafts/draft-1',
@@ -344,21 +556,8 @@ void main() {
       'POST /evening/routes/ai-drafts/draft-1/regenerate',
       'POST /evening/routes/ai-drafts/draft-1/confirm',
     ]);
-    expect(requestBodies[1], {
-      'goal': 'newfriends',
-      'mood': 'social',
-      'budget': 'mid',
-      'format': 'bar',
-      'area': 'center',
-      'stepCount': 4,
-      'city': 'Москва',
-      'latitude': 55.75,
-      'longitude': 37.61,
-    });
-    expect(options['goals'], isA<List<dynamic>>());
-    expect(route['id'], 'r-backend');
     expect(routeDetail['title'], 'Backend Route');
-    expect(requestBodies[3], {
+    expect(requestBodies[1], {
       'prompt': 'Бар и стендап',
       'stepCount': 2,
       'city': 'Москва',
@@ -1186,9 +1385,6 @@ void main() {
                       'isAffiliate': false,
                       'tags': [],
                     },
-                  ],
-                  'posters': [
-                    {'id': 'legacy-poster'},
                   ],
                   'nextCursors': {},
                 },

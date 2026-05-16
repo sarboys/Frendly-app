@@ -5,6 +5,7 @@ import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:big_break_mobile/shared/models/onboarding_data.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -118,6 +119,20 @@ void main() {
     expect(find.text('detail:template-cozy launch:1'), findsOneWidget);
   });
 
+  testWidgets('routes AI icon opens the v5 AI create screen', (
+    tester,
+  ) async {
+    _setMobileViewport(tester);
+
+    await tester.pumpWidget(_routesApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(LucideIcons.sparkles));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ai-create'), findsOneWidget);
+  });
+
   testWidgets('routes screen does not build every route card at once', (
     tester,
   ) async {
@@ -157,10 +172,10 @@ GoRouter _routesRouter() {
         builder: (context, state) => const EveningRoutesScreen(),
       ),
       GoRoute(
-        path: AppRoute.eveningBuilder.path,
-        name: AppRoute.eveningBuilder.name,
+        path: AppRoute.aiCreate.path,
+        name: AppRoute.aiCreate.name,
         builder: (context, state) => const Scaffold(
-          body: Center(child: Text('builder')),
+          body: Center(child: Text('ai-create')),
         ),
       ),
       GoRoute(

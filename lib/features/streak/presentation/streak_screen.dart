@@ -1,30 +1,36 @@
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
+import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
+import 'package:big_break_mobile/shared/data/app_providers.dart';
+import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/data/frendly_season_provider.dart';
+import 'package:big_break_mobile/shared/models/frendly_season.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class StreakScreen extends StatelessWidget {
+class StreakScreen extends ConsumerStatefulWidget {
   const StreakScreen({super.key});
 
-  static const _days = [
-    3,
-    5,
-    6,
-    11,
-    12,
-    18,
-    19,
-    20,
-    24,
-    25,
-  ];
+  @override
+  ConsumerState<StreakScreen> createState() => _StreakScreenState();
+}
+
+class _StreakScreenState extends ConsumerState<StreakScreen> {
+  String? _claimingRewardKey;
 
   @override
   Widget build(BuildContext context) {
-    const current = 3;
-    const monthGoal = 5;
+    final seasonAsync = ref.watch(frendlySeasonProvider);
+    final season = seasonAsync.valueOrNull;
+    final current = season?.checkedInCount ?? 0;
+    final nextReward = season?.nextReward;
+    final monthGoal = nextReward?.threshold ?? 25;
+    final remaining = (monthGoal - current).clamp(0, monthGoal);
+    final progress =
+        monthGoal == 0 ? 0.0 : (current / monthGoal).clamp(0, 1).toDouble();
 
     return BbV5Scaffold(
       child: BbV5Page(
@@ -85,7 +91,7 @@ class StreakScreen extends StatelessWidget {
                                         Text.rich(
                                           TextSpan(
                                             children: [
-                                              const TextSpan(text: '$current'),
+                                              TextSpan(text: '$current'),
                                               TextSpan(
                                                 text: ' / $monthGoal вечеров',
                                                 style: AppTextStyles.screenTitle
@@ -116,7 +122,9 @@ class StreakScreen extends StatelessWidget {
                                         ),
                                         const SizedBox(height: 8),
                                         Text(
-                                          'Ещё 2 встречи. Потом откроется десерт у Powerhouse.',
+                                          nextReward == null
+                                              ? 'Все подарки сезона уже открыты.'
+                                              : 'Ещё $remaining check-in. Потом откроется ${nextReward.rewardLabel}.',
                                           style: AppTextStyles.meta.copyWith(
                                             fontSize: 12.5,
                                             height: 1.625,
@@ -134,7 +142,7 @@ class StreakScreen extends StatelessWidget {
                                     BorderRadius.circular(BbV5Radii.pill),
                                 child: LinearProgressIndicator(
                                   minHeight: 8,
-                                  value: current / monthGoal,
+                                  value: progress,
                                   color: BbV5Colors.accent,
                                   backgroundColor:
                                       BbV5Colors.ink.withValues(alpha: 0.1),
@@ -145,11 +153,21 @@ class StreakScreen extends StatelessWidget {
                         ),
                       ),
                       const SliverToBoxAdapter(child: SizedBox(height: 20)),
-                      const SliverToBoxAdapter(
-                        child: _MonthMapCard(),
+                      SliverToBoxAdapter(
+                        child: _MonthMapCard(
+                          days: season?.calendarDays ?? const [],
+                          title: season?.seasonLabel ?? 'Сезон',
+                        ),
                       ),
                       const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                      const SliverToBoxAdapter(child: _RewardsList()),
+                      SliverToBoxAdapter(
+                        child: _RewardsList(
+                          rewards: season?.rewards ?? const [],
+                          loading: seasonAsync.isLoading,
+                          claimingRewardKey: _claimingRewardKey,
+                          onClaim: _claimReward,
+                        ),
+                      ),
                       const SliverToBoxAdapter(child: SizedBox(height: 90)),
                     ],
                   ),
@@ -161,7 +179,7 @@ class StreakScreen extends StatelessWidget {
                       top: false,
                       minimum: const EdgeInsets.only(bottom: 14),
                       child: BbV5PillButton(
-                        label: 'Посмотреть перки заведений',
+                        label: 'Посмотреть промо заведений',
                         icon: LucideIcons.gift,
                         trailingIcon: LucideIcons.chevron_right,
                         dark: true,
@@ -180,15 +198,53 @@ class StreakScreen extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _claimReward(FrendlySeasonRewardData reward) async {
+    if (!reward.canClaim || _claimingRewardKey != null) {
+      return;
+    }
+    setState(() => _claimingRewardKey = reward.key);
+    try {
+      final result = await ref
+          .read(backendRepositoryProvider)
+          .claimFrendlySeasonReward(reward.key);
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(frendlySeasonProvider);
+      ref.invalidate(tokenWalletProvider);
+      ref.invalidate(subscriptionStateProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${result.reward.rewardLabel} начислено')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось забрать подарок')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _claimingRewardKey = null);
+      }
+    }
+  }
 }
 
 class _MonthMapCard extends StatelessWidget {
-  const _MonthMapCard();
+  const _MonthMapCard({
+    required this.days,
+    required this.title,
+  });
+
+  final List<int> days;
+  final String title;
 
   @override
   Widget build(BuildContext context) {
     return BbV5Section(
-      title: 'Май · карта вечеров',
+      title: title,
       right: Row(
         children: [
           const Icon(
@@ -224,8 +280,8 @@ class _MonthMapCard extends StatelessWidget {
               ),
               itemBuilder: (context, index) {
                 final day = index + 1;
-                final went = StreakScreen._days.contains(day);
-                final today = day == 25;
+                final went = days.contains(day);
+                final today = day == DateTime.now().day;
                 return Container(
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
@@ -316,56 +372,33 @@ class _LegendDot extends StatelessWidget {
 }
 
 class _RewardsList extends StatelessWidget {
-  const _RewardsList();
+  const _RewardsList({
+    required this.rewards,
+    required this.loading,
+    required this.claimingRewardKey,
+    required this.onClaim,
+  });
 
-  static const List<
-      ({
-        String threshold,
-        String title,
-        String subtitle,
-        bool unlocked,
-        IconData icon,
-      })> _items = [
-    (
-      threshold: '1 ВЕЧЕР',
-      title: 'Первая искра',
-      subtitle: 'Бейдж в профиле',
-      unlocked: true,
-      icon: LucideIcons.sparkles,
-    ),
-    (
-      threshold: '3 ВЕЧЕРА',
-      title: 'Тёплый круг',
-      subtitle: 'Перк от партнёра',
-      unlocked: true,
-      icon: LucideIcons.gift,
-    ),
-    (
-      threshold: '5 ВЕЧЕРОВ',
-      title: 'Свой человек',
-      subtitle: 'Бонус у партнёра',
-      unlocked: false,
-      icon: LucideIcons.gift,
-    ),
-    (
-      threshold: '7 ВЕЧЕРОВ',
-      title: 'Знаток вечера',
-      subtitle: 'Доступ к After-Dark подборкам',
-      unlocked: false,
-      icon: LucideIcons.sparkles,
-    ),
-  ];
+  final List<FrendlySeasonRewardData> rewards;
+  final bool loading;
+  final String? claimingRewardKey;
+  final ValueChanged<FrendlySeasonRewardData> onClaim;
 
   @override
   Widget build(BuildContext context) {
+    final items = rewards.isEmpty && loading ? _fallbackRewards : rewards;
     return BbV5Section(
       title: 'Что открывается',
       margin: EdgeInsets.zero,
       child: Column(
         children: [
-          for (final item in _items) ...[
-            _RewardCard(item: item),
-            if (item != _items.last) const SizedBox(height: 10),
+          for (final item in items) ...[
+            _RewardCard(
+              item: item,
+              claiming: claimingRewardKey == item.key,
+              onClaim: () => onClaim(item),
+            ),
+            if (item != items.last) const SizedBox(height: 10),
           ],
         ],
       ),
@@ -374,18 +407,22 @@ class _RewardsList extends StatelessWidget {
 }
 
 class _RewardCard extends StatelessWidget {
-  const _RewardCard({required this.item});
+  const _RewardCard({
+    required this.item,
+    required this.claiming,
+    required this.onClaim,
+  });
 
-  final ({
-    String threshold,
-    String title,
-    String subtitle,
-    bool unlocked,
-    IconData icon,
-  }) item;
+  final FrendlySeasonRewardData item;
+  final bool claiming;
+  final VoidCallback onClaim;
 
   @override
   Widget build(BuildContext context) {
+    final unlocked = item.unlocked;
+    final icon = item.rewardKind == FrendlySeasonRewardKind.tokens
+        ? LucideIcons.coins
+        : LucideIcons.sparkles;
     return BbV5Card(
       radius: 20,
       padding: const EdgeInsets.all(16),
@@ -396,21 +433,21 @@ class _RewardCard extends StatelessWidget {
             height: 48,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              gradient: item.unlocked
+              gradient: unlocked
                   ? const LinearGradient(
                       colors: [BbV5Colors.accent, BbV5Colors.accentDeep],
                     )
                   : null,
-              color: item.unlocked ? null : BbV5Colors.paperHi,
+              color: unlocked ? null : BbV5Colors.paperHi,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: item.unlocked ? Colors.transparent : BbV5Colors.hair,
+                color: unlocked ? Colors.transparent : BbV5Colors.hair,
               ),
             ),
             child: Icon(
-              item.unlocked ? item.icon : LucideIcons.lock,
+              unlocked ? icon : LucideIcons.lock,
               size: 20,
-              color: item.unlocked ? BbV5Colors.paperHi : BbV5Colors.inkMute,
+              color: unlocked ? BbV5Colors.paperHi : BbV5Colors.inkMute,
             ),
           ),
           const SizedBox(width: 12),
@@ -419,7 +456,7 @@ class _RewardCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.threshold,
+                  '${item.threshold} CHECK-IN',
                   style: bbV5KickerStyle(
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.8,
@@ -432,7 +469,7 @@ class _RewardCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  item.subtitle,
+                  item.rewardLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.caption.copyWith(
@@ -444,9 +481,26 @@ class _RewardCard extends StatelessWidget {
               ],
             ),
           ),
-          if (item.unlocked)
+          if (item.claimed)
             const Icon(
-              LucideIcons.chevron_right,
+              LucideIcons.check,
+              size: 18,
+              color: BbV5Colors.brandDeep,
+            )
+          else if (item.canClaim)
+            BbV5PillButton(
+              label: claiming ? '...' : 'Забрать',
+              height: 32,
+              fontSize: 11,
+              icon: LucideIcons.gift,
+              iconSize: 12,
+              dark: true,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              onPressed: claiming ? null : onClaim,
+            )
+          else
+            const Icon(
+              LucideIcons.lock,
               size: 16,
               color: BbV5Colors.inkMute,
             ),
@@ -455,3 +509,66 @@ class _RewardCard extends StatelessWidget {
     );
   }
 }
+
+const _fallbackRewards = [
+  FrendlySeasonRewardData(
+    key: 'checkin-1',
+    threshold: 1,
+    statusTitle: 'Искра',
+    title: 'Первая искра',
+    description: '50 токенов за первый вечер сезона',
+    rewardKind: FrendlySeasonRewardKind.tokens,
+    rewardAmount: 50,
+    unlocked: false,
+    claimed: false,
+    claimedAt: null,
+  ),
+  FrendlySeasonRewardData(
+    key: 'checkin-5',
+    threshold: 5,
+    statusTitle: 'Свой круг',
+    title: 'Свой круг',
+    description: '150 токенов за 5 вечеров',
+    rewardKind: FrendlySeasonRewardKind.tokens,
+    rewardAmount: 150,
+    unlocked: false,
+    claimed: false,
+    claimedAt: null,
+  ),
+  FrendlySeasonRewardData(
+    key: 'checkin-10',
+    threshold: 10,
+    statusTitle: 'Человек вечера',
+    title: 'Человек вечера',
+    description: 'Frendly+ на 1 месяц',
+    rewardKind: FrendlySeasonRewardKind.subscription,
+    rewardAmount: 30,
+    unlocked: false,
+    claimed: false,
+    claimedAt: null,
+  ),
+  FrendlySeasonRewardData(
+    key: 'checkin-15',
+    threshold: 15,
+    statusTitle: 'Городской ритм',
+    title: 'Городской ритм',
+    description: '500 токенов за 15 вечеров',
+    rewardKind: FrendlySeasonRewardKind.tokens,
+    rewardAmount: 500,
+    unlocked: false,
+    claimed: false,
+    claimedAt: null,
+  ),
+  FrendlySeasonRewardData(
+    key: 'checkin-25',
+    threshold: 25,
+    statusTitle: 'Легенда месяца',
+    title: 'Легенда месяца',
+    description: 'Frendly+ на 6 месяцев',
+    rewardKind: FrendlySeasonRewardKind.subscription,
+    rewardAmount: 180,
+    unlocked: false,
+    claimed: false,
+    claimedAt: null,
+  ),
+];

@@ -1238,6 +1238,23 @@ void main() {
     expect(searchField.textAlignVertical, TextAlignVertical.center);
   });
 
+  testWidgets('create meetup place sheet does not show mock nearby places',
+      (tester) async {
+    await tester.pumpWidget(_wrap((_) {}));
+    await tester.pumpAndSettle();
+
+    await openPlaceSheet(tester);
+
+    expect(find.widgetWithText(InkWell, 'Brix'), findsNothing);
+    expect(find.widgetWithText(InkWell, 'Aglio'), findsNothing);
+    expect(find.widgetWithText(InkWell, 'Powerhouse'), findsNothing);
+    expect(find.widgetWithText(InkWell, 'Парк Горького'), findsNothing);
+    expect(find.widgetWithText(InkWell, 'Хохловский переулок'), findsNothing);
+    expect(find.text('Ничего не нашли'), findsNothing);
+    expect(find.widgetWithText(InkWell, 'Моё местоположение'), findsOneWidget);
+    expect(find.widgetWithText(InkWell, 'Афиша города'), findsOneWidget);
+  });
+
   testWidgets('create meetup place sheet shows yandex search result',
       (tester) async {
     final mapService = _FakeYandexMapService();

@@ -312,32 +312,6 @@ class AiRouteDraft {
   }
 }
 
-class EveningBuilderOptions {
-  const EveningBuilderOptions({
-    required this.goals,
-    required this.moods,
-    required this.budgets,
-    required this.formats,
-    required this.areas,
-  });
-
-  final List<EveningOption> goals;
-  final List<EveningOption> moods;
-  final List<EveningOption> budgets;
-  final List<EveningOption> formats;
-  final List<EveningOption> areas;
-
-  factory EveningBuilderOptions.fromJson(Map<String, dynamic> json) {
-    return EveningBuilderOptions(
-      goals: eveningOptionsFromJson(json['goals'], eveningGoals),
-      moods: eveningOptionsFromJson(json['moods'], eveningMoods),
-      budgets: eveningOptionsFromJson(json['budgets'], eveningBudgets),
-      formats: eveningOptionsFromJson(json['formats'], eveningFormats),
-      areas: eveningOptionsFromJson(json['areas'], eveningAreas),
-    );
-  }
-}
-
 const eveningRoutes = <EveningRouteData>[];
 
 const eveningGoals = <EveningOption>[

@@ -12,7 +12,9 @@ import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
 import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
+import 'package:big_break_mobile/shared/data/frendly_season_provider.dart';
 import 'package:big_break_mobile/shared/data/location_override_provider.dart';
+import 'package:big_break_mobile/shared/data/tomesto_promos_provider.dart';
 import 'package:big_break_mobile/shared/models/affiche_event.dart';
 import 'package:big_break_mobile/shared/models/dating_profile.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
@@ -320,6 +322,16 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
     final routeTemplatesAsync = effectiveCity.isEmpty
         ? const AsyncValue<List<EveningRouteTemplateSummary>>.data([])
         : ref.watch(eveningRouteTemplatesProvider(effectiveCity));
+    final season = ref.watch(frendlySeasonProvider).valueOrNull;
+    final manualLocation = ref.watch(manualLocationProvider);
+    final promoCount = ref
+        .watch(
+          tomestoPromosProvider(
+            TomestoPromosQuery.fromManualLocation(manualLocation, limit: 20),
+          ),
+        )
+        .valueOrNull
+        ?.length;
 
     return BbV5Scaffold(
       child: SafeArea(
@@ -398,6 +410,12 @@ class _TonightScreenState extends ConsumerState<TonightScreen> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
                 child: _TonightPersonalSection(
+                  streakSubtitle: season?.nextReward == null
+                      ? '${season?.checkedInCount ?? 0} check-in'
+                      : '${season?.checkedInCount ?? 0} / ${season!.nextReward!.threshold} check-in',
+                  promoSubtitle:
+                      promoCount == null ? 'Промо' : '$promoCount доступно',
+                  historySubtitle: '${season?.stats.checkIns ?? 0} встреч',
                   onOpenStreak: () => context.pushRoute(AppRoute.streak),
                   onOpenPerks: () => context.pushRoute(AppRoute.perks),
                   onOpenMap: () => context.pushRoute(AppRoute.memoryMap),
@@ -3600,12 +3618,18 @@ class _MetricCard extends StatelessWidget {
 
 class _TonightPersonalSection extends StatelessWidget {
   const _TonightPersonalSection({
+    required this.streakSubtitle,
+    required this.promoSubtitle,
+    required this.historySubtitle,
     required this.onOpenStreak,
     required this.onOpenPerks,
     required this.onOpenMap,
     required this.onOpenVoice,
   });
 
+  final String streakSubtitle;
+  final String promoSubtitle;
+  final String historySubtitle;
   final VoidCallback onOpenStreak;
   final VoidCallback onOpenPerks;
   final VoidCallback onOpenMap;
@@ -3623,7 +3647,7 @@ class _TonightPersonalSection extends StatelessWidget {
               Expanded(
                 child: _PersonalPortalCard(
                   title: 'Streak',
-                  subtitle: '3 / 5 вечеров',
+                  subtitle: streakSubtitle,
                   icon: LucideIcons.flame,
                   tint: BbV5Colors.terraSoft,
                   color: BbV5Colors.accent,
@@ -3633,8 +3657,8 @@ class _TonightPersonalSection extends StatelessWidget {
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: _PersonalPortalCard(
-                  title: 'Перки',
-                  subtitle: '3 доступны',
+                  title: 'Промо',
+                  subtitle: promoSubtitle,
                   icon: LucideIcons.gift,
                   tint: BbV5Colors.brandSoft,
                   color: BbV5Colors.brandDeep,
@@ -3644,9 +3668,9 @@ class _TonightPersonalSection extends StatelessWidget {
               const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: _PersonalPortalCard(
-                  title: 'Карта',
-                  subtitle: '12 мест',
-                  icon: LucideIcons.map,
+                  title: 'История',
+                  subtitle: historySubtitle,
+                  icon: LucideIcons.history,
                   tint: BbV5Colors.rose,
                   color: BbV5Colors.ink,
                   onTap: onOpenMap,

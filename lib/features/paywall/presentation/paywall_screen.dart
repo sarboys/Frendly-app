@@ -11,6 +11,10 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+bool _hasFrendlyPlusAccess(SubscriptionStateData state) {
+  return state.status == 'active' || state.status == 'trial';
+}
+
 class PaywallScreen extends ConsumerStatefulWidget {
   const PaywallScreen({super.key});
 
@@ -90,6 +94,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     if (_paymentAction != 'idle') {
       return;
     }
+    final subscription = ref.read(subscriptionStateProvider).valueOrNull;
+    if (subscription != null && _hasFrendlyPlusAccess(subscription)) {
+      return;
+    }
     final container = ProviderScope.containerOf(context, listen: false);
     setState(() => _paymentAction = 'creating');
     try {
@@ -149,8 +157,7 @@ class _PaywallContent extends StatelessWidget {
     }
 
     final selectedPlan = selectedPlanId == 'month' ? month : year;
-    final hasActiveSubscription =
-        state.status == 'active' || state.status == 'trial';
+    final hasActiveSubscription = _hasFrendlyPlusAccess(state);
 
     return SafeArea(
       bottom: false,
@@ -185,34 +192,44 @@ class _PaywallContent extends StatelessWidget {
                           const SizedBox(height: AppSpacing.lg),
                           _PlanTile(
                             plan: year,
-                            active: selectedPlanId == 'year',
+                            active: hasActiveSubscription
+                                ? state.plan == 'year'
+                                : selectedPlanId == 'year',
                             activeSubscription:
                                 hasActiveSubscription && state.plan == 'year',
                             summary:
                                 '${year.tokenMonthlyCost} токенов/мес · за год',
                             strikePrice: year.tokenCost * 2,
-                            onTap: () => onPlanChanged('year'),
+                            onTap: hasActiveSubscription
+                                ? null
+                                : () => onPlanChanged('year'),
                           ),
                           const SizedBox(height: 10),
                           _PlanTile(
                             plan: month,
-                            active: selectedPlanId == 'month',
+                            active: hasActiveSubscription
+                                ? state.plan == 'month'
+                                : selectedPlanId == 'month',
                             activeSubscription:
                                 hasActiveSubscription && state.plan == 'month',
                             summary: 'Списание токенов на 30 дней',
-                            onTap: () => onPlanChanged('month'),
+                            onTap: hasActiveSubscription
+                                ? null
+                                : () => onPlanChanged('month'),
                           ),
-                          const SizedBox(height: AppSpacing.md),
-                          Text(
-                            'Токены спишутся сразу. Доступ включится после активации.',
-                            textAlign: TextAlign.center,
-                            style: AppTextStyles.caption.copyWith(
-                              fontSize: 10.5,
-                              height: 1.45,
-                              letterSpacing: 0,
-                              color: BbV5Colors.inkMute,
+                          if (!hasActiveSubscription) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            Text(
+                              'Токены спишутся сразу. Доступ включится после активации.',
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.caption.copyWith(
+                                fontSize: 10.5,
+                                height: 1.45,
+                                letterSpacing: 0,
+                                color: BbV5Colors.inkMute,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -225,6 +242,7 @@ class _PaywallContent extends StatelessWidget {
                 bottom: 0,
                 child: _StickySubscribeBar(
                   plan: selectedPlan,
+                  activeSubscription: hasActiveSubscription,
                   paymentAction: paymentAction,
                   onSubscribe: onSubscribe,
                 ),
@@ -484,7 +502,7 @@ class _PlanTile extends StatelessWidget {
   final bool active;
   final bool activeSubscription;
   final String summary;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final int? strikePrice;
 
   @override
@@ -622,11 +640,13 @@ class _PlanBadge extends StatelessWidget {
 class _StickySubscribeBar extends StatelessWidget {
   const _StickySubscribeBar({
     required this.plan,
+    required this.activeSubscription,
     required this.paymentAction,
     required this.onSubscribe,
   });
 
   final SubscriptionPlanData plan;
+  final bool activeSubscription;
   final String paymentAction;
   final VoidCallback onSubscribe;
 
@@ -658,17 +678,56 @@ class _StickySubscribeBar extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              BbV5PillButton(
-                label: label,
-                onPressed: busy ? null : onSubscribe,
-                dark: true,
-                height: 56,
-                fontSize: 14,
-                expanded: true,
-              ),
+              if (activeSubscription)
+                const _ActiveSubscriptionStatus()
+              else
+                BbV5PillButton(
+                  label: label,
+                  onPressed: busy ? null : onSubscribe,
+                  dark: true,
+                  height: 56,
+                  fontSize: 14,
+                  expanded: true,
+                ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ActiveSubscriptionStatus extends StatelessWidget {
+  const _ActiveSubscriptionStatus();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 56,
+      width: double.infinity,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: BbV5Colors.ink,
+        borderRadius: BorderRadius.circular(BbV5Radii.pill),
+        boxShadow: BbV5Shadows.ink,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            LucideIcons.check,
+            size: 18,
+            color: BbV5Colors.paperHi,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Подписка активна',
+            style: AppTextStyles.button.copyWith(
+              fontSize: 14,
+              color: BbV5Colors.paperHi,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -38,6 +38,39 @@ void main() {
     expect(walletController.subscribeCalls, ['year']);
     expect(find.text('Frendly+ активирован'), findsOneWidget);
   });
+
+  testWidgets('paywall hides purchase action for active subscription',
+      (tester) async {
+    final walletController = _TestTokenWalletController();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          tokenWalletProvider.overrideWith((ref) => walletController),
+          subscriptionPlansProvider.overrideWith((ref) async => _plans),
+          subscriptionStateProvider.overrideWith(
+            (ref) async => const SubscriptionStateData(
+              plan: 'year',
+              status: 'active',
+              startedAt: null,
+              renewsAt: null,
+              trialEndsAt: null,
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: PaywallScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Подписка активна'), findsOneWidget);
+    expect(find.text('Оплатить 4788 токенов'), findsNothing);
+    expect(
+      find.text('Токены спишутся сразу. Доступ включится после активации.'),
+      findsNothing,
+    );
+    expect(walletController.subscribeCalls, isEmpty);
+  });
 }
 
 const _plans = [

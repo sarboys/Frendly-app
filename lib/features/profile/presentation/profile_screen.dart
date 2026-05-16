@@ -565,6 +565,8 @@ class _ProfileQuickGrid extends ConsumerWidget {
   }
 }
 
+const _profileQuickTileMinHeight = 128.0;
+
 class _ProfileQuickTile extends StatelessWidget {
   const _ProfileQuickTile({
     required this.icon,
@@ -582,47 +584,50 @@ class _ProfileQuickTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BbV5Card(
-      radius: BbV5Radii.md,
-      padding: const EdgeInsets.all(16),
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: tone.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-              border: Border.all(color: tone.withValues(alpha: 0.24)),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: _profileQuickTileMinHeight),
+      child: BbV5Card(
+        radius: BbV5Radii.md,
+        padding: const EdgeInsets.all(16),
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: tone.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+                border: Border.all(color: tone.withValues(alpha: 0.24)),
+              ),
+              child: Icon(icon, size: 17, color: tone),
             ),
-            child: Icon(icon, size: 17, color: tone),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.caption.copyWith(
-              fontFamily: 'Sora',
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: BbV5Colors.ink,
+            const SizedBox(height: 10),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.caption.copyWith(
+                fontFamily: 'Sora',
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: BbV5Colors.ink,
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.caption.copyWith(
-              fontSize: 10.5,
-              height: 1.25,
-              color: BbV5Colors.inkMute,
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.caption.copyWith(
+                fontSize: 10.5,
+                height: 1.25,
+                color: BbV5Colors.inkMute,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

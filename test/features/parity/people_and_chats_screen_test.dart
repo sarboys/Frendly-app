@@ -292,7 +292,7 @@ void main() {
                 members: ['Ты', 'Мира'],
                 phase: MeetupPhase.upcoming,
                 ticketUrl: 'https://example.com/tickets',
-                ticketSourceKind: MeetupChatTicketSourceKind.poster,
+                ticketSourceKind: MeetupChatTicketSourceKind.affiche,
               ),
             ],
           ),

@@ -6,7 +6,7 @@ enum EveningLaunchMode { auto, manual, hybrid }
 
 enum EveningPrivacy { open, request, invite }
 
-enum MeetupChatTicketSourceKind { poster, affiche }
+enum MeetupChatTicketSourceKind { affiche }
 
 class MeetupMember {
   const MeetupMember({
@@ -58,6 +58,7 @@ class MeetupChat {
     required this.lastTime,
     required this.unread,
     required this.members,
+    this.lastMessageAt,
     this.lastMessageId,
     this.memberProfiles = const [],
     this.status,
@@ -98,6 +99,7 @@ class MeetupChat {
   final String lastMessage;
   final String lastAuthor;
   final String lastTime;
+  final DateTime? lastMessageAt;
   final int unread;
   final List<String> members;
   final List<MeetupMember> memberProfiles;
@@ -155,6 +157,7 @@ class MeetupChat {
       lastMessage: json['lastMessage'] as String? ?? '',
       lastAuthor: json['lastAuthor'] as String? ?? '',
       lastTime: json['lastTime'] as String? ?? '',
+      lastMessageAt: _optionalDateTime(json['lastMessageAt']),
       unread: (json['unread'] as num?)?.toInt() ?? 0,
       members: effectiveMembers,
       memberProfiles: memberProfiles.isNotEmpty
@@ -205,6 +208,8 @@ class MeetupChat {
     String? lastMessage,
     String? lastAuthor,
     String? lastTime,
+    DateTime? lastMessageAt,
+    bool clearLastMessageAt = false,
     int? unread,
     List<String>? members,
     List<MeetupMember>? memberProfiles,
@@ -247,6 +252,8 @@ class MeetupChat {
       lastMessage: lastMessage ?? this.lastMessage,
       lastAuthor: lastAuthor ?? this.lastAuthor,
       lastTime: lastTime ?? this.lastTime,
+      lastMessageAt:
+          clearLastMessageAt ? null : lastMessageAt ?? this.lastMessageAt,
       unread: unread ?? this.unread,
       members: members ?? this.members,
       memberProfiles: memberProfiles ?? this.memberProfiles,
@@ -283,8 +290,6 @@ class MeetupChat {
 
 MeetupChatTicketSourceKind? parseMeetupChatTicketSourceKind(String? raw) {
   switch (raw) {
-    case 'poster':
-      return MeetupChatTicketSourceKind.poster;
     case 'affiche':
       return MeetupChatTicketSourceKind.affiche;
     default:
@@ -305,6 +310,13 @@ List<MeetupMember> _parseMemberProfiles(Object? value) {
 
 String? _optionalString(Object? value) {
   return value is String ? value : null;
+}
+
+DateTime? _optionalDateTime(Object? value) {
+  if (value is! String || value.isEmpty) {
+    return null;
+  }
+  return DateTime.tryParse(value)?.toLocal();
 }
 
 MeetupPhase parseMeetupPhase(String? value) {

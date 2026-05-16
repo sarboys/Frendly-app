@@ -74,49 +74,6 @@ Future<PlaceSelection?> showPlaceSheet(
 
 const _recentPlaces = <PlaceSelection>[];
 
-const _nearbyPlaces = <PlaceSelection>[
-  PlaceSelection(
-    name: 'Brix',
-    address: 'Покровка 12',
-    distance: '0.4 км',
-    distanceKm: 0.4,
-    category: 'Винный бар',
-    emoji: '🍷',
-  ),
-  PlaceSelection(
-    name: 'Aglio',
-    address: 'Маросейка 6',
-    distance: '0.7 км',
-    distanceKm: 0.7,
-    category: 'Trattoria',
-    emoji: '🍝',
-  ),
-  PlaceSelection(
-    name: 'Powerhouse',
-    address: 'Казакова 8',
-    distance: '1.2 км',
-    distanceKm: 1.2,
-    category: 'Late jazz',
-    emoji: '🎶',
-  ),
-  PlaceSelection(
-    name: 'Парк Горького',
-    address: 'Главный вход',
-    distance: '2.4 км',
-    distanceKm: 2.4,
-    category: 'Open air',
-    emoji: '🌿',
-  ),
-  PlaceSelection(
-    name: 'Хохловский переулок',
-    address: 'У арки',
-    distance: '0.9 км',
-    distanceKm: 0.9,
-    category: 'Дворик',
-    emoji: '☕',
-  ),
-];
-
 class _PlaceSheet extends ConsumerStatefulWidget {
   const _PlaceSheet({
     required this.initialValue,
@@ -147,18 +104,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
   @override
   Widget build(BuildContext context) {
     final query = _queryController.text.trim().toLowerCase();
-    final localMatches = query.isEmpty
-        ? _nearbyPlaces
-        : _nearbyPlaces
-            .where(
-              (place) =>
-                  place.name.toLowerCase().contains(query) ||
-                  place.address.toLowerCase().contains(query),
-            )
-            .toList(growable: false);
-    final filtered = query.isNotEmpty && _remoteResults.isNotEmpty
-        ? _remoteResults
-        : localMatches;
+    final filtered = query.isEmpty ? const <PlaceSelection>[] : _remoteResults;
 
     return SafeArea(
       top: false,
@@ -241,7 +187,7 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
                     children: [
                       if (_searching && query.isNotEmpty && filtered.isEmpty)
                         const _PlaceLoadingState()
-                      else if (filtered.isEmpty)
+                      else if (query.length >= 2 && filtered.isEmpty)
                         const _PlaceEmptyState()
                       else
                         ...filtered.map(

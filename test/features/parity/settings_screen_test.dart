@@ -57,6 +57,8 @@ void main() {
       400,
       scrollable: find.byType(Scrollable).first,
     );
+    expect(find.text('Внешний вид'), findsNothing);
+    expect(find.text('Тёмная тема'), findsNothing);
     expect(find.text('Опасная зона'), findsOneWidget);
     expect(find.text('Поддержка и условия'), findsOneWidget);
     expect(find.text('Удаление аккаунта'), findsOneWidget);

@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/features/event_detail/presentation/event_entry_requirements_card.dart';
+import 'package:big_break_mobile/features/evening_plan/presentation/evening_edit_state.dart';
+import 'package:big_break_mobile/features/evening_plan/presentation/evening_plan_data.dart';
 import 'package:big_break_mobile/features/meetup_chat/presentation/meetup_invite_sheet.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
@@ -1381,6 +1385,7 @@ class _V5RouteSection extends ConsumerStatefulWidget {
 
 class _V5RouteSectionState extends ConsumerState<_V5RouteSection> {
   int _activeIndex = 0;
+  bool _openingRouteEditor = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1403,6 +1408,8 @@ class _V5RouteSectionState extends ConsumerState<_V5RouteSection> {
         _activeIndex >= stops.length ? stops.length - 1 : _activeIndex;
     final routeExpected = shouldLoadRoute || event.routeStops.length > 1;
     final multi = routeExpected || stops.length > 1;
+    final canEditRoute =
+        multi && event.isHost && routeId != null && routeId.isNotEmpty;
 
     return Column(
       children: [
@@ -1420,6 +1427,21 @@ class _V5RouteSectionState extends ConsumerState<_V5RouteSection> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+              if (canEditRoute) ...[
+                const SizedBox(width: 8),
+                BbV5PillButton(
+                  label: 'Править',
+                  icon: LucideIcons.pencil,
+                  height: 30,
+                  fontSize: 10.5,
+                  iconSize: 13,
+                  iconGap: 4,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  onPressed: _openingRouteEditor
+                      ? null
+                      : () => unawaited(_openRouteEditor(routeId)),
+                ),
+              ],
             ],
           ),
         ),
@@ -1435,6 +1457,58 @@ class _V5RouteSectionState extends ConsumerState<_V5RouteSection> {
         ),
       ],
     );
+  }
+
+  Future<void> _openRouteEditor(String routeId) async {
+    if (_openingRouteEditor) {
+      return;
+    }
+    setState(() {
+      _openingRouteEditor = true;
+    });
+
+    try {
+      final overrides = ref.read(eveningRouteOverridesProvider);
+      if (!overrides.containsKey(routeId)) {
+        final json = await ref
+            .read(backendRepositoryProvider)
+            .fetchEveningRoute(routeId);
+        if (!mounted) {
+          return;
+        }
+        final route = eveningRouteFromJson(
+          json,
+          fallback: findEveningRoute(routeId),
+        );
+        final normalizedRoute =
+            route.id.trim().isEmpty ? route.copyWith(id: routeId) : route;
+        ref.read(eveningRouteOverridesProvider.notifier).state = {
+          ...ref.read(eveningRouteOverridesProvider),
+          routeId: normalizedRoute,
+        };
+      }
+
+      if (!mounted) {
+        return;
+      }
+      await context.pushRoute(
+        AppRoute.eveningEdit,
+        pathParameters: {'routeId': routeId},
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Не получилось открыть маршрут')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _openingRouteEditor = false;
+        });
+      }
+    }
   }
 }
 

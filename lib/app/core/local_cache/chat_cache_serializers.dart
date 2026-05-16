@@ -13,6 +13,7 @@ Map<String, dynamic> meetupChatToCacheJson(MeetupChat chat) {
     'lastMessage': chat.lastMessage,
     'lastAuthor': chat.lastAuthor,
     'lastTime': chat.lastTime,
+    'lastMessageAt': chat.lastMessageAt?.toUtc().toIso8601String(),
     'unread': chat.unread,
     'members': chat.members,
     'status': chat.status,
@@ -53,6 +54,7 @@ Map<String, dynamic> personalChatToCacheJson(PersonalChat chat) {
     'lastMessageId': chat.lastMessageId,
     'lastMessage': chat.lastMessage,
     'lastTime': chat.lastTime,
+    'lastMessageAt': chat.lastMessageAt?.toUtc().toIso8601String(),
     'unread': chat.unread,
     'online': chat.online,
     'fromMeetup': chat.fromMeetup,
@@ -119,7 +121,6 @@ Map<String, dynamic> _replyToCacheJson(MessageReplyPreview replyTo) {
 
 String? _ticketSourceKindToJson(MeetupChatTicketSourceKind? kind) {
   return switch (kind) {
-    MeetupChatTicketSourceKind.poster => 'poster',
     MeetupChatTicketSourceKind.affiche => 'affiche',
     null => null,
   };

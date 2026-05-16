@@ -15,37 +15,14 @@ Widget _wrap(Widget child, {int walletBalance = 0}) {
 }
 
 void main() {
-  testWidgets('token screens render their main content', (tester) async {
+  testWidgets('wallet screen renders token balance and top up content',
+      (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-
-    await tester.pumpWidget(_wrap(const TokensFocusScreen()));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Что в'), findsOneWidget);
-    expect(find.textContaining('фокусе'), findsWidgets);
-    expect(find.text('Brix · вино после работы'), findsOneWidget);
-
-    await tester.pumpWidget(_wrap(const TokensTopUpScreen()));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Пополнить'), findsOneWidget);
-    expect(find.textContaining('баланс'), findsWidgets);
-    expect(find.text('Оплатить 999 ₽'), findsOneWidget);
-
-    await tester.pumpWidget(_wrap(const TokensBalanceScreen()));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Баланс'), findsOneWidget);
-    expect(find.textContaining('токенов'), findsWidgets);
-    expect(find.text('Последние операции'), findsOneWidget);
-
-    await tester.pumpWidget(_wrap(const TokensBoostScreen()));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Продвижение'), findsWidgets);
-    expect(find.textContaining('встречи'), findsWidgets);
-    expect(find.text('Запустить за 120'), findsOneWidget);
 
     await tester.pumpWidget(_wrap(const WalletScreen()));
     await tester.pumpAndSettle();
@@ -61,7 +38,7 @@ void main() {
   testWidgets('tokens balance screen reads backend wallet state', (
     tester,
   ) async {
-    await tester.pumpWidget(_wrap(const TokensBalanceScreen()));
+    await tester.pumpWidget(_wrap(const WalletScreen()));
     await tester.pumpAndSettle();
 
     expect(find.text('0'), findsWidgets);

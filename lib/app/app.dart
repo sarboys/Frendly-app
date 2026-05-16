@@ -7,7 +7,6 @@ import 'package:big_break_mobile/app/session/app_session_controller.dart';
 import 'package:big_break_mobile/app/theme/app_colors.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
 import 'package:big_break_mobile/app/theme/app_theme.dart';
-import 'package:big_break_mobile/app/theme/app_theme_mode.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/features/payments/application/payment_return_controller.dart';
@@ -94,7 +93,6 @@ class _RootAppViewState extends ConsumerState<_RootAppView> {
       }
     });
 
-    final themeMode = ref.watch(appThemeModeProvider);
     final authTokens = ref.watch(authTokensProvider);
     ref.watch(authBootstrapProvider);
     final bootstrapProfile = ref.watch(authBootstrapProfileProvider);
@@ -125,8 +123,7 @@ class _RootAppViewState extends ConsumerState<_RootAppView> {
       debugShowCheckedModeBanner: false,
       title: 'Frendly',
       theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: themeMode,
+      themeMode: ThemeMode.light,
       routerConfig: _router,
       builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
         value: _systemUiOverlayStyleFor(Theme.of(context).brightness),

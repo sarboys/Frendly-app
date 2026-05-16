@@ -1,6 +1,5 @@
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/app.dart';
-import 'package:big_break_mobile/app/theme/app_theme_mode.dart';
 import 'package:big_break_mobile/features/splash/presentation/splash_screen.dart';
 import 'dart:async';
 
@@ -9,11 +8,9 @@ import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'fixtures/mock_data.dart';
 import 'test_overrides.dart';
 
 void main() {
@@ -138,10 +135,13 @@ void main() {
     expect(find.byType(SplashScreen), findsOneWidget);
   });
 
-  testWidgets('theme switch keeps current settings route open', (tester) async {
+  testWidgets('settings route no longer exposes dark theme controls', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({
       'auth.tokens':
           '{"accessToken":"access-token","refreshToken":"refresh-token"}',
+      'ui.dark_mode': true,
     });
     final preferences = await SharedPreferences.getInstance();
 
@@ -169,22 +169,15 @@ void main() {
     expect(find.text('Настройки аккаунта'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('Тёмная тема'),
+      find.text('Удаление аккаунта'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
 
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(MaterialApp)),
-    );
-    container.read(appThemeModeProvider.notifier).syncFromSettings(
-          mockUserSettingsData.copyWith(darkMode: true),
-        );
-    await tester.pumpAndSettle();
-
     expect(router.routeInformationProvider.value.uri.path, '/settings');
-    expect(find.text('Тёмная тема'), findsOneWidget);
+    expect(find.text('Внешний вид'), findsNothing);
+    expect(find.text('Тёмная тема'), findsNothing);
     expect(find.text('Город дышит —'), findsNothing);
   });
 }

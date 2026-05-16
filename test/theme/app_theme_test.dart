@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../test_overrides.dart';
 
 void main() {
-  testWidgets('root uses dark theme from stored preference', (
+  testWidgets('root ignores removed dark theme preference', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({'ui.dark_mode': true});
@@ -25,6 +25,6 @@ void main() {
     await tester.pumpAndSettle();
 
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
-    expect(app.themeMode, ThemeMode.dark);
+    expect(app.themeMode, ThemeMode.light);
   });
 }

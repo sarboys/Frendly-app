@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class PerksScreen extends ConsumerStatefulWidget {
   const PerksScreen({super.key});
@@ -18,7 +19,7 @@ class PerksScreen extends ConsumerStatefulWidget {
 }
 
 class _PerksScreenState extends ConsumerState<PerksScreen> {
-  final _redeemed = <String>{};
+  final _opened = <String>{};
   String _category = 'all';
 
   @override
@@ -26,23 +27,27 @@ class _PerksScreenState extends ConsumerState<PerksScreen> {
     final manualLocation = ref.watch(manualLocationProvider);
     final query = TomestoPromosQuery.fromManualLocation(manualLocation);
     final promosAsync = ref.watch(tomestoPromosProvider(query));
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return BbV5Scaffold(
       child: BbV5Page(
-        padding: const EdgeInsets.fromLTRB(20, 32, 20, 120),
+        padding: EdgeInsets.zero,
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(
-              child: BbV5TopBar(
-                kicker: query.city,
-                title: 'Промо',
-                accent: 'Tomesto',
-                onBack: () => context.pop(),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
+              sliver: SliverToBoxAdapter(
+                child: BbV5TopBar(
+                  kicker: query.city,
+                  title: 'Промо',
+                  accent: 'Tomesto',
+                  onBack: () => context.pop(),
+                ),
               ),
             ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(4, 20, 4, 16),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+              sliver: SliverToBoxAdapter(
                 child: Text(
                   'Акции заведений в выбранном городе. Категории берём из Tomesto мест.',
                   style: AppTextStyles.meta.copyWith(
@@ -52,26 +57,41 @@ class _PerksScreenState extends ConsumerState<PerksScreen> {
                 ),
               ),
             ),
-            ...promosAsync.when(
-              loading: () => [
-                const SliverToBoxAdapter(child: _PromoLoadingCard()),
-              ],
-              error: (_, __) => [
-                SliverToBoxAdapter(
-                  child: _PromoEmptyCard(
-                    title: 'Не удалось загрузить промо.',
-                    actionLabel: 'Повторить',
-                    onAction: () =>
-                        ref.invalidate(tomestoPromosProvider(query)),
+            ..._withPagePadding(
+              promosAsync.when(
+                loading: () => [
+                  const SliverToBoxAdapter(child: _PromoLoadingCard()),
+                ],
+                error: (_, __) => [
+                  SliverToBoxAdapter(
+                    child: _PromoEmptyCard(
+                      title: 'Не удалось загрузить промо.',
+                      actionLabel: 'Повторить',
+                      onAction: () =>
+                          ref.invalidate(tomestoPromosProvider(query)),
+                    ),
                   ),
-                ),
-              ],
-              data: (promos) => _buildPromoSlivers(promos, query.city),
+                ],
+                data: (promos) => _buildPromoSlivers(promos, query.city),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: SizedBox(height: 120 + bottomInset),
             ),
           ],
         ),
       ),
     );
+  }
+
+  List<Widget> _withPagePadding(List<Widget> slivers) {
+    return [
+      for (final sliver in slivers)
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          sliver: sliver,
+        ),
+    ];
   }
 
   List<Widget> _buildPromoSlivers(
@@ -169,15 +189,12 @@ class _PerksScreenState extends ConsumerState<PerksScreen> {
             return _PromoTicket(
               promo: promo,
               category: category,
-              redeemed: _redeemed.contains(promo.id),
-              onRedeem: () {
-                final title = cleanTomestoPromoTitle(promo.title);
+              opened: _opened.contains(promo.id),
+              onOpen: () async {
                 setState(() {
-                  _redeemed.add(promo.id);
+                  _opened.add(promo.id);
                 });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$title активировано')),
-                );
+                await _openPromoUrl(context, promo);
               },
             );
           },
@@ -186,6 +203,27 @@ class _PerksScreenState extends ConsumerState<PerksScreen> {
       ),
       const SliverToBoxAdapter(child: SizedBox(height: 18)),
     ];
+  }
+
+  Future<void> _openPromoUrl(
+    BuildContext context,
+    BackendPlacePromoListItem promo,
+  ) async {
+    final rawUrl =
+        promo.placeBookingUrl ?? promo.bookingUrl ?? promo.sourceUrl ?? '';
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null || !uri.hasScheme) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('У этой акции пока нет ссылки')),
+      );
+      return;
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось открыть ссылку')),
+      );
+    }
   }
 }
 
@@ -250,14 +288,14 @@ class _PromoTicket extends StatelessWidget {
   const _PromoTicket({
     required this.promo,
     required this.category,
-    required this.redeemed,
-    required this.onRedeem,
+    required this.opened,
+    required this.onOpen,
   });
 
   final BackendPlacePromoListItem promo;
   final _PromoCategory category;
-  final bool redeemed;
-  final VoidCallback onRedeem;
+  final bool opened;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -273,6 +311,9 @@ class _PromoTicket extends StatelessWidget {
         '${promo.distanceKm!.toStringAsFixed(1)} км',
       if ((promo.provider ?? '').trim().isNotEmpty) promo.provider!.trim(),
     ].join(' · ');
+    final hasBooking =
+        (promo.placeBookingUrl ?? promo.bookingUrl ?? '').trim().isNotEmpty;
+    final hasAnyUrl = hasBooking || (promo.sourceUrl ?? '').trim().isNotEmpty;
 
     return BbV5Card(
       radius: 24,
@@ -395,7 +436,7 @@ class _PromoTicket extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: redeemed
+                  color: opened
                       ? BbV5Colors.brandSoft.withValues(alpha: 0.35)
                       : Colors.transparent,
                 ),
@@ -416,7 +457,7 @@ class _PromoTicket extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (redeemed)
+                    if (opened)
                       Row(
                         children: [
                           const Icon(
@@ -426,7 +467,7 @@ class _PromoTicket extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            'Активировано',
+                            'Открыто',
                             style: AppTextStyles.caption.copyWith(
                               fontFamily: 'Sora',
                               fontSize: 11.5,
@@ -439,14 +480,16 @@ class _PromoTicket extends StatelessWidget {
                       )
                     else
                       BbV5PillButton(
-                        label: 'Активировать',
-                        icon: LucideIcons.gift,
+                        label: hasBooking ? 'Забронировать' : 'Открыть',
+                        icon: hasBooking
+                            ? LucideIcons.calendar_check
+                            : LucideIcons.external_link,
                         dark: true,
                         height: 32,
                         fontSize: 11,
                         iconSize: 12,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
-                        onPressed: onRedeem,
+                        onPressed: hasAnyUrl ? onOpen : null,
                       ),
                   ],
                 ),

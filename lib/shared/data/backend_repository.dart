@@ -13,6 +13,7 @@ import 'package:big_break_mobile/shared/models/evening_route_template.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
 import 'package:big_break_mobile/shared/models/after_party_state.dart';
 import 'package:big_break_mobile/shared/models/dating_profile.dart';
+import 'package:big_break_mobile/shared/models/frendly_season.dart';
 import 'package:big_break_mobile/shared/models/create_event_route.dart';
 import 'package:big_break_mobile/shared/models/host_dashboard.dart';
 import 'package:big_break_mobile/shared/models/live_meetup.dart';
@@ -548,6 +549,64 @@ class BackendRepository {
     return fetchProfile();
   }
 
+  Future<FrendlySeasonData> fetchFrendlySeason({
+    CancelToken? cancelToken,
+  }) async {
+    final response = await dio.get<Map<String, dynamic>>(
+      '/profile/me/frendly-season',
+      cancelToken: cancelToken,
+    );
+    return FrendlySeasonData.fromJson(response.data!);
+  }
+
+  Future<FrendlySeasonClaimData> claimFrendlySeasonReward(
+    String rewardKey,
+  ) async {
+    final encoded = Uri.encodeComponent(rewardKey);
+    final response = await dio.post<Map<String, dynamic>>(
+      '/profile/me/frendly-season/rewards/$encoded/claim',
+    );
+    return FrendlySeasonClaimData.fromJson(response.data!);
+  }
+
+  Future<PaginatedResponse<FrendlyHistoryItemData>> fetchFrendlyHistory({
+    String? cursor,
+    int limit = 20,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await dio.get<Map<String, dynamic>>(
+      '/profile/me/frendly-history',
+      queryParameters: {
+        'limit': limit,
+        if (cursor != null) 'cursor': cursor,
+      },
+      cancelToken: cancelToken,
+    );
+    return PaginatedResponse.fromJson(
+      response.data!,
+      FrendlyHistoryItemData.fromJson,
+    );
+  }
+
+  Future<PaginatedResponse<FrendlyPersonData>> fetchFrendlyPeople({
+    String? cursor,
+    int limit = 20,
+    CancelToken? cancelToken,
+  }) async {
+    final response = await dio.get<Map<String, dynamic>>(
+      '/profile/me/frendly-people',
+      queryParameters: {
+        'limit': limit,
+        if (cursor != null) 'cursor': cursor,
+      },
+      cancelToken: cancelToken,
+    );
+    return PaginatedResponse.fromJson(
+      response.data!,
+      FrendlyPersonData.fromJson,
+    );
+  }
+
   Future<PublicShareLink> createPublicShare({
     required String targetType,
     required String targetId,
@@ -651,7 +710,6 @@ class BackendRepository {
         'meetupsLimit': limit,
         'routesLimit': limit,
         'afficheLimit': limit,
-        'postersLimit': 1,
         'eveningsLimit': 1,
       },
       cancelToken: cancelToken,
@@ -773,6 +831,10 @@ class BackendRepository {
   Future<PaginatedResponse<DatingProfileData>> fetchDatingDiscover({
     String? cursor,
     int limit = 20,
+    int? ageMin,
+    int? ageMax,
+    double? radiusKm,
+    List<String> interests = const [],
     CancelToken? cancelToken,
   }) async {
     final response = await dio.get<Map<String, dynamic>>(
@@ -780,6 +842,10 @@ class BackendRepository {
       queryParameters: {
         'limit': limit,
         if (cursor != null) 'cursor': cursor,
+        if (ageMin != null) 'ageMin': ageMin,
+        if (ageMax != null) 'ageMax': ageMax,
+        if (radiusKm != null) 'radiusKm': radiusKm,
+        if (interests.isNotEmpty) 'interests': interests.join(','),
       },
       cancelToken: cancelToken,
     );
@@ -1399,56 +1465,6 @@ class BackendRepository {
       },
     );
     return EveningPublishResult.fromJson(response.data!);
-  }
-
-  Future<Map<String, dynamic>> fetchEveningOptions({
-    CancelToken? cancelToken,
-  }) async {
-    final response = await dio.get<Map<String, dynamic>>(
-      '/evening/options',
-      options: Options(
-        connectTimeout: const Duration(seconds: 4),
-        receiveTimeout: const Duration(seconds: 6),
-      ),
-      cancelToken: cancelToken,
-    );
-    return response.data!;
-  }
-
-  Future<Map<String, dynamic>> resolveEveningRoute({
-    String? goal,
-    String? mood,
-    String? budget,
-    String? format,
-    String? area,
-    String? prompt,
-    int? stepCount,
-    String? city,
-    double? latitude,
-    double? longitude,
-    CancelToken? cancelToken,
-  }) async {
-    final response = await dio.post<Map<String, dynamic>>(
-      '/evening/routes/resolve',
-      data: {
-        if (goal != null && goal.isNotEmpty) 'goal': goal,
-        if (mood != null && mood.isNotEmpty) 'mood': mood,
-        if (budget != null && budget.isNotEmpty) 'budget': budget,
-        if (format != null && format.isNotEmpty) 'format': format,
-        if (area != null && area.isNotEmpty) 'area': area,
-        if (prompt != null && prompt.trim().isNotEmpty) 'prompt': prompt.trim(),
-        if (stepCount != null) 'stepCount': stepCount,
-        if (city != null && city.isNotEmpty) 'city': city,
-        if (latitude != null) 'latitude': latitude,
-        if (longitude != null) 'longitude': longitude,
-      },
-      options: Options(
-        connectTimeout: const Duration(seconds: 4),
-        receiveTimeout: const Duration(seconds: 6),
-      ),
-      cancelToken: cancelToken,
-    );
-    return response.data!;
   }
 
   Future<Map<String, dynamic>> createAiRouteDraft({

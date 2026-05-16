@@ -366,7 +366,7 @@ void main() {
     expect(find.byIcon(LucideIcons.ticket), findsWidgets);
   });
 
-  testWidgets('meetup chat members sheet opens following invite flow',
+  testWidgets('meetup chat members sheet stays open for multiple invites',
       (tester) async {
     late _FakeChatBackendRepository repository;
     await tester.pumpWidget(
@@ -383,6 +383,18 @@ void main() {
             online: true,
             verified: false,
             vibe: 'Спокойно',
+            avatarUrl: null,
+            inviteState: FollowingInviteState.available,
+          ),
+          FollowingPerson(
+            id: 'user-borya',
+            name: 'Боря',
+            age: null,
+            area: 'Чистые пруды',
+            common: ['джаз'],
+            online: false,
+            verified: false,
+            vibe: 'Активно',
             avatarUrl: null,
             inviteState: FollowingInviteState.available,
           ),
@@ -414,11 +426,18 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Пригласить друзей'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Пригласить'));
+    await tester.tap(find.text('Пригласить').first);
     await tester.pumpAndSettle();
 
     expect(repository.invitedUsers, ['event-1:user-anna']);
     expect(find.text('Приглашение отправлено'), findsOneWidget);
+
+    await tester.tap(find.text('Пригласить').last);
+    await tester.pumpAndSettle();
+
+    expect(
+        repository.invitedUsers, ['event-1:user-anna', 'event-1:user-borya']);
+    expect(find.text('Приглашение отправлено'), findsNWidgets(2));
   });
 
   testWidgets('soon evening meetup chat renders live start banner',

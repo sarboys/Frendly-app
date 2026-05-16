@@ -14,19 +14,40 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 final datingActionTombstonesProvider =
     StateProvider<Map<String, String>>((ref) => const {});
 
+final datingDiscoverFiltersProvider =
+    StateProvider.autoDispose<DatingDiscoverFilters>(
+  (ref) => const DatingDiscoverFilters(
+    ageMin: 22,
+    ageMax: 35,
+    radiusKm: 10,
+  ),
+);
+
 final datingDiscoverProvider =
     FutureProvider.autoDispose<List<DatingProfileData>>((ref) async {
-  return _fetchDatingDiscover(ref, limit: 20, allowPeopleFallback: true);
+  final filters = ref.watch(datingDiscoverFiltersProvider);
+  return _fetchDatingDiscover(
+    ref,
+    limit: 20,
+    filters: filters,
+    allowPeopleFallback: true,
+  );
 });
 
 final datingHomePreviewProvider =
     FutureProvider.autoDispose<List<DatingProfileData>>((ref) async {
-  return _fetchDatingDiscover(ref, limit: 4, allowPeopleFallback: false);
+  return _fetchDatingDiscover(
+    ref,
+    limit: 4,
+    filters: const DatingDiscoverFilters(),
+    allowPeopleFallback: false,
+  );
 });
 
 Future<List<DatingProfileData>> _fetchDatingDiscover(
   Ref ref, {
   required int limit,
+  required DatingDiscoverFilters filters,
   required bool allowPeopleFallback,
 }) async {
   final authTokens = ref.watch(authTokensProvider);
@@ -44,12 +65,19 @@ Future<List<DatingProfileData>> _fetchDatingDiscover(
       ref,
       cacheKey: AppCacheKey.build(
         path: '/dating/discover',
-        query: {'limit': limit},
+        query: filters.toQuery(limit: limit),
       ),
       networkFetch: () async {
         try {
           return await repository
-              .fetchDatingDiscover(limit: limit, cancelToken: cancelToken)
+              .fetchDatingDiscover(
+                limit: limit,
+                ageMin: filters.ageMin,
+                ageMax: filters.ageMax,
+                radiusKm: filters.radiusKm,
+                interests: filters.interests,
+                cancelToken: cancelToken,
+              )
               .then((value) => value.items);
         } catch (_) {
           if (cancelToken.isCancelled) {
@@ -71,6 +99,30 @@ Future<List<DatingProfileData>> _fetchDatingDiscover(
     return _filterDatingTombstones(ref, profiles);
   } catch (_) {
     return const [];
+  }
+}
+
+class DatingDiscoverFilters {
+  const DatingDiscoverFilters({
+    this.ageMin,
+    this.ageMax,
+    this.radiusKm,
+    this.interests = const [],
+  });
+
+  final int? ageMin;
+  final int? ageMax;
+  final double? radiusKm;
+  final List<String> interests;
+
+  Map<String, Object> toQuery({required int limit}) {
+    return {
+      'limit': limit,
+      if (ageMin != null) 'ageMin': ageMin!,
+      if (ageMax != null) 'ageMax': ageMax!,
+      if (radiusKm != null) 'radiusKm': radiusKm!,
+      if (interests.isNotEmpty) 'interests': interests.join(','),
+    };
   }
 }
 
