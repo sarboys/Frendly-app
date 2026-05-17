@@ -307,6 +307,14 @@ void main() {
     final sendFinder = find.byKey(const Key('bb-composer-send-button'));
     expect(sendFinder, findsOneWidget);
     expect(inputRect.contains(tester.getCenter(sendFinder)), isTrue);
+    final typedEditableRect = tester.getRect(find.byType(EditableText));
+    final typedInputRect = tester.getRect(inputFinder);
+    expect(
+      (typedEditableRect.center.dy - typedInputRect.center.dy).abs(),
+      lessThan(0.5),
+    );
+    expect(typedEditableRect.top - typedInputRect.top, greaterThan(8));
+    expect(typedInputRect.bottom - typedEditableRect.bottom, greaterThan(8));
   });
 
   testWidgets('composer preserves waveform returned by recorder service', (

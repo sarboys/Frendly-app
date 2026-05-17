@@ -1,7 +1,10 @@
 import 'package:big_break_mobile/features/edit_profile/presentation/edit_profile_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
+import 'package:big_break_mobile/shared/data/backend_repository.dart';
+import 'package:big_break_mobile/shared/models/onboarding_data.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -161,4 +164,100 @@ void main() {
 
     expect(tester.getSize(interestsWrap).width, lessThanOrEqualTo(350));
   });
+
+  testWidgets('edit profile saves selected chips into local profile state',
+      (tester) async {
+    late _RecordingEditProfileRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        ...buildTestOverrides(),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _RecordingEditProfileRepository(ref: ref);
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: EditProfileScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Нетворк'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Нетворк'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Музыка'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Музыка'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Сохранить профиль'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Сохранить профиль'));
+    await tester.pumpAndSettle();
+
+    expect(
+      repository.savedOnboarding?.intent,
+      'dating,friendship,network',
+    );
+    expect(repository.savedOnboarding?.interests, contains('Музыка'));
+    expect(container.read(onboardingLocalStateProvider)?.intent,
+        'dating,friendship,network');
+    expect(container.read(onboardingLocalStateProvider)?.interests,
+        contains('Музыка'));
+    expect(container.read(profileLocalStateProvider)?.intent,
+        ['Свидания', 'Друзья', 'Нетворк']);
+  });
+}
+
+class _RecordingEditProfileRepository extends BackendRepository {
+  _RecordingEditProfileRepository({required super.ref}) : super(dio: Dio());
+
+  Map<String, dynamic>? updatedProfile;
+  OnboardingData? savedOnboarding;
+
+  @override
+  Future<ProfileData> updateProfile(Map<String, dynamic> payload) async {
+    updatedProfile = payload;
+    return ProfileData(
+      id: 'user-me',
+      displayName: payload['displayName'] as String,
+      verified: true,
+      online: true,
+      age: payload['age'] as int?,
+      city: payload['city'] as String?,
+      area: payload['area'] as String?,
+      bio: payload['bio'] as String?,
+      vibe: payload['vibe'] as String?,
+      rating: 4.8,
+      meetupCount: 12,
+      avatarUrl: null,
+      interests: const ['Кофе', 'Бары', 'Настолки'],
+      intent: const ['Свидания', 'Друзья'],
+    );
+  }
+
+  @override
+  Future<OnboardingData> saveOnboarding(OnboardingData data) async {
+    savedOnboarding = data;
+    return data;
+  }
 }

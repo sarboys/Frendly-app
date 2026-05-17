@@ -11,6 +11,7 @@ class PersonalChat {
     this.lastMessageAt,
     this.lastMessageId,
     this.peerUserId,
+    this.peerGender,
     this.avatarUrl,
     this.fromMeetup,
     this.isPinned = false,
@@ -18,6 +19,7 @@ class PersonalChat {
 
   final String id;
   final String? peerUserId;
+  final String? peerGender;
   final String? avatarUrl;
   final String name;
   final String? lastMessageId;
@@ -33,6 +35,7 @@ class PersonalChat {
     return PersonalChat(
       id: json['id'] as String,
       peerUserId: json['peerUserId'] as String?,
+      peerGender: json['peerGender'] as String?,
       avatarUrl: resolveBackendUrl(json['avatarUrl'] as String?),
       name: json['name'] as String? ?? '',
       lastMessageId: json['lastMessageId'] as String?,
@@ -49,6 +52,7 @@ class PersonalChat {
   PersonalChat copyWith({
     String? id,
     String? peerUserId,
+    String? peerGender,
     String? avatarUrl,
     String? name,
     String? lastMessageId,
@@ -64,6 +68,7 @@ class PersonalChat {
     return PersonalChat(
       id: id ?? this.id,
       peerUserId: peerUserId ?? this.peerUserId,
+      peerGender: peerGender ?? this.peerGender,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       name: name ?? this.name,
       lastMessageId: lastMessageId ?? this.lastMessageId,

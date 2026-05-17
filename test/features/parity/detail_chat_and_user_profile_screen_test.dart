@@ -15,6 +15,7 @@ import 'package:big_break_mobile/shared/models/message.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
 import 'package:big_break_mobile/shared/models/person_summary.dart';
+import 'package:big_break_mobile/shared/models/personal_chat.dart';
 import 'package:big_break_mobile/shared/models/profile.dart';
 import 'package:big_break_mobile/shared/widgets/bb_chat_bubble.dart';
 import 'package:big_break_mobile/shared/widgets/bb_social_actions.dart';
@@ -767,6 +768,102 @@ void main() {
 
     expect(find.text('Выбрать'), findsNothing);
     expect(find.textContaining('прочитано'), findsNothing);
+  });
+
+  testWidgets('personal chat hides date invite for same gender',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const PersonalChatScreen(chatId: 'p-same'),
+        withChatOverrides: true,
+        extraOverrides: [
+          profileProvider.overrideWith(
+            (ref) async => const ProfileData(
+              id: 'user-me',
+              displayName: 'Никита',
+              verified: true,
+              online: true,
+              age: 28,
+              gender: 'male',
+              city: 'Москва',
+              area: 'Центр',
+              bio: null,
+              vibe: 'Спокойно',
+              rating: 4.8,
+              meetupCount: 12,
+              avatarUrl: null,
+              interests: [],
+              intent: [],
+            ),
+          ),
+          personalChatsProvider.overrideWith(
+            (ref) async => const [
+              PersonalChat(
+                id: 'p-same',
+                peerUserId: 'user-mark',
+                peerGender: 'male',
+                name: 'Марк',
+                lastMessage: 'Привет',
+                lastTime: 'сейчас',
+                unread: 0,
+                online: true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Позвать на свидание'), findsNothing);
+  });
+
+  testWidgets('personal chat shows date invite for opposite gender',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const PersonalChatScreen(chatId: 'p-opposite'),
+        withChatOverrides: true,
+        extraOverrides: [
+          profileProvider.overrideWith(
+            (ref) async => const ProfileData(
+              id: 'user-me',
+              displayName: 'Никита',
+              verified: true,
+              online: true,
+              age: 28,
+              gender: 'male',
+              city: 'Москва',
+              area: 'Центр',
+              bio: null,
+              vibe: 'Спокойно',
+              rating: 4.8,
+              meetupCount: 12,
+              avatarUrl: null,
+              interests: [],
+              intent: [],
+            ),
+          ),
+          personalChatsProvider.overrideWith(
+            (ref) async => const [
+              PersonalChat(
+                id: 'p-opposite',
+                peerUserId: 'user-anya',
+                peerGender: 'female',
+                name: 'Аня',
+                lastMessage: 'Привет',
+                lastTime: 'сейчас',
+                unread: 0,
+                online: true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Позвать на свидание'), findsOneWidget);
   });
 
   testWidgets('incoming direct message author action opens public profile',

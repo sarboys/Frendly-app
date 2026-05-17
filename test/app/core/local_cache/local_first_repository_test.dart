@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
 import 'package:big_break_mobile/app/core/local_cache/app_cache_policy.dart';
 import 'package:big_break_mobile/app/core/local_cache/app_local_cache_store.dart';
@@ -150,5 +152,44 @@ void main() {
     expect(result.data, {'name': 'network'});
     expect(result.fromCache, isFalse);
     expect(result.refresh, isNull);
+  });
+
+  test('does not rewrite a key after namespace is cleared', () async {
+    await store.write(
+      userScope: user,
+      namespace: AppCacheNamespace.notifications,
+      cacheKey: 'list',
+      payloadJson: '{"value":"cached"}',
+      policy: policy,
+    );
+    final completer = Completer<Map<String, dynamic>>();
+
+    final result = await repository.fetch<Map<String, dynamic>>(
+      userScope: user,
+      namespace: AppCacheNamespace.notifications,
+      cacheKey: 'list',
+      policy: policy,
+      networkFetch: () => completer.future,
+      fromJson: (json) => Map<String, dynamic>.from(json as Map),
+      toJson: (value) => value,
+    );
+
+    expect(result.data, {'value': 'cached'});
+
+    await repository.deleteNamespace(
+      userScope: user,
+      namespace: AppCacheNamespace.notifications,
+    );
+    completer.complete({'value': 'stale-refresh'});
+    await result.refresh;
+
+    expect(
+      await store.readFresh(
+        userScope: user,
+        namespace: AppCacheNamespace.notifications,
+        cacheKey: 'list',
+      ),
+      isNull,
+    );
   });
 }

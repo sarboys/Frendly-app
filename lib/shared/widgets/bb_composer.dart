@@ -613,9 +613,10 @@ class _BbComposerState extends State<BbComposer> {
                         fontSize: 13.5,
                       ),
                       border: InputBorder.none,
-                      isCollapsed: true,
                       isDense: true,
-                      contentPadding: EdgeInsets.zero,
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 11,
+                      ),
                     ),
                     style: AppTextStyles.body.copyWith(
                       color: BbV5Colors.ink,

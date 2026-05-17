@@ -106,6 +106,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       if (!mounted) {
                         return;
                       }
+                      await clearEventListLocalFirstCaches(ref);
                       container.invalidate(eventDetailProvider(event.id));
                       container.invalidate(eventsProvider('nearby'));
                       container.invalidate(mapEventsProvider);
@@ -169,6 +170,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           if (!mounted) {
                             return;
                           }
+                          await clearEventListLocalFirstCaches(ref);
                           container.invalidate(eventDetailProvider(event.id));
                           container.invalidate(eventsProvider('nearby'));
                           container.invalidate(mapEventsProvider);

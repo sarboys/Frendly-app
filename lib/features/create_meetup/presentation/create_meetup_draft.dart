@@ -223,6 +223,7 @@ Future<EventDetail> submitCreateMeetupDraft(
     idempotencyKey: draft.idempotencyKey,
   );
 
+  await clearEventListLocalFirstCaches(ref);
   ref.invalidate(eventsProvider('nearby'));
   ref.invalidate(mapEventsProvider);
   ref.invalidate(datingDiscoverProvider);

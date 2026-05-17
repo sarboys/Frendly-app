@@ -1534,6 +1534,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
       if (!mounted) {
         return;
       }
+      await clearEventListLocalFirstCaches(ref);
       ref.invalidate(eventDetailProvider(widget.editEventId!));
       ref.invalidate(eventsProvider('nearby'));
       ref.invalidate(mapEventsProvider);
@@ -1628,6 +1629,7 @@ class _CreateMeetupScreenState extends ConsumerState<CreateMeetupScreen> {
       if (!mounted) {
         return;
       }
+      await clearEventListLocalFirstCaches(ref);
       ref.invalidate(eventsProvider('nearby'));
       ref.invalidate(mapEventsProvider);
       ref.invalidate(datingDiscoverProvider);

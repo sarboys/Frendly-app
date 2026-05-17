@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:big_break_mobile/app/core/device/app_permission_service.dart';
 import 'package:big_break_mobile/app/core/device/app_push_token_service.dart';
+import 'package:big_break_mobile/app/core/local_cache/app_cache_policy.dart';
 import 'package:big_break_mobile/app/core/providers/core_providers.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/session/app_session_controller.dart';
@@ -217,6 +218,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   void _saveSettings(UserSettingsData next) {
     final normalized = _withoutDarkMode(next);
+    ref.read(settingsLocalStateProvider.notifier).state = normalized;
+    unawaited(
+      clearWidgetLocalFirstCacheNamespace(ref, AppCacheNamespace.settings),
+    );
     setState(() {
       _settings = normalized;
     });
@@ -242,6 +247,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         if (!mounted) {
           return;
         }
+        ref.read(settingsLocalStateProvider.notifier).state = lastSavedSettings;
+        await clearWidgetLocalFirstCacheNamespace(
+          ref,
+          AppCacheNamespace.settings,
+        );
       }
 
       if (!mounted || lastSavedSettings == null) {
@@ -259,9 +269,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
       final fallback = _lastConfirmedSettings;
       if (fallback != null) {
+        ref.read(settingsLocalStateProvider.notifier).state = fallback;
         setState(() {
           _settings = fallback;
         });
+      } else {
+        ref.read(settingsLocalStateProvider.notifier).state = null;
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Не получилось сохранить настройки')),

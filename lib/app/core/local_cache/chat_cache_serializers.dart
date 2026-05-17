@@ -50,6 +50,7 @@ Map<String, dynamic> personalChatToCacheJson(PersonalChat chat) {
   return {
     'id': chat.id,
     'peerUserId': chat.peerUserId,
+    'peerGender': chat.peerGender,
     'name': chat.name,
     'lastMessageId': chat.lastMessageId,
     'lastMessage': chat.lastMessage,

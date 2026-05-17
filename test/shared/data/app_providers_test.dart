@@ -196,6 +196,41 @@ class _ProfileWithFailingOnboardingRepository extends BackendRepository {
   }
 }
 
+class _ProfileSocialCacheRepository extends BackendRepository {
+  _ProfileSocialCacheRepository({
+    required super.ref,
+    required super.dio,
+  });
+
+  var fetchPersonProfileCalls = 0;
+  var setFollowCalls = 0;
+
+  @override
+  Future<ProfileData> fetchPersonProfile(
+    String userId, {
+    CancelToken? cancelToken,
+  }) async {
+    fetchPersonProfileCalls += 1;
+    throw StateError('public profile should stay cached in this test');
+  }
+
+  @override
+  Future<ProfileSocialData> setProfileFollow(
+    String userId, {
+    required bool follow,
+  }) async {
+    setFollowCalls += 1;
+    return ProfileSocialData(
+      followers: follow ? 11 : 10,
+      likes: 3,
+      superLikes: 1,
+      iFollow: follow,
+      iLike: false,
+      iSuper: false,
+    );
+  }
+}
+
 class _MapEventsRepository extends BackendRepository {
   _MapEventsRepository({
     required super.ref,
@@ -743,6 +778,143 @@ void main() {
 
     expect(result.photos, merged);
     expect(result.avatarUrl, 'https://cdn.example.com/ph1.jpg');
+  });
+
+  test('clearLocalFirstCacheNamespaceFromContainer removes fresh cache entries',
+      () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    final userScope = AppCacheUserScope.user('user-me');
+    final notificationsKey = AppCacheKey.build(
+      path: '/notifications',
+      query: const {'limit': 20},
+    );
+    final unreadKey = AppCacheKey.build(path: '/notifications/unread-count');
+    await store.write(
+      userScope: userScope,
+      namespace: AppCacheNamespace.notifications,
+      cacheKey: notificationsKey,
+      payloadJson: '[]',
+      policy: AppCachePolicies.notifications,
+    );
+    await store.write(
+      userScope: userScope,
+      namespace: AppCacheNamespace.notifications,
+      cacheKey: unreadKey,
+      payloadJson: '3',
+      policy: AppCachePolicies.notifications,
+    );
+
+    final container = ProviderContainer(
+      overrides: [
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await clearLocalFirstCacheNamespaceFromContainer(
+      container,
+      AppCacheNamespace.notifications,
+    );
+
+    expect(
+      await store.readFresh(
+        userScope: userScope,
+        namespace: AppCacheNamespace.notifications,
+        cacheKey: notificationsKey,
+      ),
+      isNull,
+    );
+    expect(
+      await store.readFresh(
+        userScope: userScope,
+        namespace: AppCacheNamespace.notifications,
+        cacheKey: unreadKey,
+      ),
+      isNull,
+    );
+  });
+
+  test('profile social update drops cached public profile', () async {
+    final db = AppLocalDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final store = AppLocalCacheStore(db);
+    final userScope = AppCacheUserScope.user('user-me');
+    final cacheKey = AppCacheKey.build(path: '/people/peer');
+    await store.write(
+      userScope: userScope,
+      namespace: AppCacheNamespace.publicProfile,
+      cacheKey: cacheKey,
+      payloadJson: jsonEncode({
+        'id': 'peer',
+        'displayName': 'Peer',
+        'verified': false,
+        'frendlyPlus': false,
+        'online': true,
+        'age': 25,
+        'gender': 'female',
+        'city': 'Москва',
+        'area': 'Центр',
+        'bio': 'bio',
+        'vibe': 'calm',
+        'rating': 0,
+        'meetupCount': 0,
+        'avatarUrl': null,
+        'interests': const [],
+        'intent': const [],
+        'photos': const [],
+        'social': const {
+          'followers': 10,
+          'likes': 3,
+          'superLikes': 1,
+          'iFollow': false,
+          'iLike': false,
+          'iSuper': false,
+        },
+      }),
+      policy: AppCachePolicies.publicProfile,
+    );
+
+    late _ProfileSocialCacheRepository repository;
+    final container = ProviderContainer(
+      overrides: [
+        authBootstrapProvider.overrideWith((ref) async {}),
+        currentUserIdProvider.overrideWith((ref) => 'user-me'),
+        localFirstRepositoryProvider.overrideWithValue(
+          LocalFirstRepository(store),
+        ),
+        backendRepositoryProvider.overrideWith((ref) {
+          repository = _ProfileSocialCacheRepository(ref: ref, dio: Dio());
+          return repository;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+    final profileSubscription = container.listen(
+      personProfileProvider('peer'),
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(profileSubscription.close);
+
+    final profile = await container.read(personProfileProvider('peer').future);
+    expect(profile.social.iFollow, isFalse);
+
+    await container.read(profileSocialProvider('peer').notifier).toggleFollow();
+
+    expect(repository.setFollowCalls, 1);
+    expect(
+      await store.readFresh(
+        userScope: userScope,
+        namespace: AppCacheNamespace.publicProfile,
+        cacheKey: cacheKey,
+      ),
+      isNull,
+    );
   });
 
   test('upsertMeetupChatSummary updates chat preview and moves it to top', () {

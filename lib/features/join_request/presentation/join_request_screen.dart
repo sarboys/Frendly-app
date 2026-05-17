@@ -302,6 +302,7 @@ class _JoinRequestScreenState extends ConsumerState<JoinRequestScreen> {
                                   if (!mounted) {
                                     return;
                                   }
+                                  await clearEventListLocalFirstCaches(ref);
                                   container.invalidate(
                                     eventDetailProvider(eventId),
                                   );

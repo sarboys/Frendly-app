@@ -104,6 +104,7 @@ class AppSessionController {
     final permissionPreferences = ref.read(appPermissionPreferencesProvider);
     final profilePhotoDraft = ref.read(profilePhotoDraftProvider.notifier);
     final profilePhotoPreview = ref.read(profilePhotoPreviewProvider.notifier);
+    final profileLocalState = ref.read(profileLocalStateProvider.notifier);
     final authBootstrapProfile =
         ref.read(authBootstrapProfileProvider.notifier);
     final onboardingLocalState =
@@ -139,6 +140,7 @@ class AppSessionController {
 
     profilePhotoDraft.state = const [];
     profilePhotoPreview.state = const {};
+    profileLocalState.state = null;
     authBootstrapProfile.state = null;
     onboardingLocalState.state = null;
     meetupChatsLocalState.state = null;
@@ -170,6 +172,7 @@ class AppSessionController {
     ref.invalidate(afterPartyProvider);
     ref.invalidate(hostDashboardProvider);
     ref.invalidate(hostEventProvider);
+    ref.invalidate(settingsLocalStateProvider);
     ref.invalidate(settingsProvider);
     ref.invalidate(verificationProvider);
     ref.invalidate(safetyHubProvider);

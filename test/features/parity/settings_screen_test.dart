@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:big_break_mobile/features/settings/presentation/settings_screen.dart';
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
@@ -7,7 +9,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'dart:async';
 
 import '../../test_overrides.dart';
 
@@ -134,20 +135,24 @@ void main() {
   testWidgets('settings notification row can save from row tap',
       (tester) async {
     UserSettingsData? capturedSettings;
+    final container = ProviderContainer(
+      overrides: [
+        ...buildTestOverrides(),
+        backendRepositoryProvider.overrideWith(
+          (ref) => _RecordingBackendRepository(
+            ref: ref,
+            onUpdate: (settings) {
+              capturedSettings = settings;
+            },
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
 
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          ...buildTestOverrides(),
-          backendRepositoryProvider.overrideWith(
-            (ref) => _RecordingBackendRepository(
-              ref: ref,
-              onUpdate: (settings) {
-                capturedSettings = settings;
-              },
-            ),
-          ),
-        ],
+      UncontrolledProviderScope(
+        container: container,
         child: const MaterialApp(
           home: SettingsScreen(),
         ),
@@ -165,6 +170,7 @@ void main() {
 
     expect(capturedSettings, isNotNull);
     expect(capturedSettings!.allowPush, isFalse);
+    expect(container.read(settingsLocalStateProvider)!.allowPush, isFalse);
   });
 
   testWidgets('settings hides internal testing access controls',

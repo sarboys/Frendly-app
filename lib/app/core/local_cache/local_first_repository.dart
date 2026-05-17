@@ -25,9 +25,41 @@ class LocalFirstResult<T> {
 }
 
 class LocalFirstRepository {
-  const LocalFirstRepository(this._store);
+  LocalFirstRepository(this._store);
 
   final AppLocalCacheStore _store;
+  final _invalidationVersions = <String, int>{};
+
+  Future<void> deleteKey({
+    required AppCacheUserScope userScope,
+    required AppCacheNamespace namespace,
+    required String cacheKey,
+  }) async {
+    _bumpInvalidationVersion(
+      userScope: userScope,
+      namespace: namespace,
+      cacheKey: cacheKey,
+    );
+    await _store.deleteKey(
+      userScope: userScope,
+      namespace: namespace,
+      cacheKey: cacheKey,
+    );
+  }
+
+  Future<void> deleteNamespace({
+    required AppCacheUserScope userScope,
+    required AppCacheNamespace namespace,
+  }) async {
+    _bumpInvalidationVersion(
+      userScope: userScope,
+      namespace: namespace,
+    );
+    await _store.deleteNamespace(
+      userScope: userScope,
+      namespace: namespace,
+    );
+  }
 
   Future<LocalFirstResult<T>> fetch<T>({
     required AppCacheUserScope userScope,
@@ -39,6 +71,11 @@ class LocalFirstRepository {
     required LocalFirstJsonEncoder<T> toJson,
     bool forceRefresh = false,
   }) async {
+    final invalidationVersion = _invalidationVersion(
+      userScope: userScope,
+      namespace: namespace,
+      cacheKey: cacheKey,
+    );
     if (!forceRefresh) {
       final cached = await _store.readFresh(
         userScope: userScope,
@@ -60,6 +97,7 @@ class LocalFirstRepository {
               networkFetch: networkFetch,
               toJson: toJson,
               fallback: data,
+              invalidationVersion: invalidationVersion,
             ),
           );
         } catch (_) {
@@ -79,6 +117,7 @@ class LocalFirstRepository {
       policy: policy,
       networkFetch: networkFetch,
       toJson: toJson,
+      invalidationVersion: invalidationVersion,
     );
     return LocalFirstResult<T>(
       data: data,
@@ -95,6 +134,7 @@ class LocalFirstRepository {
     required LocalFirstNetworkFetch<T> networkFetch,
     required LocalFirstJsonEncoder<T> toJson,
     required T fallback,
+    required int invalidationVersion,
   }) async {
     try {
       return await _fetchAndWrite(
@@ -104,6 +144,7 @@ class LocalFirstRepository {
         policy: policy,
         networkFetch: networkFetch,
         toJson: toJson,
+        invalidationVersion: invalidationVersion,
       );
     } catch (_) {
       _store.metrics.increment(LocalCacheMetricNames.cacheRefreshFailure);
@@ -118,8 +159,17 @@ class LocalFirstRepository {
     required AppCachePolicy policy,
     required LocalFirstNetworkFetch<T> networkFetch,
     required LocalFirstJsonEncoder<T> toJson,
+    required int invalidationVersion,
   }) async {
     final data = await Future<T>.sync(networkFetch);
+    if (_invalidationVersion(
+          userScope: userScope,
+          namespace: namespace,
+          cacheKey: cacheKey,
+        ) !=
+        invalidationVersion) {
+      return data;
+    }
     await _store.write(
       userScope: userScope,
       namespace: namespace,
@@ -128,5 +178,46 @@ class LocalFirstRepository {
       policy: policy,
     );
     return data;
+  }
+
+  void _bumpInvalidationVersion({
+    required AppCacheUserScope userScope,
+    required AppCacheNamespace namespace,
+    String? cacheKey,
+  }) {
+    final key = _invalidationKey(
+      userScope: userScope,
+      namespace: namespace,
+      cacheKey: cacheKey,
+    );
+    _invalidationVersions[key] = (_invalidationVersions[key] ?? 0) + 1;
+  }
+
+  int _invalidationVersion({
+    required AppCacheUserScope userScope,
+    required AppCacheNamespace namespace,
+    required String cacheKey,
+  }) {
+    return (_invalidationVersions[
+                _invalidationKey(userScope: userScope, namespace: namespace)] ??
+            0) +
+        (_invalidationVersions[_invalidationKey(
+              userScope: userScope,
+              namespace: namespace,
+              cacheKey: cacheKey,
+            )] ??
+            0);
+  }
+
+  String _invalidationKey({
+    required AppCacheUserScope userScope,
+    required AppCacheNamespace namespace,
+    String? cacheKey,
+  }) {
+    final base = '${userScope.storageId}/${namespace.value}';
+    if (cacheKey == null) {
+      return base;
+    }
+    return '$base/$cacheKey';
   }
 }

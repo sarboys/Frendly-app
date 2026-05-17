@@ -82,6 +82,24 @@ void main() {
     expect(profile.intent, ['Нетворк']);
   });
 
+  test('profile maps saved multi intent labels', () {
+    final profile = ProfileData.fromProfileJson(
+      {
+        'id': 'user-me',
+        'displayName': 'Никита М',
+        'verified': true,
+        'online': true,
+        'rating': 4.8,
+        'meetupCount': 12,
+      },
+      onboardingJson: const {
+        'intent': 'dating,friendship,network',
+      },
+    );
+
+    expect(profile.intent, ['Свидания', 'Друзья', 'Нетворк']);
+  });
+
   test('profile photo returns image variant for requested usage', () {
     final photo = ProfilePhoto.fromJson({
       'id': 'ph1',

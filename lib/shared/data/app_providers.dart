@@ -83,11 +83,17 @@ final profilePhotoDraftProvider =
 final profilePhotoPreviewProvider =
     StateProvider<Map<String, Uint8List>>((ref) => const {});
 
+final profileLocalStateProvider = StateProvider<ProfileData?>((ref) => null);
+
 final profileProvider = FutureProvider<ProfileData>((ref) async {
+  final localProfile = ref.watch(profileLocalStateProvider);
   final authBootstrap = ref.watch(authBootstrapProvider.future);
   final draftPhotos = ref.watch(profilePhotoDraftProvider);
   final repository = ref.read(backendRepositoryProvider);
   final onboardingFuture = ref.watch(onboardingProvider.future);
+  if (localProfile != null) {
+    return mergeProfileDraftPhotos(localProfile, draftPhotos);
+  }
   final bootstrapProfileState = ref.read(authBootstrapProfileProvider.notifier);
   await authBootstrap;
   final bootstrapProfile = bootstrapProfileState.state;
@@ -313,6 +319,90 @@ Future<T> _fetchLocalFirst<T>(
     unawaited(refresh);
   }
   return result.data;
+}
+
+Future<void> clearLocalFirstCacheKey(
+  Ref ref, {
+  required AppCacheNamespace namespace,
+  required String cacheKey,
+}) async {
+  final repository = ref.read(localFirstRepositoryProvider);
+  if (repository == null) {
+    return;
+  }
+  await repository.deleteKey(
+    userScope: ref.read(appCacheUserScopeProvider),
+    namespace: namespace,
+    cacheKey: cacheKey,
+  );
+}
+
+Future<void> clearWidgetLocalFirstCacheKey(
+  WidgetRef ref, {
+  required AppCacheNamespace namespace,
+  required String cacheKey,
+}) async {
+  final repository = ref.read(localFirstRepositoryProvider);
+  if (repository == null) {
+    return;
+  }
+  await repository.deleteKey(
+    userScope: ref.read(appCacheUserScopeProvider),
+    namespace: namespace,
+    cacheKey: cacheKey,
+  );
+}
+
+Future<void> clearLocalFirstCacheNamespace(
+  Ref ref,
+  AppCacheNamespace namespace,
+) async {
+  final repository = ref.read(localFirstRepositoryProvider);
+  if (repository == null) {
+    return;
+  }
+  await repository.deleteNamespace(
+    userScope: ref.read(appCacheUserScopeProvider),
+    namespace: namespace,
+  );
+}
+
+Future<void> clearWidgetLocalFirstCacheNamespace(
+  WidgetRef ref,
+  AppCacheNamespace namespace,
+) async {
+  final repository = ref.read(localFirstRepositoryProvider);
+  if (repository == null) {
+    return;
+  }
+  await repository.deleteNamespace(
+    userScope: ref.read(appCacheUserScopeProvider),
+    namespace: namespace,
+  );
+}
+
+Future<void> clearLocalFirstCacheNamespaceFromContainer(
+  ProviderContainer container,
+  AppCacheNamespace namespace,
+) async {
+  final repository = container.read(localFirstRepositoryProvider);
+  if (repository == null) {
+    return;
+  }
+  await repository.deleteNamespace(
+    userScope: container.read(appCacheUserScopeProvider),
+    namespace: namespace,
+  );
+}
+
+Future<void> clearEventListLocalFirstCaches(WidgetRef ref) async {
+  await clearWidgetLocalFirstCacheNamespace(ref, AppCacheNamespace.meetups);
+  await clearWidgetLocalFirstCacheNamespace(ref, AppCacheNamespace.map);
+}
+
+Future<void> clearEventListLocalFirstCachesForRef(Ref ref) async {
+  await clearLocalFirstCacheNamespace(ref, AppCacheNamespace.meetups);
+  await clearLocalFirstCacheNamespace(ref, AppCacheNamespace.map);
 }
 
 List<T> _decodeCacheList<T>(
@@ -984,10 +1074,17 @@ final hostEventProvider = FutureProvider.autoDispose
   return repository.fetchHostEvent(eventId, cancelToken: cancelToken);
 });
 
+final settingsLocalStateProvider =
+    StateProvider<UserSettingsData?>((ref) => null);
+
 final settingsProvider = FutureProvider<UserSettingsData>((ref) async {
   final watchedTokens = ref.watch(authTokensProvider);
   if (watchedTokens == null) {
     return UserSettingsData.fallback;
+  }
+  final localSettings = ref.watch(settingsLocalStateProvider);
+  if (localSettings != null) {
+    return localSettings;
   }
   final repository = ref.read(backendRepositoryProvider);
   final authTokens = ref.read(authTokensProvider.notifier);
@@ -1242,6 +1339,11 @@ class ProfileSocialController
         return;
       }
       state = AsyncData(result);
+      await clearLocalFirstCacheKey(
+        ref,
+        namespace: AppCacheNamespace.publicProfile,
+        cacheKey: AppCacheKey.build(path: '/people/$userId'),
+      );
     } catch (error, stackTrace) {
       if (mounted) {
         state = previous;

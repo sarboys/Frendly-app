@@ -1,3 +1,4 @@
+import 'package:big_break_mobile/app/core/local_cache/app_cache_policy.dart';
 import 'package:big_break_mobile/app/navigation/app_routes.dart';
 import 'package:big_break_mobile/app/theme/app_spacing.dart';
 import 'package:big_break_mobile/app/theme/app_text_styles.dart';
@@ -174,7 +175,7 @@ class _NotificationsViewState extends ConsumerState<_NotificationsView> {
       if (!mounted) {
         return;
       }
-      _refreshNotificationsFromServer(refreshHandles);
+      await _refreshNotificationsFromServer(refreshHandles);
     } catch (_) {
       if (!mounted) {
         return;
@@ -195,9 +196,13 @@ class _NotificationsViewState extends ConsumerState<_NotificationsView> {
     );
   }
 
-  void _refreshNotificationsFromServer(
+  Future<void> _refreshNotificationsFromServer(
     _NotificationRefreshHandles refreshHandles,
-  ) {
+  ) async {
+    await clearLocalFirstCacheNamespaceFromContainer(
+      refreshHandles.container,
+      AppCacheNamespace.notifications,
+    );
     if (!mounted) {
       return;
     }
@@ -560,6 +565,8 @@ class _NotificationTileState extends ConsumerState<_NotificationTile> {
 
     final repository = ref.read(backendRepositoryProvider);
     final refreshHandles = _notificationRefreshHandles();
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
     setState(() {
       _submitting = true;
     });
@@ -569,7 +576,15 @@ class _NotificationTileState extends ConsumerState<_NotificationTile> {
       if (!mounted) {
         return;
       }
-      _refreshNotificationsFromServer(refreshHandles);
+      await _refreshNotificationsFromServer(refreshHandles);
+      await clearLocalFirstCacheNamespaceFromContainer(
+        refreshHandles.container,
+        AppCacheNamespace.meetups,
+      );
+      await clearLocalFirstCacheNamespaceFromContainer(
+        refreshHandles.container,
+        AppCacheNamespace.map,
+      );
       refreshHandles.container.invalidate(eventsProvider('nearby'));
       refreshHandles.container.invalidate(mapEventsProvider);
       refreshHandles.container.invalidate(eventDetailProvider(eventId));
@@ -577,16 +592,16 @@ class _NotificationTileState extends ConsumerState<_NotificationTile> {
       refreshHandles.container.invalidate(hostDashboardProvider);
       refreshHandles.container.invalidate(hostEventProvider(eventId));
       refreshHandles.container.invalidate(notificationUnreadCountProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Приглашение принято')),
       );
-      context.pushRoute(
-        AppRoute.eventDetail,
+      router.pushNamed(
+        AppRoute.eventDetail.name,
         pathParameters: {'eventId': eventId},
       );
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(content: Text('Не получилось принять приглашение')),
         );
       }
@@ -610,6 +625,7 @@ class _NotificationTileState extends ConsumerState<_NotificationTile> {
 
     final repository = ref.read(backendRepositoryProvider);
     final refreshHandles = _notificationRefreshHandles();
+    final messenger = ScaffoldMessenger.of(context);
     setState(() {
       _submitting = true;
     });
@@ -619,18 +635,18 @@ class _NotificationTileState extends ConsumerState<_NotificationTile> {
       if (!mounted) {
         return;
       }
-      _refreshNotificationsFromServer(refreshHandles);
+      await _refreshNotificationsFromServer(refreshHandles);
       refreshHandles.container.invalidate(eventDetailProvider(eventId));
       refreshHandles.container.invalidate(meetupChatsProvider);
       refreshHandles.container.invalidate(hostDashboardProvider);
       refreshHandles.container.invalidate(hostEventProvider(eventId));
       refreshHandles.container.invalidate(notificationUnreadCountProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Приглашение отклонено')),
       );
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(content: Text('Не получилось отклонить приглашение')),
         );
       }
@@ -671,7 +687,7 @@ class _NotificationTileState extends ConsumerState<_NotificationTile> {
       if (!mounted) {
         return;
       }
-      _refreshNotificationsFromServer(refreshHandles);
+      await _refreshNotificationsFromServer(refreshHandles);
     } catch (_) {
       if (!mounted) {
         return;
@@ -692,9 +708,13 @@ class _NotificationTileState extends ConsumerState<_NotificationTile> {
     );
   }
 
-  void _refreshNotificationsFromServer(
+  Future<void> _refreshNotificationsFromServer(
     _NotificationRefreshHandles refreshHandles,
-  ) {
+  ) async {
+    await clearLocalFirstCacheNamespaceFromContainer(
+      refreshHandles.container,
+      AppCacheNamespace.notifications,
+    );
     if (!mounted) {
       return;
     }

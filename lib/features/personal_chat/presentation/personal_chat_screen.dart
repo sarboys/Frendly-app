@@ -460,12 +460,14 @@ class _PersonalChatScreenState extends ConsumerState<PersonalChatScreen> {
     final colors = AppColors.of(context);
     final chat = ref.watch(personalChatSummaryProvider(widget.chatId));
     final messagesAsync = ref.watch(chatThreadProvider(widget.chatId));
+    final profile = ref.watch(profileProvider).valueOrNull;
     final subscription = ref.watch(subscriptionStateProvider).valueOrNull;
     final hasPremiumDating =
         subscription?.status == 'trial' || subscription?.status == 'active';
     final showDateInviteCta = hasPremiumDating &&
         (chat?.peerUserId?.isNotEmpty ?? false) &&
-        chat?.fromMeetup == null;
+        chat?.fromMeetup == null &&
+        _isOppositeBinaryGender(profile?.gender, chat?.peerGender);
 
     return ChatThreadScreen(
       header: Padding(
@@ -644,4 +646,9 @@ class _PersonalChatScreenState extends ConsumerState<PersonalChatScreen> {
 
 extension<T> on Iterable<T> {
   T? get firstOrNull => isEmpty ? null : first;
+}
+
+bool _isOppositeBinaryGender(String? currentGender, String? peerGender) {
+  return (currentGender == 'male' && peerGender == 'female') ||
+      (currentGender == 'female' && peerGender == 'male');
 }

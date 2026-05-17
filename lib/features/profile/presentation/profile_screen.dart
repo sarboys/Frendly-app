@@ -410,9 +410,8 @@ class _ProfileTrustBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: label == 'Verified'
-          ? 'Профиль верифицирован'
-          : 'Подписка Frendly+',
+      message:
+          label == 'Verified' ? 'Профиль верифицирован' : 'Подписка Frendly+',
       child: Container(
         height: 24,
         padding: const EdgeInsets.only(left: 7, right: 9),
@@ -594,7 +593,7 @@ class _ProfileQuickGrid extends ConsumerWidget {
         Row(
           children: [
             Expanded(
-              child: _ProfileQuickTile(
+              child: _ProfileFeatureCard(
                 icon: LucideIcons.crown,
                 title: 'Frendly+',
                 subtitle: 'Фильтры, лайки, закрытые вечера',
@@ -602,9 +601,9 @@ class _ProfileQuickGrid extends ConsumerWidget {
                 onTap: onPlus,
               ),
             ),
-            const SizedBox(width: AppSpacing.xs),
+            const SizedBox(width: 10),
             Expanded(
-              child: _ProfileQuickTile(
+              child: _ProfileFeatureCard(
                 icon: LucideIcons.wallet,
                 title: 'Wallet',
                 subtitle: '${_formatTokenBalance(balance)} токенов',
@@ -614,25 +613,24 @@ class _ProfileQuickGrid extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.xs),
+        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
-              child: _ProfileQuickTile(
+              child: _ProfileTrustButton(
                 icon: LucideIcons.badge_check,
-                title: 'Верификация',
-                subtitle: 'Быстрее проходят заявки',
-                tone: BbV5Colors.brand,
+                label: 'Верификация',
+                sub: 'Быстрее проходят заявки',
                 onTap: onVerification,
               ),
             ),
-            const SizedBox(width: AppSpacing.xs),
+            const SizedBox(width: 10),
             Expanded(
-              child: _ProfileQuickTile(
+              child: _ProfileTrustButton(
                 icon: LucideIcons.shield_alert,
-                title: 'SOS',
-                subtitle: 'Контакты и быстрый сигнал',
-                tone: const Color(0xFFB5443B),
+                label: 'SOS',
+                sub: 'Контакты и быстрый сигнал',
+                danger: true,
                 onTap: onSos,
               ),
             ),
@@ -643,10 +641,8 @@ class _ProfileQuickGrid extends ConsumerWidget {
   }
 }
 
-const _profileQuickTileMinHeight = 128.0;
-
-class _ProfileQuickTile extends StatelessWidget {
-  const _ProfileQuickTile({
+class _ProfileFeatureCard extends StatelessWidget {
+  const _ProfileFeatureCard({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -662,49 +658,123 @@ class _ProfileQuickTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: _profileQuickTileMinHeight),
-      child: BbV5Card(
-        radius: BbV5Radii.md,
-        padding: const EdgeInsets.all(16),
-        onTap: onTap,
+    return BbV5Card(
+      radius: 20,
+      padding: const EdgeInsets.all(14),
+      tint: tone.withValues(alpha: 0.55),
+      onTap: onTap,
+      child: SizedBox(
+        height: 96,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 40,
-              height: 40,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
-                color: tone.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-                border: Border.all(color: tone.withValues(alpha: 0.24)),
+                color: tone.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: tone.withValues(alpha: 0.28)),
               ),
-              child: Icon(icon, size: 17, color: tone),
+              child: Icon(icon, size: 16, color: tone),
             ),
-            const SizedBox(height: 10),
+            const Spacer(),
             Text(
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.caption.copyWith(
-                fontFamily: 'Sora',
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                color: BbV5Colors.ink,
-              ),
+              style: bbV5DisplayStyle(fontSize: 14, height: 1.15),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Text(
               subtitle,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.caption.copyWith(
-                fontSize: 10.5,
-                height: 1.25,
+                fontSize: 10.8,
+                height: 1.2,
                 color: BbV5Colors.inkMute,
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileTrustButton extends StatelessWidget {
+  const _ProfileTrustButton({
+    required this.icon,
+    required this.label,
+    required this.sub,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String sub;
+  final VoidCallback onTap;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = danger ? const Color(0xFFB5443B) : BbV5Colors.brandDeep;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          height: 72,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: BbV5Colors.paperHi,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: BbV5Colors.hair),
+            boxShadow: BbV5Shadows.pill,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: tone.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: 17, color: tone),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: bbV5DisplayStyle(fontSize: 12.5),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      sub,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.caption.copyWith(
+                        fontSize: 10.5,
+                        height: 1.15,
+                        color: BbV5Colors.inkMute,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -534,7 +534,7 @@ Future<void> _deleteMeetupChat(
     if (chat.eventId case final eventId?) {
       ref.invalidate(eventDetailProvider(eventId));
     }
-    _invalidateEventFeeds(ref);
+    await _invalidateEventFeeds(ref);
   } catch (_) {
     ref.read(meetupChatsLocalStateProvider.notifier).state = previous;
     if (context.mounted) {
@@ -614,7 +614,8 @@ Future<void> _deleteCommunityChat(
   }
 }
 
-void _invalidateEventFeeds(WidgetRef ref) {
+Future<void> _invalidateEventFeeds(WidgetRef ref) async {
+  await clearEventListLocalFirstCaches(ref);
   ref.invalidate(eventsProvider('nearby'));
   ref.invalidate(mapEventsProvider);
   ref.invalidate(eventsProvider('now'));

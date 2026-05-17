@@ -250,6 +250,26 @@ class ProfileData {
   }
 
   static List<String> _mapIntent(String? raw) {
+    final tokens = raw
+        ?.split(',')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (tokens != null && tokens.length > 1) {
+      final labels = <String>[];
+      for (final token in tokens) {
+        switch (token) {
+          case 'dating':
+            labels.add('Свидания');
+          case 'friendship':
+            labels.add('Друзья');
+          case 'network':
+            labels.add('Нетворк');
+        }
+      }
+      return labels;
+    }
+
     switch (raw) {
       case 'dating':
         return const ['Свидания'];

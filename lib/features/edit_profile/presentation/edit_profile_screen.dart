@@ -747,7 +747,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     });
     try {
       final repository = ref.read(backendRepositoryProvider);
-      await repository.updateProfile({
+      final profileLocalState = ref.read(profileLocalStateProvider.notifier);
+      final onboardingLocalState =
+          ref.read(onboardingLocalStateProvider.notifier);
+      final updatedProfile = await repository.updateProfile({
         'displayName': _nameController.text.trim(),
         'age': int.tryParse(_ageController.text.trim()),
         'city': profile?.city ?? 'Москва',
@@ -755,7 +758,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         'bio': _bioController.text.trim(),
         'vibe': vibe,
       });
-      await repository.saveOnboarding(
+      final savedOnboarding = await repository.saveOnboarding(
         OnboardingData(
           intent: _resolveIntent(),
           gender: profile?.gender,
@@ -768,6 +771,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (!mounted) {
         return;
       }
+      onboardingLocalState.state = savedOnboarding;
+      profileLocalState.state = updatedProfile.withOnboarding(savedOnboarding);
       ref.invalidate(profileProvider);
       ref.invalidate(onboardingProvider);
       final navigator = Navigator.of(context);
@@ -790,21 +795,23 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   String? _resolveIntent() {
-    final wantsDating = _intent.contains('Свидания');
-    final wantsFriends = _intent.contains('Друзья');
-    if (wantsDating && wantsFriends) {
+    final tokens = <String>[
+      if (_intent.contains('Свидания')) 'dating',
+      if (_intent.contains('Друзья')) 'friendship',
+      if (_intent.contains('Нетворк')) 'network',
+    ];
+    if (tokens.isEmpty) {
+      return null;
+    }
+    if (tokens.length == 2 &&
+        tokens.contains('dating') &&
+        tokens.contains('friendship')) {
       return 'both';
     }
-    if (wantsDating) {
-      return 'dating';
+    if (tokens.length == 1) {
+      return tokens.single;
     }
-    if (wantsFriends) {
-      return 'friendship';
-    }
-    if (_intent.contains('Нетворк')) {
-      return 'network';
-    }
-    return null;
+    return tokens.join(',');
   }
 }
 
