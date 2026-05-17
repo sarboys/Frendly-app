@@ -437,6 +437,87 @@ class BbV5Card extends StatelessWidget {
   }
 }
 
+class BbV5DashedBorder extends StatelessWidget {
+  const BbV5DashedBorder({
+    required this.child,
+    this.radius = 16,
+    this.color = BbV5Colors.hair,
+    this.strokeWidth = 1,
+    this.dash = 6,
+    this.gap = 6,
+    super.key,
+  });
+
+  final Widget child;
+  final double radius;
+  final Color color;
+  final double strokeWidth;
+  final double dash;
+  final double gap;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _BbV5DashedBorderPainter(
+        color: color,
+        radius: radius,
+        strokeWidth: strokeWidth,
+        dash: dash,
+        gap: gap,
+      ),
+      child: child,
+    );
+  }
+}
+
+class _BbV5DashedBorderPainter extends CustomPainter {
+  const _BbV5DashedBorderPainter({
+    required this.color,
+    required this.radius,
+    required this.strokeWidth,
+    required this.dash,
+    required this.gap,
+  });
+
+  final Color color;
+  final double radius;
+  final double strokeWidth;
+  final double dash;
+  final double gap;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(
+      rect.deflate(strokeWidth / 2),
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final next = distance + dash;
+        canvas.drawPath(metric.extractPath(distance, next), paint);
+        distance = next + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BbV5DashedBorderPainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.radius != radius ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.dash != dash ||
+        oldDelegate.gap != gap;
+  }
+}
+
 class BbV5BottomSheet extends StatelessWidget {
   const BbV5BottomSheet({
     required this.child,

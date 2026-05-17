@@ -677,6 +677,57 @@ void main() {
     expect(radarCardSubtypeForEvent(event), 'маршрут · Маршрут');
   });
 
+  test('route-backed events render every route point as map placemark', () {
+    final event = Event.fromJson({
+      'id': 'route-backed-meetup-2',
+      'title': 'Маршрут',
+      'emoji': '🚶',
+      'time': 'Сегодня',
+      'place': 'Москва',
+      'distance': '1 км',
+      'attendees': [],
+      'going': 0,
+      'capacity': 8,
+      'vibe': 'Маршрут',
+      'tone': 'sage',
+      'routeId': 'route-template-2',
+      'routePointCount': 2,
+      'latitude': 55.7558,
+      'longitude': 37.6173,
+      'joined': false,
+      'routePoints': [
+        {
+          'id': 'step-a',
+          'title': 'Старт',
+          'emoji': '☕',
+          'latitude': 55.751,
+          'longitude': 37.611,
+        },
+        {
+          'id': 'step-b',
+          'title': 'Финиш',
+          'emoji': '🎙️',
+          'latitude': 55.762,
+          'longitude': 37.642,
+        },
+      ],
+    });
+
+    final placemarks = buildEventPlacemarks(
+      events: [event],
+      selectedId: event.id,
+      onEventTap: (_) {},
+    );
+
+    expect(placemarks, hasLength(2));
+    expect(placemarks.first.mapId.value, 'event_route-backed-meetup-2_step-a');
+    expect(placemarks.first.point.latitude, 55.751);
+    expect(placemarks.first.point.longitude, 37.611);
+    expect(placemarks.last.mapId.value, 'event_route-backed-meetup-2_step-b');
+    expect(placemarks.last.point.latitude, 55.762);
+    expect(placemarks.last.point.longitude, 37.642);
+  });
+
   test('radarPinKindForEvent maps ticket events to affiche pins', () {
     const event = Event(
       id: 'affiche-1',

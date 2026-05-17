@@ -38,6 +38,37 @@ class EventBookingPromo {
   }
 }
 
+class EventRoutePoint {
+  const EventRoutePoint({
+    required this.id,
+    required this.title,
+    required this.emoji,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final String id;
+  final String title;
+  final String emoji;
+  final double latitude;
+  final double longitude;
+
+  static EventRoutePoint? fromJson(Map<String, dynamic> json) {
+    final rawLatitude = json['latitude'] ?? json['lat'];
+    final rawLongitude = json['longitude'] ?? json['lng'];
+    if (rawLatitude is! num || rawLongitude is! num) {
+      return null;
+    }
+    return EventRoutePoint(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      emoji: json['emoji'] as String? ?? '📍',
+      latitude: rawLatitude.toDouble(),
+      longitude: rawLongitude.toDouble(),
+    );
+  }
+}
+
 class Event {
   const Event({
     required this.id,
@@ -64,6 +95,7 @@ class Event {
     this.requiresFrendlyPlus = false,
     this.routeId,
     this.routePointCount,
+    this.routePoints = const [],
     this.isAfficheBacked = false,
     this.isDate = false,
     this.hostNote,
@@ -113,6 +145,7 @@ class Event {
   final bool requiresFrendlyPlus;
   final String? routeId;
   final int? routePointCount;
+  final List<EventRoutePoint> routePoints;
   final bool isAfficheBacked;
   final bool isDate;
   final String? hostNote;
@@ -172,6 +205,15 @@ class Event {
       requiresFrendlyPlus: (json['requiresFrendlyPlus'] as bool?) ?? false,
       routeId: json['routeId'] as String?,
       routePointCount: (json['routePointCount'] as num?)?.toInt(),
+      routePoints: ((json['routePoints'] as List?) ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => EventRoutePoint.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .whereType<EventRoutePoint>()
+          .toList(growable: false),
       isAfficheBacked: (json['isAfficheBacked'] as bool?) ?? false,
       isDate: (json['isDate'] as bool?) ?? false,
       hostNote: json['hostNote'] as String?,

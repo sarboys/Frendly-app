@@ -591,6 +591,8 @@ class _MeetupChatScreenState extends ConsumerState<MeetupChatScreen> {
                                 AppRoute.eveningPlan,
                                 pathParameters: {'routeId': chat.routeId!},
                               ),
+                      onBookingTap: _bookingAction(event),
+                      bookingTitle: _bookingTitle(event),
                       onTicketTap: _ticketAction(chat),
                       onTap: () => context.pushRoute(
                         AppRoute.eventDetail,
@@ -834,6 +836,21 @@ class _MeetupChatScreenState extends ConsumerState<MeetupChatScreen> {
     return () => _openTicketUrl(ticketUrl);
   }
 
+  VoidCallback? _bookingAction(EventDetail event) {
+    final bookingUrl = event.bookingUrl?.trim();
+    if (bookingUrl == null || bookingUrl.isEmpty) {
+      return null;
+    }
+    return () => _openBookingUrl(bookingUrl);
+  }
+
+  String _bookingTitle(EventDetail event) {
+    if (event.capacity > 0) {
+      return 'Столик на ${event.capacity}';
+    }
+    return 'Столик';
+  }
+
   Future<void> _openTicketUrl(String url) async {
     final uri = Uri.tryParse(url);
     if (uri == null) {
@@ -846,6 +863,20 @@ class _MeetupChatScreenState extends ConsumerState<MeetupChatScreen> {
       return;
     }
     _showSnackBar('Не получилось открыть сайт с билетами');
+  }
+
+  Future<void> _openBookingUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      _showSnackBar('Не получилось открыть бронь');
+      return;
+    }
+
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!mounted || !context.mounted || opened) {
+      return;
+    }
+    _showSnackBar('Не получилось открыть бронь');
   }
 
   Future<void> _startEveningLive(MeetupChat chat) async {

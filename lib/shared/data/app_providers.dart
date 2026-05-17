@@ -456,6 +456,7 @@ Map<String, dynamic> _eventToCacheJson(Event event) {
     'requiresFrendlyPlus': event.requiresFrendlyPlus,
     'routeId': event.routeId,
     'routePointCount': event.routePointCount,
+    'routePoints': event.routePoints.map(_eventRoutePointToJson).toList(),
     'isAfficheBacked': event.isAfficheBacked,
     'isDate': event.isDate,
     'hostNote': event.hostNote,
@@ -479,6 +480,16 @@ Map<String, dynamic> _eventToCacheJson(Event event) {
     'bookingAverageCheck': event.bookingAverageCheck,
     'bookingCurrency': event.bookingCurrency,
     'bookingPromos': event.bookingPromos.map(_eventBookingPromoToJson).toList(),
+  };
+}
+
+Map<String, dynamic> _eventRoutePointToJson(EventRoutePoint point) {
+  return {
+    'id': point.id,
+    'title': point.title,
+    'emoji': point.emoji,
+    'latitude': point.latitude,
+    'longitude': point.longitude,
   };
 }
 

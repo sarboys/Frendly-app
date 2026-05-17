@@ -244,27 +244,20 @@ typedef MeetupCoordinates = ({double latitude, double longitude});
 @visibleForTesting
 MeetupCoordinates? createMeetupPublishCoordinatesForTest(
   CreateMeetupDraft draft,
-  ManualLocation? manualLocation,
+  ManualLocation? _,
 ) {
-  return _createMeetupPublishCoordinates(draft, manualLocation);
+  return _createMeetupPublishCoordinates(draft);
 }
 
 Future<MeetupCoordinates?> _resolveCreateMeetupCoordinates(
-  WidgetRef ref,
+  WidgetRef _,
   CreateMeetupDraft draft,
 ) async {
-  return _createMeetupPublishCoordinates(
-    draft,
-    ref.read(manualLocationProvider),
-  );
+  return _createMeetupPublishCoordinates(draft);
 }
 
-MeetupCoordinates? _createMeetupPublishCoordinates(
-  CreateMeetupDraft draft,
-  ManualLocation? manualLocation,
-) {
-  return _validCoordinates(draft.latitude, draft.longitude) ??
-      _validCoordinates(manualLocation?.latitude, manualLocation?.longitude);
+MeetupCoordinates? _createMeetupPublishCoordinates(CreateMeetupDraft draft) {
+  return _validCoordinates(draft.latitude, draft.longitude);
 }
 
 MeetupCoordinates? _validCoordinates(double? latitude, double? longitude) {

@@ -52,8 +52,7 @@ void main() {
     expect(find.text('Аперитив в Brix Wine'), findsWidgets);
   });
 
-  testWidgets('perk and ticket states update immediately',
-      (tester) async {
+  testWidgets('perk and ticket states update immediately', (tester) async {
     _setMobileViewport(tester);
     await tester.pumpWidget(
       _planApp(
@@ -86,6 +85,38 @@ void main() {
     await tester.tap(find.text('Аперитив в Brix Wine').first);
     await tester.pumpAndSettle();
     expect(find.text('Перк использован'), findsOneWidget);
+  });
+
+  testWidgets('tomesto route step renders booking action instead of ticket', (
+    tester,
+  ) async {
+    _setMobileViewport(tester);
+    final route = testCozyEveningRoute.copyWith(
+      steps: [
+        testCozyEveningRoute.steps.first.copyWith(
+          ticketUrl: 'https://tomesto.ru/moskva/places/brix',
+          ticketSourceCode: 'tomesto',
+          ticketProvider: 'Tomesto',
+        ),
+        ...testCozyEveningRoute.steps.skip(1),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _planApp(
+        screen: EveningPlanScreen(
+          routeId: route.id,
+          initialRoute: route,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Аперитив в Brix Wine'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Забронировать столик'), findsOneWidget);
+    expect(find.text('Средний чек 800 ₽'), findsOneWidget);
+    expect(find.text('Купить билет 800 ₽'), findsNothing);
   });
 
   testWidgets('timeline rail line is not fixed to one card height',
@@ -125,7 +156,8 @@ void main() {
       ),
     );
 
-    final labelCenter = tester.getCenter(find.text('Запустить маршрут · в чат'));
+    final labelCenter =
+        tester.getCenter(find.text('Запустить маршрут · в чат'));
     final playCenter = tester.getCenter(find.byIcon(LucideIcons.play));
 
     expect(playCenter.dx, lessThan(labelCenter.dx));

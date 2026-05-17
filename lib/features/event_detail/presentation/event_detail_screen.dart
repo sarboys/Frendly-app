@@ -1675,6 +1675,14 @@ class _V5RouteStopRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bookingAction = active
+        ? _routeStopBookingAction(
+            event: event,
+            stop: stop,
+            index: index,
+          )
+        : null;
+
     return Material(
       color: active ? BbV5Colors.paperHi : Colors.transparent,
       child: InkWell(
@@ -1787,23 +1795,41 @@ class _V5RouteStopRow extends StatelessWidget {
                           ),
                         ),
                       ],
+                      if (bookingAction != null) ...[
+                        const SizedBox(height: 8),
+                        _V5RouteStopBookingChip(action: bookingAction),
+                      ],
                     ],
                   ),
                 ),
                 if (active) ...[
                   const SizedBox(width: 10),
-                  BbV5PillButton(
-                    label: 'Маршрут',
-                    icon: LucideIcons.navigation,
-                    height: 34,
-                    fontSize: 11,
-                    padding: const EdgeInsets.symmetric(horizontal: 11),
-                    iconSize: 14,
-                    iconGap: 4,
-                    onPressed: () => _showEventMapOptions(
-                      context,
-                      event,
-                      stop: stop,
+                  Tooltip(
+                    message: 'Открыть маршрут',
+                    child: InkWell(
+                      key: const Key('event-detail-route-map-button'),
+                      customBorder: const CircleBorder(),
+                      onTap: () => _showEventMapOptions(
+                        context,
+                        event,
+                        stop: stop,
+                      ),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: BbV5Colors.paper,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: BbV5Colors.hair),
+                          boxShadow: BbV5Shadows.pill,
+                        ),
+                        child: const Icon(
+                          LucideIcons.navigation,
+                          size: 17,
+                          color: BbV5Colors.terra,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -1814,6 +1840,281 @@ class _V5RouteStopRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _V5RouteStopBookingChip extends StatelessWidget {
+  const _V5RouteStopBookingChip({required this.action});
+
+  final _RouteStopBookingAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5DashedBorder(
+      key: const Key('event-detail-route-booking-chip'),
+      radius: 16,
+      child: Material(
+        color: BbV5Colors.paper,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: () => action.open(context),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: BbV5Colors.paperHi,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: BbV5Colors.hair),
+                  ),
+                  child: Icon(
+                    action.icon,
+                    size: 15,
+                    color: BbV5Colors.terra,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        action.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: bbV5DisplayStyle(
+                          fontSize: 11.5,
+                          height: 1.15,
+                        ),
+                      ),
+                      if (action.subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          action.subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.caption.copyWith(
+                            color: BbV5Colors.inkMute,
+                            fontSize: 10,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(
+                  LucideIcons.arrow_up_right,
+                  size: 14,
+                  color: BbV5Colors.terra,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RouteStopBookingAction {
+  const _RouteStopBookingAction({
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.url,
+    required this.ticket,
+  });
+
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final String url;
+  final bool ticket;
+
+  void open(BuildContext context) {
+    if (ticket) {
+      unawaited(_openEventTicketUrl(context, url));
+    } else {
+      unawaited(_openEventBookingUrl(context, url));
+    }
+  }
+}
+
+_RouteStopBookingAction? _routeStopBookingAction({
+  required EventDetail event,
+  required EventDetailRouteStop stop,
+  required int index,
+}) {
+  if (_isWalkRouteStop(stop)) {
+    return null;
+  }
+
+  final stopBookingUrl = _routeStopBookingUrl(stop);
+  if (stopBookingUrl != null) {
+    return _RouteStopBookingAction(
+      label: 'Забронировать столик',
+      subtitle: _routeStopBookingSubtitle(stop),
+      icon: LucideIcons.calendar_check,
+      url: stopBookingUrl,
+      ticket: false,
+    );
+  }
+
+  final stopTicketUrl = stop.ticketUrl?.trim();
+  if (stopTicketUrl != null && stopTicketUrl.isNotEmpty) {
+    return _RouteStopBookingAction(
+      label: 'Купить билет',
+      subtitle: _routeStopTicketSubtitle(stop),
+      icon: LucideIcons.ticket,
+      url: stopTicketUrl,
+      ticket: true,
+    );
+  }
+
+  final ticketUrl = event.ticketUrl?.trim();
+  if (event.hasPaidTicket &&
+      ticketUrl != null &&
+      ticketUrl.isNotEmpty &&
+      _ticketMatchesRouteStop(event, stop, index)) {
+    return _RouteStopBookingAction(
+      label: 'Купить билет',
+      subtitle: _ticketSubtitle(event),
+      icon: LucideIcons.ticket,
+      url: ticketUrl,
+      ticket: true,
+    );
+  }
+
+  final bookingUrl = event.bookingUrl?.trim();
+  if (event.hasTableBooking &&
+      bookingUrl != null &&
+      bookingUrl.isNotEmpty &&
+      _bookingMatchesRouteStop(event, stop, index)) {
+    return _RouteStopBookingAction(
+      label: 'Забронировать столик',
+      subtitle: _bookingSubtitle(event),
+      icon: LucideIcons.calendar_check,
+      url: bookingUrl,
+      ticket: false,
+    );
+  }
+
+  return null;
+}
+
+String? _routeStopBookingUrl(EventDetailRouteStop stop) {
+  final bookingUrl = stop.bookingUrl?.trim();
+  if (bookingUrl != null && bookingUrl.isNotEmpty) {
+    return bookingUrl;
+  }
+
+  final sourceCode = stop.ticketSourceCode?.trim().toLowerCase();
+  final sourceUrl = stop.sourceUrl?.trim();
+  if ((sourceCode == 'tomesto' || _isTomestoUrl(sourceUrl)) &&
+      sourceUrl != null &&
+      sourceUrl.isNotEmpty) {
+    return sourceUrl;
+  }
+
+  final ticketUrl = stop.ticketUrl?.trim();
+  if ((sourceCode == 'tomesto' || _isTomestoUrl(ticketUrl)) &&
+      ticketUrl != null &&
+      ticketUrl.isNotEmpty) {
+    return ticketUrl;
+  }
+
+  return null;
+}
+
+String _routeStopBookingSubtitle(EventDetailRouteStop stop) {
+  final parts = <String>[];
+  final averageCheck = stop.bookingAverageCheck ?? stop.ticketPrice;
+  if (averageCheck != null && averageCheck > 0) {
+    parts.add(
+        'средний чек $averageCheck ${_currencySymbol(stop.bookingCurrency)}');
+  }
+  final provider = stop.bookingProvider?.trim();
+  if (provider != null && provider.isNotEmpty) {
+    parts.add(provider);
+  } else if ((stop.ticketSourceCode ?? '').trim().toLowerCase() == 'tomesto' ||
+      _isTomestoUrl(stop.sourceUrl) ||
+      _isTomestoUrl(stop.ticketUrl)) {
+    parts.add('Tomesto');
+  }
+  return parts.isEmpty ? 'Откроется Tomesto' : parts.join(' · ');
+}
+
+String _routeStopTicketSubtitle(EventDetailRouteStop stop) {
+  final parts = <String>[];
+  final price = stop.ticketPrice;
+  if (price != null && price > 0) {
+    parts.add('от $price ₽');
+  }
+  final provider = stop.ticketProvider?.trim();
+  if (provider != null && provider.isNotEmpty) {
+    parts.add(provider);
+  }
+  return parts.isEmpty ? 'Откроется афиша' : parts.join(' · ');
+}
+
+bool _ticketMatchesRouteStop(
+  EventDetail event,
+  EventDetailRouteStop stop,
+  int index,
+) {
+  final venue = event.ticketVenue?.trim();
+  if (venue != null && venue.isNotEmpty) {
+    return _routeStopContains(stop, venue);
+  }
+  return index == 0;
+}
+
+bool _bookingMatchesRouteStop(
+  EventDetail event,
+  EventDetailRouteStop stop,
+  int index,
+) {
+  final place = _routePlaceTitle(event.place);
+  if (place.isNotEmpty && _routeStopContains(stop, place)) {
+    return true;
+  }
+  return index == 0;
+}
+
+bool _isWalkRouteStop(EventDetailRouteStop stop) {
+  final text =
+      '${stop.title} ${stop.subtitle} ${stop.note ?? ''}'.toLowerCase();
+  return text.contains('прогул') ||
+      text.contains('пешком') ||
+      text.contains('walk');
+}
+
+bool _routeStopContains(EventDetailRouteStop stop, String value) {
+  final needle = value.toLowerCase();
+  final haystack = '${stop.title} ${stop.subtitle}'.toLowerCase();
+  return haystack.contains(needle) || needle.contains(stop.title.toLowerCase());
+}
+
+bool _isTomestoUrl(String? value) {
+  final url = value?.trim();
+  if (url == null || url.isEmpty) {
+    return false;
+  }
+  final host = Uri.tryParse(url)?.host.toLowerCase();
+  return host == 'tomesto.ru' || host?.endsWith('.tomesto.ru') == true;
+}
+
+String _routePlaceTitle(String place) {
+  final trimmed = place.trim();
+  final comma = trimmed.indexOf(',');
+  return comma <= 0 ? trimmed : trimmed.substring(0, comma).trim();
 }
 
 EventDetailRouteStop _singleEventStop(EventDetail event) {

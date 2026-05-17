@@ -261,6 +261,15 @@ class EventDetailRouteStop {
     required this.time,
     this.note,
     this.emoji = '📍',
+    this.ticketUrl,
+    this.ticketPrice,
+    this.ticketProvider,
+    this.ticketSourceCode,
+    this.sourceUrl,
+    this.bookingUrl,
+    this.bookingProvider,
+    this.bookingAverageCheck,
+    this.bookingCurrency,
   });
 
   final String title;
@@ -268,6 +277,15 @@ class EventDetailRouteStop {
   final String time;
   final String? note;
   final String emoji;
+  final String? ticketUrl;
+  final int? ticketPrice;
+  final String? ticketProvider;
+  final String? ticketSourceCode;
+  final String? sourceUrl;
+  final String? bookingUrl;
+  final String? bookingProvider;
+  final int? bookingAverageCheck;
+  final String? bookingCurrency;
 
   String get mapQuery {
     final parts = <String>[title, subtitle]
@@ -303,6 +321,23 @@ class EventDetailRouteStop {
         _stringFromJson(json['emoji']),
         '📍',
       ]),
+      ticketUrl: _nullableStringFromJson(json['ticketUrl']),
+      ticketPrice: _intFromJson(json['ticketPrice'] ?? json['ticketPriceFrom']),
+      ticketProvider: _nullableStringFromJson(json['ticketProvider']),
+      ticketSourceCode: _nullableStringFromJson(
+        json['ticketSourceCode'] ?? json['sourceCode'] ?? json['source'],
+      ),
+      sourceUrl: _nullableStringFromJson(
+        json['sourceUrl'] ?? json['placeSourceUrl'] ?? json['actionUrl'],
+      ),
+      bookingUrl: _nullableStringFromJson(
+        json['bookingUrl'] ?? json['placeBookingUrl'],
+      ),
+      bookingProvider: _nullableStringFromJson(json['bookingProvider']),
+      bookingAverageCheck: _intFromJson(
+        json['bookingAverageCheck'] ?? json['averageCheck'],
+      ),
+      bookingCurrency: _nullableStringFromJson(json['bookingCurrency']),
     );
   }
 
@@ -324,6 +359,10 @@ String _stringFromJson(Object? value) {
 String? _nullableStringFromJson(Object? value) {
   final text = _stringFromJson(value);
   return text.isEmpty ? null : text;
+}
+
+int? _intFromJson(Object? value) {
+  return value is num ? value.toInt() : null;
 }
 
 String _firstNonEmpty(Iterable<String> values) {

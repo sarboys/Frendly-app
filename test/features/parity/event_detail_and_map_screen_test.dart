@@ -109,6 +109,9 @@ void main() {
               going: 6,
               chatId: 'mc-route',
               routeId: 'route-mc1',
+              bookingUrl: 'https://tomesto.example/brix',
+              bookingProvider: 'Tomesto',
+              bookingAverageCheck: 2500,
               host: EventHost(
                 id: 'user-anya',
                 displayName: 'Аня К',
@@ -164,13 +167,113 @@ void main() {
     expect(find.text('Brix Wine'), findsOneWidget);
     expect(find.text('Прогулка по Покровке'), findsOneWidget);
     expect(find.text('Late jazz в Aglio'), findsOneWidget);
+    expect(
+      find.byKey(const Key('event-detail-route-booking-chip')),
+      findsOneWidget,
+    );
 
     await tester.ensureVisible(find.text('Прогулка по Покровке'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Прогулка по Покровке'));
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const Key('event-detail-route-booking-chip')),
+      findsNothing,
+    );
+
     expect(find.text('Идем до второй точки'), findsOneWidget);
+  });
+
+  testWidgets('event detail shows stop-level booking on the active venue',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...buildTestOverrides(),
+          eventDetailProvider.overrideWith((ref, eventId) async {
+            return const EventDetail(
+              id: 'e-route-stop-booking',
+              title: 'Маршрут с баром',
+              emoji: '🍸',
+              time: 'Сегодня · 19:00',
+              place: 'Маршрут: прогулка и бар',
+              distance: '0.0 км',
+              vibe: 'Спокойно',
+              description: 'Идем по маршруту вечера.',
+              hostNote: null,
+              joined: true,
+              partnerName: null,
+              partnerOffer: null,
+              capacity: 8,
+              going: 4,
+              chatId: 'mc-route-stop-booking',
+              routeId: 'route-stop-booking',
+              host: EventHost(
+                id: 'user-anya',
+                displayName: 'Аня К',
+                verified: true,
+                rating: 4.9,
+                meetupCount: 23,
+                avatarUrl: null,
+              ),
+              attendees: [],
+            );
+          }),
+          eventDetailRouteStopsProvider.overrideWith((ref, routeId) async {
+            return [
+              EventDetailRouteStop.fromJson({
+                'title': 'Бережковская набережная',
+                'address': 'наб. Бережковская',
+                'time': '19:00',
+                'description': 'Прогулка',
+                'emoji': '🌿',
+              }),
+              EventDetailRouteStop.fromJson({
+                'title': 'BeerMood',
+                'address': 'RU Москва Чистопрудный б-р, д. 21',
+                'time': '20:00',
+                'description':
+                    'BeerMood на Чистопрудном бульваре, бар с кухней.',
+                'emoji': '🍷',
+                'ticketUrl': 'https://tomesto.ru/moskva/places/beermood',
+                'ticketSourceCode': 'tomesto',
+                'ticketProvider': 'Tomesto',
+                'ticketPrice': 2100,
+              }),
+            ];
+          }),
+        ],
+        child: const MaterialApp(
+          home: EventDetailScreen(eventId: 'e-route-stop-booking'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.dragUntilVisible(
+      find.text('BeerMood'),
+      find.byType(CustomScrollView),
+      const Offset(0, -180),
+    );
+    await tester.ensureVisible(find.text('BeerMood'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('event-detail-route-booking-chip')),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('BeerMood'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('event-detail-route-booking-chip')),
+      findsOneWidget,
+    );
+    expect(find.text('Забронировать столик'), findsOneWidget);
+    expect(find.text('средний чек 2100 ₽ · Tomesto'), findsOneWidget);
+    expect(find.text('Маршрут'), findsNothing);
   });
 
   testWidgets('event detail shows criteria as muted chips', (tester) async {
@@ -526,7 +629,7 @@ void main() {
     );
     await tester.ensureVisible(find.text('Brix Wine'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Маршрут'));
+    await tester.tap(find.byKey(const Key('event-detail-route-map-button')));
     await tester.pumpAndSettle();
 
     expect(find.text('Открыть адрес'), findsOneWidget);
@@ -545,7 +648,7 @@ void main() {
     );
     await tester.ensureVisible(find.text('Brix Wine'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Маршрут'));
+    await tester.tap(find.byKey(const Key('event-detail-route-map-button')));
     await tester.pumpAndSettle();
 
     expect(find.text('Открыть адрес'), findsOneWidget);

@@ -60,4 +60,51 @@ void main() {
     expect(find.text('Завтра · 15:00'), findsOneWidget);
     expect(find.text('Сегодня · 15:00'), findsNothing);
   });
+
+  testWidgets('pinned meetup card renders booking and ticket split grid', (
+    tester,
+  ) async {
+    var bookingTaps = 0;
+    var ticketTaps = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BbPinnedMeetupCard(
+            chat: const MeetupChat(
+              id: 'chat-booking-ticket',
+              eventId: 'event-booking-ticket',
+              title: 'Концерт',
+              emoji: '🎟',
+              time: '20:00',
+              lastMessage: '',
+              lastAuthor: '',
+              lastTime: '',
+              unread: 0,
+              members: ['Ты'],
+              ticketUrl: 'https://tickets.example/show',
+              ticketPriceFrom: 1200,
+            ),
+            place: 'Brix Wine',
+            capacity: 8,
+            bookingTitle: 'Столик на 8',
+            onBookingTap: () => bookingTaps += 1,
+            onTicketTap: () => ticketTaps += 1,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('pinned-meetup-booking-grid')), findsOneWidget);
+    expect(find.text('бронь'), findsOneWidget);
+    expect(find.text('Столик на 8'), findsOneWidget);
+    expect(find.text('билет'), findsOneWidget);
+    expect(find.text('от 1 200 ₽'), findsOneWidget);
+
+    await tester.tap(find.text('Столик на 8'));
+    await tester.tap(find.text('от 1 200 ₽'));
+
+    expect(bookingTaps, 1);
+    expect(ticketTaps, 1);
+  });
 }

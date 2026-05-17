@@ -145,4 +145,28 @@ void main() {
     expect(detail.entryRequirements.missingVerification, isTrue);
     expect(detail.entryRequirements.missingFrendlyPlus, isTrue);
   });
+
+  test('maps event detail route stop booking and ticket metadata', () {
+    final stop = EventDetailRouteStop.fromJson({
+      'title': 'Late jazz в Aglio',
+      'address': 'Маросейка 6',
+      'time': '22:00',
+      'ticketUrl': 'https://tomesto.example/aglio',
+      'ticketPrice': 800,
+      'ticketProvider': 'Tomesto',
+      'ticketSourceCode': 'tomesto',
+      'sourceUrl': 'https://tomesto.ru/moskva/places/aglio',
+      'bookingUrl': 'https://tomesto.example/aglio/book',
+      'bookingAverageCheck': 1800,
+      'bookingCurrency': 'RUB',
+    });
+
+    expect(stop.ticketUrl, 'https://tomesto.example/aglio');
+    expect(stop.ticketPrice, 800);
+    expect(stop.ticketSourceCode, 'tomesto');
+    expect(stop.sourceUrl, 'https://tomesto.ru/moskva/places/aglio');
+    expect(stop.bookingUrl, 'https://tomesto.example/aglio/book');
+    expect(stop.bookingAverageCheck, 1800);
+    expect(stop.bookingCurrency, 'RUB');
+  });
 }

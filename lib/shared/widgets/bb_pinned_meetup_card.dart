@@ -16,7 +16,10 @@ class BbPinnedMeetupCard extends StatelessWidget {
     this.onTap,
     this.onEdit,
     this.onRouteTap,
+    this.onBookingTap,
     this.onTicketTap,
+    this.bookingTitle,
+    this.bookingSubtitle,
   });
 
   final MeetupChat chat;
@@ -27,12 +30,35 @@ class BbPinnedMeetupCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onEdit;
   final VoidCallback? onRouteTap;
+  final VoidCallback? onBookingTap;
   final VoidCallback? onTicketTap;
+  final String? bookingTitle;
+  final String? bookingSubtitle;
 
   @override
   Widget build(BuildContext context) {
     final joined = going ?? chat.joinedCount ?? chat.members.length;
     final maxGuests = capacity ?? chat.maxGuests ?? joined;
+    final actions = <_BookingGridItem>[
+      if (onBookingTap != null)
+        _BookingGridItem(
+          kicker: 'бронь',
+          title: bookingTitle?.trim().isNotEmpty == true
+              ? bookingTitle!.trim()
+              : 'Столик',
+          subtitle: bookingSubtitle?.trim() ?? '',
+          icon: LucideIcons.calendar_check,
+          onTap: onBookingTap,
+        ),
+      if (chat.hasPaidTicket)
+        _BookingGridItem(
+          kicker: 'билет',
+          title: 'от ${_formatRubles(chat.ticketPriceFrom!)} ₽',
+          subtitle: '',
+          icon: LucideIcons.ticket,
+          onTap: onTicketTap,
+        ),
+    ];
 
     return BbV5Card(
       onTap: onTap,
@@ -104,9 +130,9 @@ class BbPinnedMeetupCard extends StatelessWidget {
               ],
             ),
           ),
-          if (chat.hasPaidTicket) ...[
+          if (actions.isNotEmpty) ...[
             const SizedBox(height: 18),
-            _TicketAction(chat: chat, onTap: onTicketTap),
+            _BookingActionGrid(items: actions),
           ],
         ],
       ),
@@ -290,71 +316,90 @@ class _PinnedMeta extends StatelessWidget {
   }
 }
 
-class _TicketAction extends StatelessWidget {
-  const _TicketAction({
-    required this.chat,
-    required this.onTap,
-  });
+class _BookingActionGrid extends StatelessWidget {
+  const _BookingActionGrid({required this.items});
 
-  final MeetupChat chat;
-  final VoidCallback? onTap;
+  final List<_BookingGridItem> items;
 
   @override
   Widget build(BuildContext context) {
-    return _DashedBorder(
+    return Row(
+      key: const Key('pinned-meetup-booking-grid'),
+      children: [
+        for (final entry in items.indexed) ...[
+          if (entry.$1 > 0) const SizedBox(width: 8),
+          Expanded(child: _BookingActionTile(item: entry.$2)),
+        ],
+      ],
+    );
+  }
+}
+
+class _BookingActionTile extends StatelessWidget {
+  const _BookingActionTile({required this.item});
+
+  final _BookingGridItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5DashedBorder(
+      radius: 16,
       child: Material(
         color: BbV5Colors.paper,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          onTap: item.onTap,
+          borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             child: Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 32,
+                  height: 32,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: BbV5Colors.paperHi,
                     shape: BoxShape.circle,
                     border: Border.all(color: BbV5Colors.hair),
                   ),
-                  child: const Icon(
-                    LucideIcons.ticket,
-                    size: 18,
-                    color: BbV5Colors.accent,
+                  child: Icon(
+                    item.icon,
+                    size: 15,
+                    color: BbV5Colors.terra,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'билет на событие',
+                        item.kicker,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: bbV5KickerStyle(letterSpacing: 1.6),
+                        style: bbV5KickerStyle(
+                          fontSize: 9,
+                          letterSpacing: 1.4,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Купить билет · от ${_formatRubles(chat.ticketPriceFrom!)} ₽',
+                        item.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: bbV5DisplayStyle(fontSize: 12.5, height: 1.25),
+                        style: bbV5DisplayStyle(fontSize: 11.5, height: 1.15),
                       ),
-                      if (_ticketMeta(chat).isNotEmpty) ...[
+                      if (item.subtitle.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
-                          _ticketMeta(chat),
+                          item.subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.caption.copyWith(
-                            fontSize: 10.5,
                             color: BbV5Colors.inkMute,
+                            fontSize: 10,
                             letterSpacing: 0,
                           ),
                         ),
@@ -362,35 +407,11 @@ class _TicketAction extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
-                Container(
-                  height: 32,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: BbV5Colors.accent,
-                    borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Купить',
-                        style: AppTextStyles.button.copyWith(
-                          fontFamily: 'Sora',
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: BbV5Colors.paperHi,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Icon(
-                        LucideIcons.arrow_up_right,
-                        size: 14,
-                        color: BbV5Colors.paperHi,
-                      ),
-                    ],
-                  ),
+                const SizedBox(width: 6),
+                const Icon(
+                  LucideIcons.arrow_up_right,
+                  size: 13,
+                  color: BbV5Colors.terra,
                 ),
               ],
             ),
@@ -401,61 +422,20 @@ class _TicketAction extends StatelessWidget {
   }
 }
 
-class _DashedBorder extends StatelessWidget {
-  const _DashedBorder({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: const _DashedBorderPainter(
-        color: BbV5Colors.hair,
-        radius: 18,
-      ),
-      child: child,
-    );
-  }
-}
-
-class _DashedBorderPainter extends CustomPainter {
-  const _DashedBorderPainter({
-    required this.color,
-    required this.radius,
+class _BookingGridItem {
+  const _BookingGridItem({
+    required this.kicker,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
   });
 
-  final Color color;
-  final double radius;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final rrect = RRect.fromRectAndRadius(
-      rect.deflate(0.5),
-      Radius.circular(radius),
-    );
-    final path = Path()..addRRect(rrect);
-    final metrics = path.computeMetrics();
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-    const dash = 6.0;
-    const gap = 6.0;
-    for (final metric in metrics) {
-      var distance = 0.0;
-      while (distance < metric.length) {
-        final next = distance + dash;
-        canvas.drawPath(metric.extractPath(distance, next), paint);
-        distance = next + gap;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) {
-    return color != oldDelegate.color || radius != oldDelegate.radius;
-  }
+  final String kicker;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback? onTap;
 }
 
 String _initial(String value) {
@@ -472,13 +452,6 @@ String _planNumber(String value) {
     return '1';
   }
   return digits.length > 2 ? digits.substring(digits.length - 2) : digits;
-}
-
-String _ticketMeta(MeetupChat chat) {
-  return [
-    chat.ticketProvider?.trim(),
-    chat.ticketVenue?.trim(),
-  ].where((value) => value != null && value.isNotEmpty).join(' · ');
 }
 
 String _formatRubles(int value) {

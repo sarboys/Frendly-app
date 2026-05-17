@@ -879,10 +879,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     bool animated = true,
     required int fitGeneration,
   }) async {
-    final eventPoints = events
-        .map(_pointForEvent)
-        .whereType<ym.Point>()
-        .toList(growable: false);
+    final eventPoints = events.expand(_pointsForEvent).toList(growable: false);
     if (eventPoints.isEmpty) {
       return;
     }
@@ -1126,6 +1123,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   ym.Point? _pointForEvent(Event event) {
     return _pointForEventModel(event);
+  }
+
+  List<ym.Point> _pointsForEvent(Event event) {
+    return _pointsForEventModel(event)
+        .map((entry) => entry.point)
+        .toList(growable: false);
   }
 
   String _effectiveRadarFilter(List<Event> events) {
@@ -1876,8 +1879,7 @@ List<Event> visibleMapEventsForRadar({
 
 @visibleForTesting
 bool hasClusterableEventPoints(List<Event> events) {
-  return events.map(_pointForEventModel).whereType<ym.Point>().length >
-      _radarClusterPointThreshold;
+  return _eventMapPointCount(events) > _radarClusterPointThreshold;
 }
 
 @visibleForTesting
@@ -1978,10 +1980,12 @@ int teleportedRadarCarouselPage(
 @visibleForTesting
 String buildMapViewportFitKey(List<Event> events, String filter) {
   final parts = events
-      .where((event) => event.latitude != null && event.longitude != null)
-      .map(
-        (event) =>
-            '${event.id}:${event.latitude!.toStringAsFixed(5)},${event.longitude!.toStringAsFixed(5)}',
+      .expand(
+        (event) => _pointsForEventModel(event).map(
+          (entry) => '${event.id}:${entry.idSuffix}:'
+              '${entry.point.latitude.toStringAsFixed(5)},'
+              '${entry.point.longitude.toStringAsFixed(5)}',
+        ),
       )
       .toList(growable: false);
   if (parts.isEmpty) {
@@ -2064,15 +2068,16 @@ String buildMapObjectsCacheKey({
     'selected:$selectedId',
     'user:${_pointCacheKey(userPoint)}',
     'search:${_pointCacheKey(searchPoint)}',
-    'cluster:${events.length > _radarClusterPointThreshold}',
+    'cluster:${_eventMapPointCount(events) > _radarClusterPointThreshold}',
     'clusterRefresh:$clusterRefreshRevision',
     for (final event in events)
-      if (event.latitude != null && event.longitude != null)
+      for (final entry in _pointsForEventModel(event))
         [
           'event',
           event.id,
-          _roundGeo(event.latitude!).toStringAsFixed(5),
-          _roundGeo(event.longitude!).toStringAsFixed(5),
+          entry.idSuffix,
+          _roundGeo(entry.point.latitude).toStringAsFixed(5),
+          _roundGeo(entry.point.longitude).toStringAsFixed(5),
           event.emoji,
           promotedIds.contains(event.id) ? 'promoted' : 'regular',
         ].join(':'),
@@ -2099,9 +2104,10 @@ List<ym.PlacemarkMapObject> buildEventPlacemarks({
 }) {
   return [
     for (final event in events)
-      if (event.latitude != null && event.longitude != null)
+      for (final entry in _pointsForEventModel(event))
         _buildEventPlacemark(
           event: event,
+          pointEntry: entry,
           selected: event.id == selectedId,
           promoted: promotedIds.contains(event.id),
           onEventTap: onEventTap,
@@ -2111,6 +2117,7 @@ List<ym.PlacemarkMapObject> buildEventPlacemarks({
 
 ym.PlacemarkMapObject _buildEventPlacemark({
   required Event event,
+  required _EventMapPoint pointEntry,
   required bool selected,
   required bool promoted,
   required void Function(String eventId) onEventTap,
@@ -2118,11 +2125,8 @@ ym.PlacemarkMapObject _buildEventPlacemark({
   final pinKind =
       promoted ? RadarMapPinKind.promoted : radarPinKindForEvent(event);
   return ym.PlacemarkMapObject(
-    mapId: ym.MapObjectId('event_${event.id}'),
-    point: ym.Point(
-      latitude: event.latitude!,
-      longitude: event.longitude!,
-    ),
+    mapId: ym.MapObjectId('event_${event.id}${pointEntry.idSuffix}'),
+    point: pointEntry.point,
     zIndex: selected ? 2 : 1,
     consumeTapEvents: true,
     opacity: 1,
@@ -2253,16 +2257,75 @@ ym.PlacemarkMapObject buildSearchPointPlacemark(ym.Point point) {
 }
 
 ym.Point? _pointForEventModel(Event event) {
-  final latitude = event.latitude;
-  final longitude = event.longitude;
-  if (latitude == null || longitude == null) {
+  final points = _pointsForEventModel(event);
+  if (points.isEmpty) {
     return null;
   }
+  return points.first.point;
+}
 
-  return ym.Point(
-    latitude: latitude,
-    longitude: longitude,
+List<_EventMapPoint> _pointsForEventModel(Event event) {
+  final routeId = event.routeId?.trim() ?? '';
+  if (routeId.isNotEmpty && event.routePoints.isNotEmpty) {
+    return [
+      for (final indexed in event.routePoints.indexed)
+        if (_pointFromCoordinates(
+          indexed.$2.latitude,
+          indexed.$2.longitude,
+        )
+            case final point?)
+          _EventMapPoint(
+            idSuffix: '_${_routePointMapIdSuffix(indexed.$2, indexed.$1)}',
+            point: point,
+          ),
+    ];
+  }
+
+  final point = _pointFromCoordinates(event.latitude, event.longitude);
+  if (point == null) {
+    return const [];
+  }
+  return [_EventMapPoint(idSuffix: '', point: point)];
+}
+
+int _eventMapPointCount(List<Event> events) {
+  return events.fold<int>(
+    0,
+    (count, event) => count + _pointsForEventModel(event).length,
   );
+}
+
+ym.Point? _pointFromCoordinates(double? latitude, double? longitude) {
+  if (latitude == null ||
+      longitude == null ||
+      !latitude.isFinite ||
+      !longitude.isFinite ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180 ||
+      (latitude == 0 && longitude == 0)) {
+    return null;
+  }
+  return ym.Point(latitude: latitude, longitude: longitude);
+}
+
+String _routePointMapIdSuffix(EventRoutePoint point, int index) {
+  final id = point.id.trim();
+  if (id.isNotEmpty) {
+    return id;
+  }
+  return 'route_point_$index';
+}
+
+class _EventMapPoint {
+  const _EventMapPoint({
+    required this.idSuffix,
+    required this.point,
+  });
+
+  final String idSuffix;
+  final ym.Point point;
 }
 
 @visibleForTesting

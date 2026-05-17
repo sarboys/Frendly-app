@@ -908,6 +908,7 @@ class _StepDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final tomestoBooking = _isTomestoStep(step);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.72,
@@ -1194,14 +1195,18 @@ class _StepDetailSheet extends StatelessWidget {
                         child: Row(
                           children: [
                             Icon(
-                              LucideIcons.ticket,
+                              tomestoBooking
+                                  ? LucideIcons.calendar_check
+                                  : LucideIcons.ticket,
                               size: 16,
                               color: colors.inkSoft,
                             ),
                             const SizedBox(width: AppSpacing.xs),
                             Expanded(
                               child: Text(
-                                'Билет ${step.ticketPrice} ₽',
+                                tomestoBooking
+                                    ? 'Средний чек ${step.ticketPrice} ₽'
+                                    : 'Билет ${step.ticketPrice} ₽',
                                 style: AppTextStyles.meta.copyWith(
                                   fontWeight: FontWeight.w600,
                                   color: colors.foreground,
@@ -1210,7 +1215,9 @@ class _StepDetailSheet extends StatelessWidget {
                             ),
                             _DetailStatusChip(
                               used: ticketBought,
-                              kind: _DetailStatusKind.ticket,
+                              kind: tomestoBooking
+                                  ? _DetailStatusKind.booking
+                                  : _DetailStatusKind.ticket,
                             ),
                           ],
                         ),
@@ -1228,12 +1235,18 @@ class _StepDetailSheet extends StatelessWidget {
                         _SheetActionButton(
                           icon: ticketBought
                               ? LucideIcons.circle_check
-                              : LucideIcons.ticket,
+                              : tomestoBooking
+                                  ? LucideIcons.calendar_check
+                                  : LucideIcons.ticket,
                           trailingIcon:
                               ticketBought ? null : LucideIcons.arrow_right,
                           label: ticketBought
-                              ? 'Билет куплен'
-                              : 'Купить билет ${step.ticketPrice} ₽',
+                              ? tomestoBooking
+                                  ? 'Бронь открыта'
+                                  : 'Билет куплен'
+                              : tomestoBooking
+                                  ? 'Забронировать столик'
+                                  : 'Купить билет ${step.ticketPrice} ₽',
                           done: ticketBought,
                           onTap: ticketBought ? null : onBuyTicket,
                         ),
@@ -2672,7 +2685,7 @@ class _TinyPill extends StatelessWidget {
   }
 }
 
-enum _DetailStatusKind { perk, ticket }
+enum _DetailStatusKind { perk, ticket, booking }
 
 class _DetailStatusChip extends StatelessWidget {
   const _DetailStatusChip({
@@ -2689,7 +2702,9 @@ class _DetailStatusChip extends StatelessWidget {
     final label = used
         ? kind == _DetailStatusKind.perk
             ? 'Использован'
-            : 'Куплено'
+            : kind == _DetailStatusKind.booking
+                ? 'Открыта'
+                : 'Куплено'
         : 'Доступно';
 
     return Container(
@@ -2748,3 +2763,17 @@ class _PerkPartner {
 }
 
 enum _RedeemStep { intro, form, success }
+
+bool _isTomestoStep(EveningRouteStep step) {
+  final sourceCode = step.ticketSourceCode?.trim().toLowerCase();
+  if (sourceCode == 'tomesto') {
+    return true;
+  }
+
+  final ticketUrl = step.ticketUrl?.trim();
+  if (ticketUrl == null || ticketUrl.isEmpty) {
+    return false;
+  }
+  final host = Uri.tryParse(ticketUrl)?.host.toLowerCase();
+  return host == 'tomesto.ru' || host?.endsWith('.tomesto.ru') == true;
+}

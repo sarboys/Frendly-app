@@ -31,7 +31,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.drag(find.byType(ListView), const Offset(0, -620));
+    await tester.dragUntilVisible(
+      find.byKey(const Key('host-booking-strip')),
+      find.byType(ListView),
+      const Offset(0, -320),
+    );
+    expect(find.byKey(const Key('host-booking-strip')), findsOneWidget);
+    expect(find.text('Brix Wine · столик на 8'), findsOneWidget);
+    expect(find.textContaining('подтверждено'), findsOneWidget);
+
+    await tester.dragUntilVisible(
+      find.text('Завершить вечер'),
+      find.byType(ListView),
+      const Offset(0, -320),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Завершить вечер'));
     await tester.pumpAndSettle();
@@ -99,6 +112,7 @@ const _event = Event(
   joined: true,
   isHost: true,
   liveStatus: EventLiveStatus.live,
+  bookingUrl: 'https://tomesto.example/brix',
 );
 
 class _RecordingHostRepository extends BackendRepository {

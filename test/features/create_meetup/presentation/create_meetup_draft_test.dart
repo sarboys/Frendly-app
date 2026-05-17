@@ -28,7 +28,7 @@ void main() {
     expect(draft.submitDescription, 'Встречаемся: Powerhouse · Казакова 8');
   });
 
-  test('publish uses manual location when draft place has no coordinates', () {
+  test('publish does not use manual city as place coordinates', () {
     const manualLocation = ManualLocation(
       label: 'Москва',
       latitude: 55.7558,
@@ -41,8 +41,7 @@ void main() {
       manualLocation,
     );
 
-    expect(coordinates?.latitude, 55.7558);
-    expect(coordinates?.longitude, 37.6173);
+    expect(coordinates, isNull);
   });
 
   test('publish keeps exact place coordinates before manual location', () {

@@ -6,12 +6,14 @@ import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/event.dart';
 import 'package:big_break_mobile/shared/models/host_dashboard.dart';
+import 'package:big_break_mobile/shared/utils/event_time_labels.dart';
 import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
 import 'package:big_break_mobile/shared/widgets/bb_external_event_image.dart';
 import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class HostDashboardScreen extends ConsumerStatefulWidget {
   const HostDashboardScreen({
@@ -869,6 +871,7 @@ class _HostedEventTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final imageUrl = event.imageUrl?.trim();
     final canFinish = _canFinishEvent(event);
+    final bookingAction = _hostedBookingAction(event);
 
     return BbV5Card(
       padding: const EdgeInsets.all(12),
@@ -994,6 +997,10 @@ class _HostedEventTile extends StatelessWidget {
               ],
             ),
           ),
+          if (bookingAction != null) ...[
+            const SizedBox(height: 10),
+            _HostedBookingStrip(action: bookingAction),
+          ],
           const SizedBox(height: 12),
           Row(
             children: [
@@ -1022,6 +1029,122 @@ class _HostedEventTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _HostedBookingStrip extends StatelessWidget {
+  const _HostedBookingStrip({required this.action});
+
+  final _HostedBookingAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    return BbV5DashedBorder(
+      key: const Key('host-booking-strip'),
+      radius: 14,
+      child: Material(
+        color: BbV5Colors.paper,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: () => _openHostedBookingAction(context, action),
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: BbV5Colors.paperHi,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: BbV5Colors.hair),
+                  ),
+                  child: Icon(
+                    action.icon,
+                    size: 15,
+                    color: BbV5Colors.terra,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        action.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: bbV5DisplayStyle(fontSize: 11.5, height: 1.15),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        action.status,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.caption.copyWith(
+                          color: BbV5Colors.inkMute,
+                          fontSize: 10,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  height: 28,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: BbV5Colors.terraSoft,
+                    borderRadius: BorderRadius.circular(BbV5Radii.pill),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        action.cta,
+                        style: AppTextStyles.button.copyWith(
+                          color: BbV5Colors.accentDeep,
+                          fontFamily: 'Sora',
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        LucideIcons.chevron_right,
+                        size: 13,
+                        color: BbV5Colors.accentDeep,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HostedBookingAction {
+  const _HostedBookingAction({
+    required this.label,
+    required this.status,
+    required this.cta,
+    required this.icon,
+    required this.url,
+  });
+
+  final String label;
+  final String status;
+  final String cta;
+  final IconData icon;
+  final String url;
 }
 
 class _FinishMeetupSheet extends ConsumerStatefulWidget {
@@ -1605,6 +1728,86 @@ class _HostErrorState extends StatelessWidget {
       ),
     );
   }
+}
+
+_HostedBookingAction? _hostedBookingAction(Event event) {
+  final ticketUrl = event.ticketUrl?.trim();
+  if (event.hasPaidTicket && ticketUrl != null && ticketUrl.isNotEmpty) {
+    final sold = event.going <= 0 ? 0 : event.going;
+    final capacity = event.capacity > 0 ? ' из ${event.capacity}' : '';
+    return _HostedBookingAction(
+      label: 'Билеты · $sold$capacity',
+      status: '${_ticketPriceLabel(event)} · продано $sold',
+      cta: 'Билеты',
+      icon: LucideIcons.ticket,
+      url: ticketUrl,
+    );
+  }
+
+  final bookingUrl = event.bookingUrl?.trim();
+  if (event.hasTableBooking && bookingUrl != null && bookingUrl.isNotEmpty) {
+    final tableLabel =
+        event.capacity > 0 ? 'столик на ${event.capacity}' : 'столик';
+    return _HostedBookingAction(
+      label: '${_hostedPlaceTitle(event.place)} · $tableLabel',
+      status: 'подтверждено · ${eventClockLabel(event.time)}',
+      cta: 'Бронь',
+      icon: LucideIcons.calendar_check,
+      url: bookingUrl,
+    );
+  }
+
+  return null;
+}
+
+Future<void> _openHostedBookingAction(
+  BuildContext context,
+  _HostedBookingAction action,
+) async {
+  final uri = Uri.tryParse(action.url);
+  if (uri == null || !uri.hasScheme) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Не получилось открыть ссылку')),
+    );
+    return;
+  }
+
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (opened || !context.mounted) {
+    return;
+  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Не получилось открыть ссылку')),
+  );
+}
+
+String _ticketPriceLabel(Event event) {
+  final price = event.ticketPriceFrom;
+  if (price != null && price > 0) {
+    return 'от ${_formatRubles(price)} ₽';
+  }
+  return 'цена на сайте';
+}
+
+String _hostedPlaceTitle(String place) {
+  final trimmed = place.trim();
+  final comma = trimmed.indexOf(',');
+  if (comma <= 0) {
+    return trimmed.isEmpty ? 'Место' : trimmed;
+  }
+  return trimmed.substring(0, comma).trim();
+}
+
+String _formatRubles(int value) {
+  final raw = value.toString();
+  final buffer = StringBuffer();
+  for (var index = 0; index < raw.length; index += 1) {
+    if (index > 0 && (raw.length - index) % 3 == 0) {
+      buffer.write(' ');
+    }
+    buffer.write(raw[index]);
+  }
+  return buffer.toString();
 }
 
 String _statusLabel(Event event) {

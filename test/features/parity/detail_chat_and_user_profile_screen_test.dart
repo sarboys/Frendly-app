@@ -11,6 +11,7 @@ import 'package:big_break_mobile/features/user_profile/presentation/user_profile
 import 'package:big_break_mobile/shared/data/app_providers.dart';
 import 'package:big_break_mobile/shared/data/backend_repository.dart';
 import 'package:big_break_mobile/shared/models/evening_session.dart';
+import 'package:big_break_mobile/shared/models/event_detail.dart';
 import 'package:big_break_mobile/shared/models/message.dart';
 import 'package:big_break_mobile/shared/models/meetup_chat.dart';
 import 'package:big_break_mobile/shared/models/paginated_response.dart';
@@ -357,13 +358,47 @@ void main() {
               ),
             ],
           ),
+          eventDetailProvider.overrideWith((ref, eventId) async {
+            return const EventDetail(
+              id: 'e1',
+              title: 'Кино под открытым небом',
+              emoji: '🎬',
+              time: 'Сегодня · 21:00',
+              place: 'Brix Wine, Покровка 12',
+              distance: '1.2 км',
+              vibe: 'Спокойно',
+              description: 'Сначала встречаемся за столиком.',
+              hostNote: null,
+              joined: true,
+              partnerName: null,
+              partnerOffer: null,
+              capacity: 8,
+              going: 4,
+              chatId: 'chat-ticket',
+              bookingUrl: 'https://tomesto.example/brix',
+              bookingProvider: 'Tomesto',
+              bookingAverageCheck: 2400,
+              host: EventHost(
+                id: 'host-1',
+                displayName: 'Маша',
+                verified: true,
+                rating: 4.9,
+                meetupCount: 7,
+                avatarUrl: null,
+              ),
+              attendees: [],
+            );
+          }),
         ],
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Купить билет · от 2 500 ₽'), findsOneWidget);
-    expect(find.text('Ticketland · Live Arena'), findsOneWidget);
+    expect(find.byKey(const Key('pinned-meetup-booking-grid')), findsOneWidget);
+    expect(find.text('бронь'), findsOneWidget);
+    expect(find.text('Столик на 8'), findsOneWidget);
+    expect(find.text('билет'), findsOneWidget);
+    expect(find.text('от 2 500 ₽'), findsOneWidget);
     expect(find.byIcon(LucideIcons.ticket), findsWidgets);
   });
 
