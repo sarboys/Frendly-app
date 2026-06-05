@@ -7,20 +7,25 @@ private let mapkitApiKeyInfoKey = "MapkitApiKey"
 private let dartDefinesInfoKey = "DartDefines"
 private let mapkitDartDefineKey = "BIG_BREAK_MAPKIT_API_KEY"
 private let pushTokenChannelName = "app.push.token"
+private let runtimeEnvironmentChannelName = "app.runtime.environment"
 private let pushTokenStorageKey = "app.push.token.cached"
 private let socialShareChannelName = "app.social.share"
 private let yandexAuthChannelName = "app.yandex.auth"
 private let yandexClientIdInfoKey = "YandexClientId"
+private let yandexAuthorizationStrategyKey = "authorizationStrategy"
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private var bootstrapChannel: FlutterMethodChannel?
+  private var runtimeEnvironmentChannel: FlutterMethodChannel?
   private var pushTokenChannel: FlutterMethodChannel?
   private var socialShareChannel: FlutterMethodChannel?
   private var yandexAuthChannel: FlutterMethodChannel?
   private var pendingPushTokenResult: FlutterResult?
   private var pendingYandexAuthResult: FlutterResult?
+  private var pendingYandexAuthTimeout: DispatchWorkItem?
   private var yandexLoginClientId: String?
+  private var yandexLoginAuthorizationStrategy: YandexLoginSDK.AuthorizationStrategy?
   private var isMapkitConfigured = false
 
   override func application(
@@ -34,6 +39,7 @@ private let yandexClientIdInfoKey = "YandexClientId"
 
     if let registrar = registrar(forPlugin: "AppBootstrapChannel") {
       registerBootstrapChannel(with: registrar)
+      registerRuntimeEnvironmentChannel(with: registrar)
       registerPushTokenChannel(with: registrar)
       registerSocialShareChannel(with: registrar)
       registerYandexAuthChannel(with: registrar)
@@ -69,6 +75,26 @@ private let yandexClientIdInfoKey = "YandexClientId"
       }
     }
     bootstrapChannel = channel
+  }
+
+  private func registerRuntimeEnvironmentChannel(with registrar: FlutterPluginRegistrar) {
+    let channel = FlutterMethodChannel(
+      name: runtimeEnvironmentChannelName,
+      binaryMessenger: registrar.messenger()
+    )
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "isIosAppOnMac":
+        if #available(iOS 14.0, *) {
+          result(ProcessInfo.processInfo.isiOSAppOnMac)
+        } else {
+          result(false)
+        }
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    runtimeEnvironmentChannel = channel
   }
 
   private func configuredMapkitApiKey() -> String? {
@@ -177,6 +203,8 @@ private let yandexClientIdInfoKey = "YandexClientId"
       switch call.method {
       case "signIn":
         self.startYandexAuth(call: call, result: result)
+      case "signOut":
+        self.signOutYandexAuth(call: call, result: result)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -325,7 +353,11 @@ private let yandexClientIdInfoKey = "YandexClientId"
     }
 
     do {
-      try ensureYandexLoginActivated(clientId: clientId)
+      let authorizationStrategy = yandexAuthorizationStrategy(from: call)
+      try ensureYandexLoginActivated(
+        clientId: clientId,
+        authorizationStrategy: authorizationStrategy
+      )
       guard let viewController = activeViewController() else {
         result(FlutterError(
           code: "yandex_auth_unavailable",
@@ -336,15 +368,58 @@ private let yandexClientIdInfoKey = "YandexClientId"
       }
 
       pendingYandexAuthResult = result
+      scheduleYandexAuthTimeout()
       try YandexLoginSDK.shared.authorize(
         with: viewController,
         customValues: nil,
-        authorizationStrategy: .default
+        authorizationStrategy: authorizationStrategy
       )
     } catch {
+      clearYandexAuthTimeout()
       pendingYandexAuthResult = nil
       result(FlutterError(
         code: "yandex_auth_failed",
+        message: error.localizedDescription,
+        details: nil
+      ))
+    }
+  }
+
+  private func scheduleYandexAuthTimeout() {
+    clearYandexAuthTimeout()
+    let timeout = DispatchWorkItem { [weak self] in
+      guard let self, let pendingResult = self.pendingYandexAuthResult else {
+        return
+      }
+
+      self.pendingYandexAuthResult = nil
+      self.pendingYandexAuthTimeout = nil
+      pendingResult(FlutterError(
+        code: "yandex_auth_timeout",
+        message: "Yandex auth callback did not return to the app",
+        details: nil
+      ))
+    }
+
+    pendingYandexAuthTimeout = timeout
+    DispatchQueue.main.asyncAfter(deadline: .now() + 90, execute: timeout)
+  }
+
+  private func clearYandexAuthTimeout() {
+    pendingYandexAuthTimeout?.cancel()
+    pendingYandexAuthTimeout = nil
+  }
+
+  private func signOutYandexAuth(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    do {
+      try YandexLoginSDK.shared.logout()
+      if let clientId = yandexClientId(from: call) ?? configuredYandexClientId() {
+        try? YandexLoginSDK.shared.logout(with: clientId)
+      }
+      result(nil)
+    } catch {
+      result(FlutterError(
+        code: "yandex_logout_failed",
         message: error.localizedDescription,
         details: nil
       ))
@@ -356,16 +431,24 @@ private let yandexClientIdInfoKey = "YandexClientId"
       return
     }
 
-    try? ensureYandexLoginActivated(clientId: clientId)
+    try? ensureYandexLoginActivated(clientId: clientId, authorizationStrategy: .webOnly)
   }
 
-  private func ensureYandexLoginActivated(clientId: String) throws {
-    if yandexLoginClientId == clientId {
+  private func ensureYandexLoginActivated(
+    clientId: String,
+    authorizationStrategy: YandexLoginSDK.AuthorizationStrategy
+  ) throws {
+    if yandexLoginClientId == clientId &&
+        yandexLoginAuthorizationStrategy == authorizationStrategy {
       return
     }
 
-    try YandexLoginSDK.shared.activate(with: clientId)
+    try YandexLoginSDK.shared.activate(
+      with: clientId,
+      authorizationStrategy: authorizationStrategy
+    )
     yandexLoginClientId = clientId
+    yandexLoginAuthorizationStrategy = authorizationStrategy
   }
 
   private func yandexClientId(from call: FlutterMethodCall) -> String? {
@@ -379,6 +462,24 @@ private let yandexClientIdInfoKey = "YandexClientId"
   private func configuredYandexClientId() -> String? {
     let raw = Bundle.main.object(forInfoDictionaryKey: yandexClientIdInfoKey) as? String
     return cleanYandexClientId(raw)
+  }
+
+  private func yandexAuthorizationStrategy(
+    from call: FlutterMethodCall
+  ) -> YandexLoginSDK.AuthorizationStrategy {
+    guard let arguments = call.arguments as? [String: Any],
+          let raw = arguments[yandexAuthorizationStrategyKey] as? String else {
+      return .webOnly
+    }
+
+    switch raw.trimmingCharacters(in: .whitespacesAndNewlines) {
+    case "default":
+      return .default
+    case "primaryOnly":
+      return .primaryOnly
+    default:
+      return .webOnly
+    }
   }
 
   private func cleanYandexClientId(_ raw: String?) -> String? {
@@ -425,6 +526,7 @@ extension AppDelegate: YandexLoginSDKObserver {
       return
     }
 
+    clearYandexAuthTimeout()
     pendingYandexAuthResult = nil
     switch result {
     case .success(let loginResult):

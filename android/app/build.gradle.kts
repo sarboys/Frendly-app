@@ -2,6 +2,7 @@ import java.util.Base64
 
 plugins {
     id("com.android.application")
+    id("com.google.gms.google-services")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
@@ -38,7 +39,7 @@ val mapkitApiKey = findProperty("BIG_BREAK_MAPKIT_API_KEY")?.toString()
     ?: ""
 
 android {
-    namespace = "com.example.big_break_mobile"
+    namespace = "com.sergeypolyakov.frendly.mobile2"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -57,7 +58,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.big_break_mobile"
+        applicationId = "com.sergeypolyakov.frendly.mobile2.dev"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26

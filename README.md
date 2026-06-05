@@ -1,6 +1,6 @@
-# Big Break Mobile
+# Frendly Mobile2
 
-Flutter приложение Big Break.
+Новое Flutter приложение под дизайн `front2`.
 
 Главные документы перед работой:
 - `../docs/design-system-big-break.md`
@@ -23,7 +23,7 @@ flutter doctor
 Подготовка проекта:
 
 ```bash
-cd mobile
+cd mobile2
 flutter pub get
 cd ios
 pod install
@@ -33,14 +33,12 @@ cd ..
 ## Запуск через Flutter
 
 ```bash
-cd mobile
+cd mobile2
 flutter run
 ```
 
-По умолчанию приложение смотрит на тестовый backend:
-- API: `https://api.frendly.tech`
-- WebSocket: `wss://api.frendly.tech/ws`
-- Telegram bot: `frendly_code_bot`
+На первом этапе новый Dart UI работает на моковых данных.
+Backend и realtime еще не подключены.
 
 Если нужен другой backend:
 
@@ -79,7 +77,7 @@ BIG_BREAK_YANDEX_CLIENT_ID=your-yandex-client-id
 3. Открой workspace, не project:
 
 ```bash
-open mobile/ios/Runner.xcworkspace
+open mobile2/ios/Runner.xcworkspace
 ```
 
 4. В Xcode выбери scheme `Runner`.
@@ -93,7 +91,7 @@ open mobile/ios/Runner.xcworkspace
 Если Pods не подтянулись или Xcode ругается на зависимости:
 
 ```bash
-cd mobile
+cd mobile2
 flutter clean
 flutter pub get
 cd ios

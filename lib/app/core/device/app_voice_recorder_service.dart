@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:big_break_mobile/shared/models/recorded_voice_draft.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:record/record.dart';
 
@@ -25,16 +23,36 @@ final appVoiceRecorderServiceProvider =
     Provider<AppVoiceRecorderService>((ref) {
   final service = NativeAppVoiceRecorderService();
   ref.onDispose(() {
-    service.dispose();
+    unawaited(service.dispose());
   });
   return service;
 });
 
+class RecordedVoiceDraft {
+  const RecordedVoiceDraft({
+    required this.path,
+    required this.fileName,
+    required this.durationMs,
+    required this.waveform,
+  });
+
+  final String path;
+  final String fileName;
+  final int durationMs;
+  final List<double> waveform;
+}
+
 abstract class AppVoiceRecorderService {
   Stream<double> get amplitudeStream;
+
+  Future<bool> hasPermission();
+
   Future<void> start();
+
   Future<RecordedVoiceDraft> stop();
+
   Future<void> cancel();
+
   Future<void> dispose();
 }
 
@@ -58,70 +76,71 @@ class NativeAppVoiceRecorderService implements AppVoiceRecorderService {
   Stream<double> get amplitudeStream => _amplitudeController.stream;
 
   @override
+  Future<bool> hasPermission() {
+    return _recorder.hasPermission();
+  }
+
+  @override
   Future<void> start() async {
     await _stopAmplitudeSubscription();
     _amplitudeSamples.clear();
 
-    final tempDir = await Directory.systemTemp.createTemp('bb-voice');
-    final fileName = 'voice-${DateTime.now().microsecondsSinceEpoch}.m4a';
+    final tempDir = await Directory.systemTemp.createTemp('dateasy-voice');
+    final fileName =
+        'dateasy-voice-${DateTime.now().microsecondsSinceEpoch}.m4a';
     final path = '${tempDir.path}/$fileName';
 
     await _recorder.ios?.manageAudioSession(true);
-
     try {
-      await _recorder.start(
-        buildVoiceRecordConfig(),
-        path: path,
-      );
+      await _recorder.start(buildVoiceRecordConfig(), path: path);
     } catch (_) {
       await _recreateRecorder();
       await _recorder.ios?.manageAudioSession(true);
-      await _recorder.start(
-        buildVoiceRecordConfig(),
-        path: path,
-      );
+      await _recorder.start(buildVoiceRecordConfig(), path: path);
     }
-
-    _amplitudeSubscription =
-        _recorder.onAmplitudeChanged(_amplitudeInterval).listen((amplitude) {
-      final normalized = _normalizeAmplitude(amplitude.current);
-      _amplitudeSamples.add(normalized);
-      if (!_amplitudeController.isClosed) {
-        _amplitudeController.add(normalized);
-      }
-    });
 
     _currentPath = path;
     _currentDirectory = tempDir;
     _startedAt = DateTime.now();
+    _amplitudeSubscription =
+        _recorder.onAmplitudeChanged(_amplitudeInterval).listen((amplitude) {
+      final normalized = _normalizeAmplitude(amplitude.current);
+      _amplitudeSamples.add(normalized);
+      if (_amplitudeSamples.length > 1800) {
+        _amplitudeSamples.removeRange(0, _amplitudeSamples.length - 1800);
+      }
+      if (!_amplitudeController.isClosed) {
+        _amplitudeController.add(normalized);
+      }
+    });
   }
 
   @override
   Future<RecordedVoiceDraft> stop() async {
     final path = await _recorder.stop() ?? _currentPath;
     await _stopAmplitudeSubscription();
-    if (path == null) {
-      throw StateError('Voice recording path is missing');
+    if (path == null || path.isEmpty) {
+      throw StateError('voice_recording_path_missing');
     }
 
-    final file = File(path);
-    final size = await file.length();
-    final duration = _normalizedDuration(
-      DateTime.now().difference(_startedAt ?? DateTime.now()),
-    );
-    final waveform = _buildWaveform(duration);
-
+    final startedAt = _startedAt;
+    final durationMs = startedAt == null
+        ? 1
+        : DateTime.now()
+            .difference(startedAt)
+            .inMilliseconds
+            .clamp(1, 180000)
+            .toInt();
+    final waveform = _recordWaveformFromSamples(_amplitudeSamples, durationMs);
+    _amplitudeSamples.clear();
     _currentPath = null;
     _currentDirectory = null;
     _startedAt = null;
 
     return RecordedVoiceDraft(
-      file: PlatformFile(
-        name: file.uri.pathSegments.last,
-        size: size,
-        path: file.path,
-      ),
-      duration: duration,
+      path: path,
+      fileName: path.replaceAll('\\', '/').split('/').last,
+      durationMs: durationMs,
       waveform: waveform,
     );
   }
@@ -129,7 +148,10 @@ class NativeAppVoiceRecorderService implements AppVoiceRecorderService {
   @override
   Future<void> cancel() async {
     await _stopAmplitudeSubscription();
-    await _recorder.cancel();
+    try {
+      await _recorder.cancel();
+    } catch (_) {}
+    _amplitudeSamples.clear();
     _currentPath = null;
     final directory = _currentDirectory;
     _currentDirectory = null;
@@ -153,76 +175,57 @@ class NativeAppVoiceRecorderService implements AppVoiceRecorderService {
     _recorder = AudioRecorder();
   }
 
-  Duration _normalizedDuration(Duration duration) {
-    if (duration <= Duration.zero) {
-      return const Duration(seconds: 1);
-    }
-    return duration;
+  Future<void> _stopAmplitudeSubscription() async {
+    await _amplitudeSubscription?.cancel();
+    _amplitudeSubscription = null;
   }
 
   Future<void> _deleteDirectory(Directory? directory) async {
     if (directory == null) {
       return;
     }
-
     try {
       if (await directory.exists()) {
         await directory.delete(recursive: true);
       }
     } catch (_) {}
   }
+}
 
-  Future<void> _stopAmplitudeSubscription() async {
-    await _amplitudeSubscription?.cancel();
-    _amplitudeSubscription = null;
+double _normalizeAmplitude(double currentDbfs) {
+  if (!currentDbfs.isFinite) {
+    return 0.08;
+  }
+  final clamped = currentDbfs.clamp(-50.0, 0.0).toDouble();
+  final normalized = (clamped + 50.0) / 50.0;
+  return math.pow(normalized, 1.6).toDouble().clamp(0.08, 1.0);
+}
+
+List<double> _recordWaveformFromSamples(List<double> samples, int durationMs) {
+  if (samples.isEmpty) {
+    return _fallbackWaveform(durationMs);
   }
 
-  double _normalizeAmplitude(double currentDbfs) {
-    if (!currentDbfs.isFinite) {
-      return 0.0;
+  final targetBars = math.max(24, math.min(48, durationMs ~/ 350));
+  final samplesPerBar = math.max(1, (samples.length / targetBars).ceil());
+  final bars = <double>[];
+  for (var index = 0; index < samples.length; index += samplesPerBar) {
+    final end = math.min(index + samplesPerBar, samples.length);
+    var peak = 0.08;
+    for (var sampleIndex = index; sampleIndex < end; sampleIndex += 1) {
+      peak = math.max(peak, samples[sampleIndex]);
     }
-    final clamped = currentDbfs.clamp(-50.0, 0.0).toDouble();
-    final normalized = (clamped + 50.0) / 50.0;
-    return math.pow(normalized, 1.6).toDouble().clamp(0.0, 1.0);
+    bars.add(peak.clamp(0.08, 1.0));
   }
 
-  List<double> _buildWaveform(Duration duration) {
-    if (_amplitudeSamples.isEmpty) {
-      return _fallbackWaveform(duration);
-    }
+  return bars.isEmpty ? _fallbackWaveform(durationMs) : bars;
+}
 
-    final targetBars = math.max(
-      24,
-      math.min(48, duration.inMilliseconds ~/ 350),
-    );
-    final samplesPerBar = math.max(
-      1,
-      (_amplitudeSamples.length / targetBars).ceil(),
-    );
-    final bars = <double>[];
-
-    for (var index = 0;
-        index < _amplitudeSamples.length;
-        index += samplesPerBar) {
-      final chunk = _amplitudeSamples
-          .skip(index)
-          .take(samplesPerBar)
-          .toList(growable: false);
-      if (chunk.isEmpty) {
-        continue;
-      }
-      bars.add(chunk.reduce(math.max).clamp(0.0, 1.0));
-    }
-
-    return bars.isEmpty ? _fallbackWaveform(duration) : bars;
-  }
-
-  List<double> _fallbackWaveform(Duration duration) {
-    final bars = math.max(24, math.min(40, duration.inMilliseconds ~/ 450));
-    return List<double>.generate(
-      bars,
-      (index) => 0.22 + ((index % 5) * 0.12),
-      growable: false,
-    );
-  }
+List<double> _fallbackWaveform(int durationMs) {
+  final bars = math.max(24, math.min(40, durationMs ~/ 450));
+  return List<double>.generate(
+    bars,
+    (index) => 0.22 + ((index % 5) * 0.12),
+    growable: false,
+  );
 }

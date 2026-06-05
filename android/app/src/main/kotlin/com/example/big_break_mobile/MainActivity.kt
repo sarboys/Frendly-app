@@ -1,4 +1,4 @@
-package com.example.big_break_mobile
+package com.sergeypolyakov.frendly.mobile2
 
 import android.content.Intent
 import androidx.core.content.FileProvider

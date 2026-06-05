@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 class BackendConfig {
   const BackendConfig._();
 
@@ -6,7 +8,7 @@ class BackendConfig {
     defaultValue: 'https://api.frendly.tech',
   );
 
-  static const chatWsUrl = String.fromEnvironment(
+  static const chatWebSocketUrl = String.fromEnvironment(
     'BIG_BREAK_CHAT_WS_URL',
     defaultValue: 'wss://api.frendly.tech/ws',
   );
@@ -16,41 +18,63 @@ class BackendConfig {
     defaultValue: 'frendly_code_bot',
   );
 
-  static const facebookAppId = String.fromEnvironment(
-    'BIG_BREAK_FACEBOOK_APP_ID',
-    defaultValue: '955838486813478',
-  );
-
-  static const enableTestPhoneShortcuts = bool.fromEnvironment(
-    'BIG_BREAK_ENABLE_TEST_PHONE_SHORTCUTS',
-    defaultValue: false,
-  );
-
-  static const localFirstCacheDefaultEnabled = true;
-
-  static const localFirstCacheEnabled = bool.fromEnvironment(
-    'BIG_BREAK_LOCAL_FIRST_CACHE',
-    defaultValue: localFirstCacheDefaultEnabled,
-  );
+  static const _defaultGoogleClientId =
+      '202569120900-49bl2vjan89hiof10o7uvffij50jj70a.apps.googleusercontent.com';
 
   static const googleClientId = String.fromEnvironment(
     'BIG_BREAK_GOOGLE_CLIENT_ID',
-    defaultValue: '',
+    defaultValue: _defaultGoogleClientId,
   );
 
   static const googleServerClientId = String.fromEnvironment(
     'BIG_BREAK_GOOGLE_SERVER_CLIENT_ID',
-    defaultValue: '',
+    defaultValue: googleClientId,
   );
 
-  static const yandexOAuthClientId = String.fromEnvironment(
+  static const yandexClientId = String.fromEnvironment(
     'BIG_BREAK_YANDEX_CLIENT_ID',
-    defaultValue: '',
   );
 
-  static Uri telegramAuthUri(String startToken) {
-    return Uri.parse(
-      'https://t.me/$telegramBotUsername?start=login_$startToken',
-    );
+  static const enableTestPhoneShortcuts = bool.fromEnvironment(
+    'BIG_BREAK_ENABLE_TEST_PHONE_SHORTCUTS',
+    defaultValue: true,
+  );
+
+  static const _seededTestPhoneShortcutNumbers = <String>{
+    '+70000000000',
+    '+71111111111',
+    '+72222222222',
+    '+73333333333',
+    '+74444444444',
+    '+75555555555',
+    '+76666666666',
+    '+77777777777',
+    '+78888888888',
+    '+79999999999',
+  };
+
+  static bool isSeededTestPhoneShortcutNumber(String phoneNumber) {
+    if (kReleaseMode && !enableTestPhoneShortcuts) {
+      return false;
+    }
+    final normalized = phoneNumber.replaceAll(RegExp(r'[\s()-]'), '');
+    return _seededTestPhoneShortcutNumbers.contains(normalized);
   }
+
+  static const mapKitKey = String.fromEnvironment(
+    'BIG_BREAK_MAPKIT_API_KEY',
+    defaultValue: String.fromEnvironment('BIG_BREAK_YANDEX_MAPKIT_KEY'),
+  );
+
+  static bool get hasMapKitKey => isUsableMapKitKey(mapKitKey);
+
+  static bool isUsableMapKitKey(String value) {
+    final key = value.trim();
+    return key.isNotEmpty && key != 'your-mapkit-key' && !key.startsWith(r'$(');
+  }
+
+  static const localFirstCacheEnabled = bool.fromEnvironment(
+    'BIG_BREAK_LOCAL_FIRST_CACHE',
+    defaultValue: true,
+  );
 }

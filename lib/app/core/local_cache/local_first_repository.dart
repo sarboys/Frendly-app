@@ -1,223 +1,204 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
-import 'package:big_break_mobile/app/core/local_cache/app_cache_policy.dart';
-import 'package:big_break_mobile/app/core/local_cache/app_local_cache_store.dart';
-import 'package:big_break_mobile/app/core/local_cache/local_cache_metrics.dart';
+import 'package:mobile2/app/core/local_cache/app_cache_key.dart';
+import 'package:mobile2/app/core/local_cache/app_local_cache_store.dart';
 
-typedef LocalFirstNetworkFetch<T> = FutureOr<T> Function();
-typedef LocalFirstJsonDecoder<T> = T Function(Object? json);
-typedef LocalFirstJsonEncoder<T> = Object? Function(T value);
-
-class LocalFirstResult<T> {
-  const LocalFirstResult({
-    required this.data,
-    required this.fromCache,
-    required this.isStale,
-    this.refresh,
-  });
-
-  final T data;
-  final bool fromCache;
-  final bool isStale;
-  final Future<T>? refresh;
+enum LocalCacheReadPolicy {
+  freshOnly,
+  staleWhileRefresh,
+  sensitiveFreshOnly,
 }
 
 class LocalFirstRepository {
-  LocalFirstRepository(this._store);
+  LocalFirstRepository(
+    this._store, {
+    void Function(Object error, StackTrace stackTrace)? onCacheFailure,
+    bool Function(Object error)? isExpectedCancellation,
+  })  : _onCacheFailure = onCacheFailure,
+        _isExpectedCancellation = isExpectedCancellation;
 
   final AppLocalCacheStore _store;
-  final _invalidationVersions = <String, int>{};
+  final void Function(Object error, StackTrace stackTrace)? _onCacheFailure;
+  final bool Function(Object error)? _isExpectedCancellation;
+  final Map<String, Future<void>> _refreshes = <String, Future<void>>{};
 
-  Future<void> deleteKey({
-    required AppCacheUserScope userScope,
-    required AppCacheNamespace namespace,
-    required String cacheKey,
-  }) async {
-    _bumpInvalidationVersion(
-      userScope: userScope,
-      namespace: namespace,
-      cacheKey: cacheKey,
-    );
-    await _store.deleteKey(
-      userScope: userScope,
-      namespace: namespace,
-      cacheKey: cacheKey,
-    );
-  }
-
-  Future<void> deleteNamespace({
-    required AppCacheUserScope userScope,
-    required AppCacheNamespace namespace,
-  }) async {
-    _bumpInvalidationVersion(
-      userScope: userScope,
-      namespace: namespace,
-    );
-    await _store.deleteNamespace(
-      userScope: userScope,
-      namespace: namespace,
-    );
-  }
-
-  Future<LocalFirstResult<T>> fetch<T>({
-    required AppCacheUserScope userScope,
-    required AppCacheNamespace namespace,
-    required String cacheKey,
-    required AppCachePolicy policy,
-    required LocalFirstNetworkFetch<T> networkFetch,
-    required LocalFirstJsonDecoder<T> fromJson,
-    required LocalFirstJsonEncoder<T> toJson,
+  Future<T> fetch<T>({
+    required AppCacheKey key,
+    required Duration ttl,
+    required Future<Map<String, Object?>> Function() network,
+    required T Function(Map<String, Object?> json) decode,
+    LocalCacheReadPolicy policy = LocalCacheReadPolicy.staleWhileRefresh,
     bool forceRefresh = false,
+    bool Function(Map<String, Object?> json)? useCached,
   }) async {
-    final invalidationVersion = _invalidationVersion(
-      userScope: userScope,
-      namespace: namespace,
-      cacheKey: cacheKey,
-    );
+    final now = DateTime.now();
     if (!forceRefresh) {
-      final cached = await _store.readFresh(
-        userScope: userScope,
-        namespace: namespace,
-        cacheKey: cacheKey,
-      );
-      if (cached != null) {
-        try {
-          final data = fromJson(jsonDecode(cached.payloadJson));
-          return LocalFirstResult<T>(
-            data: data,
-            fromCache: true,
-            isStale: cached.isStale,
-            refresh: _refresh(
-              userScope: userScope,
-              namespace: namespace,
-              cacheKey: cacheKey,
-              policy: policy,
-              networkFetch: networkFetch,
-              toJson: toJson,
-              fallback: data,
-              invalidationVersion: invalidationVersion,
-            ),
-          );
-        } catch (_) {
-          await _store.deleteKey(
-            userScope: userScope,
-            namespace: namespace,
-            cacheKey: cacheKey,
-          );
+      final cached = await _readFreshJson(key, now: now);
+      if (cached != null && _shouldUseCached(cached, useCached)) {
+        unawaited(_refreshInBackground(
+          key: key,
+          ttl: ttl,
+          network: network,
+        ));
+        return decode(cached);
+      }
+      if (policy == LocalCacheReadPolicy.staleWhileRefresh) {
+        final stale = await _readJson(key);
+        if (stale != null && _shouldUseCached(stale, useCached)) {
+          unawaited(_refreshInBackground(
+            key: key,
+            ttl: ttl,
+            network: network,
+          ));
+          return decode(stale);
         }
       }
     }
-
-    final data = await _fetchAndWrite(
-      userScope: userScope,
-      namespace: namespace,
-      cacheKey: cacheKey,
-      policy: policy,
-      networkFetch: networkFetch,
-      toJson: toJson,
-      invalidationVersion: invalidationVersion,
-    );
-    return LocalFirstResult<T>(
-      data: data,
-      fromCache: false,
-      isStale: false,
-    );
+    final fresh = await network();
+    await _writeJson(key, fresh, expiresAt: DateTime.now().add(ttl));
+    return decode(fresh);
   }
 
-  Future<T> _refresh<T>({
-    required AppCacheUserScope userScope,
-    required AppCacheNamespace namespace,
-    required String cacheKey,
-    required AppCachePolicy policy,
-    required LocalFirstNetworkFetch<T> networkFetch,
-    required LocalFirstJsonEncoder<T> toJson,
-    required T fallback,
-    required int invalidationVersion,
+  Stream<T> watch<T>({
+    required AppCacheKey key,
+    required Duration ttl,
+    required Future<Map<String, Object?>> Function() network,
+    required T Function(Map<String, Object?> json) decode,
+    LocalCacheReadPolicy policy = LocalCacheReadPolicy.staleWhileRefresh,
+    bool forceRefresh = false,
+    bool Function(Map<String, Object?> json)? useCached,
+  }) async* {
+    String? lastJson;
+
+    if (!forceRefresh) {
+      final fresh = await _readFreshJson(key, now: DateTime.now());
+      final cached = fresh ??
+          (policy == LocalCacheReadPolicy.staleWhileRefresh
+              ? await _readJson(key)
+              : null);
+      if (cached != null && _shouldUseCached(cached, useCached)) {
+        lastJson = jsonEncode(cached);
+        yield decode(cached);
+        unawaited(_refreshInBackground(
+          key: key,
+          ttl: ttl,
+          network: network,
+        ));
+      }
+    }
+
+    if (lastJson == null) {
+      final Map<String, Object?> fresh;
+      try {
+        fresh = await network();
+      } catch (error, stackTrace) {
+        if (_isExpectedCancellation?.call(error) ?? false) {
+          return;
+        }
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+      lastJson = jsonEncode(fresh);
+      await _writeJson(
+        key,
+        fresh,
+        expiresAt: DateTime.now().add(ttl),
+      );
+      yield decode(fresh);
+    }
+
+    try {
+      await for (final json in _store.watchJson(key)) {
+        if (json == null) {
+          continue;
+        }
+        final encoded = jsonEncode(json);
+        if (encoded == lastJson) {
+          continue;
+        }
+        lastJson = encoded;
+        yield decode(json);
+      }
+    } catch (error, stackTrace) {
+      _onCacheFailure?.call(error, stackTrace);
+    }
+  }
+
+  bool _shouldUseCached(
+    Map<String, Object?> json,
+    bool Function(Map<String, Object?> json)? useCached,
+  ) {
+    return useCached == null || useCached(json);
+  }
+
+  Future<void> _refreshInBackground({
+    required AppCacheKey key,
+    required Duration ttl,
+    required Future<Map<String, Object?>> Function() network,
+  }) {
+    final refreshKey = _refreshKey(key);
+    final existing = _refreshes[refreshKey];
+    if (existing != null) {
+      return existing;
+    }
+    final refresh = _runRefresh(key: key, ttl: ttl, network: network);
+    _refreshes[refreshKey] = refresh;
+    return refresh.whenComplete(() {
+      if (identical(_refreshes[refreshKey], refresh)) {
+        _refreshes.remove(refreshKey);
+      }
+    });
+  }
+
+  Future<void> _runRefresh({
+    required AppCacheKey key,
+    required Duration ttl,
+    required Future<Map<String, Object?>> Function() network,
   }) async {
     try {
-      return await _fetchAndWrite(
-        userScope: userScope,
-        namespace: namespace,
-        cacheKey: cacheKey,
-        policy: policy,
-        networkFetch: networkFetch,
-        toJson: toJson,
-        invalidationVersion: invalidationVersion,
+      final fresh = await network();
+      await _writeJson(
+        key,
+        fresh,
+        expiresAt: DateTime.now().add(ttl),
       );
-    } catch (_) {
-      _store.metrics.increment(LocalCacheMetricNames.cacheRefreshFailure);
-      return fallback;
-    }
+    } catch (_) {}
   }
 
-  Future<T> _fetchAndWrite<T>({
-    required AppCacheUserScope userScope,
-    required AppCacheNamespace namespace,
-    required String cacheKey,
-    required AppCachePolicy policy,
-    required LocalFirstNetworkFetch<T> networkFetch,
-    required LocalFirstJsonEncoder<T> toJson,
-    required int invalidationVersion,
+  String _refreshKey(AppCacheKey key) {
+    return '${key.userScope.value}/${key.namespace}/${key.value}';
+  }
+
+  Future<Map<String, Object?>?> _readFreshJson(
+    AppCacheKey key, {
+    required DateTime now,
   }) async {
-    final data = await Future<T>.sync(networkFetch);
-    if (_invalidationVersion(
-          userScope: userScope,
-          namespace: namespace,
-          cacheKey: cacheKey,
-        ) !=
-        invalidationVersion) {
-      return data;
+    try {
+      return await _store.getFreshJson(key, now: now);
+    } catch (error, stackTrace) {
+      _onCacheFailure?.call(error, stackTrace);
+      return null;
     }
-    await _store.write(
-      userScope: userScope,
-      namespace: namespace,
-      cacheKey: cacheKey,
-      payloadJson: jsonEncode(toJson(data)),
-      policy: policy,
-    );
-    return data;
   }
 
-  void _bumpInvalidationVersion({
-    required AppCacheUserScope userScope,
-    required AppCacheNamespace namespace,
-    String? cacheKey,
-  }) {
-    final key = _invalidationKey(
-      userScope: userScope,
-      namespace: namespace,
-      cacheKey: cacheKey,
-    );
-    _invalidationVersions[key] = (_invalidationVersions[key] ?? 0) + 1;
-  }
-
-  int _invalidationVersion({
-    required AppCacheUserScope userScope,
-    required AppCacheNamespace namespace,
-    required String cacheKey,
-  }) {
-    return (_invalidationVersions[
-                _invalidationKey(userScope: userScope, namespace: namespace)] ??
-            0) +
-        (_invalidationVersions[_invalidationKey(
-              userScope: userScope,
-              namespace: namespace,
-              cacheKey: cacheKey,
-            )] ??
-            0);
-  }
-
-  String _invalidationKey({
-    required AppCacheUserScope userScope,
-    required AppCacheNamespace namespace,
-    String? cacheKey,
-  }) {
-    final base = '${userScope.storageId}/${namespace.value}';
-    if (cacheKey == null) {
-      return base;
+  Future<Map<String, Object?>?> _readJson(AppCacheKey key) async {
+    try {
+      return await _store.getJson(key);
+    } catch (error, stackTrace) {
+      _onCacheFailure?.call(error, stackTrace);
+      return null;
     }
-    return '$base/$cacheKey';
+  }
+
+  Future<void> _writeJson(
+    AppCacheKey key,
+    Map<String, Object?> json, {
+    required DateTime expiresAt,
+  }) async {
+    try {
+      await _store.putJson(key, json, expiresAt: expiresAt);
+    } catch (error, stackTrace) {
+      _onCacheFailure?.call(error, stackTrace);
+    }
   }
 }

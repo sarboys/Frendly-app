@@ -1,282 +1,317 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:big_break_mobile/app/core/device/app_location_service.dart';
-import 'package:big_break_mobile/app/core/maps/mapkit_bootstrap.dart';
-import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/app/theme/app_colors.dart';
-import 'package:big_break_mobile/app/theme/app_radii.dart';
-import 'package:big_break_mobile/app/theme/app_shadows.dart';
-import 'package:big_break_mobile/app/theme/app_spacing.dart';
-import 'package:big_break_mobile/app/theme/app_text_styles.dart';
-import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
-import 'package:big_break_mobile/features/tonight/presentation/v5_search_modal.dart';
-import 'package:big_break_mobile/shared/data/app_providers.dart';
-import 'package:big_break_mobile/shared/data/location_override_provider.dart';
-import 'package:big_break_mobile/shared/models/evening_session.dart';
-import 'package:big_break_mobile/shared/models/event.dart';
-import 'package:big_break_mobile/shared/widgets/bb_bottom_nav.dart';
-import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:mobile2/app/core/config/backend_config.dart';
+import 'package:mobile2/app/core/providers/core_providers.dart';
+import 'package:mobile2/features/meetings/presentation/meeting_boost.dart';
+import 'package:mobile2/shared/data/app_providers.dart';
+import 'package:mobile2/shared/data/city_catalog.dart';
+import 'package:mobile2/shared/data/yandex_city_search_service.dart';
+import 'package:mobile2/shared/models/backend_models.dart';
+import 'package:mobile2/shared/theme/dateasy_theme.dart';
+import 'package:mobile2/shared/widgets/dateasy_bottom_nav.dart';
+import 'package:mobile2/shared/widgets/dateasy_phone_frame.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart' as ym;
-
-@visibleForTesting
-const mapAutoNativeUserLayerEnabled = false;
 
 const _mapZoomStep = 1.0;
 const _minMapZoom = 2.0;
 const _maxMapZoom = 19.0;
-const _radarCarouselInitialPage = 0;
-const _radarCarouselCardViewportFraction = 0.48;
-const _nativeMapPoiLimit = 80;
-const _manualRadiusViewportFitKey = 'manual-radius-fit';
 const _radarClusterPointThreshold = 10;
 const _radarClusterRadius = 64.0;
 const _radarClusterMinZoom = 13;
 const _radarPinScale = 1.04;
 const _radarSelectedPinScale = 1.18;
 const _radarClusterPinScale = 1.12;
+const _radarWaveMinRadiusMeters = 34.0;
+const _radarWaveRadiusStepMeters = 72.0;
+const _radarListFocusZoom = 14.5;
+const _radarListFocusZoomThreshold = 13.0;
+const _radarUserFocusRadiusKm = 5.0;
 
-@visibleForTesting
 const radarDefaultMapPoint = ym.Point(
   latitude: 55.7558,
   longitude: 37.6173,
 );
 
-@visibleForTesting
 enum RadarMapPinKind {
   bars,
   routes,
   affiche,
-  live,
-  user,
-  search,
   cluster,
   promoted,
+  boost6h,
+  boost24h,
+  boost72h,
   coffee,
   footprints,
   music,
+  user,
 }
 
 const _radarPinAssetByKind = <RadarMapPinKind, String>{
-  RadarMapPinKind.bars: 'assets/map/pins/v5_pin_wine.png',
-  RadarMapPinKind.routes: 'assets/map/pins/v5_pin_sparkles.png',
-  RadarMapPinKind.affiche: 'assets/map/pins/v5_pin_ticket.png',
-  RadarMapPinKind.live: 'assets/map/pins/v5_pin_music.png',
+  RadarMapPinKind.bars: 'assets/map/pins/front2_pin_lime.png',
+  RadarMapPinKind.routes: 'assets/map/pins/front2_pin_lilac.png',
+  RadarMapPinKind.affiche: 'assets/map/pins/front2_pin_pink.png',
+  RadarMapPinKind.cluster: 'assets/map/pins/front2_pin_cluster.png',
+  RadarMapPinKind.promoted: 'assets/map/pins/front2_pin_boost_24h.png',
+  RadarMapPinKind.boost6h: 'assets/map/pins/front2_pin_boost_6h.png',
+  RadarMapPinKind.boost24h: 'assets/map/pins/front2_pin_boost_24h.png',
+  RadarMapPinKind.boost72h: 'assets/map/pins/front2_pin_boost_72h.png',
+  RadarMapPinKind.coffee: 'assets/map/pins/front2_pin_lime.png',
+  RadarMapPinKind.footprints: 'assets/map/pins/front2_pin_lilac.png',
+  RadarMapPinKind.music: 'assets/map/pins/front2_pin_lime.png',
   RadarMapPinKind.user: 'assets/map/pins/radar_pin_user.png',
-  RadarMapPinKind.cluster: 'assets/map/pins/radar_pin_cluster.png',
-  RadarMapPinKind.promoted: 'assets/map/pins/v5_pin_flame.png',
-  RadarMapPinKind.coffee: 'assets/map/pins/v5_pin_coffee.png',
-  RadarMapPinKind.footprints: 'assets/map/pins/v5_pin_footprints.png',
-  RadarMapPinKind.music: 'assets/map/pins/v5_pin_music.png',
 };
 
-@visibleForTesting
-const radarMapStyleJson = '''
-[
-  {
-    "tags": {
-      "all": ["poi"]
-    },
-    "stylers": {
-      "saturation": -0.30,
-      "lightness": 0.10
-    }
-  },
-  {
-    "tags": {
-      "all": ["road"]
-    },
-    "stylers": {
-      "saturation": -0.25,
-      "lightness": 0.08
-    }
-  },
-  {
-    "tags": {
-      "all": ["landscape"]
-    },
-    "stylers": {
-      "saturation": -0.20,
-      "lightness": 0.06
-    }
-  }
-]
-''';
+final radarNativeMapEnabledProvider = Provider<bool>((_) => true);
+
+bool radarShouldRenderNativeMap({
+  required bool nativeMapEnabled,
+  required bool hasDartMapKitKey,
+}) {
+  return nativeMapEnabled || hasDartMapKitKey;
+}
 
 class MapScreen extends ConsumerStatefulWidget {
-  const MapScreen({
-    this.initialEventId,
-    super.key,
-  });
-
-  final String? initialEventId;
+  const MapScreen({super.key});
 
   @override
   ConsumerState<MapScreen> createState() => _MapScreenState();
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> {
-  late final Future<void> _mapBootstrapFuture;
-  late final PageController _eventPageController;
-  final MapObjectCache _mapObjectCache = MapObjectCache();
-  ym.YandexMapController? _mapController;
-  Timer? _viewportQueryDebounce;
-  int _mapControllerGeneration = 0;
-  int _viewportQueryGeneration = 0;
-  int _viewportFitGeneration = 0;
-  int _clusterRefreshRevision = 0;
-  double? _lastCameraZoom;
-  MapEventsQuery _mapQuery = initialRadarMapEventsQuery();
-  ym.Point? _searchPoint;
-  ym.Point? _userPoint;
-  String selected = '';
-  String filter = 'meetups';
-  bool _primingInitialLocation = false;
-  bool _didPrimeInitialLocation = false;
-  bool _triedInitialLocation = false;
-  bool _autoFitPending = false;
-  bool _isRadarListExpanded = true;
-  bool _syncRadiusAfterProgrammaticZoom = false;
-  String _lastViewportFitKey = '';
-  List<Event> _lastMapEvents = const [];
-  List<Event> _visibleMapEvents = const [];
+  MapEventsQuery? _mapQuery;
+  ym.YandexMapController? _controller;
+  Timer? _viewportDebounce;
+  final DateasyMapObjectCache _mapObjectCache = DateasyMapObjectCache();
+  List<BackendCardItem> _lastMapEvents = const [];
+  String? _resolvedCityKey;
+  String? _resolvingCityKey;
+  ym.Point? _cityPoint;
+  String _filter = 'meetups';
+  String _selectedId = '';
+  bool _nearbyOpen = true;
+  bool _initialCameraReady = false;
+  bool _locatingUser = false;
+  bool _cityResolveFailed = false;
+  int _cityResolveGeneration = 0;
 
-  bool get _supportsNativeMap =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.iOS ||
-          defaultTargetPlatform == TargetPlatform.android);
-
-  @override
-  void initState() {
-    super.initState();
-    _eventPageController = PageController(
-      initialPage: _radarCarouselInitialPage,
-      viewportFraction: _radarCarouselCardViewportFraction,
-    );
-    final initialEventId = widget.initialEventId;
-    if (initialEventId != null && initialEventId.isNotEmpty) {
-      selected = initialEventId;
-    }
-    final initialManualPoint = resolvePreferredMapPoint(
-      manualLocation: ref.read(manualLocationProvider),
-    );
-    if (initialManualPoint != null && (initialEventId ?? '').isEmpty) {
-      _userPoint = initialManualPoint;
-      _mapQuery =
-          initialRadarMapEventsQuery(preferredPoint: initialManualPoint);
-      _didPrimeInitialLocation = true;
-      _triedInitialLocation = true;
-      _autoFitPending = true;
-    }
-    _mapBootstrapFuture = _supportsNativeMap
-        ? ref.read(mapkitBootstrapProvider).ensureInitialized()
-        : Future<void>.value();
-    if ((initialEventId ?? '').isEmpty) {
-      unawaited(_primeInitialUserLocation(animated: false));
-    }
-  }
+  MapEventsQuery get _effectiveQuery =>
+      _mapQuery ??
+      initialRadarMapEventsQuery(
+        preferredPoint: _radarPointForCity(ref.read(currentUserProvider)?.city),
+        radiusKm: ref.read(nearbyEventsRadiusKmProvider),
+      );
 
   @override
   void dispose() {
-    _mapControllerGeneration += 1;
-    _viewportQueryGeneration += 1;
-    _viewportFitGeneration += 1;
-    _mapController = null;
-    _viewportQueryDebounce?.cancel();
-    _eventPageController.dispose();
+    _viewportDebounce?.cancel();
     super.dispose();
+  }
+
+  void _ensureCityPoint(String? city) {
+    final key = city?.trim() ?? '';
+    if (_resolvedCityKey == key || _resolvingCityKey == key) {
+      return;
+    }
+    final generation = ++_cityResolveGeneration;
+    _resolvingCityKey = key;
+    Future<void>(() async {
+      if (!mounted || generation != _cityResolveGeneration) {
+        return;
+      }
+      setState(() {
+        _mapQuery = null;
+        _lastMapEvents = const [];
+        _selectedId = '';
+        _initialCameraReady = false;
+        _cityResolveFailed = false;
+      });
+      final point = await _resolveCityPoint(city);
+      if (!mounted || generation != _cityResolveGeneration) {
+        return;
+      }
+      setState(() {
+        _resolvedCityKey = key;
+        _resolvingCityKey = null;
+        _cityPoint = point;
+        _cityResolveFailed = key.isNotEmpty && point == null;
+      });
+      if (point != null) {
+        await _moveToRadius(point, ref.read(nearbyEventsRadiusKmProvider));
+      }
+    });
+  }
+
+  Future<ym.Point?> _resolveCityPoint(String? city) async {
+    final trimmed = city?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return radarDefaultMapPoint;
+    }
+    final catalogPoint = pointForCityCoordinates(cityPointForQuery(trimmed));
+    if (catalogPoint != null) {
+      return catalogPoint;
+    }
+    try {
+      final results = await ref
+          .read(yandexCitySearchServiceProvider)
+          .search(trimmed, limit: 1);
+      if (results.isEmpty) {
+        return null;
+      }
+      final first = results.first;
+      return _pointFromCoordinates(first.latitude, first.longitude);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  ym.Point? _radarPointForCity(String? city) {
+    final key = city?.trim() ?? '';
+    if (key.isEmpty) {
+      return radarDefaultMapPoint;
+    }
+    if (_resolvedCityKey != key) {
+      return null;
+    }
+    return _cityPoint;
+  }
+
+  Widget _buildCityResolvingState(String? city) {
+    final resolving = !_cityResolveFailed;
+    return DateasyPhoneFrame(
+      child: Stack(
+        children: [
+          const Positioned.fill(child: _MapkitUnavailableState()),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (resolving)
+                    const CircularProgressIndicator(color: DateasyColors.lime)
+                  else
+                    const Icon(
+                      LucideIcons.mapPinOff,
+                      color: DateasyColors.muted,
+                      size: 36,
+                    ),
+                  const SizedBox(height: 14),
+                  Text(
+                    resolving
+                        ? 'Готовлю карту города'
+                        : 'Не удалось найти город на карте',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: DateasyColors.foreground,
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                  if (!resolving) ...[
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: () {
+                        _resolvedCityKey = null;
+                        _resolvingCityKey = null;
+                        _ensureCityPoint(city);
+                      },
+                      child: const Text(
+                        'Повторить',
+                        style: TextStyle(
+                          color: DateasyColors.lime,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const DateasyBottomNav(),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final nearbyRadiusKm = ref.watch(nearbyEventsRadiusKmProvider);
-    final mapEventsAsync = ref.watch(mapEventsProvider(_mapQuery));
-    final wallet = ref.watch(tokenWalletProvider);
-    final promotedIds = wallet.promoted.keys
-        .where((eventId) => wallet.isPromoted(eventId))
-        .toSet();
+    final user = ref.watch(currentUserProvider);
+    final radiusKm = ref.watch(nearbyEventsRadiusKmProvider);
+    final city = user?.city?.trim();
+    _ensureCityPoint(city);
+    final radarPoint = _radarPointForCity(city);
+    if (radarPoint == null) {
+      return _buildCityResolvingState(city);
+    }
+    final query = _mapQuery ??
+        initialRadarMapEventsQuery(
+          preferredPoint: radarPoint,
+          radiusKm: radiusKm,
+        );
+    final eventsState = ref.watch(mapEventsProvider(query));
     final events = visibleMapEventsForRadar(
-      eventsAsync: mapEventsAsync,
+      eventsState: eventsState,
       previousEvents: _lastMapEvents,
     );
-    if (mapEventsAsync.hasValue) {
+    if (eventsState.hasValue) {
       _lastMapEvents = events;
     }
-    final effectiveFilter = _effectiveRadarFilter(events);
-    final filteredEvents = _filteredEvents(events, effectiveFilter);
-    final liveEvenings =
-        (ref.watch(eveningSessionsProvider).valueOrNull ?? const [])
-            .where((session) => session.phase == EveningSessionPhase.live)
-            .take(4)
-            .toList(growable: false);
-    final activeEvent = filteredEvents
-            .where((item) => item.id == selected)
-            .cast<Event?>()
-            .firstOrNull ??
-        (filteredEvents.isNotEmpty ? filteredEvents.first : null);
-    final selectedId = activeEvent?.id ?? selected;
-    _visibleMapEvents = filteredEvents;
+    final categoryCounts = buildRadarCategoryCounts(events);
+    final activeFilter = activeRadarFilterForCounts(
+      selectedFilter: _filter,
+      counts: categoryCounts,
+    );
+    final filteredEvents = _filteredEvents(events, activeFilter);
+    final selectedId = _selectedId.isNotEmpty
+        ? _selectedId
+        : filteredEvents.isEmpty
+            ? ''
+            : filteredEvents.first.id;
+    final nearby =
+        filteredEvents.map(_NearbyItem.fromBackend).toList(growable: false);
     final mapObjects = _mapObjectCache.objectsFor(
       events: filteredEvents,
       selectedId: selectedId,
-      promotedIds: promotedIds,
-      clusterRefreshRevision: _clusterRefreshRevision,
-      liveEvenings: liveEvenings,
-      userPoint: _userPoint,
-      searchPoint: _searchPoint,
-      onEventTap: _handleEventTap,
-      onEventClusterTap: _handleEventClusterTap,
-      onSessionTap: _openEveningPreview,
+      onPinTap: _handlePinTap,
     );
-    _syncPagerToSelected(filteredEvents, selectedId);
-    _scheduleViewportFit(filteredEvents, effectiveFilter);
-    final topInset = MediaQuery.paddingOf(context).top;
 
-    return Scaffold(
-      backgroundColor: BbV5Colors.paper,
-      body: Stack(
+    return DateasyPhoneFrame(
+      child: Stack(
         children: [
           Positioned.fill(
-            child: _buildMapSurface(
-              filteredEvents,
-              mapObjects,
-              selectedId,
+            child: _NativeMap(
+              mapObjects: mapObjects,
+              loading: eventsState.isLoading && events.isEmpty,
+              renderNativeMap: radarShouldRenderNativeMap(
+                nativeMapEnabled: ref.watch(radarNativeMapEnabledProvider),
+                hasDartMapKitKey: BackendConfig.hasMapKitKey,
+              ),
+              onCreated: _handleMapCreated,
+              onCameraFinished: _handleCameraFinished,
             ),
           ),
-          if (!_supportsNativeMap)
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: _RadarMapVisualOverlay(
-                  showUserPulse: true,
-                ),
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _TopControls(onRadiusTap: () => _showRadiusSheet(radiusKm)),
+                  _FilterChips(
+                    filter: activeFilter,
+                    counts: categoryCounts,
+                    onSelect: _selectFilter,
+                  ),
+                ],
               ),
-            ),
-          if (!_supportsNativeMap)
-            for (final entry in liveEvenings.asMap().entries)
-              _LiveEveningMapPin(
-                session: entry.value,
-                index: entry.key,
-              ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: topInset + 12,
-            child: _RadarTopControls(
-              events: events,
-              filter: effectiveFilter,
-              radiusKm: nearbyRadiusKm,
-              onBack: _handleBack,
-              onSelectFilter: (nextFilter) => _selectFilter(
-                nextFilter,
-                events,
-              ),
-              onRadiusChanged: (value) => unawaited(_changeNearbyRadius(value)),
             ),
           ),
           Positioned(
@@ -287,538 +322,158 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _MapTopButton(
+                  _MapZoomButton(
                     icon: LucideIcons.plus,
-                    tooltip: 'Приблизить',
                     onTap: () => _changeZoom(_mapZoomStep),
                   ),
                   const SizedBox(height: 8),
-                  _MapTopButton(
+                  _MapZoomButton(
+                    icon: LucideIcons.navigation,
+                    loading: _locatingUser,
+                    onTap: _focusCurrentLocation,
+                  ),
+                  const SizedBox(height: 8),
+                  _MapZoomButton(
                     icon: LucideIcons.minus,
-                    tooltip: 'Отдалить',
                     onTap: () => _changeZoom(-_mapZoomStep),
                   ),
                 ],
               ),
             ),
           ),
-          if (filteredEvents.isNotEmpty)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 96,
-              child: _RadarBottomSheet(
-                events: filteredEvents,
-                promotedIds: promotedIds,
-                isExpanded: _isRadarListExpanded,
-                pageController: _eventPageController,
-                onPageChanged: (index) {
-                  final eventIndex = radarCarouselEventIndex(
-                    index,
-                    filteredEvents.length,
-                  );
-                  if (eventIndex < 0 || eventIndex >= filteredEvents.length) {
-                    return;
-                  }
-                  _selectEvent(
-                    filteredEvents[eventIndex],
-                    filteredEvents,
-                    animatePager: false,
-                    keepCurrentZoom: true,
-                  );
-                },
-                onExpandedChanged: (expanded) {
-                  setState(() {
-                    _isRadarListExpanded = expanded;
-                  });
-                },
-                onEventTap: (event) => context.pushRoute(
-                  AppRoute.eventDetail,
-                  pathParameters: {'eventId': event.id},
-                ),
-              ),
-            ),
           Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: BbV5GlassBottomBar(
-              child: BbBottomNav(
-                location: AppRoute.tonight.path,
-                onTap: (tab) => context.goRoute(tab.route),
-              ),
+            left: 20,
+            right: 20,
+            bottom: MediaQuery.paddingOf(context).bottom + 104,
+            child: _NearbyCard(
+              items: nearby,
+              loading: eventsState.isLoading && events.isEmpty,
+              hasError: eventsState.hasError,
+              open: _nearbyOpen,
+              onToggle: () => setState(() => _nearbyOpen = !_nearbyOpen),
+              onSwipe: (open) => setState(() => _nearbyOpen = open),
+              onPageChanged: _handleNearbyPageChanged,
             ),
           ),
+          const DateasyBottomNav(),
         ],
       ),
     );
   }
 
-  void _handleBack() {
-    if (context.canPop()) {
-      context.pop();
-      return;
+  Future<void> _handleMapCreated(ym.YandexMapController controller) async {
+    _controller = controller;
+    final initialQuery = _effectiveQuery;
+    if (mounted && _mapQuery == null) {
+      setState(() => _mapQuery = initialQuery);
     }
-    context.goRoute(AppRoute.tonight);
-  }
-
-  Widget _buildMapSurface(
-    List<Event> filteredEvents,
-    List<ym.MapObject> mapObjects,
-    String selectedId,
-  ) {
-    if (!_supportsNativeMap) {
-      return _FallbackMapSurface(
-        events: filteredEvents,
-        selectedId: selectedId,
-        onTap: _handleEventTap,
-      );
-    }
-
-    return FutureBuilder<void>(
-      future: _mapBootstrapFuture,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return _FallbackMapSurface(
-            key: const Key('map-bootstrap-error-surface'),
-            events: filteredEvents,
-            selectedId: selectedId,
-            onTap: _handleEventTap,
-            footer: const _NativeMapErrorBadge(),
-          );
-        }
-
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const _NativeMapLoadingSurface(
-            key: Key('map-native-loading'),
-          );
-        }
-
-        return Container(
-          key: const Key('map-native-surface'),
-          color: const Color(0xFFF1ECE2),
-          child: ym.YandexMap(
-            mapObjects: mapObjects,
-            onMapCreated: (controller) =>
-                _onMapCreated(controller, filteredEvents),
-            onCameraPositionChanged: _onCameraPositionChanged,
-            onMapTap: _onMapTap,
-            mapType: ym.MapType.vector,
-            mode2DEnabled: true,
-            poiLimit: _nativeMapPoiLimit,
-          ),
-        );
-      },
-    );
-  }
-
-  void _openEveningPreview(String sessionId) {
-    context.pushRoute(
-      AppRoute.eveningPreview,
-      pathParameters: {'sessionId': sessionId},
-    );
-  }
-
-  void _onMapCreated(
-    ym.YandexMapController controller,
-    List<Event> filteredEvents,
-  ) {
-    _mapControllerGeneration += 1;
-    _mapController = controller;
-    unawaited(controller.setMapStyle(radarMapStyleJson));
-    if (mapAutoNativeUserLayerEnabled) {
-      unawaited(controller.toggleUserLayer(visible: true));
-    }
-    final initialEventId = widget.initialEventId;
-    if (initialEventId != null && initialEventId.isNotEmpty) {
-      final activeEvent = filteredEvents
-          .where((item) => item.id == initialEventId)
-          .cast<Event?>()
-          .firstOrNull;
-      final point = activeEvent == null ? null : _pointForEvent(activeEvent);
-      if (point == null) {
-        return;
-      }
-      unawaited(
-        _moveToPoint(
-          point,
-          zoom: 15,
-          animated: false,
-        ),
-      );
-      return;
-    }
-
-    final fitKey = buildMapViewportFitKey(filteredEvents, filter);
-    if (shouldScheduleMapViewportFit(
-      supportsNativeMap: _supportsNativeMap,
-      hasMapController: _mapController != null,
-      hasInitialEvent: false,
-      autoFitPending: _autoFitPending,
-      fitKey: fitKey,
-      lastFitKey: _lastViewportFitKey,
-    )) {
-      _autoFitPending = false;
-      _lastViewportFitKey = fitKey;
-      final fitGeneration = ++_viewportFitGeneration;
-      unawaited(
-        _fitViewportForEvents(
-          filteredEvents,
-          animated: false,
-          fitGeneration: fitGeneration,
-        ),
-      );
-      return;
-    }
-    if (_userPoint != null) {
-      unawaited(_moveToUserPreview(_userPoint!, animated: false));
-    } else {
-      unawaited(_primeInitialUserLocation(animated: false));
-    }
-  }
-
-  void _onCameraPositionChanged(
-    ym.CameraPosition cameraPosition,
-    ym.CameraUpdateReason reason,
-    bool finished,
-  ) {
-    final previousZoom = _lastCameraZoom;
-    _lastCameraZoom = cameraPosition.zoom;
-    if (shouldRefreshEventClustersForZoom(
-      hasClusterCollection: hasClusterableEventPoints(_visibleMapEvents),
-      previousZoom: previousZoom,
-      currentZoom: cameraPosition.zoom,
-      finished: finished,
-    )) {
-      setState(() {
-        _clusterRefreshRevision += 1;
-      });
-    }
-
-    final shouldSyncProgrammaticZoom = _syncRadiusAfterProgrammaticZoom &&
-        reason == ym.CameraUpdateReason.application &&
-        finished;
-    if (shouldSyncProgrammaticZoom) {
-      _syncRadiusAfterProgrammaticZoom = false;
-    }
-
-    if (!shouldRefreshMapViewportQuery(
-      reason: reason,
-      finished: finished,
-      allowApplication: shouldSyncProgrammaticZoom,
-    )) {
-      return;
-    }
-
-    _viewportQueryDebounce?.cancel();
-    final queryGeneration = ++_viewportQueryGeneration;
-    _viewportQueryDebounce = Timer(
-      const Duration(milliseconds: 250),
-      () {
-        if (!mounted ||
-            _mapController == null ||
-            queryGeneration != _viewportQueryGeneration) {
-          return;
-        }
-        unawaited(
-          _refreshViewportQuery(
-            center: cameraPosition.target,
-            queryGeneration: queryGeneration,
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _refreshViewportQuery({
-    ym.Point? center,
-    required int queryGeneration,
-  }) async {
-    final controller = _mapController;
-    final generation = _mapControllerGeneration;
-    if (controller == null) {
-      return;
-    }
-
-    try {
-      final visibleRegion = await controller.getVisibleRegion();
-      if (!_isActiveMapController(controller, generation) ||
-          queryGeneration != _viewportQueryGeneration) {
-        return;
-      }
-      final cameraCenter =
-          center ?? (await controller.getCameraPosition()).target;
-      if (!_isActiveMapController(controller, generation) ||
-          queryGeneration != _viewportQueryGeneration) {
-        return;
-      }
-
-      final nextQuery = buildMapEventsQuery(
-        bounds: boundingBoxFromVisibleRegion(visibleRegion),
-        center: cameraCenter,
-      );
-      final currentRadiusKm = ref.read(nearbyEventsRadiusKmProvider);
-      final nextRadiusKm = nearbyRadiusKmFromMapQuery(
-        currentRadiusKm: currentRadiusKm,
-        query: nextQuery,
-      );
-      if (nextRadiusKm != currentRadiusKm) {
-        ref
-            .read(nearbyEventsRadiusKmProvider.notifier)
-            .setRadiusKm(nextRadiusKm);
-      }
-      if (nextQuery == _mapQuery) {
-        return;
-      }
-      if (queryGeneration != _viewportQueryGeneration) {
-        return;
-      }
-
-      setState(() {
-        _mapQuery = nextQuery;
-      });
-    } catch (_) {
-      return;
-    }
-  }
-
-  bool _isActiveMapController(
-    ym.YandexMapController controller,
-    int generation,
-  ) {
-    return mounted &&
-        identical(_mapController, controller) &&
-        _mapControllerGeneration == generation;
-  }
-
-  Future<void> _primeInitialUserLocation({required bool animated}) async {
-    if (_didPrimeInitialLocation || _primingInitialLocation) {
-      return;
-    }
-
-    _didPrimeInitialLocation = true;
-    _primingInitialLocation = true;
-    _triedInitialLocation = true;
-    try {
-      final point = await _resolvePreferredMapPoint();
-      if (point == null || !mounted) {
-        return;
-      }
-
-      setState(() {
-        _autoFitPending = true;
-        _userPoint = point;
-        _mapQuery = initialRadarMapEventsQuery(preferredPoint: point);
-      });
-
-      unawaited(_moveToUserPreview(point, animated: animated));
-    } finally {
-      _primingInitialLocation = false;
-    }
-  }
-
-  Future<void> _changeNearbyRadius(double value) async {
-    final radiusKm = clampNearbyEventsRadiusKm(value);
-    ref.read(nearbyEventsRadiusKmProvider.notifier).setRadiusKm(radiusKm);
-    final currentCenter = mapRadiusCenterForChange(
-      query: _mapQuery,
-      userPoint: _userPoint,
-      cameraPoint: await _currentCameraCenter(),
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _autoFitPending = false;
-      _lastViewportFitKey = _manualRadiusViewportFitKey;
-      if (currentCenter == null) {
-        _mapQuery = MapEventsQuery(radiusKm: radiusKm);
-      } else {
-        _mapQuery = MapEventsQuery(
-          centerLatitude: _roundGeo(currentCenter.latitude),
-          centerLongitude: _roundGeo(currentCenter.longitude),
-          radiusKm: radiusKm,
-        );
-      }
-    });
-
-    if (currentCenter != null) {
-      unawaited(_fitViewportForRadius(currentCenter, radiusKm));
-    }
-  }
-
-  Future<ym.Point?> _currentCameraCenter() async {
-    final controller = _mapController;
-    final generation = _mapControllerGeneration;
-    if (controller == null) {
-      return null;
-    }
-
-    try {
-      final cameraPosition = await controller.getCameraPosition();
-      if (!_isActiveMapController(controller, generation)) {
-        return null;
-      }
-      return cameraPosition.target;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<void> _fitViewportForRadius(ym.Point center, double radiusKm) {
-    return _moveToRadius(center, radiusKm);
-  }
-
-  Future<void> _moveToRadius(ym.Point center, double radiusKm) async {
-    final controller = _mapController;
-    final generation = _mapControllerGeneration;
-    if (controller == null) {
-      return;
-    }
-
-    try {
-      final zoom = mapZoomForRadiusKm(
-        radiusKm: radiusKm,
-        viewportSize: _mapRadiusViewportSize(),
-        latitude: center.latitude,
-      );
-      if (!_isActiveMapController(controller, generation)) {
-        return;
-      }
-      await controller.moveCamera(
-        ym.CameraUpdate.newCameraPosition(
-          ym.CameraPosition(
-            target: center,
-            zoom: zoom,
-            azimuth: 0,
-            tilt: 0,
-          ),
-        ),
-        animation: const ym.MapAnimation(
-          type: ym.MapAnimationType.smooth,
-          duration: 0.35,
-        ),
-      );
-    } catch (_) {
-      return;
-    }
-  }
-
-  Size _mapRadiusViewportSize() {
-    final size = MediaQuery.sizeOf(context);
-    if (size.width <= 0 || size.height <= 0) {
-      return const Size(390, 620);
-    }
-    return Size(
-      size.width,
-      (size.height - 220).clamp(240, size.height).toDouble(),
-    );
-  }
-
-  Future<ym.Point?> _resolvePreferredMapPoint() async {
-    final manualLocation = ref.read(manualLocationProvider);
-    if (manualLocation != null) {
-      return resolvePreferredMapPoint(manualLocation: manualLocation);
-    }
-
-    final locationService = ref.read(appLocationServiceProvider);
-    final position = await locationService.getCurrentPosition();
-    if (!mounted) {
-      return null;
-    }
-    return resolvePreferredMapPoint(currentPosition: position);
-  }
-
-  Future<void> _moveToUserPreview(
-    ym.Point point, {
-    bool animated = true,
-  }) {
-    return _moveToPoint(point, zoom: 13.5, animated: animated);
-  }
-
-  Future<void> _moveToEventPoint(
-    ym.Point point, {
-    required bool keepCurrentZoom,
-  }) async {
-    double? currentZoom;
-    if (keepCurrentZoom) {
-      final controller = _mapController;
-      final generation = _mapControllerGeneration;
-      if (controller != null) {
-        try {
-          final cameraPosition = await controller.getCameraPosition();
-          if (_isActiveMapController(controller, generation)) {
-            currentZoom = cameraPosition.zoom;
-          }
-        } catch (_) {
-          currentZoom = null;
-        }
-      }
-    }
-
-    return _moveToPoint(
-      point,
-      zoom: mapZoomForEventSelection(
-        currentZoom: currentZoom,
-        keepCurrentZoom: keepCurrentZoom,
+    await controller.moveCamera(
+      ym.CameraUpdate.newCameraPosition(
+        _cameraForQuery(initialQuery, MediaQuery.sizeOf(context)),
       ),
     );
-  }
-
-  Future<void> _moveToPoint(
-    ym.Point point, {
-    double zoom = 14,
-    bool animated = true,
-  }) async {
-    final controller = _mapController;
-    if (controller == null) {
+    if (!mounted || !identical(_controller, controller)) {
       return;
     }
+    _initialCameraReady = true;
+    await _updateViewportFromNative();
+  }
 
+  void _handleCameraFinished(ym.CameraPosition cameraPosition) {
+    if (!_initialCameraReady) {
+      return;
+    }
+    _viewportDebounce?.cancel();
+    _viewportDebounce = Timer(
+      const Duration(milliseconds: 250),
+      () => _updateViewportFromNative(center: cameraPosition.target),
+    );
+  }
+
+  Future<void> _updateViewportFromNative({ym.Point? center}) async {
+    final controller = _controller;
+    if (controller == null || !mounted) {
+      return;
+    }
     try {
-      await controller.moveCamera(
-        ym.CameraUpdate.newCameraPosition(
-          ym.CameraPosition(
-            target: point,
-            zoom: zoom,
-            azimuth: 0,
-            tilt: 0,
-          ),
-        ),
-        animation: animated
-            ? const ym.MapAnimation(
-                type: ym.MapAnimationType.smooth,
-                duration: 0.35,
-              )
-            : null,
+      final region = await controller.getVisibleRegion();
+      final cameraCenter =
+          center ?? (await controller.getCameraPosition()).target;
+      if (!mounted || !identical(_controller, controller)) {
+        return;
+      }
+      final next = buildMapEventsQuery(
+        bounds: boundingBoxFromVisibleRegion(region),
+        center: cameraCenter,
       );
+      if (_effectiveQuery == next) {
+        return;
+      }
+      setState(() => _mapQuery = next);
     } catch (_) {
       return;
     }
+  }
+
+  void _selectFilter(String nextFilter) {
+    if (_filter == nextFilter) {
+      return;
+    }
+    final nextEvents = _filteredEvents(_lastMapEvents, nextFilter);
+    final nextSelectedId = nextEvents.isEmpty ? '' : nextEvents.first.id;
+    setState(() {
+      _filter = nextFilter;
+      _selectedId = nextSelectedId;
+    });
+    if (nextEvents.isNotEmpty) {
+      final point = pointForEvent(nextEvents.first);
+      if (point != null) {
+        unawaited(_moveToPoint(point, keepCurrentZoom: true));
+      }
+    }
+  }
+
+  void _handlePinTap(String eventId) {
+    final event =
+        _lastMapEvents.where((item) => item.id == eventId).firstOrNull;
+    final nextFilter = event == null ? _filter : radarCategoryForEvent(event);
+    setState(() {
+      _selectedId = eventId;
+      _filter = nextFilter;
+    });
+    final point = event == null ? null : pointForEvent(event);
+    if (point != null) {
+      unawaited(_moveToPoint(point, keepCurrentZoom: true));
+    }
+  }
+
+  void _handleNearbyPageChanged(String eventId) {
+    final event =
+        _lastMapEvents.where((item) => item.id == eventId).firstOrNull;
+    if (event == null) {
+      return;
+    }
+    setState(() {
+      _selectedId = eventId;
+      _filter = radarCategoryForEvent(event);
+    });
+    unawaited(_moveToEventFromList(event));
   }
 
   Future<void> _changeZoom(double delta) async {
-    final controller = _mapController;
-    final generation = _mapControllerGeneration;
+    final controller = _controller;
     if (controller == null) {
       return;
     }
-
     try {
-      final cameraPosition = await controller.getCameraPosition();
-      if (!_isActiveMapController(controller, generation)) {
-        return;
-      }
-      _syncRadiusAfterProgrammaticZoom = true;
+      final camera = await controller.getCameraPosition();
       await controller.moveCamera(
         ym.CameraUpdate.newCameraPosition(
           ym.CameraPosition(
-            target: cameraPosition.target,
-            zoom: clampMapZoom(cameraPosition.zoom + delta),
-            azimuth: cameraPosition.azimuth,
-            tilt: cameraPosition.tilt,
+            target: camera.target,
+            zoom: clampMapZoom(camera.zoom + delta),
+            azimuth: camera.azimuth,
+            tilt: camera.tilt,
           ),
         ),
         animation: const ym.MapAnimation(
@@ -827,147 +482,95 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         ),
       );
     } catch (_) {
-      _syncRadiusAfterProgrammaticZoom = false;
       return;
     }
   }
 
-  Future<void> _moveToBounds(
-    ym.BoundingBox bounds, {
-    bool animated = true,
+  Future<void> _focusCurrentLocation() async {
+    if (_locatingUser) {
+      return;
+    }
+    setState(() => _locatingUser = true);
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showMapSnack('Геолокация выключена');
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        _showMapSnack('Нет доступа к геолокации');
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      final point = ym.Point(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      final controller = _controller;
+      if (controller != null) {
+        unawaited(controller.toggleUserLayer(visible: true));
+      }
+      ref
+          .read(nearbyEventsRadiusKmProvider.notifier)
+          .setRadiusKm(_radarUserFocusRadiusKm);
+      setState(() {
+        _selectedId = '';
+        _mapQuery = buildInitialMapEventsQuery(
+          point,
+          radiusKm: _radarUserFocusRadiusKm,
+        );
+      });
+      await _moveToRadius(point, _radarUserFocusRadiusKm);
+    } catch (_) {
+      _showMapSnack('Не удалось определить геолокацию');
+    } finally {
+      if (mounted) {
+        setState(() => _locatingUser = false);
+      }
+    }
+  }
+
+  void _showMapSnack(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _moveToPoint(
+    ym.Point point, {
+    bool keepCurrentZoom = false,
+    double? targetZoom,
   }) async {
-    final controller = _mapController;
+    final controller = _controller;
     if (controller == null) {
       return;
     }
-
     try {
-      await controller.moveCamera(
-        ym.CameraUpdate.newGeometry(
-          ym.Geometry.fromBoundingBox(bounds),
-          focusRect: _mapFocusRect(),
-        ),
-        animation: animated
-            ? const ym.MapAnimation(
-                type: ym.MapAnimationType.smooth,
-                duration: 0.35,
-              )
-            : null,
-      );
-    } catch (_) {
-      return;
-    }
-  }
-
-  ym.ScreenRect? _mapFocusRect() {
-    final size = MediaQuery.sizeOf(context);
-    if (size.width <= 0 || size.height <= 0) {
-      return null;
-    }
-
-    return ym.ScreenRect(
-      topLeft: const ym.ScreenPoint(x: 0, y: 0),
-      bottomRight: ym.ScreenPoint(
-        x: size.width,
-        y: (size.height - 145).clamp(240, size.height).toDouble(),
-      ),
-    );
-  }
-
-  Future<void> _fitViewportForEvents(
-    List<Event> events, {
-    bool animated = true,
-    required int fitGeneration,
-  }) async {
-    final eventPoints = events.expand(_pointsForEvent).toList(growable: false);
-    if (eventPoints.isEmpty) {
-      return;
-    }
-
-    final userPoint = await _resolveViewportUserPoint();
-    if (!mounted || fitGeneration != _viewportFitGeneration) {
-      return;
-    }
-
-    final bounds = buildMapViewportBounds(
-      userPoint: userPoint,
-      eventPoints: eventPoints,
-    );
-    if (bounds == null) {
-      return;
-    }
-    if (fitGeneration != _viewportFitGeneration) {
-      return;
-    }
-
-    await _moveToBounds(bounds, animated: animated);
-  }
-
-  Future<ym.Point?> _resolveViewportUserPoint() async {
-    if (_userPoint != null) {
-      return _userPoint;
-    }
-    if (_triedInitialLocation) {
-      return null;
-    }
-
-    _triedInitialLocation = true;
-    final point = await _resolvePreferredMapPoint();
-    if (point == null) {
-      return null;
-    }
-
-    if (mounted) {
-      setState(() {
-        _userPoint = point;
-      });
-    }
-    return point;
-  }
-
-  void _onMapTap(ym.Point point) {
-    setState(() {
-      _searchPoint = point;
-    });
-    unawaited(_moveToPoint(point, zoom: 15));
-  }
-
-  void _handleEventTap(String eventId) {
-    final events = _visibleMapEvents;
-    final event = events.where((item) => item.id == eventId).firstOrNull;
-    if (event == null) {
-      return;
-    }
-    _selectEvent(
-      event,
-      events,
-      animatePager: true,
-      keepCurrentZoom: false,
-    );
-  }
-
-  Future<void> _handleEventClusterTap(
-    List<ym.PlacemarkMapObject> placemarks,
-  ) async {
-    final target = clusterCenterPoint(placemarks);
-    final controller = _mapController;
-    final generation = _mapControllerGeneration;
-    if (target == null || controller == null) {
-      return;
-    }
-
-    try {
-      final cameraPosition = await controller.getCameraPosition();
-      if (!_isActiveMapController(controller, generation)) {
-        return;
-      }
+      final camera = await controller.getCameraPosition();
       await controller.moveCamera(
         ym.CameraUpdate.newCameraPosition(
           ym.CameraPosition(
-            target: target,
-            zoom: mapZoomForClusterTap(cameraPosition.zoom),
-            azimuth: cameraPosition.azimuth,
-            tilt: cameraPosition.tilt,
+            target: point,
+            zoom: targetZoom ??
+                (keepCurrentZoom ? clampMapZoom(camera.zoom) : 15),
+            azimuth: 0,
+            tilt: 0,
           ),
         ),
         animation: const ym.MapAnimation(
@@ -980,582 +583,566 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  void _selectEvent(
-    Event event,
-    List<Event> events, {
-    required bool animatePager,
-    required bool keepCurrentZoom,
-  }) {
+  Future<void> _moveToEventFromList(BackendCardItem event) async {
+    final controller = _controller;
+    final point = pointForEvent(event);
+    if (controller == null || point == null) {
+      return;
+    }
+    try {
+      final camera = await controller.getCameraPosition();
+      await _moveToPoint(
+        point,
+        targetZoom: mapZoomForNearbySelection(currentZoom: camera.zoom),
+      );
+    } catch (_) {
+      return;
+    }
+  }
+
+  Future<void> _changeNearbyRadius(double value) async {
+    final radiusKm = clampNearbyEventsRadiusKm(value);
+    ref.read(nearbyEventsRadiusKmProvider.notifier).setRadiusKm(radiusKm);
+    final center = await _currentCameraCenter() ??
+        _queryCenter(_effectiveQuery) ??
+        _radarPointForCity(ref.read(currentUserProvider)?.city) ??
+        radarDefaultMapPoint;
+    if (!mounted) {
+      return;
+    }
     setState(() {
-      selected = event.id;
+      _mapQuery = buildInitialMapEventsQuery(center, radiusKm: radiusKm);
     });
+    await _moveToRadius(center, radiusKm);
+  }
 
-    final point = _pointForEvent(event);
-    if (point != null) {
-      unawaited(
-        _moveToEventPoint(
-          point,
-          keepCurrentZoom: keepCurrentZoom,
-        ),
-      );
+  Future<ym.Point?> _currentCameraCenter() async {
+    final controller = _controller;
+    if (controller == null) {
+      return null;
     }
+    try {
+      return (await controller.getCameraPosition()).target;
+    } catch (_) {
+      return null;
+    }
+  }
 
-    if (animatePager) {
-      final index = events.indexWhere((item) => item.id == event.id);
-      if (index >= 0 && _eventPageController.hasClients) {
-        final currentPage =
-            _eventPageController.page?.round() ?? _radarCarouselInitialPage;
-        unawaited(
-          _eventPageController.animateToPage(
-            nearestRadarCarouselPage(
-              currentPage,
-              targetIndex: index,
-              eventCount: events.length,
+  Future<void> _moveToRadius(ym.Point center, double radiusKm) async {
+    final controller = _controller;
+    if (controller == null) {
+      return;
+    }
+    final size = MediaQuery.sizeOf(context);
+    try {
+      await controller.moveCamera(
+        ym.CameraUpdate.newCameraPosition(
+          ym.CameraPosition(
+            target: center,
+            zoom: mapZoomForRadiusKm(
+              radiusKm: radiusKm,
+              viewportSize: size,
+              latitude: center.latitude,
             ),
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOut,
+            azimuth: 0,
+            tilt: 0,
           ),
+        ),
+        animation: const ym.MapAnimation(
+          type: ym.MapAnimationType.smooth,
+          duration: 0.28,
+        ),
+      );
+    } catch (_) {
+      return;
+    }
+  }
+
+  void _showRadiusSheet(double currentRadiusKm) {
+    var radiusKm = currentRadiusKm;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: const Color(0x99000000),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return _GlassPanel(
+              borderRadius: 28,
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 48,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Радиус радара',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '${radiusKm.round()} км',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: DateasyColors.muted,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    Slider(
+                      min: 1,
+                      max: nearbyEventsMaxRadiusKm,
+                      divisions: nearbyEventsMaxRadiusKm.round() - 1,
+                      value: radiusKm,
+                      activeColor: DateasyColors.lime,
+                      inactiveColor: DateasyColors.border,
+                      onChanged: (value) {
+                        setSheetState(() => radiusKm = value);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        unawaited(_changeNearbyRadius(radiusKm));
+                      },
+                      child: Container(
+                        height: 52,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          gradient: dateasyLimeGradient,
+                        ),
+                        child: const Text(
+                          'Применить',
+                          style: TextStyle(
+                            color: DateasyColors.backgroundDeep,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
-      }
-    }
-  }
-
-  void _syncPagerToSelected(List<Event> events, String selectedId) {
-    if (selectedId.isEmpty) {
-      return;
-    }
-    final index = events.indexWhere((item) => item.id == selectedId);
-    if (index < 0) {
-      return;
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_eventPageController.hasClients) {
-        return;
-      }
-      final currentPage =
-          _eventPageController.page?.round() ?? _radarCarouselInitialPage;
-      if (radarCarouselEventIndex(currentPage, events.length) == index) {
-        return;
-      }
-      _eventPageController.jumpToPage(
-        nearestRadarCarouselPage(
-          currentPage,
-          targetIndex: index,
-          eventCount: events.length,
-        ),
-      );
-    });
-  }
-
-  void _scheduleViewportFit(List<Event> events, String currentFilter) {
-    final fitKey = buildMapViewportFitKey(events, currentFilter);
-    if (!shouldScheduleMapViewportFit(
-      supportsNativeMap: _supportsNativeMap,
-      hasMapController: _mapController != null,
-      hasInitialEvent: (widget.initialEventId ?? '').isNotEmpty,
-      autoFitPending: _autoFitPending,
-      fitKey: fitKey,
-      lastFitKey: _lastViewportFitKey,
-    )) {
-      return;
-    }
-    _autoFitPending = false;
-    _lastViewportFitKey = fitKey;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _mapController == null) {
-        return;
-      }
-      final fitGeneration = ++_viewportFitGeneration;
-      unawaited(
-        _fitViewportForEvents(
-          events,
-          fitGeneration: fitGeneration,
-        ),
-      );
-    });
-  }
-
-  void _selectFilter(String nextFilter, List<Event> events) {
-    final filtered = _filteredEvents(events, nextFilter);
-    setState(() {
-      filter = nextFilter;
-      if (filtered.isEmpty) {
-        return;
-      }
-      if (!filtered.any((item) => item.id == selected)) {
-        selected = filtered.first.id;
-      }
-    });
-
-    if (filtered.isNotEmpty) {
-      final activeEvent = filtered
-              .where((item) => item.id == selected)
-              .cast<Event?>()
-              .firstOrNull ??
-          filtered.first;
-      final index = filtered.indexWhere((item) => item.id == activeEvent.id);
-      if (index >= 0 && _eventPageController.hasClients) {
-        final currentPage =
-            _eventPageController.page?.round() ?? _radarCarouselInitialPage;
-        unawaited(
-          _eventPageController.animateToPage(
-            nearestRadarCarouselPage(
-              currentPage,
-              targetIndex: index,
-              eventCount: filtered.length,
-            ),
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOut,
-          ),
-        );
-      }
-      final fitGeneration = ++_viewportFitGeneration;
-      unawaited(
-        _fitViewportForEvents(
-          filtered,
-          fitGeneration: fitGeneration,
-        ),
-      );
-    }
-  }
-
-  ym.Point? _pointForEvent(Event event) {
-    return _pointForEventModel(event);
-  }
-
-  List<ym.Point> _pointsForEvent(Event event) {
-    return _pointsForEventModel(event)
-        .map((entry) => entry.point)
-        .toList(growable: false);
-  }
-
-  String _effectiveRadarFilter(List<Event> events) {
-    if (selected.isEmpty) {
-      return filter;
-    }
-    if (_filteredEvents(events, filter).any((event) => event.id == selected)) {
-      return filter;
-    }
-    final selectedEvent = events
-        .where((event) => event.id == selected)
-        .cast<Event?>()
-        .firstOrNull;
-    if (selectedEvent == null) {
-      return filter;
-    }
-    final nextFilter = radarCategoryForEvent(selectedEvent);
-    if (nextFilter == filter ||
-        !_radarFilters.any((item) => item.key == nextFilter)) {
-      return filter;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && filter != nextFilter) {
-        setState(() {
-          filter = nextFilter;
-        });
-      }
-    });
-    return nextFilter;
-  }
-
-  List<Event> _filteredEvents(List<Event> events, String currentFilter) {
-    return events
-        .where((event) => radarCategoryForEvent(event) == currentFilter)
-        .toList(growable: false);
+      },
+    );
   }
 }
 
-class _RadarMapVisualOverlay extends StatelessWidget {
-  const _RadarMapVisualOverlay({
-    required this.showUserPulse,
+class _NativeMap extends StatelessWidget {
+  const _NativeMap({
+    required this.mapObjects,
+    required this.loading,
+    required this.renderNativeMap,
+    required this.onCreated,
+    required this.onCameraFinished,
   });
 
-  final bool showUserPulse;
+  final List<ym.MapObject> mapObjects;
+  final bool loading;
+  final bool renderNativeMap;
+  final ValueChanged<ym.YandexMapController> onCreated;
+  final ValueChanged<ym.CameraPosition> onCameraFinished;
 
   @override
   Widget build(BuildContext context) {
     return Stack(
+      fit: StackFit.expand,
       children: [
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  const Color(0xFFF6E2CC).withValues(alpha: 0.34),
-                  BbV5Colors.paper.withValues(alpha: 0.28),
-                  const Color(0xFFE8D6BE).withValues(alpha: 0.34),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Positioned.fill(
-          child: CustomPaint(
-            painter: _RadarTopographyPainter(),
-          ),
-        ),
-        Positioned(
-          right: -64,
-          top: 120,
-          width: 260,
-          height: 230,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                colors: [
-                  BbV5Colors.brandSoft.withValues(alpha: 0.26),
-                  BbV5Colors.brandSoft.withValues(alpha: 0),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          left: -72,
-          top: 240,
-          width: 230,
-          height: 190,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                colors: [
-                  BbV5Colors.terraSoft.withValues(alpha: 0.26),
-                  BbV5Colors.terraSoft.withValues(alpha: 0),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (showUserPulse)
-          const Align(
-            alignment: Alignment(0, -0.10),
-            child: _RadarUserPulse(),
+        if (renderNativeMap)
+          ym.YandexMap(
+            nightModeEnabled: true,
+            rotateGesturesEnabled: false,
+            tiltGesturesEnabled: false,
+            mode2DEnabled: true,
+            mapObjects: mapObjects,
+            onMapCreated: onCreated,
+            onCameraPositionChanged: (position, _, finished) {
+              if (finished) {
+                onCameraFinished(position);
+              }
+            },
+          )
+        else
+          const _MapkitUnavailableState(),
+        if (loading)
+          const Center(
+            child: CircularProgressIndicator(color: DateasyColors.lime),
           ),
       ],
     );
   }
 }
 
-class _RadarTopographyPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final linePaint = Paint()
-      ..color = BbV5Colors.ink.withValues(alpha: 0.16)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.1
-      ..strokeCap = StrokeCap.round;
-
-    final softLinePaint = Paint()
-      ..color = BbV5Colors.ink.withValues(alpha: 0.10)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-
-    final upper = Path()
-      ..moveTo(0, size.height * 0.28)
-      ..quadraticBezierTo(
-        size.width * 0.50,
-        size.height * 0.22,
-        size.width,
-        size.height * 0.34,
-      );
-    final middle = Path()
-      ..moveTo(0, size.height * 0.42)
-      ..quadraticBezierTo(
-        size.width * 0.50,
-        size.height * 0.36,
-        size.width,
-        size.height * 0.48,
-      );
-    final lower = Path()
-      ..moveTo(0, size.height * 0.68)
-      ..quadraticBezierTo(
-        size.width * 0.48,
-        size.height * 0.58,
-        size.width,
-        size.height * 0.74,
-      );
-    final leftVertical = Path()
-      ..moveTo(size.width * 0.34, 0)
-      ..quadraticBezierTo(
-        size.width * 0.42,
-        size.height * 0.50,
-        size.width * 0.27,
-        size.height,
-      );
-    final rightVertical = Path()
-      ..moveTo(size.width * 0.72, 0)
-      ..lineTo(size.width * 0.82, size.height);
-
-    canvas.drawPath(upper, linePaint);
-    canvas.drawPath(middle, linePaint);
-    canvas.drawPath(lower, softLinePaint);
-    canvas.drawPath(leftVertical, softLinePaint);
-    canvas.drawPath(rightVertical, softLinePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _RadarUserPulse extends StatelessWidget {
-  const _RadarUserPulse();
+class _MapkitUnavailableState extends StatelessWidget {
+  const _MapkitUnavailableState();
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 72,
-      height: 72,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: BbV5Colors.ink.withValues(alpha: 0.12),
-            ),
-          ),
-          Container(
-            width: 18,
-            height: 18,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: BbV5Colors.paperHi,
-              boxShadow: BbV5Shadows.pill,
-            ),
-          ),
-          Container(
-            width: 10,
-            height: 10,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: BbV5Colors.accent,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RadarTopControls extends StatelessWidget {
-  const _RadarTopControls({
-    required this.events,
-    required this.filter,
-    required this.radiusKm,
-    required this.onBack,
-    required this.onSelectFilter,
-    required this.onRadiusChanged,
-  });
-
-  final List<Event> events;
-  final String filter;
-  final double radiusKm;
-  final VoidCallback onBack;
-  final ValueChanged<String> onSelectFilter;
-  final ValueChanged<double> onRadiusChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final categoryCounts = buildRadarCategoryCounts(events);
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  _MapTopButton(
-                    icon: LucideIcons.arrow_left,
-                    onTap: onBack,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => showV5SearchModal(context),
-                      child: Container(
-                        height: 44,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: BbV5Colors.paperHi.withValues(alpha: 0.94),
-                          borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                          border: Border.all(color: BbV5Colors.hair),
-                          boxShadow: BbV5Shadows.pill,
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              LucideIcons.search,
-                              size: 16,
-                              color: BbV5Colors.inkMute,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Бар, маршрут, человек…',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.meta.copyWith(
-                                  fontSize: 13,
-                                  color: BbV5Colors.inkMute,
-                                ),
-                              ),
-                            ),
-                            const Icon(
-                              LucideIcons.sun,
-                              size: 13,
-                              color: BbV5Colors.inkMute,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '+14°',
-                              style: AppTextStyles.caption.copyWith(
-                                fontFamily: 'Sora',
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                                color: BbV5Colors.inkMute,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _MapTopButton(
-                    icon: LucideIcons.sliders_horizontal,
-                    onTap: () => _showRadarRadiusSheet(
-                      context,
-                      radiusKm,
-                      onRadiusChanged,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 39,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _radarFilters.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
-                  itemBuilder: (context, index) {
-                    final item = _radarFilters[index];
-                    final count = categoryCounts[item.key] ?? 0;
-                    return _RadarFilterChip(
-                      label: '${item.title} · $count',
-                      active: filter == item.key,
-                      onTap: () => onSelectFilter(item.key),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
+    return const DecoratedBox(
+      decoration: BoxDecoration(gradient: dateasyHeroGradient),
+      child: Center(
+        child: Icon(
+          LucideIcons.map,
+          size: 40,
+          color: DateasyColors.muted,
         ),
       ),
     );
   }
 }
 
-void _showRadarRadiusSheet(
-  BuildContext context,
-  double currentRadiusKm,
-  ValueChanged<double> onChanged,
-) {
-  var radiusKm = currentRadiusKm;
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    barrierColor: const Color(0x8014100C),
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setSheetState) {
-          return Align(
-            alignment: Alignment.bottomCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
-                ),
-                child: Material(
-                  color: BbV5Colors.paper,
-                  child: SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Center(
-                            child: Container(
-                              width: 48,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: BbV5Colors.hair,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          Text(
-                            'Радиус радара',
-                            style: bbV5DisplayStyle(
-                              fontSize: 20,
-                              letterSpacing: 0,
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          BbV5Kicker('РАДИУС · ${radiusKm.round()} КМ'),
-                          Slider(
-                            min: 1,
-                            max: nearbyEventsMaxRadiusKm,
-                            divisions: nearbyEventsMaxRadiusKm.round() - 1,
-                            value: radiusKm,
-                            activeColor: BbV5Colors.accent,
-                            inactiveColor: BbV5Colors.hair,
-                            onChanged: (value) {
-                              setSheetState(() {
-                                radiusKm = value;
-                              });
-                            },
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          BbV5PillButton(
-                            label: 'Применить',
-                            dark: true,
-                            height: 52,
-                            expanded: true,
-                            onPressed: () {
-                              onChanged(radiusKm);
-                              Navigator.of(context).pop();
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
+class DateasyMapObjectCache {
+  String _key = '';
+  List<ym.MapObject> _objects = const [];
+
+  List<ym.MapObject> objectsFor({
+    required List<BackendCardItem> events,
+    required String selectedId,
+    double pulsePhase = 0,
+    required ValueChanged<String> onPinTap,
+  }) {
+    final nextKey = buildMapObjectsCacheKey(
+      events: events,
+      selectedId: selectedId,
+      pulsePhase: pulsePhase,
+    );
+    if (nextKey == _key) {
+      return _objects;
+    }
+    final placemarks = buildEventPlacemarks(
+      events: events,
+      selectedId: selectedId,
+      pulsePhase: pulsePhase,
+      onPinTap: onPinTap,
+    );
+    if (placemarks.isEmpty) {
+      _key = nextKey;
+      _objects = const [];
+      return const [];
+    }
+    final objects = <ym.MapObject>[
+      if (placemarks.length > _radarClusterPointThreshold)
+        ym.ClusterizedPlacemarkCollection(
+          mapId: const ym.MapObjectId('event-pins'),
+          radius: _radarClusterRadius,
+          minZoom: _radarClusterMinZoom,
+          placemarks: placemarks,
+          onClusterAdded: (_, cluster) async {
+            return cluster.copyWith(
+              appearance: cluster.appearance.copyWith(
+                opacity: 0.92,
+                icon: ym.PlacemarkIcon.single(
+                  radarPinIconStyle(
+                    kind: RadarMapPinKind.cluster,
+                    selected: false,
                   ),
                 ),
+                text: ym.PlacemarkText(
+                  text: radarClusterText(cluster.size),
+                  style: radarClusterTextStyle(cluster.size),
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        )
+      else ...[
+        ...buildEventWaveObjects(
+          events: events,
+          selectedId: selectedId,
+          pulsePhase: pulsePhase,
+        ),
+        ...placemarks,
+      ],
+    ];
+    _key = nextKey;
+    _objects = List<ym.MapObject>.unmodifiable(objects);
+    return _objects;
+  }
+}
+
+String buildMapObjectsCacheKey({
+  required List<BackendCardItem> events,
+  required String selectedId,
+  double pulsePhase = 0,
+}) {
+  final parts = <String>[
+    'selected:$selectedId',
+  ];
+  for (final event in events) {
+    for (final entry in pointsForEvent(event)) {
+      parts.add(
+        [
+          event.id,
+          entry.idSuffix,
+          entry.point.latitude.toStringAsFixed(5),
+          entry.point.longitude.toStringAsFixed(5),
+          radarCategoryForEvent(event),
+          meetingBoostTierFromRaw(event.raw)?.optionId ?? '',
+        ].join(':'),
       );
-    },
+    }
+  }
+  return parts.join('|');
+}
+
+List<ym.PlacemarkMapObject> buildEventPlacemarks({
+  required List<BackendCardItem> events,
+  required String selectedId,
+  double pulsePhase = 0,
+  required ValueChanged<String> onPinTap,
+}) {
+  return [
+    for (final event in events)
+      for (final entry in pointsForEvent(event))
+        _eventPlacemark(
+          event: event,
+          pointEntry: entry,
+          selected: event.id == selectedId,
+          pulsePhase: pulsePhase,
+          onPinTap: onPinTap,
+        ),
+  ];
+}
+
+ym.PlacemarkMapObject _eventPlacemark({
+  required BackendCardItem event,
+  required EventMapPoint pointEntry,
+  required bool selected,
+  required double pulsePhase,
+  required ValueChanged<String> onPinTap,
+}) {
+  return ym.PlacemarkMapObject(
+    mapId: ym.MapObjectId('event-${event.id}${pointEntry.idSuffix}'),
+    point: pointEntry.point,
+    zIndex: selected ? 2 : 1,
+    consumeTapEvents: true,
+    opacity: 1,
+    onTap: (_, __) => onPinTap(event.id),
+    icon: ym.PlacemarkIcon.single(
+      radarPinIconStyle(
+        kind: radarPinKindForEvent(event),
+        selected: selected,
+      ),
+    ),
   );
 }
 
-class _RadarFilterChip extends StatelessWidget {
-  const _RadarFilterChip({
+ym.PlacemarkIconStyle radarPinIconStyle({
+  required RadarMapPinKind kind,
+  required bool selected,
+}) {
+  final scale = switch (kind) {
+    RadarMapPinKind.user => 1.0,
+    RadarMapPinKind.cluster => _radarClusterPinScale,
+    RadarMapPinKind.promoted ||
+    RadarMapPinKind.boost6h ||
+    RadarMapPinKind.boost24h ||
+    RadarMapPinKind.boost72h =>
+      selected ? 1.34 : 1.22,
+    _ => selected ? _radarSelectedPinScale : _radarPinScale,
+  };
+  return ym.PlacemarkIconStyle(
+    image: ym.BitmapDescriptor.fromAssetImage(_radarPinAssetByKind[kind]!),
+    anchor: kind == RadarMapPinKind.user || kind == RadarMapPinKind.cluster
+        ? const Offset(0.5, 0.5)
+        : const Offset(0.5, 0.82),
+    scale: scale,
+  );
+}
+
+List<ym.CircleMapObject> buildEventWaveObjects({
+  required List<BackendCardItem> events,
+  required String selectedId,
+  double pulsePhase = 0,
+}) {
+  final phase = pulsePhase.clamp(0, 1).toDouble();
+  return [
+    for (final event in events)
+      for (final entry in pointsForEvent(event))
+        ym.CircleMapObject(
+          mapId: ym.MapObjectId('event-wave-${event.id}${entry.idSuffix}'),
+          circle: ym.Circle(
+            center: entry.point,
+            radius:
+                _radarWaveMinRadiusMeters + phase * _radarWaveRadiusStepMeters,
+          ),
+          zIndex: event.id == selectedId ? 0.7 : 0.5,
+          strokeWidth: 0,
+          strokeColor: Colors.transparent,
+          fillColor: radarPinColorForKind(
+            radarPinKindForEvent(event),
+          ).withValues(alpha: 0.24 - phase * 0.16),
+        ),
+  ];
+}
+
+Color radarPinColorForKind(RadarMapPinKind kind) {
+  return switch (kind) {
+    RadarMapPinKind.affiche ||
+    RadarMapPinKind.promoted ||
+    RadarMapPinKind.boost24h =>
+      DateasyColors.pink,
+    RadarMapPinKind.routes || RadarMapPinKind.footprints => DateasyColors.lilac,
+    RadarMapPinKind.boost72h => const Color(0xFFFFB020),
+    _ => DateasyColors.lime,
+  };
+}
+
+String radarClusterText(int size) {
+  if (size > 999) {
+    return '999+';
+  }
+  return size.toString();
+}
+
+ym.PlacemarkTextStyle radarClusterTextStyle(int size) {
+  final text = radarClusterText(size);
+  final fontSize = switch (text.length) {
+    1 => 14.0,
+    2 => 12.0,
+    3 => 10.5,
+    _ => 9.0,
+  };
+  return ym.PlacemarkTextStyle(
+    size: fontSize,
+    color: DateasyColors.backgroundDeep,
+    outlineColor: Colors.transparent,
+    placement: ym.TextStylePlacement.center,
+    offsetFromIcon: false,
+  );
+}
+
+class _TopControls extends StatelessWidget {
+  const _TopControls({required this.onRadiusTap});
+
+  final VoidCallback onRadiusTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
+          child: const _GlassPanel(
+            borderRadius: 16,
+            padding: EdgeInsets.zero,
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Icon(LucideIcons.arrowLeft, size: 20),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => context.go('/search'),
+            child: const _GlassPanel(
+              borderRadius: 16,
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.search,
+                    size: 16,
+                    color: DateasyColors.muted,
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Места, события, люди',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: DateasyColors.muted,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: onRadiusTap,
+          child: const _GlassPanel(
+            borderRadius: 16,
+            padding: EdgeInsets.zero,
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Icon(LucideIcons.slidersHorizontal, size: 20),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FilterChips extends StatelessWidget {
+  const _FilterChips({
+    required this.filter,
+    required this.counts,
+    required this.onSelect,
+  });
+
+  final String filter;
+  final Map<String, int> counts;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.only(top: 12, bottom: 2),
+      child: Row(
+        children: [
+          for (var index = 0; index < _radarFilters.length; index++) ...[
+            _FilterChip(
+              label:
+                  '${_radarFilters[index].title} · ${counts[_radarFilters[index].key] ?? 0}',
+              active: filter == _radarFilters[index].key,
+              onTap: () => onSelect(_radarFilters[index].key),
+            ),
+            if (index != _radarFilters.length - 1) const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
     required this.label,
     required this.active,
     required this.onTap,
@@ -1567,39 +1154,84 @@ class _RadarFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(BbV5Radii.pill),
-        child: Container(
-          height: 36,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: active ? BbV5Colors.ink : BbV5Colors.paperHi,
-            borderRadius: BorderRadius.circular(BbV5Radii.pill),
-            border: Border.all(
-              color: active ? BbV5Colors.ink : BbV5Colors.hair,
-            ),
-            boxShadow: active ? BbV5Shadows.ink : BbV5Shadows.pill,
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.caption.copyWith(
-              fontFamily: 'Sora',
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0,
-              color: active ? BbV5Colors.paperHi : BbV5Colors.inkSoft,
-            ),
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? DateasyColors.foreground : DateasyColors.glass,
+          borderRadius: BorderRadius.circular(999),
+          border: active
+              ? null
+              : Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.visible,
+          softWrap: false,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: active
+                    ? DateasyColors.backgroundDeep
+                    : DateasyColors.foreground,
+                fontSize: 12,
+                height: 1.15,
+                fontWeight: active ? FontWeight.w600 : null,
+              ),
         ),
       ),
     );
   }
+}
+
+class _MapZoomButton extends StatelessWidget {
+  const _MapZoomButton({
+    required this.icon,
+    required this.onTap,
+    this.loading = false,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: loading ? null : onTap,
+      child: _GlassPanel(
+        borderRadius: 16,
+        padding: EdgeInsets.zero,
+        child: SizedBox(
+          width: 42,
+          height: 42,
+          child: loading
+              ? const Center(
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: DateasyColors.foreground,
+                    ),
+                  ),
+                )
+              : Icon(icon, size: 18),
+        ),
+      ),
+    );
+  }
+}
+
+List<BackendCardItem> _filteredEvents(
+  List<BackendCardItem> events,
+  String filter,
+) {
+  return events
+      .where((event) => radarCategoryForEvent(event) == filter)
+      .toList(growable: false);
 }
 
 class _RadarFilterDefinition {
@@ -1618,8 +1250,7 @@ const _radarFilters = [
   _RadarFilterDefinition(key: 'affiche', title: 'Афиша'),
 ];
 
-@visibleForTesting
-Map<String, int> buildRadarCategoryCounts(List<Event> events) {
+Map<String, int> buildRadarCategoryCounts(List<BackendCardItem> events) {
   final counts = <String, int>{
     for (final filter in _radarFilters) filter.key: 0,
   };
@@ -1630,31 +1261,65 @@ Map<String, int> buildRadarCategoryCounts(List<Event> events) {
   return counts;
 }
 
-@visibleForTesting
-String radarCategoryForEvent(Event event) {
-  if (event.isAfficheBacked ||
-      event.ticketSourceKind != null ||
-      (event.ticketUrl ?? '').trim().isNotEmpty) {
+String activeRadarFilterForCounts({
+  required String selectedFilter,
+  required Map<String, int> counts,
+}) {
+  if ((counts[selectedFilter] ?? 0) > 0) {
+    return selectedFilter;
+  }
+  for (final filter in _radarFilters) {
+    if ((counts[filter.key] ?? 0) > 0) {
+      return filter.key;
+    }
+  }
+  return selectedFilter;
+}
+
+String radarCategoryForEvent(BackendCardItem event) {
+  final raw = event.raw;
+  if (raw['source'] == 'affiche' ||
+      raw['afficheEventId'] != null ||
+      _stringOrNull(raw['ticketUrl'] ?? raw['actionUrl']) != null ||
+      _stringOrNull(raw['ticketSourceKind'] ?? raw['ticketSourceCode']) !=
+          null) {
     return 'affiche';
   }
-  if ((event.routePointCount ?? 0) > 1) {
-    return 'routes';
-  }
-  if (event.routePointCount == null &&
-      (event.routeId ?? '').trim().isNotEmpty) {
+  final routePointCount = _intOrNull(raw['routePointCount']);
+  final routeId = _stringOrNull(raw['routeId']);
+  if ((routePointCount ?? 0) > 1 ||
+      (routePointCount == null && routeId != null)) {
     return 'routes';
   }
   return 'meetups';
 }
 
-@visibleForTesting
-RadarMapPinKind radarPinKindForEvent(Event event) {
-  final pinText = '${event.title} ${event.vibe} ${event.place} ${event.emoji}'
-      .toLowerCase();
+RadarMapPinKind radarPinKindForEvent(BackendCardItem event) {
+  final raw = event.raw;
+  final boostTier = meetingBoostTierFromRaw(raw);
+  if (boostTier?.id == '72h') {
+    return RadarMapPinKind.boost72h;
+  }
+  if (boostTier?.id == '24h') {
+    return RadarMapPinKind.boost24h;
+  }
+  if (boostTier?.id == '6h') {
+    return RadarMapPinKind.boost6h;
+  }
+  if (raw['isAfterDark'] == true) {
+    return RadarMapPinKind.promoted;
+  }
   final category = radarCategoryForEvent(event);
   if (category == 'affiche') {
     return RadarMapPinKind.affiche;
   }
+  final pinText = [
+    event.title,
+    event.subtitle,
+    raw['vibe'],
+    raw['place'],
+    raw['emoji'],
+  ].whereType<Object>().join(' ').toLowerCase();
   if (category == 'routes') {
     if (pinText.contains('прогул') ||
         pinText.contains('пеш') ||
@@ -1681,617 +1346,62 @@ RadarMapPinKind radarPinKindForEvent(Event event) {
   return RadarMapPinKind.bars;
 }
 
-@visibleForTesting
-ym.PlacemarkIconStyle radarPinIconStyle({
-  required RadarMapPinKind kind,
-  required bool selected,
+List<BackendCardItem> visibleMapEventsForRadar({
+  required AsyncValue<BackendPage<BackendCardItem>> eventsState,
+  required List<BackendCardItem> previousEvents,
 }) {
-  final asset = _radarPinAssetByKind[kind]!;
-  final scale = switch (kind) {
-    RadarMapPinKind.user => 1.0,
-    RadarMapPinKind.cluster => _radarClusterPinScale,
-    _ => selected ? _radarSelectedPinScale : _radarPinScale,
-  };
-  return ym.PlacemarkIconStyle(
-    image: ym.BitmapDescriptor.fromAssetImage(asset),
-    scale: scale,
-    anchor: kind == RadarMapPinKind.user
-        ? const Offset(0.5, 0.5)
-        : const Offset(0.5, 0.82),
-  );
-}
-
-@visibleForTesting
-ym.BoundingBox? buildMapViewportBounds({
-  required ym.Point? userPoint,
-  required List<ym.Point> eventPoints,
-}) {
-  final points = [
-    if (userPoint != null) userPoint,
-    ...eventPoints,
-  ];
-  if (points.isEmpty) {
-    return null;
-  }
-
-  var minLatitude = points.first.latitude;
-  var maxLatitude = points.first.latitude;
-  var minLongitude = points.first.longitude;
-  var maxLongitude = points.first.longitude;
-
-  for (final point in points.skip(1)) {
-    minLatitude = point.latitude < minLatitude ? point.latitude : minLatitude;
-    maxLatitude = point.latitude > maxLatitude ? point.latitude : maxLatitude;
-    minLongitude =
-        point.longitude < minLongitude ? point.longitude : minLongitude;
-    maxLongitude =
-        point.longitude > maxLongitude ? point.longitude : maxLongitude;
-  }
-
-  final latitudeSpan = maxLatitude - minLatitude;
-  final longitudeSpan = maxLongitude - minLongitude;
-  final latitudePadding = (latitudeSpan * 0.18).clamp(0.006, 0.12).toDouble();
-  final longitudePadding = (longitudeSpan * 0.18).clamp(0.006, 0.12).toDouble();
-
-  return ym.BoundingBox(
-    southWest: ym.Point(
-      latitude: minLatitude - latitudePadding,
-      longitude: minLongitude - longitudePadding,
-    ),
-    northEast: ym.Point(
-      latitude: maxLatitude + latitudePadding,
-      longitude: maxLongitude + longitudePadding,
-    ),
-  );
-}
-
-@visibleForTesting
-ym.BoundingBox buildMapRadiusBounds({
-  required ym.Point center,
-  required double radiusKm,
-}) {
-  const kilometersPerLatitudeDegree = 111.32;
-  final paddedRadiusKm = radiusKm.clamp(0.5, nearbyEventsMaxRadiusKm) * 1.12;
-  final latitudeDelta = paddedRadiusKm / kilometersPerLatitudeDegree;
-  final latitudeRadians = center.latitude * 0.017453292519943295;
-  final longitudeScale =
-      math.cos(latitudeRadians).abs().clamp(0.01, 1).toDouble();
-  final longitudeDelta =
-      paddedRadiusKm / (kilometersPerLatitudeDegree * longitudeScale);
-
-  return ym.BoundingBox(
-    southWest: ym.Point(
-      latitude: (center.latitude - latitudeDelta).clamp(-90, 90).toDouble(),
-      longitude:
-          (center.longitude - longitudeDelta).clamp(-180, 180).toDouble(),
-    ),
-    northEast: ym.Point(
-      latitude: (center.latitude + latitudeDelta).clamp(-90, 90).toDouble(),
-      longitude:
-          (center.longitude + longitudeDelta).clamp(-180, 180).toDouble(),
-    ),
-  );
-}
-
-@visibleForTesting
-double mapZoomForRadiusKm({
-  required double radiusKm,
-  required Size viewportSize,
-  required double latitude,
-}) {
-  const earthCircumferenceMeters = 40075016.686;
-  const tileSize = 256.0;
-  const radiansPerDegree = 0.017453292519943295;
-  const log2 = 0.6931471805599453;
-  final clampedRadiusKm =
-      radiusKm.clamp(0.5, nearbyEventsMaxRadiusKm).toDouble();
-  final latitudeScale =
-      math.cos(latitude * radiansPerDegree).abs().clamp(0.01, 1).toDouble();
-  final metersPerPixelAtZoomZero =
-      earthCircumferenceMeters * latitudeScale / tileSize;
-  final fitPixels =
-      math.max(120.0, math.min(viewportSize.width, viewportSize.height) * 0.72);
-  final targetMetersPerPixel = (clampedRadiusKm * 2000) / fitPixels;
-  final zoom = math.log(metersPerPixelAtZoomZero / targetMetersPerPixel) / log2;
-
-  return clampMapZoom(zoom);
-}
-
-@visibleForTesting
-ym.Point? mapRadiusCenterForChange({
-  required MapEventsQuery query,
-  required ym.Point? userPoint,
-  required ym.Point? cameraPoint,
-}) {
-  if (cameraPoint != null) {
-    return cameraPoint;
-  }
-
-  if (query.centerLatitude != null && query.centerLongitude != null) {
-    return ym.Point(
-      latitude: query.centerLatitude!,
-      longitude: query.centerLongitude!,
-    );
-  }
-
-  return userPoint;
-}
-
-@visibleForTesting
-bool shouldScheduleMapViewportFit({
-  required bool supportsNativeMap,
-  required bool hasMapController,
-  required bool hasInitialEvent,
-  required bool autoFitPending,
-  required String fitKey,
-  required String lastFitKey,
-}) {
-  return supportsNativeMap &&
-      hasMapController &&
-      !hasInitialEvent &&
-      fitKey.isNotEmpty &&
-      fitKey != lastFitKey &&
-      (autoFitPending || lastFitKey.isEmpty);
-}
-
-@visibleForTesting
-bool shouldRefreshMapViewportQuery({
-  required ym.CameraUpdateReason reason,
-  required bool finished,
-  bool allowApplication = false,
-}) {
-  return finished &&
-      (reason == ym.CameraUpdateReason.gestures ||
-          (allowApplication && reason == ym.CameraUpdateReason.application));
-}
-
-@visibleForTesting
-bool shouldRefreshEventClustersForZoom({
-  required bool hasClusterCollection,
-  required double? previousZoom,
-  required double currentZoom,
-  required bool finished,
-}) {
-  if (!finished || !hasClusterCollection) {
-    return false;
-  }
-  if (currentZoom > _radarClusterMinZoom) {
-    return false;
-  }
-  return previousZoom == null || previousZoom > _radarClusterMinZoom;
-}
-
-@visibleForTesting
-List<Event> visibleMapEventsForRadar({
-  required AsyncValue<List<Event>> eventsAsync,
-  required List<Event> previousEvents,
-}) {
-  if (eventsAsync.hasValue) {
-    final events = eventsAsync.value ?? const <Event>[];
-    if (events.isEmpty && previousEvents.isNotEmpty) {
-      return previousEvents;
-    }
+  if (eventsState.hasValue) {
+    final events = eventsState.valueOrNull?.items ?? const <BackendCardItem>[];
     return events;
   }
-
   return previousEvents;
 }
 
-@visibleForTesting
-bool hasClusterableEventPoints(List<Event> events) {
-  return _eventMapPointCount(events) > _radarClusterPointThreshold;
+class EventMapPoint {
+  const EventMapPoint({
+    required this.idSuffix,
+    required this.point,
+  });
+
+  final String idSuffix;
+  final ym.Point point;
 }
 
-@visibleForTesting
-double nearbyRadiusKmFromMapQuery({
-  required double currentRadiusKm,
-  required MapEventsQuery query,
-}) {
-  final radiusKm = query.radiusKm;
-  if (radiusKm == null) {
-    return currentRadiusKm;
-  }
-
-  return clampNearbyEventsRadiusKm(radiusKm);
-}
-
-@visibleForTesting
-double clampMapZoom(double zoom) {
-  return zoom.clamp(_minMapZoom, _maxMapZoom).toDouble();
-}
-
-@visibleForTesting
-double mapZoomForEventSelection({
-  required double? currentZoom,
-  required bool keepCurrentZoom,
-}) {
-  if (keepCurrentZoom && currentZoom != null) {
-    return clampMapZoom(currentZoom);
-  }
-
-  return 15;
-}
-
-@visibleForTesting
-double mapZoomForClusterTap(double currentZoom) {
-  return clampMapZoom(
-    math.max(currentZoom + 2, _radarClusterMinZoom + 1),
-  );
-}
-
-@visibleForTesting
-ym.Point? clusterCenterPoint(List<ym.PlacemarkMapObject> placemarks) {
-  if (placemarks.isEmpty) {
-    return null;
-  }
-
-  var latitude = 0.0;
-  var longitude = 0.0;
-  for (final placemark in placemarks) {
-    latitude += placemark.point.latitude;
-    longitude += placemark.point.longitude;
-  }
-
-  return ym.Point(
-    latitude: latitude / placemarks.length,
-    longitude: longitude / placemarks.length,
-  );
-}
-
-@visibleForTesting
-int radarCarouselEventIndex(int pageIndex, int eventCount) {
-  if (eventCount <= 0) {
-    return 0;
-  }
-  return pageIndex % eventCount;
-}
-
-@visibleForTesting
-int nearestRadarCarouselPage(
-  int currentPage, {
-  required int targetIndex,
-  required int eventCount,
-}) {
-  if (eventCount <= 1) {
-    return 0;
-  }
-
-  final currentEventIndex = radarCarouselEventIndex(currentPage, eventCount);
-  final forward = (targetIndex - currentEventIndex) % eventCount;
-  final backward = forward - eventCount;
-  final delta = forward.abs() <= backward.abs() ? forward : backward;
-  return currentPage + delta;
-}
-
-@visibleForTesting
-int teleportedRadarCarouselPage(
-  int pageIndex, {
-  required int eventCount,
-}) {
-  if (eventCount <= 2) {
-    return pageIndex;
-  }
-  if (pageIndex < eventCount || pageIndex >= eventCount * 2) {
-    return eventCount + radarCarouselEventIndex(pageIndex, eventCount);
-  }
-  return pageIndex;
-}
-
-@visibleForTesting
-String buildMapViewportFitKey(List<Event> events, String filter) {
-  final parts = events
-      .expand(
-        (event) => _pointsForEventModel(event).map(
-          (entry) => '${event.id}:${entry.idSuffix}:'
-              '${entry.point.latitude.toStringAsFixed(5)},'
-              '${entry.point.longitude.toStringAsFixed(5)}',
-        ),
-      )
-      .toList(growable: false);
-  if (parts.isEmpty) {
-    return '';
-  }
-
-  return '$filter|${parts.join('|')}';
-}
-
-@visibleForTesting
-class MapObjectCache {
-  String _key = '';
-  List<ym.MapObject> _objects = const [];
-
-  List<ym.MapObject> objectsFor({
-    required List<Event> events,
-    required String selectedId,
-    int clusterRefreshRevision = 0,
-    Set<String> promotedIds = const {},
-    required List<EveningSessionSummary> liveEvenings,
-    required ym.Point? userPoint,
-    required ym.Point? searchPoint,
-    required void Function(String eventId) onEventTap,
-    void Function(List<ym.PlacemarkMapObject> placemarks)? onEventClusterTap,
-    required void Function(String sessionId) onSessionTap,
-  }) {
-    final nextKey = buildMapObjectsCacheKey(
-      events: events,
-      selectedId: selectedId,
-      clusterRefreshRevision: clusterRefreshRevision,
-      promotedIds: promotedIds,
-      liveEvenings: liveEvenings,
-      userPoint: userPoint,
-      searchPoint: searchPoint,
-    );
-    if (nextKey == _key) {
-      return _objects;
-    }
-
-    final eventPlacemarks = buildEventPlacemarks(
-      events: events,
-      selectedId: selectedId,
-      promotedIds: promotedIds,
-      onEventTap: onEventTap,
-    );
-    final objects = <ym.MapObject>[
-      if (eventPlacemarks.length > _radarClusterPointThreshold)
-        buildEventClusterCollection(
-          placemarks: eventPlacemarks,
-          clusterRefreshRevision: clusterRefreshRevision,
-          onClusterTap: onEventClusterTap ?? (_) {},
-        )
-      else
-        ...eventPlacemarks,
-      ...buildLiveEveningPlacemarks(
-        sessions: liveEvenings,
-        onSessionTap: onSessionTap,
-      ),
-      if (userPoint != null) buildUserLocationPlacemark(userPoint),
-      if (searchPoint != null) buildSearchPointPlacemark(searchPoint),
-    ];
-
-    _key = nextKey;
-    _objects = List<ym.MapObject>.unmodifiable(objects);
-    return _objects;
-  }
-}
-
-@visibleForTesting
-String buildMapObjectsCacheKey({
-  required List<Event> events,
-  required String selectedId,
-  int clusterRefreshRevision = 0,
-  Set<String> promotedIds = const {},
-  required List<EveningSessionSummary> liveEvenings,
-  required ym.Point? userPoint,
-  required ym.Point? searchPoint,
-}) {
-  final parts = <String>[
-    'selected:$selectedId',
-    'user:${_pointCacheKey(userPoint)}',
-    'search:${_pointCacheKey(searchPoint)}',
-    'cluster:${_eventMapPointCount(events) > _radarClusterPointThreshold}',
-    'clusterRefresh:$clusterRefreshRevision',
-    for (final event in events)
-      for (final entry in _pointsForEventModel(event))
-        [
-          'event',
-          event.id,
-          entry.idSuffix,
-          _roundGeo(entry.point.latitude).toStringAsFixed(5),
-          _roundGeo(entry.point.longitude).toStringAsFixed(5),
-          event.emoji,
-          promotedIds.contains(event.id) ? 'promoted' : 'regular',
-        ].join(':'),
-    for (final session in liveEvenings)
-      if (session.lat != null && session.lng != null)
-        [
-          'session',
-          session.id,
-          _roundGeo(session.lat!).toStringAsFixed(5),
-          _roundGeo(session.lng!).toStringAsFixed(5),
-          session.emoji,
-        ].join(':'),
-  ];
-
-  return parts.join('|');
-}
-
-@visibleForTesting
-List<ym.PlacemarkMapObject> buildEventPlacemarks({
-  required List<Event> events,
-  required String selectedId,
-  Set<String> promotedIds = const {},
-  required void Function(String eventId) onEventTap,
-}) {
-  return [
-    for (final event in events)
-      for (final entry in _pointsForEventModel(event))
-        _buildEventPlacemark(
-          event: event,
-          pointEntry: entry,
-          selected: event.id == selectedId,
-          promoted: promotedIds.contains(event.id),
-          onEventTap: onEventTap,
-        ),
-  ];
-}
-
-ym.PlacemarkMapObject _buildEventPlacemark({
-  required Event event,
-  required _EventMapPoint pointEntry,
-  required bool selected,
-  required bool promoted,
-  required void Function(String eventId) onEventTap,
-}) {
-  final pinKind =
-      promoted ? RadarMapPinKind.promoted : radarPinKindForEvent(event);
-  return ym.PlacemarkMapObject(
-    mapId: ym.MapObjectId('event_${event.id}${pointEntry.idSuffix}'),
-    point: pointEntry.point,
-    zIndex: selected ? 2 : 1,
-    consumeTapEvents: true,
-    opacity: 1,
-    icon: ym.PlacemarkIcon.single(
-      radarPinIconStyle(
-        kind: pinKind,
-        selected: selected,
-      ),
-    ),
-    text: promoted
-        ? ym.PlacemarkText(
-            text: '🔥',
-            style: ym.PlacemarkTextStyle(
-              size: selected ? 13 : 12,
-              placement: ym.TextStylePlacement.center,
-              offsetFromIcon: false,
-            ),
-          )
-        : null,
-    onTap: (_, __) => onEventTap(event.id),
-  );
-}
-
-@visibleForTesting
-ym.ClusterizedPlacemarkCollection buildEventClusterCollection({
-  required List<ym.PlacemarkMapObject> placemarks,
-  int clusterRefreshRevision = 0,
-  required void Function(List<ym.PlacemarkMapObject> placemarks) onClusterTap,
-}) {
-  return ym.ClusterizedPlacemarkCollection(
-    mapId: const ym.MapObjectId('event_clusters'),
-    placemarks: placemarks,
-    radius: _radarClusterRadius,
-    minZoom: _radarClusterMinZoom,
-    zIndex: _clusterCollectionZIndex(clusterRefreshRevision),
-    consumeTapEvents: true,
-    onClusterAdded: (collection, cluster) async {
-      return cluster.copyWith(
-        appearance: cluster.appearance.copyWith(
-          opacity: 1,
-          icon: ym.PlacemarkIcon.single(
-            radarPinIconStyle(
-              kind: RadarMapPinKind.cluster,
-              selected: false,
-            ),
-          ),
-          text: ym.PlacemarkText(
-            text: cluster.size.toString(),
-            style: const ym.PlacemarkTextStyle(
-              size: 13,
-              color: Color(0xFF2A2A2A),
-              outlineColor: Colors.white,
-              placement: ym.TextStylePlacement.center,
-              offsetFromIcon: false,
-            ),
-          ),
-        ),
-      );
-    },
-    onClusterTap: (_, cluster) => onClusterTap(cluster.placemarks),
-  );
-}
-
-double _clusterCollectionZIndex(int refreshRevision) {
-  return 1 + (refreshRevision % 1000) * 0.0001;
-}
-
-@visibleForTesting
-List<ym.PlacemarkMapObject> buildLiveEveningPlacemarks({
-  required List<EveningSessionSummary> sessions,
-  required void Function(String sessionId) onSessionTap,
-}) {
-  return [
-    for (final session in sessions)
-      if (session.lat != null && session.lng != null)
-        ym.PlacemarkMapObject(
-          mapId: ym.MapObjectId('evening_session_${session.id}'),
-          point: ym.Point(
-            latitude: session.lat!,
-            longitude: session.lng!,
-          ),
-          zIndex: 5,
-          consumeTapEvents: true,
-          opacity: 1,
-          icon: ym.PlacemarkIcon.single(
-            radarPinIconStyle(
-              kind: RadarMapPinKind.live,
-              selected: false,
-            ),
-          ),
-          onTap: (_, __) => onSessionTap(session.id),
-        ),
-  ];
-}
-
-@visibleForTesting
-ym.PlacemarkMapObject buildUserLocationPlacemark(ym.Point point) {
-  return ym.PlacemarkMapObject(
-    mapId: const ym.MapObjectId('user_location'),
-    point: point,
-    zIndex: 4,
-    consumeTapEvents: false,
-    opacity: 1,
-    icon: ym.PlacemarkIcon.single(
-      radarPinIconStyle(
-        kind: RadarMapPinKind.user,
-        selected: false,
-      ),
-    ),
-  );
-}
-
-@visibleForTesting
-ym.PlacemarkMapObject buildSearchPointPlacemark(ym.Point point) {
-  return ym.PlacemarkMapObject(
-    mapId: const ym.MapObjectId('search_point'),
-    point: point,
-    zIndex: 3,
-    text: const ym.PlacemarkText(
-      text: '📍',
-      style: ym.PlacemarkTextStyle(
-        size: 18,
-        placement: ym.TextStylePlacement.center,
-        offsetFromIcon: false,
-      ),
-    ),
-  );
-}
-
-ym.Point? _pointForEventModel(Event event) {
-  final points = _pointsForEventModel(event);
-  if (points.isEmpty) {
-    return null;
-  }
-  return points.first.point;
-}
-
-List<_EventMapPoint> _pointsForEventModel(Event event) {
-  final routeId = event.routeId?.trim() ?? '';
-  if (routeId.isNotEmpty && event.routePoints.isNotEmpty) {
+List<EventMapPoint> pointsForEvent(BackendCardItem event) {
+  final raw = event.raw;
+  final routeId = _stringOrNull(raw['routeId']);
+  final routePoints = raw['routePoints'];
+  final stepPoints = raw['steps'];
+  final points =
+      routePoints is List && routePoints.isNotEmpty ? routePoints : stepPoints;
+  if (routeId != null && points is List && points.isNotEmpty) {
     return [
-      for (final indexed in event.routePoints.indexed)
-        if (_pointFromCoordinates(
-          indexed.$2.latitude,
-          indexed.$2.longitude,
-        )
-            case final point?)
-          _EventMapPoint(
-            idSuffix: '_${_routePointMapIdSuffix(indexed.$2, indexed.$1)}',
-            point: point,
-          ),
+      for (final entry in points.indexed)
+        if (entry.$2 is Map)
+          if (_pointFromRaw(Map<Object?, Object?>.from(entry.$2 as Map))
+              case final point?)
+            EventMapPoint(
+              idSuffix: '-${_routePointMapIdSuffix(entry.$2 as Map, entry.$1)}',
+              point: point,
+            ),
     ];
   }
-
   final point = _pointFromCoordinates(event.latitude, event.longitude);
   if (point == null) {
     return const [];
   }
-  return [_EventMapPoint(idSuffix: '', point: point)];
+  return [EventMapPoint(idSuffix: '', point: point)];
 }
 
-int _eventMapPointCount(List<Event> events) {
-  return events.fold<int>(
-    0,
-    (count, event) => count + _pointsForEventModel(event).length,
+ym.Point? pointForEvent(BackendCardItem event) {
+  final points = pointsForEvent(event);
+  return points.isEmpty ? null : points.first.point;
+}
+
+ym.Point? _pointFromRaw(Map<Object?, Object?> raw) {
+  return _pointFromCoordinates(
+    _doubleOrNull(raw['latitude'] ?? raw['lat']),
+    _doubleOrNull(raw['longitude'] ?? raw['lng']),
   );
 }
 
@@ -2310,25 +1420,14 @@ ym.Point? _pointFromCoordinates(double? latitude, double? longitude) {
   return ym.Point(latitude: latitude, longitude: longitude);
 }
 
-String _routePointMapIdSuffix(EventRoutePoint point, int index) {
-  final id = point.id.trim();
-  if (id.isNotEmpty) {
+String _routePointMapIdSuffix(Map<Object?, Object?> raw, int index) {
+  final id = _stringOrNull(raw['id']);
+  if (id != null) {
     return id;
   }
-  return 'route_point_$index';
+  return 'route-point-$index';
 }
 
-class _EventMapPoint {
-  const _EventMapPoint({
-    required this.idSuffix,
-    required this.point,
-  });
-
-  final String idSuffix;
-  final ym.Point point;
-}
-
-@visibleForTesting
 MapEventsQuery buildMapEventsQuery({
   required ym.BoundingBox bounds,
   required ym.Point center,
@@ -2336,8 +1435,7 @@ MapEventsQuery buildMapEventsQuery({
   final radiusKm = [
     _distanceKm(center, bounds.southWest),
     _distanceKm(center, bounds.northEast),
-  ].reduce((value, item) => value > item ? value : item);
-
+  ].reduce(math.max);
   return MapEventsQuery(
     centerLatitude: _roundViewportGeo(center.latitude),
     centerLongitude: _roundViewportGeo(center.longitude),
@@ -2351,7 +1449,6 @@ MapEventsQuery buildMapEventsQuery({
   );
 }
 
-@visibleForTesting
 ym.BoundingBox boundingBoxFromVisibleRegion(ym.VisibleRegion region) {
   final points = [
     region.topLeft,
@@ -2374,68 +1471,99 @@ ym.BoundingBox boundingBoxFromVisibleRegion(ym.VisibleRegion region) {
   }
 
   return ym.BoundingBox(
-    southWest: ym.Point(
-      latitude: minLatitude,
-      longitude: minLongitude,
-    ),
-    northEast: ym.Point(
-      latitude: maxLatitude,
-      longitude: maxLongitude,
-    ),
+    southWest: ym.Point(latitude: minLatitude, longitude: minLongitude),
+    northEast: ym.Point(latitude: maxLatitude, longitude: maxLongitude),
   );
 }
 
-@visibleForTesting
-MapEventsQuery buildInitialMapEventsQuery(ym.Point point) {
+MapEventsQuery buildInitialMapEventsQuery(
+  ym.Point point, {
+  double radiusKm = nearbyEventsDefaultRadiusKm,
+}) {
   return MapEventsQuery(
     centerLatitude: _roundGeo(point.latitude),
     centerLongitude: _roundGeo(point.longitude),
-    radiusKm: nearbyEventsDefaultRadiusKm,
+    radiusKm: radiusKm,
   );
 }
 
-@visibleForTesting
-MapEventsQuery initialRadarMapEventsQuery({ym.Point? preferredPoint}) {
-  return buildInitialMapEventsQuery(preferredPoint ?? radarDefaultMapPoint);
+MapEventsQuery initialRadarMapEventsQuery({
+  ym.Point? preferredPoint,
+  double radiusKm = nearbyEventsDefaultRadiusKm,
+}) {
+  return buildInitialMapEventsQuery(
+    preferredPoint ?? radarDefaultMapPoint,
+    radiusKm: radiusKm,
+  );
 }
 
-@visibleForTesting
-ym.Point? resolvePreferredMapPoint({
-  ManualLocation? manualLocation,
-  Position? currentPosition,
-}) {
-  if (manualLocation != null && isSupportedManualLocation(manualLocation)) {
-    return ym.Point(
-      latitude: manualLocation.latitude,
-      longitude: manualLocation.longitude,
-    );
-  }
+double clampMapZoom(double zoom) {
+  return zoom.clamp(_minMapZoom, _maxMapZoom).toDouble();
+}
 
-  if (currentPosition == null) {
+double mapZoomForNearbySelection({required double currentZoom}) {
+  final zoom = clampMapZoom(currentZoom);
+  if (zoom < _radarListFocusZoomThreshold) {
+    return _radarListFocusZoom;
+  }
+  return zoom;
+}
+
+double mapZoomForRadiusKm({
+  required double radiusKm,
+  required Size viewportSize,
+  required double latitude,
+}) {
+  const earthCircumferenceMeters = 40075016.686;
+  const tileSize = 256.0;
+  const radiansPerDegree = 0.017453292519943295;
+  const log2 = 0.6931471805599453;
+  final clampedRadiusKm =
+      radiusKm.clamp(0.5, nearbyEventsMaxRadiusKm).toDouble();
+  final latitudeScale =
+      math.cos(latitude * radiansPerDegree).abs().clamp(0.01, 1).toDouble();
+  final metersPerPixelAtZoomZero =
+      earthCircumferenceMeters * latitudeScale / tileSize;
+  final fitPixels =
+      math.max(120.0, math.min(viewportSize.width, viewportSize.height) * 0.72);
+  final targetMetersPerPixel = (clampedRadiusKm * 2000) / fitPixels;
+  final zoom = math.log(metersPerPixelAtZoomZero / targetMetersPerPixel) / log2;
+  return clampMapZoom(zoom);
+}
+
+ym.Point? pointForCityCoordinates(CityCoordinates? coordinates) {
+  if (coordinates == null) {
     return null;
   }
-
   return ym.Point(
-    latitude: currentPosition.latitude,
-    longitude: currentPosition.longitude,
+    latitude: coordinates.latitude,
+    longitude: coordinates.longitude,
   );
 }
 
-String _pointCacheKey(ym.Point? point) {
-  if (point == null) {
-    return '-';
-  }
-
-  return '${_roundGeo(point.latitude).toStringAsFixed(5)},'
-      '${_roundGeo(point.longitude).toStringAsFixed(5)}';
+ym.CameraPosition _cameraForQuery(MapEventsQuery query, Size viewportSize) {
+  final point = _queryCenter(query) ?? radarDefaultMapPoint;
+  return ym.CameraPosition(
+    target: point,
+    zoom: mapZoomForRadiusKm(
+      radiusKm: query.radiusKm ?? nearbyEventsDefaultRadiusKm,
+      viewportSize: viewportSize,
+      latitude: point.latitude,
+    ),
+    azimuth: 0,
+    tilt: 0,
+  );
 }
 
-double _roundGeo(double value) => double.parse(value.toStringAsFixed(5));
-
-double _roundViewportGeo(double value) =>
-    double.parse(value.toStringAsFixed(3));
-
-double _roundDistanceKm(double value) => double.parse(value.toStringAsFixed(1));
+ym.Point? _queryCenter(MapEventsQuery query) {
+  if (query.centerLatitude == null || query.centerLongitude == null) {
+    return null;
+  }
+  return ym.Point(
+    latitude: query.centerLatitude!,
+    longitude: query.centerLongitude!,
+  );
+}
 
 double _distanceKm(ym.Point from, ym.Point to) {
   const earthRadiusKm = 6371.0;
@@ -2451,627 +1579,284 @@ double _distanceKm(ym.Point from, ym.Point to) {
   return 2 * earthRadiusKm * math.atan2(math.sqrt(a), math.sqrt(1 - a));
 }
 
-@visibleForTesting
-String radarEtaLabelForDistance(String distance) {
-  final normalized = distance.trim().toLowerCase().replaceAll(',', '.');
-  if (normalized.isEmpty) {
-    return '';
+double _roundGeo(double value) => double.parse(value.toStringAsFixed(5));
+
+double _roundViewportGeo(double value) =>
+    double.parse(value.toStringAsFixed(3));
+
+double _roundDistanceKm(double value) => double.parse(value.toStringAsFixed(1));
+
+String? _stringOrNull(Object? value) {
+  final text = value?.toString().trim();
+  if (text == null || text.isEmpty) {
+    return null;
   }
-  final match = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(normalized);
-  if (match == null) {
-    return '';
-  }
-  final value = double.tryParse(match.group(1)!);
-  if (value == null) {
-    return '';
-  }
-  final distanceKm = normalized.contains('м') && !normalized.contains('км')
-      ? value / 1000
-      : value;
-  final minutes = math.max(1, (distanceKm * 12.5).ceil());
-  return '$minutes мин';
+  return text;
 }
 
-@visibleForTesting
-String radarCardSubtypeForEvent(Event event) {
-  switch (radarCategoryForEvent(event)) {
-    case 'routes':
-      return (event.vibe.trim().isEmpty ? 'маршрут' : 'маршрут · ${event.vibe}')
-          .trim();
-    case 'affiche':
-      return (event.time.trim().isEmpty ? 'афиша' : 'афиша · ${event.time}')
-          .trim();
-    case 'meetups':
-    default:
-      if ((event.routeId ?? '').trim().isNotEmpty &&
-          (event.routePointCount ?? 1) <= 1) {
-        return 'встреча';
-      }
-      return event.vibe.trim().isEmpty ? 'встреча' : event.vibe.trim();
+int? _intOrNull(Object? value) {
+  if (value is int) {
+    return value;
   }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '');
 }
 
-typedef _RadarCarouselItemBuilder = Widget Function(
-  BuildContext context,
-  int index,
-  bool active,
-);
+double? _doubleOrNull(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString() ?? '');
+}
 
-class _RadarBottomSheet extends StatelessWidget {
-  const _RadarBottomSheet({
-    required this.events,
-    required this.promotedIds,
-    required this.isExpanded,
-    required this.pageController,
+class _NearbyCard extends StatelessWidget {
+  const _NearbyCard({
+    required this.items,
+    required this.loading,
+    required this.hasError,
+    required this.open,
+    required this.onToggle,
+    required this.onSwipe,
     required this.onPageChanged,
-    required this.onExpandedChanged,
-    required this.onEventTap,
   });
 
-  final List<Event> events;
-  final Set<String> promotedIds;
-  final bool isExpanded;
-  final PageController pageController;
-  final ValueChanged<int> onPageChanged;
-  final ValueChanged<bool> onExpandedChanged;
-  final ValueChanged<Event> onEventTap;
+  final List<_NearbyItem> items;
+  final bool loading;
+  final bool hasError;
+  final bool open;
+  final VoidCallback onToggle;
+  final ValueChanged<bool> onSwipe;
+  final ValueChanged<String> onPageChanged;
 
   @override
   Widget build(BuildContext context) {
+    final visibleCount = math.min(items.length, 8);
+    final body = loading
+        ? const _NearbyStatus(text: 'Загружаем события')
+        : items.isEmpty
+            ? _NearbyStatus(
+                text: hasError
+                    ? 'Не удалось загрузить события'
+                    : 'В этом viewport ничего не найдено',
+              )
+            : PageView.builder(
+                controller: PageController(viewportFraction: 0.82),
+                padEnds: false,
+                itemCount: visibleCount,
+                onPageChanged: (index) => onPageChanged(items[index].id),
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      right: index == visibleCount - 1 ? 0 : 8,
+                    ),
+                    child: _NearbyRow(item: items[index]),
+                  );
+                },
+              );
+
     return GestureDetector(
-      key: const Key('radar-bottom-sheet-drag-area'),
-      behavior: HitTestBehavior.translucent,
       onVerticalDragEnd: (details) {
         final velocity = details.primaryVelocity ?? 0;
-        if (velocity > 20) {
-          onExpandedChanged(false);
-        } else if (velocity < -20) {
-          onExpandedChanged(true);
+        if (velocity > 120) {
+          onSwipe(false);
+        } else if (velocity < -120) {
+          onSwipe(true);
         }
       },
-      child: Container(
-        padding: EdgeInsets.fromLTRB(20, 10, 20, isExpanded ? 16 : 10),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [BbV5Colors.paperHi, BbV5Colors.paper],
-          ),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          border: Border.all(color: BbV5Colors.hair),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x2E1F241D),
-              blurRadius: 40,
-              spreadRadius: -12,
-              offset: Offset(0, -16),
-            ),
-          ],
-        ),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  height: 34,
-                  child: Center(
-                    child: Container(
+      child: _GlassPanel(
+        borderRadius: 24,
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            GestureDetector(
+              onTap: onToggle,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                child: Row(
+                  children: [
+                    Container(
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: BbV5Colors.hair,
+                        color: Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
-                  ),
-                ),
-                if (isExpanded) ...[
-                  const SizedBox(height: 2),
-                  _RadarCenterCarousel(
-                    itemCount: events.length,
-                    pageController: pageController,
-                    onPageChanged: onPageChanged,
-                    itemBuilder: (context, index, active) {
-                      final event = events[index];
-                      return _RadarEventCard(
-                        event: event,
-                        active: active,
-                        promoted: promotedIds.contains(event.id),
-                        onTap: () => onEventTap(event),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 1),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RadarCenterCarousel extends StatefulWidget {
-  const _RadarCenterCarousel({
-    required this.itemCount,
-    required this.pageController,
-    required this.onPageChanged,
-    required this.itemBuilder,
-  });
-
-  final int itemCount;
-  final PageController pageController;
-  final ValueChanged<int> onPageChanged;
-  final _RadarCarouselItemBuilder itemBuilder;
-
-  @override
-  State<_RadarCenterCarousel> createState() => _RadarCenterCarouselState();
-}
-
-class _RadarCenterCarouselState extends State<_RadarCenterCarousel> {
-  int _activeIndex = 0;
-
-  bool get _isLooping => widget.itemCount > 2;
-
-  int get _physicalItemCount =>
-      _isLooping ? widget.itemCount * 3 : widget.itemCount;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.pageController.addListener(_syncActiveFromPage);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureMiddleBlock());
-  }
-
-  @override
-  void didUpdateWidget(covariant _RadarCenterCarousel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.pageController != widget.pageController) {
-      oldWidget.pageController.removeListener(_syncActiveFromPage);
-      widget.pageController.addListener(_syncActiveFromPage);
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) => _ensureMiddleBlock());
-  }
-
-  @override
-  void dispose() {
-    widget.pageController.removeListener(_syncActiveFromPage);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.itemCount <= 0) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: 126,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              PageView.builder(
-                key: const Key('radar-center-carousel-page-view'),
-                controller: widget.pageController,
-                padEnds: true,
-                clipBehavior: Clip.none,
-                onPageChanged: _handlePageChanged,
-                itemCount: _physicalItemCount,
-                itemBuilder: (context, index) {
-                  final realIndex = radarCarouselEventIndex(
-                    index,
-                    widget.itemCount,
-                  );
-                  return _RadarCarouselPage(
-                    controller: widget.pageController,
-                    pageIndex: index,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: widget.itemBuilder(
-                        context,
-                        realIndex,
-                        realIndex == _activeIndex,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Рядом сейчас · ${items.length}'.toUpperCase(),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: DateasyColors.muted,
+                              fontSize: 12,
+                              letterSpacing: 1.1,
+                            ),
                       ),
                     ),
-                  );
-                },
+                    AnimatedRotation(
+                      turns: open ? 0 : 0.5,
+                      duration: const Duration(milliseconds: 180),
+                      child: const Icon(
+                        LucideIcons.chevronDown,
+                        size: 16,
+                        color: DateasyColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              if (widget.itemCount > 1) ...[
-                Positioned(
-                  left: 0,
-                  top: 47,
-                  child: _RadarCarouselArrowButton(
-                    icon: LucideIcons.chevron_left,
-                    onTap: () => _moveBy(-1),
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  top: 47,
-                  child: _RadarCarouselArrowButton(
-                    icon: LucideIcons.chevron_right,
-                    onTap: () => _moveBy(1),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        if (widget.itemCount > 1)
-          Row(
-            key: const Key('radar-carousel-dots'),
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (var index = 0; index < widget.itemCount; index++)
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
-                  width: index == _activeIndex ? 14 : 4,
-                  height: 4,
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  decoration: BoxDecoration(
-                    color: index == _activeIndex
-                        ? BbV5Colors.ink
-                        : BbV5Colors.hair,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-            ],
-          ),
-      ],
-    );
-  }
-
-  void _handlePageChanged(int index) {
-    _setActiveFromPhysicalPage(index);
-    widget.onPageChanged(index);
-    if (!_isLooping) {
-      return;
-    }
-    final targetPage = teleportedRadarCarouselPage(
-      index,
-      eventCount: widget.itemCount,
-    );
-    if (targetPage == index) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !widget.pageController.hasClients) {
-        return;
-      }
-      widget.pageController.jumpToPage(targetPage);
-    });
-  }
-
-  void _moveBy(int delta) {
-    if (!widget.pageController.hasClients) {
-      return;
-    }
-    final page = (widget.pageController.page ??
-            widget.pageController.initialPage.toDouble())
-        .round();
-    widget.pageController.animateToPage(
-      page + delta,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-    );
-  }
-
-  void _ensureMiddleBlock() {
-    if (!mounted || !_isLooping || !widget.pageController.hasClients) {
-      return;
-    }
-    final page = (widget.pageController.page ??
-            widget.pageController.initialPage.toDouble())
-        .round();
-    final targetPage = teleportedRadarCarouselPage(
-      page,
-      eventCount: widget.itemCount,
-    );
-    if (targetPage != page) {
-      widget.pageController.jumpToPage(targetPage);
-      _setActiveFromPhysicalPage(targetPage);
-    }
-  }
-
-  void _syncActiveFromPage() {
-    if (!widget.pageController.hasClients || widget.itemCount <= 0) {
-      return;
-    }
-    final page = widget.pageController.page;
-    if (page == null) {
-      return;
-    }
-    _setActiveFromPhysicalPage(page.round());
-  }
-
-  void _setActiveFromPhysicalPage(int page) {
-    final activeIndex = radarCarouselEventIndex(page, widget.itemCount);
-    if (activeIndex == _activeIndex) {
-      return;
-    }
-    setState(() {
-      _activeIndex = activeIndex;
-    });
-  }
-}
-
-class _RadarCarouselPage extends StatelessWidget {
-  const _RadarCarouselPage({
-    required this.controller,
-    required this.pageIndex,
-    required this.child,
-  });
-
-  final PageController controller;
-  final int pageIndex;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      child: child,
-      builder: (context, child) {
-        final page = controller.hasClients
-            ? controller.page ?? controller.initialPage.toDouble()
-            : controller.initialPage.toDouble();
-        final distance = (page - pageIndex).abs().clamp(0.0, 1.0);
-        final scale = 1 - (0.08 * distance);
-        final opacity = 1 - (0.45 * distance);
-        return Opacity(
-          opacity: opacity,
-          child: Transform.scale(
-            scale: scale,
-            child: child,
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _RadarCarouselArrowButton extends StatelessWidget {
-  const _RadarCarouselArrowButton({
-    required this.icon,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: BbV5Colors.paperHi,
-      shape: const CircleBorder(),
-      shadowColor: const Color(0x4D1F241D),
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 32,
-          height: 32,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: BbV5Colors.hair),
-            boxShadow: BbV5Shadows.pill,
-          ),
-          child: Icon(
-            icon,
-            size: 16,
-            color: BbV5Colors.ink,
-          ),
+            ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              child: open
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      child: SizedBox(
+                        height: loading || items.isEmpty ? 72 : 76,
+                        child: body,
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _RadarEventCard extends StatelessWidget {
-  const _RadarEventCard({
-    required this.event,
-    required this.active,
-    required this.promoted,
-    required this.onTap,
-  });
+class _NearbyStatus extends StatelessWidget {
+  const _NearbyStatus({required this.text});
 
-  final Event event;
-  final bool active;
-  final bool promoted;
-  final VoidCallback onTap;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    final distance = event.distance.trim();
-    final eta = radarEtaLabelForDistance(distance);
-    final distanceEta = distance.isEmpty
-        ? 'рядом'
-        : eta.isEmpty
-            ? distance
-            : '$distance · $eta';
-    final subtype = radarCardSubtypeForEvent(event);
-    final pinKind =
-        promoted ? RadarMapPinKind.promoted : radarPinKindForEvent(event);
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: DateasyColors.muted,
+            ),
+      ),
+    );
+  }
+}
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Stack(
-          clipBehavior: Clip.none,
+class _NearbyRow extends StatelessWidget {
+  const _NearbyRow({required this.item});
+
+  final _NearbyItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final boostTier = item.boostTier;
+    final boostVisual =
+        boostTier == null ? null : meetingBoostVisual(boostTier);
+    return GestureDetector(
+      onTap: () => context.push('/meetings/${item.id}'),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          gradient: boostVisual == null
+              ? null
+              : LinearGradient(
+                  colors: [
+                    boostVisual.primary.withValues(alpha: 0.18),
+                    Colors.white.withValues(alpha: 0.06),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+          color:
+              boostVisual == null ? Colors.white.withValues(alpha: 0.06) : null,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: boostVisual?.primary.withValues(alpha: 0.62) ??
+                DateasyColors.border,
+          ),
+          boxShadow: [
+            if (boostVisual != null)
+              BoxShadow(
+                color: boostVisual.glow.withValues(alpha: 0.22),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+          ],
+        ),
+        child: Row(
           children: [
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: active ? BbV5Colors.paperHi : BbV5Colors.paper,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: active
-                      ? promoted
-                          ? BbV5Colors.accent
-                          : BbV5Colors.hair
-                      : BbV5Colors.hairSoft,
-                ),
-                boxShadow: active
-                    ? promoted
-                        ? const [
-                            BoxShadow(
-                              color: Color(0x80D08A63),
-                              blurRadius: 30,
-                              spreadRadius: -12,
-                              offset: Offset(0, 14),
-                            ),
-                          ]
-                        : BbV5Shadows.pill
-                    : const [],
+              width: 42,
+              height: 42,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: dateasyLimeGradient,
               ),
+              child: Icon(
+                item.icon,
+                color: DateasyColors.backgroundDeep,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Image.asset(
-                        _radarPinAssetByKind[pinKind]!,
-                        width: 36,
-                        height: 36,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              event.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.itemTitle.copyWith(
-                                fontFamily: 'Sora',
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                                color: BbV5Colors.ink,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              subtype,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.caption.copyWith(
-                                fontSize: 10,
-                                color: BbV5Colors.inkMute,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Row(
                     children: [
                       Expanded(
                         child: Text(
-                          distanceEta,
+                          item.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.caption.copyWith(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w600,
-                            color: BbV5Colors.inkSoft,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                         ),
                       ),
-                      Container(
-                        height: 18,
-                        padding: const EdgeInsets.symmetric(horizontal: 7),
-                        decoration: BoxDecoration(
-                          color: BbV5Colors.paper,
-                          borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                          border: Border.all(color: BbV5Colors.hairSoft),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              LucideIcons.users,
-                              size: 10,
-                              color: BbV5Colors.inkSoft,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${event.going} идут',
-                              style: AppTextStyles.caption.copyWith(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w600,
-                                color: BbV5Colors.inkSoft,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      if (boostTier != null) ...[
+                        const SizedBox(width: 6),
+                        MeetingBoostBadge(tier: boostTier, compact: true),
+                      ],
                     ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: DateasyColors.muted,
+                          fontSize: 11,
+                        ),
                   ),
                 ],
               ),
             ),
-            if (promoted)
-              Positioned(
-                left: 12,
-                top: -8,
-                child: Container(
-                  height: 20,
-                  padding: const EdgeInsets.symmetric(horizontal: 7),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [BbV5Colors.gold, BbV5Colors.terra],
-                    ),
-                    borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0xAAC97A55),
-                        blurRadius: 10,
-                        spreadRadius: -2,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        LucideIcons.flame,
-                        size: 11,
-                        color: Color(0xFFFFF8EC),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'ТОП',
-                        style: AppTextStyles.caption.copyWith(
-                          fontFamily: 'Sora',
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFFFFF8EC),
-                          letterSpacing: 0,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: dateasyLimeGradient,
               ),
+              child: Text(
+                '+Я',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: DateasyColors.backgroundDeep,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ),
           ],
         ),
       ),
@@ -3079,516 +1864,62 @@ class _RadarEventCard extends StatelessWidget {
   }
 }
 
-class _MapTopButton extends StatelessWidget {
-  const _MapTopButton({
-    required this.icon,
-    required this.onTap,
-    this.tooltip,
+class _GlassPanel extends StatelessWidget {
+  const _GlassPanel({
+    required this.child,
+    required this.borderRadius,
+    required this.padding,
   });
 
-  final IconData icon;
-  final VoidCallback? onTap;
-  final String? tooltip;
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
-    final button = Material(
-      color: BbV5Colors.paperHi.withValues(alpha: 0.92),
-      shadowColor: const Color(0x4D1F241D),
-      elevation: 0,
-      shape: const CircleBorder(),
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Icon(
-            icon,
-            color: onTap == null ? BbV5Colors.inkMute : BbV5Colors.ink,
-            size: 17,
-          ),
-        ),
-      ),
-    );
-    final message = tooltip;
-    if (message == null) {
-      return button;
-    }
-    return Tooltip(
-      message: message,
-      child: Semantics(
-        button: true,
-        label: message,
-        child: button,
-      ),
-    );
-  }
-}
-
-class _LiveEveningMapPin extends StatelessWidget {
-  const _LiveEveningMapPin({
-    required this.session,
-    required this.index,
-  });
-
-  final EveningSessionSummary session;
-  final int index;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    final positions = const [
-      Offset(0.32, 0.24),
-      Offset(0.58, 0.31),
-      Offset(0.42, 0.48),
-      Offset(0.70, 0.42),
-    ];
-    final position = positions[index % positions.length];
-    final size = MediaQuery.sizeOf(context);
-
-    return Positioned(
-      key: ValueKey('map-live-evening-pin-${session.id}'),
-      left: size.width * position.dx - 26,
-      top: size.height * position.dy - 26,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => context.pushRoute(
-            AppRoute.eveningPreview,
-            pathParameters: {'sessionId': session.id},
-          ),
-          customBorder: const CircleBorder(),
-          child: SizedBox(
-            width: 64,
-            height: 72,
-            child: Stack(
-              alignment: Alignment.topCenter,
-              children: [
-                Positioned(
-                  top: 0,
-                  child: _MapLivePulse(
-                    key: ValueKey('map-live-evening-pulse-${session.id}'),
-                  ),
-                ),
-                Positioned(
-                  top: 4,
-                  child: Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: colors.primary,
-                      border: Border.all(color: colors.background, width: 4),
-                      boxShadow: AppShadows.card,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      session.emoji,
-                      style: const TextStyle(fontSize: 20),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: colors.primary,
-                      borderRadius: AppRadii.pillBorder,
-                    ),
-                    child: Text(
-                      'Live',
-                      style: AppTextStyles.caption.copyWith(
-                        color: colors.primaryForeground,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MapLivePulse extends StatefulWidget {
-  const _MapLivePulse({super.key});
-
-  @override
-  State<_MapLivePulse> createState() => _MapLivePulseState();
-}
-
-class _MapLivePulseState extends State<_MapLivePulse> {
-  Timer? _pulseTimer;
-  bool _wide = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseTimer = Timer.periodic(const Duration(milliseconds: 1300), (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _wide = !_wide;
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _pulseTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 650),
-      curve: Curves.easeInOut,
-      width: _wide ? 56 : 48,
-      height: _wide ? 56 : 48,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: colors.primary.withValues(alpha: _wide ? 0.22 : 0.34),
-      ),
-    );
-  }
-}
-
-class _MapPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0x668B7D6B)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-
-    final thinPaint = Paint()
-      ..color = const Color(0x408B7D6B)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-
-    final mainPath = Path()
-      ..moveTo(size.width * 0.1, size.height * 0.15)
-      ..quadraticBezierTo(
-        size.width * 0.3,
-        size.height * 0.1,
-        size.width * 0.48,
-        size.height * 0.2,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.62,
-        size.height * 0.28,
-        size.width * 0.88,
-        size.height * 0.18,
-      );
-
-    final middlePath = Path()
-      ..moveTo(size.width * 0.12, size.height * 0.4)
-      ..cubicTo(
-        size.width * 0.24,
-        size.height * 0.34,
-        size.width * 0.46,
-        size.height * 0.44,
-        size.width * 0.66,
-        size.height * 0.36,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.78,
-        size.height * 0.33,
-        size.width * 0.9,
-        size.height * 0.42,
-      );
-
-    final lowerPath = Path()
-      ..moveTo(size.width * 0.08, size.height * 0.72)
-      ..cubicTo(
-        size.width * 0.22,
-        size.height * 0.6,
-        size.width * 0.42,
-        size.height * 0.8,
-        size.width * 0.58,
-        size.height * 0.7,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.72,
-        size.height * 0.64,
-        size.width * 0.92,
-        size.height * 0.76,
-      );
-
-    final verticalPath = Path()
-      ..moveTo(size.width * 0.28, size.height * 0.08)
-      ..quadraticBezierTo(
-        size.width * 0.36,
-        size.height * 0.26,
-        size.width * 0.34,
-        size.height * 0.42,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.32,
-        size.height * 0.56,
-        size.width * 0.26,
-        size.height * 0.84,
-      );
-
-    canvas.drawPath(mainPath, paint);
-    canvas.drawPath(middlePath, paint);
-    canvas.drawPath(lowerPath, paint);
-    canvas.drawPath(verticalPath, thinPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _NativeMapLoadingSurface extends StatelessWidget {
-  const _NativeMapLoadingSurface({
-    super.key,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-
-    return Container(
-      color: const Color(0xFFF1ECE2),
-      alignment: Alignment.center,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 28,
-            height: 28,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.4,
-              color: colors.primary,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Поднимаем карту',
-            style: AppTextStyles.meta.copyWith(color: colors.inkSoft),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NativeMapErrorBadge extends StatelessWidget {
-  const _NativeMapErrorBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-
-    return Positioned(
-      top: 132,
-      left: 16,
-      right: 16,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: padding,
         decoration: BoxDecoration(
-          color: colors.background.withValues(alpha: 0.94),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colors.border),
-          boxShadow: AppShadows.soft,
+          color: DateasyColors.glass,
+          borderRadius: BorderRadius.circular(borderRadius),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         ),
-        child: Text(
-          'Карта не успела подняться. Пока показываем облегчённый режим.',
-          style: AppTextStyles.meta.copyWith(color: colors.inkSoft),
-          textAlign: TextAlign.center,
-        ),
+        child: child,
       ),
     );
   }
 }
 
-extension<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
-}
-
-class _FallbackMapSurface extends StatelessWidget {
-  const _FallbackMapSurface({
-    super.key,
-    required this.events,
-    required this.selectedId,
-    required this.onTap,
-    this.footer,
+class _NearbyItem {
+  const _NearbyItem({
+    required this.id,
+    required this.title,
+    required this.meta,
+    required this.icon,
+    required this.boostTier,
   });
 
-  final List<Event> events;
-  final String selectedId;
-  final ValueChanged<String> onTap;
-  final Widget? footer;
+  final String id;
+  final String title;
+  final String meta;
+  final IconData icon;
+  final MeetingBoostTier? boostTier;
 
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      key: const Key('map-fallback-surface'),
-      children: [
-        Positioned.fill(
-          child: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFFF1ECE2), Color(0xFFE3D7C6)],
-              ),
-            ),
-            child: CustomPaint(
-              painter: _MapPainter(),
-            ),
-          ),
-        ),
-        Positioned.fill(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final eventsWithCoordinates = events
-                  .where((event) =>
-                      event.latitude != null && event.longitude != null)
-                  .toList(growable: false);
-              return Stack(
-                children: [
-                  for (final entry in eventsWithCoordinates.asMap().entries)
-                    Positioned(
-                      left: constraints.maxWidth *
-                              _fallbackPositionForEvent(
-                                entry.value,
-                                entry.key,
-                                events.length,
-                              ).left -
-                          28,
-                      top: constraints.maxHeight *
-                              _fallbackPositionForEvent(
-                                entry.value,
-                                entry.key,
-                                events.length,
-                              ).top -
-                          28,
-                      child: GestureDetector(
-                        onTap: () => onTap(entry.value.id),
-                        child: _FallbackPin(
-                          event: entry.value,
-                          selected: entry.value.id == selectedId,
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-        if (footer != null) footer!,
-      ],
+  factory _NearbyItem.fromBackend(BackendCardItem item) {
+    return _NearbyItem(
+      id: item.id,
+      title: item.title.isEmpty ? 'Встреча' : item.title,
+      meta: [
+        if (item.city != null) item.city,
+        if (item.subtitle != null) item.subtitle,
+      ].whereType<String>().join(' · '),
+      boostTier: meetingBoostTierFromRaw(item.raw),
+      icon: meetingBoostTierFromRaw(item.raw)?.icon ??
+          (item.raw['isAfterDark'] == true
+              ? LucideIcons.flame
+              : LucideIcons.mapPin),
     );
   }
-}
-
-({double left, double top}) _fallbackPositionForEvent(
-  Event event,
-  int index,
-  int total,
-) {
-  return _fallbackPositionForPoint(
-    latitude: event.latitude!,
-    longitude: event.longitude!,
-  );
-}
-
-({double left, double top}) _fallbackPositionForPoint({
-  required double latitude,
-  required double longitude,
-}) {
-  final left = ((longitude - 37.5) / 0.2).clamp(0.14, 0.86);
-  final top = (1 - ((latitude - 55.70) / 0.1)).clamp(0.18, 0.82);
-  return (left: left, top: top);
-}
-
-class _FallbackPin extends StatelessWidget {
-  const _FallbackPin({
-    required this.event,
-    required this.selected,
-  });
-
-  final Event event;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    final size = selected ? 43.0 : 38.0;
-    final color = _radarPinColor(event.emoji, event.tone);
-    return Transform.scale(
-      scale: selected ? 1.06 : 1,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: BbV5Colors.paperHi,
-              border: Border.all(color: BbV5Colors.hair),
-              boxShadow: BbV5Shadows.pill,
-            ),
-            alignment: Alignment.center,
-            child: Image.asset(
-              _radarPinAssetByKind[radarPinKindForEvent(event)]!,
-              width: selected ? 31 : 28,
-              height: selected ? 31 : 28,
-            ),
-          ),
-          Positioned(
-            left: size / 2 - 3,
-            bottom: -8,
-            child: Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: BbV5Colors.ink.withValues(alpha: 0.20),
-                    blurRadius: 8,
-                    spreadRadius: -2,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-Color _radarPinColor(String emoji, EventTone tone) {
-  if (emoji.contains('✨') || tone == EventTone.sage) {
-    return BbV5Colors.brand;
-  }
-  if (emoji.contains('♡') || emoji.contains('❤️') || emoji.contains('💘')) {
-    return BbV5Colors.rose;
-  }
-  if (emoji.contains('🎟') || emoji.contains('🎫') || tone == EventTone.warm) {
-    return BbV5Colors.gold;
-  }
-  if (emoji.contains('☕')) {
-    return BbV5Colors.brandDeep;
-  }
-  return BbV5Colors.terra;
 }

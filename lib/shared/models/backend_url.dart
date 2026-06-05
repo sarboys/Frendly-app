@@ -1,25 +1,23 @@
-import 'package:big_break_mobile/app/core/config/backend_config.dart';
+import 'package:mobile2/app/core/config/backend_config.dart';
 
 String? resolveBackendUrl(String? raw) {
-  if (raw == null || raw.isEmpty) {
-    return raw;
+  final value = raw?.trim();
+  if (value == null || value.isEmpty) {
+    return value;
   }
-
-  if (raw.startsWith('http://') || raw.startsWith('https://')) {
-    return raw;
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return value;
   }
-
-  if (raw.startsWith('/')) {
-    return joinBackendUrl(BackendConfig.apiBaseUrl, raw);
+  if (value.startsWith('/')) {
+    return joinBackendUrl(BackendConfig.apiBaseUrl, value);
   }
-
-  return raw;
+  return value;
 }
 
 String joinBackendUrl(String baseUrl, String path) {
   final cleanBase = baseUrl.replaceFirst(RegExp(r'/+$'), '');
-  if (!path.startsWith('/')) {
-    return '$cleanBase/$path';
+  if (path.startsWith('/')) {
+    return '$cleanBase$path';
   }
-  return '$cleanBase$path';
+  return '$cleanBase/$path';
 }

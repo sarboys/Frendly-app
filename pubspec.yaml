@@ -1,5 +1,5 @@
-name: big_break_mobile
-description: Big Break Flutter app
+name: mobile2
+description: Frendly mobile2 Flutter app
 publish_to: "none"
 version: 0.1.0+1
 
@@ -12,6 +12,8 @@ dependencies:
   app_links: ^6.4.0
   cached_network_image: ^3.4.1
   dio: ^5.8.0+1
+  firebase_core: ^4.9.0
+  firebase_messaging: ^16.2.2
   file_picker: ^10.3.2
   file_saver: ^0.3.1
   flutter_cache_manager: ^3.4.1
@@ -24,8 +26,10 @@ dependencies:
   just_audio: ^0.9.46
   open_filex: ^4.7.0
   permission_handler: ^11.4.0
+  package_info_plus: ^8.3.1
   record: ^6.1.1
   shared_preferences: ^2.5.3
+  sign_in_with_apple: ^6.1.4
   url_launcher: ^6.3.1
   web_socket_channel: ^3.0.3
   yandex_mapkit: ^4.2.1
@@ -38,6 +42,7 @@ dependencies:
   path_provider: ^2.1.5
   path: ^1.9.1
   lucide_icons_flutter: ^3.1.13
+  in_app_purchase: ^3.2.3
 
 dev_dependencies:
   flutter_test:
@@ -59,8 +64,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/fonts/
-    - assets/images/logo-fr-orange.jpg
-    - assets/images/logo-fr-sage.png
+    - assets/front2/
+    - assets/images/
     - assets/map/pins/
   fonts:
     - family: Sora

@@ -1,19 +1,16 @@
-import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/app/theme/app_spacing.dart';
-import 'package:big_break_mobile/app/theme/app_text_styles.dart';
-import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
-import 'package:big_break_mobile/shared/data/app_providers.dart';
-import 'package:big_break_mobile/shared/data/backend_repository.dart';
-import 'package:big_break_mobile/shared/models/subscription.dart';
-import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
+import 'dart:ui' show ImageFilter;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-
-bool _hasFrendlyPlusAccess(SubscriptionStateData state) {
-  return state.status == 'active' || state.status == 'trial';
-}
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:mobile2/features/payments/application/apple_iap_purchase_controller.dart';
+import 'package:mobile2/shared/data/app_providers.dart';
+import 'package:mobile2/shared/models/backend_models.dart';
+import 'package:mobile2/shared/theme/dateasy_theme.dart';
+import 'package:mobile2/shared/utils/frendly_legal_links.dart';
+import 'package:mobile2/shared/widgets/dateasy_refresh_indicator.dart';
 
 class PaywallScreen extends ConsumerStatefulWidget {
   const PaywallScreen({super.key});
@@ -23,464 +20,357 @@ class PaywallScreen extends ConsumerStatefulWidget {
 }
 
 class _PaywallScreenState extends ConsumerState<PaywallScreen> {
-  String _plan = 'year';
-  String _paymentAction = 'idle';
-  bool _restoring = false;
+  String? _selectedPlanId;
+  bool _busy = false;
+  String? _error;
 
-  @override
-  Widget build(BuildContext context) {
-    final plansAsync = ref.watch(subscriptionPlansProvider);
-    final stateAsync = ref.watch(subscriptionStateProvider);
+  bool get _usesAppleIap => defaultTargetPlatform == TargetPlatform.iOS;
 
-    return BbV5Scaffold(
-      child: plansAsync.when(
-        loading: () => const _PaywallLoadingState(),
-        error: (_, __) => _PaywallErrorState(
-          onRetry: () => ref.invalidate(subscriptionPlansProvider),
-        ),
-        data: (plans) => stateAsync.when(
-          loading: () => const _PaywallLoadingState(),
-          error: (_, __) => _PaywallErrorState(
-            onRetry: () => ref.invalidate(subscriptionStateProvider),
-          ),
-          data: (state) => _PaywallContent(
-            plans: plans,
-            state: state,
-            selectedPlanId: _plan,
-            paymentAction: _paymentAction,
-            restoring: _restoring,
-            onPlanChanged: (planId) => setState(() => _plan = planId),
-            onRestore: _restore,
-            onSubscribe: _subscribe,
-          ),
-        ),
-      ),
+  _Plan? _selectedPlan(List<_Plan> plans) {
+    if (plans.isEmpty) {
+      return null;
+    }
+    final defaultPlan = plans.length > 1 ? plans[1] : plans.first;
+    final selectedId = _selectedPlanId;
+    if (selectedId == null) {
+      return defaultPlan;
+    }
+    return plans.firstWhere(
+      (plan) => plan.id == selectedId,
+      orElse: () => defaultPlan,
     );
   }
 
-  Future<void> _restore() async {
-    if (_restoring) {
-      return;
-    }
-    final repository = ref.read(backendRepositoryProvider);
-    final container = ProviderScope.containerOf(context, listen: false);
-    setState(() => _restoring = true);
-    try {
-      if (!mounted) {
-        return;
-      }
-      await repository.restoreSubscription();
-      if (!mounted || !context.mounted) {
-        return;
-      }
-      container.invalidate(subscriptionStateProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Подписки восстановлены')),
-      );
-    } catch (_) {
-      if (mounted && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Восстановление пока недоступно')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _restoring = false);
-      }
-    }
-  }
-
-  Future<void> _subscribe() async {
-    if (_paymentAction != 'idle') {
-      return;
-    }
-    final subscription = ref.read(subscriptionStateProvider).valueOrNull;
-    if (subscription != null && _hasFrendlyPlusAccess(subscription)) {
-      return;
-    }
-    final container = ProviderScope.containerOf(context, listen: false);
-    setState(() => _paymentAction = 'creating');
-    try {
-      await ref.read(tokenWalletProvider.notifier).subscribeWithTokens(_plan);
-      container.invalidate(subscriptionStateProvider);
-      if (!mounted || !context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Frendly+ активирован')),
-      );
-    } catch (_) {
-      if (mounted && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не хватает токенов')),
-        );
-        context.pushRoute(AppRoute.wallet);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _paymentAction = 'idle');
-      }
-    }
-  }
-}
-
-class _PaywallContent extends StatelessWidget {
-  const _PaywallContent({
-    required this.plans,
-    required this.state,
-    required this.selectedPlanId,
-    required this.paymentAction,
-    required this.restoring,
-    required this.onPlanChanged,
-    required this.onRestore,
-    required this.onSubscribe,
-  });
-
-  final List<SubscriptionPlanData> plans;
-  final SubscriptionStateData state;
-  final String selectedPlanId;
-  final String paymentAction;
-  final bool restoring;
-  final ValueChanged<String> onPlanChanged;
-  final VoidCallback onRestore;
-  final VoidCallback onSubscribe;
-
   @override
   Widget build(BuildContext context) {
-    final year = _planById(plans, 'year');
-    final month = _planById(plans, 'month');
-    if (year == null || month == null) {
-      return _PaywallErrorState(
-        onRetry: () {},
-        message: 'Тарифы пока недоступны',
-      );
-    }
+    final wallet = ref.watch(tokenWalletProvider);
+    final catalog = ref.watch(paymentsCatalogProvider);
+    final planCatalog = ref.watch(subscriptionPlansProvider);
+    final balance = wallet.valueOrNull?.balance ?? 0;
+    final plans = planCatalog.valueOrNull
+            ?.map((plan) => _Plan.fromBackend(
+                  plan,
+                  usesAppleIap: _usesAppleIap,
+                ))
+            .where((plan) => _usesAppleIap ? plan.amount > 0 : plan.ft > 0)
+            .toList(growable: false) ??
+        const <_Plan>[];
+    final selectedPlan = _selectedPlan(plans);
+    final catalogPerks = _perksFromCatalog(catalog.valueOrNull);
+    final perks = selectedPlan?.perks.isNotEmpty == true
+        ? selectedPlan!.perks
+        : catalogPerks;
+    final hasEnoughTokens =
+        _usesAppleIap || (selectedPlan != null && balance >= selectedPlan.ft);
 
-    final selectedPlan = selectedPlanId == 'month' ? month : year;
-    final hasActiveSubscription = _hasFrendlyPlusAccess(state);
+    return Scaffold(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final width =
+              constraints.maxWidth > 420 ? 420.0 : constraints.maxWidth;
 
-    return SafeArea(
-      bottom: false,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Stack(
-            children: [
-              CustomScrollView(
-                slivers: [
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 32, 20, 156),
-                    sliver: SliverToBoxAdapter(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _PaywallHeader(
-                            restoring: restoring,
-                            onBack: () {
-                              if (context.canPop()) {
-                                context.pop();
-                              } else {
-                                context.goRoute(AppRoute.tonight);
-                              }
-                            },
-                            onRestore: onRestore,
-                          ),
-                          const SizedBox(height: 28),
-                          const _PaywallHero(),
-                          const SizedBox(height: AppSpacing.lg),
-                          const _FeaturesCard(),
-                          const SizedBox(height: AppSpacing.lg),
-                          _PlanTile(
-                            plan: year,
-                            active: hasActiveSubscription
-                                ? state.plan == 'year'
-                                : selectedPlanId == 'year',
-                            activeSubscription:
-                                hasActiveSubscription && state.plan == 'year',
-                            summary:
-                                '${year.tokenMonthlyCost} токенов/мес · за год',
-                            strikePrice: year.tokenCost * 2,
-                            onTap: hasActiveSubscription
-                                ? null
-                                : () => onPlanChanged('year'),
-                          ),
-                          const SizedBox(height: 10),
-                          _PlanTile(
-                            plan: month,
-                            active: hasActiveSubscription
-                                ? state.plan == 'month'
-                                : selectedPlanId == 'month',
-                            activeSubscription:
-                                hasActiveSubscription && state.plan == 'month',
-                            summary: 'Списание токенов на 30 дней',
-                            onTap: hasActiveSubscription
-                                ? null
-                                : () => onPlanChanged('month'),
-                          ),
-                          if (!hasActiveSubscription) ...[
-                            const SizedBox(height: AppSpacing.md),
-                            Text(
-                              'Токены спишутся сразу. Доступ включится после активации.',
-                              textAlign: TextAlign.center,
-                              style: AppTextStyles.caption.copyWith(
-                                fontSize: 10.5,
-                                height: 1.45,
-                                letterSpacing: 0,
-                                color: BbV5Colors.inkMute,
+          return Center(
+            child: SizedBox(
+              width: width,
+              height: constraints.maxHeight,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(gradient: dateasyHeroGradient),
+                child: Stack(
+                  children: [
+                    const _GlowBlob(
+                      alignment: Alignment(1.18, -1.12),
+                      colorA: DateasyColors.lilac,
+                      colorB: DateasyColors.pink,
+                      opacity: 0.4,
+                    ),
+                    const _GlowBlob(
+                      alignment: Alignment(-1.18, 1.2),
+                      colorA: DateasyColors.lime,
+                      colorB: DateasyColors.lime2,
+                      opacity: 0.3,
+                    ),
+                    SafeArea(
+                      child: DateasyRefreshIndicator(
+                        onRefresh: () async {
+                          ref.invalidate(tokenWalletProvider);
+                          ref.invalidate(paymentsCatalogProvider);
+                          ref.invalidate(subscriptionPlansProvider);
+                        },
+                        child: CustomScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          slivers: [
+                            SliverPadding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                              sliver: SliverToBoxAdapter(
+                                child: Column(
+                                  children: [
+                                    _TopBar(balance: balance),
+                                    const _HeroBlock(),
+                                    _PerkList(
+                                      perks: perks,
+                                      loading: catalog.isLoading,
+                                      hasError: catalog.hasError,
+                                    ),
+                                    if (planCatalog.isLoading && plans.isEmpty)
+                                      const _InlineState(
+                                        text: 'Загружаем планы Plus',
+                                      )
+                                    else if (plans.isEmpty)
+                                      _InlineState(
+                                        text: planCatalog.hasError
+                                            ? 'Не удалось загрузить планы Plus'
+                                            : 'Backend пока не отдает планы Plus',
+                                      )
+                                    else
+                                      _PlanList(
+                                        plans: plans,
+                                        selectedPlanId:
+                                            selectedPlan?.id ?? plans.first.id,
+                                        onSelect: (planId) => setState(
+                                          () => _selectedPlanId = planId,
+                                        ),
+                                      ),
+                                    const SizedBox(height: 24),
+                                    if (selectedPlan != null)
+                                      _BottomCta(
+                                        plan: selectedPlan,
+                                        usesAppleIap: _usesAppleIap,
+                                        hasEnoughTokens: hasEnoughTokens,
+                                        missingTokens:
+                                            selectedPlan.ft - balance,
+                                        busy: _busy,
+                                        error: _error,
+                                        onTap: () => _subscribe(
+                                          selectedPlan,
+                                          hasEnoughTokens,
+                                          catalog.valueOrNull,
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _StickySubscribeBar(
-                  plan: selectedPlan,
-                  activeSubscription: hasActiveSubscription,
-                  paymentAction: paymentAction,
-                  onSubscribe: onSubscribe,
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  SubscriptionPlanData? _planById(
-    List<SubscriptionPlanData> plans,
-    String id,
-  ) {
-    for (final plan in plans) {
-      if (plan.id == id) {
-        return plan;
+  Future<void> _subscribe(
+    _Plan plan,
+    bool hasEnoughTokens,
+    PaymentsCatalog? catalog,
+  ) async {
+    if (!_usesAppleIap && !hasEnoughTokens) {
+      context.go('/wallet');
+      return;
+    }
+    if (_busy) {
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      if (_usesAppleIap) {
+        final appleProductId = plan.appleProductId ??
+            _appleSubscriptionProductId(catalog, plan.id);
+        if (appleProductId == null) {
+          throw const AppleIapPurchaseException(
+            'missing_apple_product_id',
+            'App Store product id is missing',
+          );
+        }
+        await ref.read(paymentActionsProvider).purchaseAppleProduct(
+              productKind: 'subscription',
+              productId: plan.id,
+              appleProductId: appleProductId,
+            );
+      } else {
+        await ref.read(paymentActionsProvider).subscribeWithTokens(plan.id);
+      }
+      if (!mounted) {
+        return;
+      }
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Plus активирован'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: DateasyColors.surface2,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _busy = false;
+        _error = _usesAppleIap
+            ? _appleIapErrorText(error)
+            : 'Не удалось активировать Plus';
+      });
+    }
+  }
+
+  String _appleIapErrorText(Object error) {
+    if (error is AppleIapPurchaseException) {
+      return switch (error.code) {
+        'missing_apple_product_id' => 'У подписки нет product id для App Store',
+        'app_store_unavailable' => 'App Store покупки сейчас недоступны',
+        'apple_product_not_found' => 'Подписка не найдена в App Store Connect',
+        'purchase_canceled' => 'Покупка отменена',
+        'purchase_pending' => 'Покупка еще обрабатывается в App Store',
+        'purchase_not_started' => 'App Store не начал покупку',
+        'purchase_timeout' => 'App Store не ответил. Попробуй еще раз',
+        'purchase_product_mismatch' =>
+          'App Store вернул не ту подписку. Проверь product id',
+        'purchase_failed' => 'App Store отклонил покупку',
+        _ => 'Не удалось оплатить через App Store',
+      };
+    }
+    return 'Не удалось оплатить через App Store';
+  }
+
+  String? _appleSubscriptionProductId(PaymentsCatalog? catalog, String planId) {
+    for (final plan in catalog?.subscriptions ?? const <SubscriptionPlan>[]) {
+      final value = plan.appleProductId?.trim();
+      if (plan.id == planId && value != null && value.isNotEmpty) {
+        return value;
       }
     }
     return null;
   }
 }
 
-class _PaywallHeader extends StatelessWidget {
-  const _PaywallHeader({
-    required this.restoring,
-    required this.onBack,
-    required this.onRestore,
-  });
+class _TopBar extends StatelessWidget {
+  const _TopBar({required this.balance});
 
-  final bool restoring;
-  final VoidCallback onBack;
-  final VoidCallback onRestore;
+  final int balance;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        BbV5IconButton(
-          icon: LucideIcons.arrow_left,
-          onPressed: onBack,
-        ),
-        const Spacer(),
-        TextButton(
-          onPressed: restoring ? null : onRestore,
-          child: Text(
-            restoring ? '...' : 'Восстановить',
-            style: AppTextStyles.button.copyWith(
-              fontSize: 12,
-              color: BbV5Colors.inkSoft,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PaywallHero extends StatelessWidget {
-  const _PaywallHero();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 13),
-          decoration: BoxDecoration(
-            color: BbV5Colors.accent,
-            borderRadius: BorderRadius.circular(BbV5Radii.pill),
-            boxShadow: BbV5Shadows.ink,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                LucideIcons.sparkles,
-                size: 13,
-                color: BbV5Colors.paperHi,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Frendly+',
-                style: AppTextStyles.caption.copyWith(
-                  fontFamily: 'Sora',
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.89,
-                  color: BbV5Colors.paperHi,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        Text.rich(
-          TextSpan(
-            children: [
-              const TextSpan(text: 'Больше встреч,\n'),
-              TextSpan(
-                text: 'своих людей.',
-                style: bbV5DisplayStyle(
-                  fontSize: 32,
-                  height: 1.05,
-                  fontWeight: FontWeight.w400,
-                ).copyWith(fontStyle: FontStyle.italic),
-              ),
-            ],
-          ),
-          textAlign: TextAlign.center,
-          style: bbV5DisplayStyle(fontSize: 32, height: 1.05),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          'Чтобы ни один интересный вечер не прошёл мимо.',
-          textAlign: TextAlign.center,
-          style: AppTextStyles.body.copyWith(
-            fontSize: 14,
-            height: 1.45,
-            color: BbV5Colors.inkSoft,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _FeaturesCard extends StatelessWidget {
-  const _FeaturesCard();
-
-  static const _features = [
-    _FeatureData(
-      icon: LucideIcons.sliders_horizontal,
-      title: 'Расширенные фильтры',
-      subtitle: 'Возраст, верификация, вайб, общие интересы',
-    ),
-    _FeatureData(
-      icon: LucideIcons.zap,
-      title: 'Приоритет в заявках',
-      subtitle: 'Хосты видят твою заявку первой',
-    ),
-    _FeatureData(
-      icon: LucideIcons.calendar,
-      title: 'Безлимит встреч',
-      subtitle: 'Создавай и присоединяйся без ограничений',
-    ),
-    _FeatureData(
-      icon: LucideIcons.eye,
-      title: 'Кто смотрел профиль',
-      subtitle: 'Видишь, кому ты понравился',
-    ),
-    _FeatureData(
-      icon: LucideIcons.crown,
-      title: 'Доступ к Dating',
-      subtitle: 'Полноценные знакомства один на один',
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return BbV5Card(
-      radius: 24,
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          for (var index = 0; index < _features.length; index++) ...[
-            _FeatureRow(data: _features[index]),
-            if (index != _features.length - 1)
-              const Divider(height: 1, color: BbV5Colors.hairSoft),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _FeatureData {
-  const _FeatureData({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-}
-
-class _FeatureRow extends StatelessWidget {
-  const _FeatureRow({required this.data});
-
-  final _FeatureData data;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: BbV5Colors.paper,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: BbV5Colors.hair),
-            ),
-            child: Icon(data.icon, size: 18, color: BbV5Colors.terra),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        GestureDetector(
+          onTap: () => context.go('/wallet'),
+          child: _GlassPanel(
+            borderRadius: 999,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  data.title,
-                  style: bbV5DisplayStyle(fontSize: 13.5),
+                const Icon(
+                  LucideIcons.coins,
+                  size: 14,
+                  color: DateasyColors.lime,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(width: 6),
                 Text(
-                  data.subtitle,
-                  style: AppTextStyles.meta.copyWith(
-                    fontSize: 11.5,
-                    height: 1.2,
-                    color: BbV5Colors.inkMute,
-                  ),
+                  '$balance FT',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: AppSpacing.xs),
-          const Icon(
-            LucideIcons.check,
-            size: 17,
-            color: BbV5Colors.brand,
+        ),
+        const Spacer(),
+        _GlassIconButton(
+          icon: LucideIcons.x,
+          onTap: () => context.go('/profile'),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeroBlock extends StatelessWidget {
+  const _HeroBlock();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              gradient: dateasyPinkGradient,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x55FF639F),
+                  blurRadius: 30,
+                  spreadRadius: -12,
+                  offset: Offset(0, 16),
+                ),
+              ],
+            ),
+            child: const Icon(
+              LucideIcons.crown,
+              color: DateasyColors.foreground,
+              size: 28,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Text(
+                'Frendly',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  gradient: dateasyLimeGradient,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  'Plus',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        color: DateasyColors.backgroundDeep,
+                        fontSize: 30,
+                        fontWeight: FontWeight.w600,
+                        height: 1.05,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 300),
+            child: Text(
+              'Больше встреч, лайков и приоритет в радаре',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: DateasyColors.muted,
+                    fontSize: 14,
+                  ),
+            ),
           ),
         ],
       ),
@@ -488,312 +378,528 @@ class _FeatureRow extends StatelessWidget {
   }
 }
 
-class _PlanTile extends StatelessWidget {
-  const _PlanTile({
-    required this.plan,
-    required this.active,
-    required this.activeSubscription,
-    required this.summary,
-    required this.onTap,
-    this.strikePrice,
+class _PerkList extends StatelessWidget {
+  const _PerkList({
+    required this.perks,
+    required this.loading,
+    required this.hasError,
   });
 
-  final SubscriptionPlanData plan;
-  final bool active;
-  final bool activeSubscription;
-  final String summary;
-  final VoidCallback? onTap;
-  final int? strikePrice;
+  final List<_Perk> perks;
+  final bool loading;
+  final bool hasError;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          padding: const EdgeInsets.all(16),
+    if (perks.isEmpty) {
+      return _InlineState(
+        text: loading
+            ? 'Загружаем преимущества Plus'
+            : hasError
+                ? 'Не удалось загрузить преимущества Plus'
+                : 'Backend пока не отдает преимущества Plus',
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: _GlassPanel(
+        borderRadius: 24,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            for (var index = 0; index < perks.length; index++) ...[
+              _PerkRow(perk: perks[index]),
+              if (index != perks.length - 1) const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PerkRow extends StatelessWidget {
+  const _PerkRow({required this.perk});
+
+  final _Perk perk;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [BbV5Colors.paperHi, BbV5Colors.paper],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: active ? BbV5Colors.ink : BbV5Colors.hair,
-              width: active ? 2 : 1,
-            ),
-            boxShadow: BbV5Shadows.card,
+            gradient: dateasyLimeGradient,
+            borderRadius: BorderRadius.circular(12),
           ),
-          child: Stack(
-            children: [
-              if (plan.badge != null)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: _PlanBadge(label: plan.badge!),
+          child: Icon(
+            perk.icon,
+            color: DateasyColors.backgroundDeep,
+            size: 17,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            perk.label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontSize: 14,
                 ),
-              if (activeSubscription)
-                const Positioned(
-                  top: 0,
-                  right: 0,
-                  child: _PlanBadge(label: 'Активно'),
+          ),
+        ),
+        const Icon(
+          LucideIcons.check,
+          color: DateasyColors.lime,
+          size: 16,
+        ),
+      ],
+    );
+  }
+}
+
+class _PlanList extends StatelessWidget {
+  const _PlanList({
+    required this.plans,
+    required this.selectedPlanId,
+    required this.onSelect,
+  });
+
+  final List<_Plan> plans;
+  final String selectedPlanId;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: Column(
+        children: [
+          for (var index = 0; index < plans.length; index++) ...[
+            _PlanCard(
+              plan: plans[index],
+              selected: plans[index].id == selectedPlanId,
+              onTap: () => onSelect(plans[index].id),
+            ),
+            if (index != plans.length - 1) const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanCard extends StatelessWidget {
+  const _PlanCard({
+    required this.plan,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _Plan plan;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor =
+        selected ? DateasyColors.lime : Colors.white.withValues(alpha: 0.1);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: selected
+              ? DateasyColors.lime.withValues(alpha: 0.1)
+              : DateasyColors.glass,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor),
+          boxShadow: selected
+              ? const [
+                  BoxShadow(
+                    color: Color(0x33BEFF67),
+                    blurRadius: 28,
+                    spreadRadius: -16,
+                    offset: Offset(0, 16),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: selected ? DateasyColors.lime : Colors.transparent,
+                border: Border.all(
+                  color: selected
+                      ? DateasyColors.lime
+                      : Colors.white.withValues(alpha: 0.3),
+                  width: 2,
                 ),
-              Column(
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    plan.label,
-                    style: bbV5DisplayStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    summary,
-                    style: AppTextStyles.meta.copyWith(
-                      fontSize: 11.5,
-                      color: BbV5Colors.inkMute,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
                       Text(
-                        '${plan.tokenCost}',
-                        style:
-                            bbV5DisplayStyle(fontSize: 22, height: 1).copyWith(
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
+                        plan.title,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                       ),
-                      Text(
-                        plan.id == 'month' ? ' токенов/мес' : ' токенов',
-                        style: AppTextStyles.meta.copyWith(
-                          color: BbV5Colors.inkMute,
-                        ),
-                      ),
-                      if (strikePrice != null) ...[
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          '$strikePrice',
-                          style: AppTextStyles.meta.copyWith(
-                            color: BbV5Colors.inkMute,
-                            decoration: TextDecoration.lineThrough,
-                            fontFeatures: const [
-                              FontFeature.tabularFigures(),
-                            ],
-                          ),
-                        ),
-                      ],
+                      if (plan.badge != null) _Badge(text: plan.badge!),
                     ],
                   ),
-                  if (plan.id == 'year' && plan.trialDays > 0) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      '${plan.trialDays} дней бесплатно',
-                      style: AppTextStyles.caption.copyWith(
-                        letterSpacing: 0,
-                        color: BbV5Colors.inkMute,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                  ],
+                  const SizedBox(height: 2),
+                  Text(
+                    plan.period,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: DateasyColors.muted,
+                          fontSize: 11,
+                        ),
+                  ),
                 ],
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${plan.amount}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(width: 4),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 1),
+                  child: Text(
+                    plan.amountUnit,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: DateasyColors.muted,
+                          fontSize: 12,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _PlanBadge extends StatelessWidget {
-  const _PlanBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: BbV5Colors.terra,
-        borderRadius: BorderRadius.circular(BbV5Radii.pill),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.caption.copyWith(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.8,
-          color: BbV5Colors.paperHi,
-        ),
-      ),
-    );
-  }
-}
-
-class _StickySubscribeBar extends StatelessWidget {
-  const _StickySubscribeBar({
+class _BottomCta extends StatelessWidget {
+  const _BottomCta({
     required this.plan,
-    required this.activeSubscription,
-    required this.paymentAction,
-    required this.onSubscribe,
+    required this.usesAppleIap,
+    required this.hasEnoughTokens,
+    required this.missingTokens,
+    required this.busy,
+    required this.error,
+    required this.onTap,
   });
 
-  final SubscriptionPlanData plan;
-  final bool activeSubscription;
-  final String paymentAction;
-  final VoidCallback onSubscribe;
+  final _Plan plan;
+  final bool usesAppleIap;
+  final bool hasEnoughTokens;
+  final int missingTokens;
+  final bool busy;
+  final String? error;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final busy = paymentAction != 'idle';
-    final label = switch (paymentAction) {
-      'creating' => 'Активируем...',
-      _ => 'Оплатить ${plan.tokenCost} токенов',
-    };
+    final label = usesAppleIap
+        ? 'Оплатить через App Store'
+        : hasEnoughTokens
+            ? 'Активировать за ${plan.ft} FT'
+            : 'Не хватает $missingTokens FT · Пополнить';
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0x00F1E6D6),
-            Color(0xF2F1E6D6),
-            BbV5Colors.paper,
-          ],
-          stops: [0, 0.34, 1],
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (activeSubscription)
-                const _ActiveSubscriptionStatus()
-              else
-                BbV5PillButton(
-                  label: label,
-                  onPressed: busy ? null : onSubscribe,
-                  dark: true,
-                  height: 56,
-                  fontSize: 14,
-                  expanded: true,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ActiveSubscriptionStatus extends StatelessWidget {
-  const _ActiveSubscriptionStatus();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      width: double.infinity,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: BbV5Colors.ink,
-        borderRadius: BorderRadius.circular(BbV5Radii.pill),
-        boxShadow: BbV5Shadows.ink,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
         children: [
-          const Icon(
-            LucideIcons.check,
-            size: 18,
-            color: BbV5Colors.paperHi,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'Подписка активна',
-            style: AppTextStyles.button.copyWith(
-              fontSize: 14,
-              color: BbV5Colors.paperHi,
+          Semantics(
+            button: true,
+            enabled: !busy,
+            label: label,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: busy ? null : onTap,
+              child: Container(
+                width: double.infinity,
+                height: 54,
+                decoration: BoxDecoration(
+                  gradient: hasEnoughTokens || usesAppleIap
+                      ? dateasyLimeGradient
+                      : dateasyPinkGradient,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (hasEnoughTokens || usesAppleIap
+                              ? DateasyColors.lime
+                              : DateasyColors.pink)
+                          .withValues(alpha: 0.35),
+                      blurRadius: 30,
+                      spreadRadius: -14,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          label,
+                          textAlign: TextAlign.center,
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: DateasyColors.backgroundDeep,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                        ),
+                ),
+              ),
             ),
           ),
+          const SizedBox(height: 12),
+          Text(
+            error ??
+                (usesAppleIap
+                    ? 'Покупка пройдет через Apple In-App Purchase'
+                    : 'Списание токенов через backend'),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color:
+                      error == null ? DateasyColors.muted : DateasyColors.lime,
+                  fontSize: 10,
+                ),
+          ),
+          const SizedBox(height: 6),
+          const _PaywallLegalLinks(),
         ],
       ),
     );
   }
 }
 
-class _PaywallLoadingState extends StatelessWidget {
-  const _PaywallLoadingState();
+class _PaywallLegalLinks extends StatelessWidget {
+  const _PaywallLegalLinks();
 
   @override
   Widget build(BuildContext context) {
-    return const SafeArea(
-      child: Center(
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: DateasyColors.muted,
+          fontSize: 10,
+          decoration: TextDecoration.underline,
+        );
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8,
+      runSpacing: 0,
+      children: [
+        _LegalTextButton(
+          label: 'Terms of Use (EULA)',
+          url: frendlyTermsUrl,
+          style: style,
+        ),
+        Text(
+          '·',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: DateasyColors.muted,
+                fontSize: 10,
+              ),
+        ),
+        _LegalTextButton(
+          label: 'Privacy Policy',
+          url: frendlyPrivacyUrl,
+          style: style,
+        ),
+      ],
+    );
+  }
+}
+
+class _LegalTextButton extends StatelessWidget {
+  const _LegalTextButton({
+    required this.label,
+    required this.url,
+    required this.style,
+  });
+
+  final String label;
+  final String url;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: () => openFrendlyLegalUrlOrNotify(context, url),
+      style: TextButton.styleFrom(
+        minimumSize: Size.zero,
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        foregroundColor: DateasyColors.muted,
+      ),
+      child: Text(label, style: style),
+    );
+  }
+}
+
+class _GlassIconButton extends StatelessWidget {
+  const _GlassIconButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: _GlassPanel(
+        borderRadius: 16,
+        padding: EdgeInsets.zero,
         child: SizedBox(
-          width: 26,
-          height: 26,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.4,
-            color: BbV5Colors.ink,
-          ),
+          width: 40,
+          height: 40,
+          child: Icon(icon, size: 20),
         ),
       ),
     );
   }
 }
 
-class _PaywallErrorState extends StatelessWidget {
-  const _PaywallErrorState({
-    required this.onRetry,
-    this.message = 'Не получилось загрузить подписку',
+class _GlassPanel extends StatelessWidget {
+  const _GlassPanel({
+    required this.child,
+    required this.borderRadius,
+    required this.padding,
   });
 
-  final VoidCallback onRetry;
-  final String message;
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: BbV5Card(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    message,
-                    textAlign: TextAlign.center,
-                    style: bbV5DisplayStyle(fontSize: 18),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Попробуй ещё раз через пару секунд.',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.meta.copyWith(
-                      color: BbV5Colors.inkMute,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  BbV5PillButton(
-                    label: 'Повторить',
-                    onPressed: onRetry,
-                    dark: true,
-                  ),
-                ],
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: DateasyColors.glass,
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
+class _InlineState extends StatelessWidget {
+  const _InlineState({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: _GlassPanel(
+        borderRadius: 20,
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: DateasyColors.muted,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  const _Badge({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        gradient: dateasyPinkGradient,
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: DateasyColors.foreground,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              height: 1,
+            ),
+      ),
+    );
+  }
+}
+
+class _GlowBlob extends StatelessWidget {
+  const _GlowBlob({
+    required this.alignment,
+    required this.colorA,
+    required this.colorB,
+    required this.opacity,
+  });
+
+  final Alignment alignment;
+  final Color colorA;
+  final Color colorB;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Align(
+          alignment: alignment,
+          child: Opacity(
+            opacity: opacity,
+            child: ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 48, sigmaY: 48),
+              child: Container(
+                width: 288,
+                height: 288,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(colors: [colorA, colorB]),
+                ),
               ),
             ),
           ),
@@ -801,4 +907,159 @@ class _PaywallErrorState extends StatelessWidget {
       ),
     );
   }
+}
+
+class _Perk {
+  const _Perk({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  factory _Perk.fromLabel(String label, int index) {
+    final lower = label.toLowerCase();
+    final icon = lower.contains('like') || lower.contains('лайк')
+        ? LucideIcons.heart
+        : lower.contains('ai') || lower.contains('маршрут')
+            ? LucideIcons.sparkles
+            : lower.contains('boost') || lower.contains('буст')
+                ? LucideIcons.zap
+                : lower.contains('view') || lower.contains('просмотр')
+                    ? LucideIcons.eye
+                    : [
+                        LucideIcons.check,
+                        LucideIcons.sparkles,
+                        LucideIcons.zap,
+                      ][index % 3];
+    return _Perk(icon: icon, label: label);
+  }
+}
+
+class _Plan {
+  const _Plan({
+    required this.id,
+    required this.title,
+    required this.ft,
+    required this.amount,
+    required this.amountUnit,
+    required this.period,
+    required this.perks,
+    this.badge,
+    this.appleProductId,
+  });
+
+  final String id;
+  final String title;
+  final int ft;
+  final int amount;
+  final String amountUnit;
+  final String period;
+  final List<_Perk> perks;
+  final String? badge;
+  final String? appleProductId;
+
+  factory _Plan.fromBackend(
+    SubscriptionPlan plan, {
+    required bool usesAppleIap,
+  }) {
+    final amount = usesAppleIap ? plan.priceRub : plan.tokenCost;
+    final monthly = usesAppleIap
+        ? _pricePeriod(
+            monthly: plan.priceMonthlyRub,
+            total: plan.priceRub,
+            unit: 'руб.',
+          )
+        : _pricePeriod(
+            monthly: plan.tokenMonthlyCost,
+            total: plan.tokenCost,
+            unit: 'FT',
+          );
+    return _Plan(
+      id: plan.id,
+      title: plan.label.isEmpty ? 'Plus' : plan.label,
+      ft: plan.tokenCost,
+      amount: amount,
+      amountUnit: usesAppleIap ? 'руб.' : 'FT',
+      period: monthly,
+      perks: _perksFromRaw(plan.raw),
+      badge: plan.badge,
+      appleProductId: _nonEmpty(plan.appleProductId),
+    );
+  }
+}
+
+String _pricePeriod({
+  required int monthly,
+  required int total,
+  required String unit,
+}) {
+  if (monthly > 0) {
+    return '$monthly $unit/мес';
+  }
+  if (total > 0) {
+    return '$total $unit';
+  }
+  return '';
+}
+
+String? _nonEmpty(String? value) {
+  final normalized = value?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return normalized;
+}
+
+List<_Perk> _perksFromCatalog(PaymentsCatalog? catalog) {
+  if (catalog == null) {
+    return const [];
+  }
+  return _perksFromRaw(catalog.raw);
+}
+
+List<_Perk> _perksFromRaw(Map<String, Object?> raw) {
+  final labels = <String>[
+    ..._labelList(raw['perks']),
+    ..._labelList(raw['benefits']),
+    ..._labelList(raw['features']),
+    ..._labelList(raw['plusPerks']),
+    ..._labelList(raw['plusBenefits']),
+  ];
+  return labels
+      .toSet()
+      .toList(growable: false)
+      .asMap()
+      .entries
+      .map((entry) => _Perk.fromLabel(entry.value, entry.key))
+      .toList(growable: false);
+}
+
+List<String> _labelList(Object? value) {
+  if (value is Iterable) {
+    return value.map(_labelFrom).whereType<String>().toList(growable: false);
+  }
+  final single = _labelFrom(value);
+  return single == null ? const [] : [single];
+}
+
+String? _labelFrom(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is Map) {
+    return _stringOrNull(
+      value['label'] ?? value['title'] ?? value['text'] ?? value['name'],
+    );
+  }
+  return _stringOrNull(value);
+}
+
+String? _stringOrNull(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  final text = value.toString().trim();
+  return text.isEmpty ? null : text;
 }

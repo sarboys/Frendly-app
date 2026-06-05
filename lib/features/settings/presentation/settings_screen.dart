@@ -1,25 +1,153 @@
-import 'dart:async';
-
-import 'package:big_break_mobile/app/core/device/app_permission_service.dart';
-import 'package:big_break_mobile/app/core/device/app_push_token_service.dart';
-import 'package:big_break_mobile/app/core/local_cache/app_cache_policy.dart';
-import 'package:big_break_mobile/app/core/providers/core_providers.dart';
-import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/app/session/app_session_controller.dart';
-import 'package:big_break_mobile/app/theme/app_colors.dart';
-import 'package:big_break_mobile/app/theme/app_spacing.dart';
-import 'package:big_break_mobile/app/theme/app_text_styles.dart';
-import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
-import 'package:big_break_mobile/shared/data/app_providers.dart';
-import 'package:big_break_mobile/shared/data/backend_repository.dart';
-import 'package:big_break_mobile/shared/models/profile.dart';
-import 'package:big_break_mobile/shared/models/user_settings.dart';
-import 'package:big_break_mobile/shared/widgets/bb_avatar.dart';
-import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:mobile2/app/core/device/app_push_token_service.dart';
+import 'package:mobile2/app/core/providers/core_providers.dart';
+import 'package:mobile2/shared/data/app_providers.dart';
+import 'package:mobile2/shared/models/backend_models.dart';
+import 'package:mobile2/shared/theme/dateasy_theme.dart';
+import 'package:mobile2/shared/utils/frendly_legal_links.dart';
+import 'package:mobile2/shared/widgets/dateasy_phone_frame.dart';
+import 'package:mobile2/shared/widgets/dateasy_refresh_indicator.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+const _promoRulesRoute = '/settings/documents/promo-rules';
+
+const _faqItems = <_InfoItem>[
+  _InfoItem(
+    title: 'Что такое Frendly?',
+    body:
+        'Frendly помогает находить встречи, маршруты, чаты, дейтинг и планы в городе.',
+  ),
+  _InfoItem(
+    title: 'Как найти встречу?',
+    body:
+        'Открой «Встречи», выбери событие и отправь заявку или вступи, если вход открыт.',
+  ),
+  _InfoItem(
+    title: 'Как создать встречу?',
+    body:
+        'Нажми кнопку создания, добавь место, время, формат, описание и опубликуй встречу.',
+  ),
+  _InfoItem(
+    title: 'Как работает дейтинг?',
+    body:
+        'Листай анкеты и ставь лайк. Если лайк взаимный, появится мэтч и можно написать.',
+  ),
+  _InfoItem(
+    title: 'Что значит скрыть профиль?',
+    body: 'Скрытый профиль не показывается в дейтинге и публичной выдаче.',
+  ),
+  _InfoItem(
+    title: 'Зачем нужна верификация?',
+    body:
+        'Верификация повышает доверие и открывает больше безопасных сценариев.',
+  ),
+  _InfoItem(
+    title: 'Что такое Frendly+?',
+    body:
+        'Frendly+ дает расширенные возможности и доступ к закрытым сценариям.',
+  ),
+  _InfoItem(
+    title: 'Как работают чаты?',
+    body:
+        'Есть личные чаты и чаты встреч. Они открываются после нужного действия.',
+  ),
+  _InfoItem(
+    title: 'Что делать при проблеме на встрече?',
+    body: 'Открой SOS и доверенные контакты. Там собраны быстрые действия.',
+  ),
+  _InfoItem(
+    title: 'Где посмотреть правила?',
+    body: 'Открой «Документы» в настройках. Там лежат правила и согласия.',
+  ),
+];
+
+const _documentLinks = <_DocumentLink>[
+  _DocumentLink(
+    title: 'Все документы',
+    url: frendlyLegalUrl,
+  ),
+  _DocumentLink(
+    title: 'Пользовательское соглашение',
+    url: frendlyTermsUrl,
+  ),
+  _DocumentLink(
+    title: 'Публичная оферта',
+    url: 'https://frendly.tech/legal/offer',
+  ),
+  _DocumentLink(
+    title: 'Оплата и возвраты',
+    url: 'https://frendly.tech/legal/payment-and-refund',
+  ),
+  _DocumentLink(
+    title: 'Политика обработки персональных данных',
+    url: frendlyPrivacyUrl,
+  ),
+  _DocumentLink(
+    title: 'Согласие на обработку персональных данных',
+    url: 'https://frendly.tech/legal/personal-data-consent',
+  ),
+  _DocumentLink(
+    title: 'Согласие на распространение персональных данных',
+    url: 'https://frendly.tech/legal/public-profile-consent',
+  ),
+  _DocumentLink(
+    title: 'Согласие на биометрию',
+    url: 'https://frendly.tech/legal/biometric-consent',
+  ),
+  _DocumentLink(
+    title: 'Согласие на специальные категории данных',
+    url: 'https://frendly.tech/legal/special-category-consent',
+  ),
+  _DocumentLink(
+    title: 'Согласие на рекламные сообщения',
+    url: 'https://frendly.tech/legal/marketing-consent',
+  ),
+  _DocumentLink(
+    title: 'Cookies и аналитика',
+    url: 'https://frendly.tech/legal/cookies',
+  ),
+  _DocumentLink(
+    title: 'Правила сообщества',
+    url: frendlyCommunityRulesUrl,
+  ),
+  _DocumentLink(
+    title: 'Условия для партнёров',
+    url: 'https://frendly.tech/legal/partner-terms',
+  ),
+  _DocumentLink(
+    title: 'Правила промо и розыгрышей',
+    url: 'https://frendly.tech/legal/promo-rules',
+  ),
+];
+
+class _InfoItem {
+  const _InfoItem({
+    required this.title,
+    required this.body,
+  });
+
+  final String title;
+  final String body;
+}
+
+class _DocumentLink {
+  const _DocumentLink({
+    required this.title,
+    required this.url,
+  });
+
+  final String title;
+  final String url;
+
+  String get host => Uri.parse(url).host;
+}
+
+Future<void> _openExternalUrl(BuildContext context, String url) async {
+  await openFrendlyLegalUrlOrNotify(context, url);
+}
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -29,580 +157,710 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  UserSettingsData? _settings;
-  bool _didHydrateFromRemote = false;
-  bool _isSavingSettings = false;
-  bool _isLoggingOut = false;
-  UserSettingsData? _queuedSettings;
-  UserSettingsData? _lastConfirmedSettings;
-  String _language = 'Русский';
-  String _city = 'Москва';
+  bool _push = false;
+  bool _pushBusy = false;
+  bool _supportBusy = false;
+  final Map<String, bool> _settingOverrides = <String, bool>{};
+  final Set<String> _settingsBusy = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    final preferences = ref.read(sharedPreferencesProvider);
+    _push = preferences?.getBool(pushNotificationsEnabledStorageKey) ?? true;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final settingsAsync = ref.watch(settingsProvider);
-    final profileAsync = ref.watch(profileProvider);
-    final wallet = ref.watch(tokenWalletProvider);
-    final remoteSettings = settingsAsync.valueOrNull;
-    if (remoteSettings != null && !_didHydrateFromRemote) {
-      final nextSettings = _withoutDarkMode(remoteSettings);
-      _settings = nextSettings;
-      _lastConfirmedSettings = nextSettings;
-      _didHydrateFromRemote = true;
-    }
-    final current = _settings ?? UserSettingsData.fallback;
-    final isLoadingRemote = settingsAsync.isLoading && remoteSettings == null;
-    final hasRemoteError = settingsAsync.hasError && remoteSettings == null;
+    final currentUser = ref.watch(currentUserProvider);
+    final ownProfile = ref.watch(ownProfileProvider);
+    final verification = ref.watch(verificationProvider);
+    final settingsState = ref.watch(appSettingsProvider);
+    final settings = settingsState.valueOrNull;
+    final city = currentUser?.city ??
+        ownProfile.valueOrNull?.city ??
+        ownProfile.valueOrNull?.raw['city']?.toString();
+    final pushValue =
+        _settingOverrides['allowPush'] ?? settings?.allowPush ?? _push;
+    final discoverableValue =
+        _settingOverrides['discoverable'] ?? settings?.discoverable ?? true;
 
-    return BbV5Scaffold(
-      child: SafeArea(
-        bottom: false,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 32, 20, 28),
+    return DateasyPhoneFrame(
+      child: DateasyRefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(
+            top: MediaQuery.paddingOf(context).top + 16,
+            bottom: 40,
+          ),
+          children: [
+            const _SettingsHeader(title: 'Настройки', backPath: '/profile'),
+            const _PlusCard(),
+            _SettingsGroup(
+              title: 'Аккаунт',
+              rows: [
+                _SettingRow(
+                  icon: LucideIcons.eye,
+                  label: 'Видимость профиля',
+                  right: discoverableValue ? 'Все' : 'Скрыт',
+                  onTap: _settingsBusy.contains('discoverable')
+                      ? null
+                      : () => _handleBackendToggle(
+                            'discoverable',
+                            !discoverableValue,
+                          ),
+                ),
+                _SettingRow(
+                  icon: LucideIcons.mapPin,
+                  label: 'Город',
+                  right: city == null || city.isEmpty ? 'Москва' : city,
+                ),
+                const _SettingRow(
+                  icon: LucideIcons.languages,
+                  label: 'Язык',
+                  right: 'Русский',
+                ),
+                const _SettingRow(
+                  icon: LucideIcons.lock,
+                  label: 'Редактировать профиль',
+                ),
+              ],
+            ),
+            _SettingsGroup(
+              title: 'Уведомления',
+              rows: [
+                _SettingRow(
+                  icon: LucideIcons.bell,
+                  label: 'Push',
+                  toggleValue: pushValue,
+                  onToggle: _pushBusy
+                      ? (_) {}
+                      : (value) {
+                          _handlePushToggle(value);
+                        },
+                ),
+              ],
+            ),
+            _SettingsGroup(
+              title: 'Безопасность',
+              rows: [
+                const _SettingRow(
+                  icon: LucideIcons.shieldAlert,
+                  label: 'SOS и доверенные',
+                ),
+                const _SettingRow(
+                  icon: LucideIcons.ban,
+                  label: 'Заблокированные',
+                ),
+                _SettingRow(
+                  icon: LucideIcons.shieldAlert,
+                  label: 'Верификация',
+                  right: _verificationLabel(verification.valueOrNull),
+                ),
+              ],
+            ),
+            _SettingsGroup(
+              title: 'Помощь',
+              rows: [
+                _SettingRow(
+                  icon: LucideIcons.messageCircle,
+                  label: 'Техподдержка',
+                  onTap: _openSupport,
+                ),
+                const _SettingRow(
+                  icon: LucideIcons.circleQuestionMark,
+                  label: 'FAQ',
+                ),
+                const _SettingRow(
+                  icon: LucideIcons.globe,
+                  label: 'О Frendly',
+                ),
+                const _SettingRow(
+                  icon: LucideIcons.fileText,
+                  label: 'Документы',
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _LogoutButton(onTap: _logout),
+            const SizedBox(height: 18),
+            Text(
+              'v 1.0.0',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: DateasyColors.muted,
+                    fontSize: 11,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _refresh() async {
+    ref.invalidate(appSettingsProvider);
+    ref.invalidate(ownProfileProvider);
+    ref.invalidate(verificationProvider);
+  }
+
+  String _verificationLabel(VerificationStateData? verification) {
+    switch (verification?.status) {
+      case 'verified':
+        return 'Готово';
+      case 'under_review':
+      case 'selfie_submitted':
+        return 'На проверке';
+      case 'rejected':
+        return 'Повторить';
+      default:
+        return 'Пройти';
+    }
+  }
+
+  Future<void> _handleBackendToggle(
+    String key,
+    bool value,
+  ) async {
+    if (_settingsBusy.contains(key)) {
+      return;
+    }
+    setState(() {
+      _settingsBusy.add(key);
+      _settingOverrides[key] = value;
+    });
+    try {
+      await ref.read(settingsActionsProvider).update({key: value});
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _settingOverrides.remove(key);
+        });
+        _showNotice('Не удалось сохранить настройку.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _settingsBusy.remove(key));
+      }
+    }
+  }
+
+  Future<void> _handlePushToggle(bool nextValue) async {
+    if (_pushBusy) {
+      return;
+    }
+    final previousValue = _push;
+    setState(() {
+      _push = nextValue;
+      _settingOverrides['allowPush'] = nextValue;
+      _pushBusy = true;
+    });
+
+    try {
+      await ref.read(settingsActionsProvider).setPushEnabled(nextValue);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _push = previousValue;
+          _settingOverrides.remove('allowPush');
+        });
+        _showNotice(
+          nextValue
+              ? 'Push пока недоступны в этом билде.'
+              : 'Не получилось отключить push.',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _pushBusy = false);
+      }
+    }
+  }
+
+  Future<void> _openSupport() async {
+    if (_supportBusy) {
+      return;
+    }
+    setState(() => _supportBusy = true);
+    try {
+      final support =
+          await ref.read(backendRepositoryProvider).startTelegramSupport();
+      if (!mounted || !context.mounted) {
+        return;
+      }
+      final opened = await launchUrl(
+        Uri.parse(support.botUrl),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened) {
+        _showNotice('Не удалось открыть поддержку');
+      }
+    } catch (_) {
+      if (mounted) {
+        _showNotice('Не удалось открыть поддержку');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _supportBusy = false);
+      }
+    }
+  }
+
+  Future<void> _logout() async {
+    await ref.read(settingsActionsProvider).logout();
+
+    if (mounted && context.mounted) {
+      context.go('/welcome');
+    }
+  }
+
+  void _showNotice(String message) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
+class SettingsFaqScreen extends StatelessWidget {
+  const SettingsFaqScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return DateasyPhoneFrame(
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(
+          top: MediaQuery.paddingOf(context).top + 16,
+          bottom: 40,
+        ),
+        children: const [
+          _SettingsHeader(title: 'FAQ', backPath: '/settings'),
+          SizedBox(height: 20),
+          _SettingsIntro(
+            title: 'Коротко о Frendly',
+            body: 'Ответы по главным функциям приложения.',
+          ),
+          SizedBox(height: 8),
+          _FaqList(),
+        ],
+      ),
+    );
+  }
+}
+
+class SettingsDocumentsScreen extends StatelessWidget {
+  const SettingsDocumentsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return DateasyPhoneFrame(
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(
+          top: MediaQuery.paddingOf(context).top + 16,
+          bottom: 40,
+        ),
+        children: const [
+          _SettingsHeader(title: 'Документы', backPath: '/settings'),
+          SizedBox(height: 20),
+          _SettingsIntro(
+            title: 'Правовая информация',
+            body:
+                'Официальные правила Drops открываются внутри приложения. Остальные документы откроются на frendly.tech.',
+          ),
+          SizedBox(height: 8),
+          _DocumentsList(),
+        ],
+      ),
+    );
+  }
+}
+
+class SettingsPromoRulesScreen extends StatelessWidget {
+  const SettingsPromoRulesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return DateasyPhoneFrame(
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(
+          top: MediaQuery.paddingOf(context).top + 16,
+          bottom: 40,
+        ),
+        children: const [
+          _SettingsHeader(
+            title: 'Правила Drops',
+            backPath: '/settings/documents',
+          ),
+          SizedBox(height: 20),
+          _SettingsIntro(
+            title: 'Официальные правила Frendly Drops',
+            body:
+                'Эти правила действуют для конкурсов и розыгрышей внутри Frendly. Они доступны в приложении постоянно.',
+          ),
+          SizedBox(height: 16),
+          _PromoRulesAppleNotice(),
+          SizedBox(height: 12),
+          _PromoRulesSection(
+            title: '1. Организатор',
+            body:
+                'Организатор конкурса, владелец и разработчик приложения Frendly. Конкурс проводится внутри приложения Frendly.',
+          ),
+          _PromoRulesSection(
+            title: '2. Участие',
+            body:
+                'Участие бесплатное. Покупка подписки, токенов или других товаров не является обязательным условием участия и не гарантирует победу. Билеты нельзя купить. Они начисляются за действия в приложении, которые указаны в разделе «Задания месяца».',
+          ),
+          _PromoRulesSection(
+            title: '3. Кто может участвовать',
+            body:
+                'Участвовать может активный пользователь Frendly, если он соответствует условиям конкретного Drops. Условия могут включать верификацию, активную Frendly+ подписку, город, возраст или другие ограничения, показанные на карточке конкурса.',
+          ),
+          _PromoRulesSection(
+            title: '4. Билеты',
+            body:
+                'Каждый билет дает одну заявку на участие в выбранном Drops. Пользователь сам применяет доступные билеты к активному конкурсу до даты розыгрыша. Лимит билетов за месяц и условия начисления указаны на экране Drops.',
+          ),
+          _PromoRulesSection(
+            title: '5. Победители',
+            body:
+                'Победители выбираются среди примененных билетов после окончания приема заявок. Чем больше билетов пользователь применил к конкурсу, тем больше его шанс. После розыгрыша Frendly может проверить личность победителя и соблюдение правил.',
+          ),
+          _PromoRulesSection(
+            title: '6. Призы',
+            body:
+                'Приз, количество победителей и дата розыгрыша указаны на карточке конкретного Drops. Организатор может заменить приз на аналогичный по стоимости, если исходный приз недоступен. Денежная замена приза не гарантируется.',
+          ),
+          _PromoRulesSection(
+            title: '7. Отмена и ограничения',
+            body:
+                'Организатор может отменить участие пользователя, если обнаружены накрутка, повторные аккаунты, нарушение правил сообщества, техническая ошибка или иное недобросовестное поведение.',
+          ),
+          _PromoRulesSection(
+            title: '8. Связь',
+            body:
+                'По вопросам конкурса можно обратиться в поддержку Frendly через раздел «Техподдержка» в настройках приложения.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SettingsBlockedUsersScreen extends ConsumerStatefulWidget {
+  const SettingsBlockedUsersScreen({super.key});
+
+  @override
+  ConsumerState<SettingsBlockedUsersScreen> createState() =>
+      _SettingsBlockedUsersScreenState();
+}
+
+class _SettingsBlockedUsersScreenState
+    extends ConsumerState<SettingsBlockedUsersScreen> {
+  final Set<String> _busyIds = <String>{};
+
+  @override
+  Widget build(BuildContext context) {
+    final blocksState = ref.watch(blocksProvider);
+
+    return DateasyPhoneFrame(
+      child: DateasyRefreshIndicator(
+        onRefresh: _refresh,
+        child: blocksState.when(
+          data: (page) => _BlockedUsersList(
+            items: page.items,
+            busyIds: _busyIds,
+            onUnblock: _unblock,
+          ),
+          loading: () => const _BlockedUsersLoading(),
+          error: (_, __) => _BlockedUsersError(onRefresh: _refresh),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _refresh() async {
+    ref.invalidate(blocksProvider);
+    await ref.read(blocksProvider.future);
+  }
+
+  Future<void> _unblock(BlockedUserData user) async {
+    final targetUserId = user.blockedUserId;
+    if (_busyIds.contains(targetUserId)) {
+      return;
+    }
+    setState(() => _busyIds.add(targetUserId));
+    try {
+      await ref.read(reportActionsProvider).deleteBlock(
+            targetUserId: targetUserId,
+          );
+      if (!mounted || !context.mounted) {
+        return;
+      }
+      _showNotice('Пользователь разблокирован');
+    } catch (_) {
+      if (mounted && context.mounted) {
+        _showNotice('Не удалось разблокировать');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busyIds.remove(targetUserId));
+      }
+    }
+  }
+
+  void _showNotice(String message) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
+class _BlockedUsersList extends StatelessWidget {
+  const _BlockedUsersList({
+    required this.items,
+    required this.busyIds,
+    required this.onUnblock,
+  });
+
+  final List<BlockedUserData> items;
+  final Set<String> busyIds;
+  final ValueChanged<BlockedUserData> onUnblock;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.only(
+        top: MediaQuery.paddingOf(context).top + 16,
+        bottom: 40,
+      ),
+      itemCount: items.isEmpty ? 3 : items.length + 2,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return const _SettingsHeader(
+            title: 'Заблокированные',
+            backPath: '/settings',
+          );
+        }
+        if (index == 1) {
+          return const Padding(
+            padding: EdgeInsets.only(top: 20),
+            child: _SettingsIntro(
+              title: 'Список блокировок',
+              body: 'Открой профиль или разблокируй человека из списка.',
+            ),
+          );
+        }
+        if (items.isEmpty) {
+          return const _BlockedUsersEmpty();
+        }
+        final item = items[index - 2];
+        return _BlockedUserRow(
+          user: item,
+          busy: busyIds.contains(item.blockedUserId),
+          onUnblock: () => onUnblock(item),
+        );
+      },
+    );
+  }
+}
+
+class _BlockedUsersLoading extends StatelessWidget {
+  const _BlockedUsersLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.only(
+        top: MediaQuery.paddingOf(context).top + 16,
+        bottom: 40,
+      ),
+      children: const [
+        _SettingsHeader(title: 'Заблокированные', backPath: '/settings'),
+        SizedBox(height: 20),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20),
+          child: _GlassPanel(
+            borderRadius: 18,
+            padding: EdgeInsets.all(18),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BlockedUsersError extends StatelessWidget {
+  const _BlockedUsersError({required this.onRefresh});
+
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.only(
+        top: MediaQuery.paddingOf(context).top + 16,
+        bottom: 40,
+      ),
+      children: [
+        const _SettingsHeader(title: 'Заблокированные', backPath: '/settings'),
+        const SizedBox(height: 20),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _GlassPanel(
+            borderRadius: 18,
+            padding: const EdgeInsets.all(18),
+            child: Column(
               children: [
-                _SettingsHeader(onBack: () => context.pop()),
-                const SizedBox(height: 20),
-                _ProfileSettingsTile(
-                  profileAsync: profileAsync,
-                  onTap: () => context.pushRoute(AppRoute.profile),
+                Text(
+                  'Не удалось загрузить список',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
                 const SizedBox(height: 12),
-                _SettingsQuickGrid(
-                  walletBalance: wallet.balance,
-                  onPlus: () => context.pushRoute(AppRoute.paywall),
-                  onWallet: () => context.pushRoute(AppRoute.wallet),
-                ),
-                const SizedBox(height: 12),
-                _TrustStrip(
-                  onVerification: () =>
-                      context.pushRoute(AppRoute.verification),
-                  onSos: () => context.pushRoute(AppRoute.sos),
-                ),
-                if (isLoadingRemote || hasRemoteError) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  _RemoteSettingsBanner(
-                    loading: isLoadingRemote,
-                    error: hasRemoteError,
-                  ),
-                ],
-                _SettingsGroup(
-                  title: 'Приватность',
-                  children: [
-                    _SettingsToggle(
-                      label: 'Показывать в поиске',
-                      sub: 'Тебя смогут найти люди рядом',
-                      icon: LucideIcons.eye,
-                      value: current.discoverable,
-                      enabled: !isLoadingRemote && !hasRemoteError,
-                      onChanged: (v) =>
-                          _saveSettings(current.copyWith(discoverable: v)),
-                    ),
-                    _SettingsToggle(
-                      label: 'Показывать возраст',
-                      icon: LucideIcons.shield_check,
-                      value: current.showAge,
-                      enabled: !isLoadingRemote && !hasRemoteError,
-                      onChanged: (v) =>
-                          _saveSettings(current.copyWith(showAge: v)),
-                    ),
-                    _SettingsToggle(
-                      label: 'Скрывать точную точку',
-                      sub: 'Показывать район вместо адреса',
-                      icon: LucideIcons.map_pin_off,
-                      value: current.hideExactLocation,
-                      enabled: !isLoadingRemote && !hasRemoteError,
-                      onChanged: (v) =>
-                          _saveSettings(current.copyWith(hideExactLocation: v)),
-                    ),
-                    _SettingsRow(
-                      label: 'Заблокированные',
-                      icon: LucideIcons.user_x,
-                      chevron: true,
-                      onTap: () => context.pushRoute(AppRoute.safetyHub),
-                    ),
-                  ],
-                ),
-                _SettingsGroup(
-                  title: 'Уведомления',
-                  children: [
-                    _SettingsToggle(
-                      label: 'Push-уведомления',
-                      sub: 'Главный переключатель',
-                      icon: LucideIcons.bell,
-                      value: current.allowPush,
-                      enabled: !isLoadingRemote && !hasRemoteError,
-                      onChanged: (v) => _handlePushToggle(current, v),
-                    ),
-                    _SettingsToggle(
-                      label: 'Тихие часы',
-                      sub: 'С 23:00 до 08:00',
-                      icon: LucideIcons.moon,
-                      value: current.quietHours,
-                      enabled: !isLoadingRemote && !hasRemoteError,
-                      onChanged: (v) =>
-                          _saveSettings(current.copyWith(quietHours: v)),
-                    ),
-                  ],
-                ),
-                _SettingsGroup(
-                  title: 'Аккаунт',
-                  children: [
-                    _SettingsRow(
-                      label: 'Аккаунт и безопасность',
-                      sub: '+7 ··· 87, Apple ID',
-                      icon: LucideIcons.shield_check,
-                      chevron: true,
-                      onTap: _showAccountSecuritySheet,
-                    ),
-                    _SettingsRow(
-                      label: 'Язык',
-                      sub: _language,
-                      icon: LucideIcons.globe,
-                      chevron: true,
-                      onTap: _showLanguageSheet,
-                    ),
-                    _SettingsRow(
-                      label: 'Город',
-                      sub: _city,
-                      icon: LucideIcons.map_pin,
-                      chevron: true,
-                      onTap: _showCitySheet,
-                    ),
-                  ],
-                ),
-                _SettingsGroup(
-                  title: 'Опасная зона',
-                  children: [
-                    _SettingsRow(
-                      label: 'Поддержка и условия',
-                      sub: 'Помощь, приватность, правила',
-                      icon: LucideIcons.circle_question_mark,
-                      chevron: true,
-                      onTap: _showHelpSheet,
-                    ),
-                    _SettingsRow(
-                      label: 'Удаление аккаунта',
-                      sub: 'Связаться с поддержкой',
-                      icon: LucideIcons.trash_2,
-                      chevron: true,
-                      onTap: _showPrivacySheet,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                _LogoutButton(
-                  loading: _isLoggingOut,
-                  onTap: _logout,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Center(
-                  child: Text(
-                    'FRENDLY · v1.0',
-                    style: AppTextStyles.caption.copyWith(
-                      fontSize: 10.5,
-                      letterSpacing: 1.68,
-                      color: BbV5Colors.inkMute,
-                    ),
-                  ),
+                TextButton(
+                  onPressed: onRefresh,
+                  child: const Text('Повторить'),
                 ),
               ],
             ),
           ),
         ),
-      ),
+      ],
     );
   }
+}
 
-  void _saveSettings(UserSettingsData next) {
-    final normalized = _withoutDarkMode(next);
-    ref.read(settingsLocalStateProvider.notifier).state = normalized;
-    unawaited(
-      clearWidgetLocalFirstCacheNamespace(ref, AppCacheNamespace.settings),
-    );
-    setState(() {
-      _settings = normalized;
-    });
-    _queuedSettings = normalized;
-    unawaited(_flushQueuedSettings());
-  }
+class _BlockedUsersEmpty extends StatelessWidget {
+  const _BlockedUsersEmpty();
 
-  Future<void> _flushQueuedSettings() async {
-    if (_isSavingSettings) {
-      return;
-    }
-
-    final repository = ref.read(backendRepositoryProvider);
-    _isSavingSettings = true;
-    UserSettingsData? lastSavedSettings;
-
-    try {
-      while (_queuedSettings != null) {
-        final next = _queuedSettings!;
-        _queuedSettings = null;
-        lastSavedSettings =
-            _withoutDarkMode(await repository.updateSettings(next));
-        if (!mounted) {
-          return;
-        }
-        ref.read(settingsLocalStateProvider.notifier).state = lastSavedSettings;
-        await clearWidgetLocalFirstCacheNamespace(
-          ref,
-          AppCacheNamespace.settings,
-        );
-      }
-
-      if (!mounted || lastSavedSettings == null) {
-        return;
-      }
-
-      setState(() {
-        _settings = lastSavedSettings;
-        _lastConfirmedSettings = lastSavedSettings;
-        _didHydrateFromRemote = true;
-      });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      final fallback = _lastConfirmedSettings;
-      if (fallback != null) {
-        ref.read(settingsLocalStateProvider.notifier).state = fallback;
-        setState(() {
-          _settings = fallback;
-        });
-      } else {
-        ref.read(settingsLocalStateProvider.notifier).state = null;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не получилось сохранить настройки')),
-      );
-    } finally {
-      _isSavingSettings = false;
-    }
-  }
-
-  UserSettingsData _withoutDarkMode(UserSettingsData settings) {
-    return settings.darkMode ? settings.copyWith(darkMode: false) : settings;
-  }
-
-  Future<void> _logout() async {
-    if (_isLoggingOut) {
-      return;
-    }
-    setState(() {
-      _isLoggingOut = true;
-    });
-
-    final repository = ref.read(backendRepositoryProvider);
-    final sessionController = ref.read(appSessionControllerProvider);
-    final authTokens = ref.read(authTokensProvider.notifier);
-    final currentUserId = ref.read(currentUserIdProvider.notifier);
-    final pushTokenService = ref.read(appPushTokenServiceProvider);
-
-    unawaited(_logoutRemoteBestEffort(repository, pushTokenService));
-    await sessionController.clearSessionRuntime(clearPersistedChatState: true);
-    authTokens.clear();
-    currentUserId.state = null;
-
-    if (mounted && context.mounted) {
-      context.goRoute(AppRoute.welcome);
-    }
-  }
-
-  Future<void> _logoutRemoteBestEffort(
-    BackendRepository repository,
-    AppPushTokenService pushTokenService,
-  ) async {
-    try {
-      final pushDeviceId = await pushTokenService.currentDeviceId();
-      if (pushDeviceId != null) {
-        try {
-          await repository.deletePushTokenByDeviceId(pushDeviceId);
-        } catch (_) {}
-      }
-      try {
-        await repository.logout();
-      } catch (_) {}
-      await pushTokenService.clearRegisteredToken();
-    } catch (_) {}
-  }
-
-  Future<void> _handlePushToggle(
-    UserSettingsData current,
-    bool nextValue,
-  ) async {
-    if (!nextValue) {
-      _saveSettings(current.copyWith(allowPush: false));
-      return;
-    }
-
-    final permissionService = ref.read(appPermissionServiceProvider);
-    final pushTokenService = ref.read(appPushTokenServiceProvider);
-    final repository = ref.read(backendRepositoryProvider);
-
-    final granted = await permissionService.requestNotifications();
-    if (!mounted || !granted) {
-      if (mounted && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Доступ к уведомлениям не выдан.')),
-        );
-      }
-      return;
-    }
-
-    final pushToken = await pushTokenService.registerDeviceToken();
-    if (!mounted || pushToken == null) {
-      if (mounted && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Push пока недоступны в этом билде.')),
-        );
-      }
-      return;
-    }
-
-    try {
-      await repository.registerPushToken(
-        token: pushToken.token,
-        provider: pushToken.provider,
-        deviceId: pushToken.deviceId,
-        platform: pushToken.platform,
-      );
-    } catch (_) {
-      if (mounted && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не получилось включить push.')),
-        );
-      }
-      return;
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    _saveSettings(current.copyWith(allowPush: true));
-  }
-
-  Future<void> _showAccountSecuritySheet() async {
-    final colors = AppColors.of(context);
-
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: colors.background,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Аккаунт и безопасность',
-                style: bbV5DisplayStyle(fontSize: 18, height: 1.2),
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: _GlassPanel(
+        borderRadius: 18,
+        padding: const EdgeInsets.all(18),
+        child: Text(
+          'Заблокированных пользователей нет',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: DateasyColors.muted,
               ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Телефон: +7 ··· 87',
-                style: bbV5DisplayStyle(fontSize: 13.5, height: 1.25),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Вход: Apple ID',
-                style: bbV5DisplayStyle(fontSize: 13.5, height: 1.25),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Пароль здесь не используется. Вход идет по коду и Apple ID.',
-                style: AppTextStyles.meta.copyWith(
-                  color: colors.inkMute,
-                  fontSize: 12.5,
-                  height: 1.45,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
   }
+}
 
-  Future<void> _showHelpSheet() async {
-    final colors = AppColors.of(context);
+class _BlockedUserRow extends StatelessWidget {
+  const _BlockedUserRow({
+    required this.user,
+    required this.busy,
+    required this.onUnblock,
+  });
 
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: colors.background,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+  final BlockedUserData user;
+  final bool busy;
+  final VoidCallback onUnblock;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = user.displayName?.trim().isNotEmpty == true
+        ? user.displayName!.trim()
+        : 'Пользователь';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () =>
+            context.push('/u/${Uri.encodeComponent(user.blockedUserId)}'),
+        child: _GlassPanel(
+          borderRadius: 18,
+          padding: const EdgeInsets.all(14),
+          child: Row(
             children: [
-              Text(
-                'Помощь',
-                style: bbV5DisplayStyle(fontSize: 18, height: 1.2),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Если что-то сломалось, открой Безопасность и поддержку или напиши в саппорт из Safety Hub.',
-                style: AppTextStyles.bodySoft.copyWith(
-                  color: colors.foreground,
-                  fontSize: 13.5,
-                  height: 1.625,
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(14),
                 ),
+                child: const Icon(LucideIcons.ban, size: 18),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showPrivacySheet() async {
-    final colors = AppColors.of(context);
-
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: colors.background,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Условия и приватность',
-                style: bbV5DisplayStyle(fontSize: 18, height: 1.2),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Мы показываем только нужные данные для встреч, не публикуем точную точку без согласия и даём управлять приватностью прямо в настройках.',
-                style: AppTextStyles.bodySoft.copyWith(
-                  color: colors.foreground,
-                  fontSize: 13.5,
-                  height: 1.625,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showLanguageSheet() async {
-    final next = await _showOptionSheet(
-      title: 'Выбери язык',
-      currentValue: _language,
-      options: const ['Русский', 'English'],
-    );
-
-    if (next == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _language = next;
-    });
-  }
-
-  Future<void> _showCitySheet() async {
-    final next = await _showOptionSheet(
-      title: 'Выбери город',
-      currentValue: _city,
-      options: const ['Москва', 'Санкт-Петербург', 'Казань'],
-    );
-
-    if (next == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _city = next;
-    });
-  }
-
-  Future<String?> _showOptionSheet({
-    required String title,
-    required String currentValue,
-    required List<String> options,
-  }) {
-    final colors = AppColors.of(context);
-
-    return showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: colors.background,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: bbV5DisplayStyle(fontSize: 18, height: 1.2),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              for (final option in options)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () => Navigator.of(context).pop(option),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 14,
-                      ),
-                      decoration: BoxDecoration(
-                        color: option == currentValue
-                            ? colors.primarySoft
-                            : colors.card,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: option == currentValue
-                              ? colors.primary.withValues(alpha: 0.25)
-                              : colors.border,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              option,
-                              style: AppTextStyles.itemTitle.copyWith(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w600,
-                                height: 1.25,
-                                letterSpacing: -0.27,
-                              ),
-                            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
                           ),
-                          if (option == currentValue)
-                            Icon(
-                              Icons.check_rounded,
-                              size: 18,
-                              color: colors.primary,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Профиль заблокирован',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: DateasyColors.muted,
+                            fontSize: 12,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: busy ? null : onUnblock,
+                child: Opacity(
+                  opacity: busy ? 0.55 : 1,
+                  child: Container(
+                    height: 32,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: DateasyColors.lime.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: DateasyColors.lime.withValues(alpha: 0.38),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        busy ? '...' : 'Разблокировать',
+                        maxLines: 1,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: DateasyColors.lime,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
-                        ],
                       ),
                     ),
                   ),
                 ),
+              ),
             ],
           ),
         ),
@@ -612,270 +870,82 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 }
 
 class _SettingsHeader extends StatelessWidget {
-  const _SettingsHeader({required this.onBack});
-
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        BbV5IconButton(
-          icon: LucideIcons.arrow_left,
-          onPressed: onBack,
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              BbV5Kicker('Управление'),
-              BbV5HeroTitle(
-                title: 'Настройки',
-                accent: 'аккаунта',
-                maxLines: 1,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ProfileSettingsTile extends StatelessWidget {
-  const _ProfileSettingsTile({
-    required this.profileAsync,
-    required this.onTap,
+  const _SettingsHeader({
+    required this.title,
+    required this.backPath,
   });
 
-  final AsyncValue<ProfileData> profileAsync;
-  final VoidCallback onTap;
+  final String title;
+  final String backPath;
 
   @override
   Widget build(BuildContext context) {
-    final profile = profileAsync.valueOrNull;
-    final name = profile?.displayName ?? 'Мой профиль';
-    final location = [
-      profile?.city,
-      profile?.area,
-    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' · ');
-    final subtitle = location.isEmpty ? 'Открыть карточку профиля' : location;
-    final intent = profile == null || profile.intent.isEmpty
-        ? 'Вечера'
-        : profile.intent.first;
-
-    return BbV5Card(
-      radius: 24,
-      padding: const EdgeInsets.all(16),
-      tint: BbV5Colors.terraSoft,
-      onTap: onTap,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
-          BbAvatar(
-            name: name,
-            imageUrl: profile?.avatarUrl,
-            online: profile?.online ?? false,
-            size: BbAvatarSize.lg,
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: bbV5DisplayStyle(fontSize: 18, height: 1.15),
-                      ),
-                    ),
-                    if (profile?.verified ?? false) ...[
-                      const SizedBox(width: 6),
-                      const Icon(
-                        LucideIcons.badge_check,
-                        size: 16,
-                        color: BbV5Colors.brandDeep,
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.meta.copyWith(
-                    fontSize: 12,
-                    color: BbV5Colors.inkMute,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    _MiniBadge(
-                      icon: LucideIcons.heart,
-                      label: intent,
-                    ),
-                    _MiniBadge(
-                      icon: LucideIcons.star,
-                      label: profile?.rating.toStringAsFixed(1) ?? '4.8',
-                    ),
-                    _MiniBadge(
-                      icon: LucideIcons.users,
-                      label: '${profile?.meetupCount ?? 0} встреч',
-                    ),
-                  ],
-                ),
-              ],
+          _GlassPanel(
+            borderRadius: 16,
+            padding: EdgeInsets.zero,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => context.go(backPath),
+              child: const SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(LucideIcons.chevronLeft, size: 20),
+              ),
             ),
           ),
-          const SizedBox(width: 10),
-          const Icon(
-            LucideIcons.chevron_right,
-            size: 18,
-            color: BbV5Colors.inkMute,
+          Expanded(
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
           ),
+          const SizedBox(width: 44),
         ],
       ),
     );
   }
 }
 
-class _SettingsQuickGrid extends StatelessWidget {
-  const _SettingsQuickGrid({
-    required this.walletBalance,
-    required this.onPlus,
-    required this.onWallet,
-  });
-
-  final int walletBalance;
-  final VoidCallback onPlus;
-  final VoidCallback onWallet;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _FeatureCard(
-            icon: LucideIcons.crown,
-            title: 'Frendly+',
-            subtitle: 'Фильтры, лайки, закрытые вечера',
-            tone: BbV5Colors.gold,
-            onTap: onPlus,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _FeatureCard(
-            icon: LucideIcons.wallet,
-            title: 'Wallet',
-            subtitle: '$walletBalance токенов',
-            tone: BbV5Colors.brand,
-            onTap: onWallet,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TrustStrip extends StatelessWidget {
-  const _TrustStrip({
-    required this.onVerification,
-    required this.onSos,
-  });
-
-  final VoidCallback onVerification;
-  final VoidCallback onSos;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _TrustButton(
-            icon: LucideIcons.badge_check,
-            label: 'Верификация',
-            sub: 'Быстрее проходят заявки',
-            onTap: onVerification,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _TrustButton(
-            icon: LucideIcons.shield_alert,
-            label: 'SOS',
-            sub: 'Контакты и быстрый сигнал',
-            danger: true,
-            onTap: onSos,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _FeatureCard extends StatelessWidget {
-  const _FeatureCard({
-    required this.icon,
+class _SettingsIntro extends StatelessWidget {
+  const _SettingsIntro({
     required this.title,
-    required this.subtitle,
-    required this.tone,
-    required this.onTap,
+    required this.body,
   });
 
-  final IconData icon;
   final String title;
-  final String subtitle;
-  final Color tone;
-  final VoidCallback onTap;
+  final String body;
 
   @override
   Widget build(BuildContext context) {
-    return BbV5Card(
-      radius: 20,
-      padding: const EdgeInsets.all(14),
-      tint: tone.withValues(alpha: 0.55),
-      onTap: onTap,
-      child: SizedBox(
-        height: 96,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: _GlassPanel(
+        borderRadius: 20,
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: tone.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: tone.withValues(alpha: 0.28)),
-              ),
-              child: Icon(icon, size: 16, color: tone),
-            ),
-            const Spacer(),
             Text(
               title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: bbV5DisplayStyle(fontSize: 14, height: 1.15),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 6),
             Text(
-              subtitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.caption.copyWith(
-                fontSize: 10.8,
-                height: 1.2,
-                color: BbV5Colors.inkMute,
-              ),
+              body,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: DateasyColors.muted,
+                    height: 1.35,
+                  ),
             ),
           ],
         ),
@@ -884,200 +954,74 @@ class _FeatureCard extends StatelessWidget {
   }
 }
 
-class _TrustButton extends StatelessWidget {
-  const _TrustButton({
-    required this.icon,
-    required this.label,
-    required this.sub,
-    required this.onTap,
-    this.danger = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final String sub;
-  final VoidCallback onTap;
-  final bool danger;
+class _PlusCard extends StatelessWidget {
+  const _PlusCard();
 
   @override
   Widget build(BuildContext context) {
-    final tone = danger ? const Color(0xFFB5443B) : BbV5Colors.brandDeep;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      child: GestureDetector(
+        onTap: () => context.push('/paywall'),
         child: Container(
-          height: 72,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: BbV5Colors.paperHi,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: BbV5Colors.hair),
-            boxShadow: BbV5Shadows.pill,
+            gradient: dateasyPinkGradient,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x55FF639F),
+                blurRadius: 28,
+                spreadRadius: -12,
+                offset: Offset(0, 16),
+              ),
+            ],
           ),
+          padding: const EdgeInsets.all(16),
           child: Row(
             children: [
               Container(
-                width: 34,
-                height: 34,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: tone.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  color: DateasyColors.background.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(icon, size: 17, color: tone),
+                child: const Icon(
+                  LucideIcons.crown,
+                  color: DateasyColors.foreground,
+                  size: 20,
+                ),
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: bbV5DisplayStyle(fontSize: 12.5),
+                      'Frendly Plus',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: DateasyColors.foreground,
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
-                      sub,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.caption.copyWith(
-                        fontSize: 10.5,
-                        height: 1.15,
-                        color: BbV5Colors.inkMute,
-                      ),
+                      'Безлимит свайпов и приоритет',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: DateasyColors.foreground
+                                .withValues(alpha: 0.78),
+                            fontSize: 12,
+                          ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniBadge extends StatelessWidget {
-  const _MiniBadge({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: BbV5Colors.paperHi,
-        borderRadius: BorderRadius.circular(BbV5Radii.pill),
-        border: Border.all(color: BbV5Colors.hair),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: BbV5Colors.inkSoft),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: AppTextStyles.caption.copyWith(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              color: BbV5Colors.inkSoft,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RemoteSettingsBanner extends StatelessWidget {
-  const _RemoteSettingsBanner({
-    required this.loading,
-    required this.error,
-  });
-
-  final bool loading;
-  final bool error;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: BbV5Colors.paperHi,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: BbV5Colors.hair),
-      ),
-      child: Row(
-        children: [
-          if (loading) ...[
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: BbV5Colors.ink,
+              const Icon(
+                LucideIcons.chevronRight,
+                color: DateasyColors.foreground,
+                size: 20,
               ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-          ],
-          Expanded(
-            child: Text(
-              loading
-                  ? 'Загружаем настройки'
-                  : 'Не удалось загрузить настройки. Можно вернуться позже.',
-              style: AppTextStyles.meta.copyWith(color: BbV5Colors.inkSoft),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LogoutButton extends StatelessWidget {
-  const _LogoutButton({
-    required this.loading,
-    required this.onTap,
-  });
-
-  final bool loading;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 48,
-      child: FilledButton.icon(
-        onPressed: loading ? null : onTap,
-        icon: loading
-            ? const SizedBox(
-                width: 17,
-                height: 17,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(LucideIcons.log_out, size: 17),
-        label: Text(loading ? 'Выходим' : 'Выйти'),
-        style: FilledButton.styleFrom(
-          elevation: 0,
-          backgroundColor: BbV5Colors.paperHi,
-          foregroundColor: const Color(0xFFB5443B),
-          shape: const StadiumBorder(
-            side: BorderSide(color: BbV5Colors.hair),
-          ),
-          textStyle: AppTextStyles.button.copyWith(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
+            ],
           ),
         ),
       ),
@@ -1088,39 +1032,44 @@ class _LogoutButton extends StatelessWidget {
 class _SettingsGroup extends StatelessWidget {
   const _SettingsGroup({
     required this.title,
-    required this.children,
+    required this.rows,
   });
 
   final String title;
-  final List<Widget> children;
+  final List<_SettingRow> rows;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 20),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: Text(title, style: bbV5KickerStyle()),
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(
+              title.toUpperCase(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: DateasyColors.muted,
+                    fontSize: 12,
+                    letterSpacing: 1,
+                  ),
+            ),
           ),
-          const SizedBox(height: 8),
-          BbV5Card(
-            radius: 20,
+          _GlassPanel(
+            borderRadius: 16,
             padding: EdgeInsets.zero,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
               child: Column(
                 children: [
-                  for (var index = 0; index < children.length; index++) ...[
-                    if (index > 0)
-                      const Divider(
+                  for (var index = 0; index < rows.length; index++) ...[
+                    rows[index],
+                    if (index != rows.length - 1)
+                      Divider(
                         height: 1,
-                        thickness: 1,
-                        color: BbV5Colors.hairSoft,
+                        color: Colors.white.withValues(alpha: 0.05),
                       ),
-                    children[index],
                   ],
                 ],
               ),
@@ -1132,95 +1081,146 @@ class _SettingsGroup extends StatelessWidget {
   }
 }
 
-class _SettingsIconTile extends StatelessWidget {
-  const _SettingsIconTile({required this.icon});
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        color: BbV5Colors.paper,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: BbV5Colors.hair),
-      ),
-      child: Icon(icon, size: 15, color: BbV5Colors.inkSoft),
-    );
-  }
-}
-
-class _SettingsTextBlock extends StatelessWidget {
-  const _SettingsTextBlock({
-    required this.label,
-    this.sub,
-  });
-
-  final String label;
-  final String? sub;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: bbV5DisplayStyle(fontSize: 13.5),
-        ),
-        if (sub != null)
-          Text(
-            sub!,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.meta.copyWith(
-              fontSize: 11.5,
-              color: BbV5Colors.inkMute,
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({
-    required this.label,
+class _SettingRow extends StatelessWidget {
+  const _SettingRow({
     required this.icon,
-    this.sub,
-    this.chevron = false,
+    required this.label,
+    this.right,
+    this.toggleValue,
+    this.onToggle,
     this.onTap,
   });
 
-  final String label;
-  final String? sub;
   final IconData icon;
-  final bool chevron;
+  final String label;
+  final String? right;
+  final bool? toggleValue;
+  final ValueChanged<bool>? onToggle;
   final VoidCallback? onTap;
+
+  bool get _isToggle => toggleValue != null;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              _SettingsIconTile(icon: icon),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(child: _SettingsTextBlock(label: label, sub: sub)),
-              if (chevron)
-                const Icon(
-                  LucideIcons.chevron_right,
-                  size: 18,
-                  color: BbV5Colors.inkMute,
+    final content = Row(
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, size: 16),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w400,
                 ),
+          ),
+        ),
+        if (_isToggle)
+          _SwitchPill(
+            value: toggleValue!,
+            onChanged: onToggle ?? (_) {},
+          )
+        else ...[
+          if (right != null) ...[
+            Text(
+              right!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: DateasyColors.muted,
+                    fontSize: 12,
+                  ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          const Icon(
+            LucideIcons.chevronRight,
+            size: 16,
+            color: DateasyColors.muted,
+          ),
+        ],
+      ],
+    );
+
+    if (_isToggle) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: content,
+      );
+    }
+
+    return GestureDetector(
+      onTap: onTap ?? () => _handleTap(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: content,
+      ),
+    );
+  }
+
+  void _handleTap(BuildContext context) {
+    switch (label) {
+      case 'Город':
+        context.go('/city');
+      case 'Язык':
+        _showNotice(context, 'Язык: Русский');
+      case 'Редактировать профиль':
+        context.push('/profile/edit');
+      case 'SOS и доверенные':
+        context.go('/sos');
+      case 'Заблокированные':
+        context.go('/settings/blocked');
+      case 'Верификация':
+        context.push('/verify');
+      case 'FAQ':
+        context.go('/settings/faq');
+      case 'О Frendly':
+        _openExternalUrl(context, 'https://frendly.tech');
+      case 'Документы':
+        context.go('/settings/documents');
+    }
+  }
+
+  void _showNotice(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
+class _FaqList extends StatelessWidget {
+  const _FaqList();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: _GlassPanel(
+        borderRadius: 18,
+        padding: EdgeInsets.zero,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Column(
+            children: [
+              for (var index = 0; index < _faqItems.length; index++) ...[
+                _InfoTextRow(item: _faqItems[index]),
+                if (index != _faqItems.length - 1)
+                  Divider(
+                    height: 1,
+                    color: Colors.white.withValues(alpha: 0.05),
+                  ),
+              ],
             ],
           ),
         ),
@@ -1229,70 +1229,400 @@ class _SettingsRow extends StatelessWidget {
   }
 }
 
-class _SettingsToggle extends StatelessWidget {
-  const _SettingsToggle({
-    required this.label,
-    required this.icon,
-    required this.value,
-    required this.onChanged,
-    this.enabled = true,
-    this.sub,
+class _DocumentsList extends StatelessWidget {
+  const _DocumentsList();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: _GlassPanel(
+        borderRadius: 18,
+        padding: EdgeInsets.zero,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Column(
+            children: [
+              const _InternalDocumentRow(
+                title: 'Официальные правила Frendly Drops',
+                subtitle: 'Открывается внутри приложения',
+                route: _promoRulesRoute,
+              ),
+              Divider(
+                height: 1,
+                color: Colors.white.withValues(alpha: 0.05),
+              ),
+              for (var index = 0; index < _documentLinks.length; index++) ...[
+                _DocumentRow(link: _documentLinks[index]),
+                if (index != _documentLinks.length - 1)
+                  Divider(
+                    height: 1,
+                    color: Colors.white.withValues(alpha: 0.05),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InternalDocumentRow extends StatelessWidget {
+  const _InternalDocumentRow({
+    required this.title,
+    required this.subtitle,
+    required this.route,
   });
 
-  final String label;
-  final String? sub;
-  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String route;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => context.go(route),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: DateasyColors.lime.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                LucideIcons.fileCheck,
+                size: 16,
+                color: DateasyColors.lime,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: DateasyColors.muted,
+                          fontSize: 12,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              LucideIcons.chevronRight,
+              size: 16,
+              color: DateasyColors.muted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PromoRulesAppleNotice extends StatelessWidget {
+  const _PromoRulesAppleNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: _GlassPanel(
+        borderRadius: 20,
+        padding: const EdgeInsets.all(18),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: DateasyColors.lime.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                LucideIcons.shieldCheck,
+                color: DateasyColors.lime,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Apple не является спонсором конкурса',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Apple не участвует в организации, проведении, финансировании, выборе победителей или выдаче призов Frendly Drops.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: DateasyColors.muted,
+                          height: 1.35,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PromoRulesSection extends StatelessWidget {
+  const _PromoRulesSection({
+    required this.title,
+    required this.body,
+  });
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: _GlassPanel(
+        borderRadius: 18,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              body,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: DateasyColors.muted,
+                    height: 1.42,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoTextRow extends StatelessWidget {
+  const _InfoTextRow({required this.item});
+
+  final _InfoItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.title,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            item.body,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: DateasyColors.muted,
+                  height: 1.35,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DocumentRow extends StatelessWidget {
+  const _DocumentRow({required this.link});
+
+  final _DocumentLink link;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openExternalUrl(context, link.url),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(LucideIcons.fileText, size: 16),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    link.title,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    link.host,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: DateasyColors.muted,
+                          fontSize: 12,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              LucideIcons.externalLink,
+              size: 16,
+              color: DateasyColors.muted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SwitchPill extends StatelessWidget {
+  const _SwitchPill({
+    required this.value,
+    required this.onChanged,
+  });
+
   final bool value;
-  final bool enabled;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: enabled ? () => onChanged(!value) : null,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 80),
+        curve: Curves.easeOutCubic,
+        width: 44,
+        height: 24,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          gradient: value ? dateasyLimeGradient : null,
+          color: value ? null : Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 80),
+          curve: Curves.easeOutCubic,
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 16,
+            height: 16,
+            decoration: const BoxDecoration(
+              color: DateasyColors.background,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LogoutButton extends StatelessWidget {
+  const _LogoutButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 48,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border:
+                Border.all(color: DateasyColors.pink.withValues(alpha: 0.3)),
+          ),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _SettingsIconTile(icon: icon),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(child: _SettingsTextBlock(label: label, sub: sub)),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                width: 44,
-                height: 24,
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: value
-                      ? BbV5Colors.accent
-                      : const Color(0x2E3C281C)
-                          .withValues(alpha: enabled ? 1 : 0.55),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: BbV5Colors.paperHi
-                        .withValues(alpha: enabled ? 1 : 0.72),
-                    borderRadius: BorderRadius.circular(999),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x33000000),
-                        blurRadius: 6,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                ),
+              const Icon(
+                LucideIcons.logOut,
+                size: 16,
+                color: DateasyColors.pink,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Выйти',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: DateasyColors.pink,
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _GlassPanel extends StatelessWidget {
+  const _GlassPanel({
+    required this.child,
+    required this.borderRadius,
+    required this.padding,
+  });
+
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: DateasyColors.glass,
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Padding(padding: padding, child: child),
     );
   }
 }

@@ -21,7 +21,7 @@ USE_RECURSIVE_SCRIPT_INPUTS_IN_SCRIPT_PHASES = YES
 PRODUCT_NAME = Frendly
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.bigBreakMobile
+PRODUCT_BUNDLE_IDENTIFIER = com.sergeypolyakov.frendly.mobile2.dev
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 Frendly. All rights reserved.

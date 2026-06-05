@@ -1,911 +1,363 @@
-import 'dart:async';
-import 'dart:typed_data';
-import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
-import 'package:big_break_mobile/app/theme/app_spacing.dart';
-import 'package:big_break_mobile/app/theme/app_text_styles.dart';
-import 'package:big_break_mobile/features/tokens/application/token_wallet_controller.dart';
-import 'package:big_break_mobile/shared/data/app_providers.dart';
-import 'package:big_break_mobile/shared/models/profile.dart';
-import 'package:big_break_mobile/shared/utils/location_label.dart';
-import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
-import 'package:big_break_mobile/shared/widgets/bb_profile_photo_gallery.dart';
-import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:mobile2/app/core/providers/core_providers.dart';
+import 'package:mobile2/shared/data/app_providers.dart';
+import 'package:mobile2/shared/models/backend_models.dart';
+import 'package:mobile2/shared/theme/dateasy_theme.dart';
+import 'package:mobile2/shared/widgets/dateasy_bottom_nav.dart';
+import 'package:mobile2/shared/widgets/dateasy_media_viewer.dart';
+import 'package:mobile2/shared/widgets/dateasy_phone_frame.dart';
+import 'package:mobile2/shared/widgets/dateasy_refresh_indicator.dart';
+import 'package:mobile2/shared/widgets/dateasy_remote_image.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final profileAsync = ref.watch(profileProvider);
-    final photoPreviews = ref.watch(profilePhotoPreviewProvider);
+    final currentUser = ref.watch(currentUserProvider);
+    final profileState = ref.watch(ownProfileProvider);
+    final profile = profileState.valueOrNull;
+    final wallet = ref.watch(tokenWalletProvider);
+    final verification = ref.watch(verificationProvider).valueOrNull;
+    final subscription = ref.watch(subscriptionProvider).valueOrNull;
+    final hostDashboard = ref.watch(hostDashboardProvider);
 
-    return BbV5Scaffold(
-      child: profileAsync.when(
-        loading: () => const _ProfileLoadingState(),
-        error: (_, __) => _ProfileErrorState(
-          onRetry: () => ref.invalidate(profileProvider),
-        ),
-        data: (profile) {
-          _prewarmProfilePhotos(ref, profile);
-          return ProfileV5Content(
-            profile: profile,
-            photoPreviews: photoPreviews,
-          );
-        },
-      ),
-    );
-  }
-}
-
-class ProfileV5Content extends StatelessWidget {
-  const ProfileV5Content({
-    required this.profile,
-    this.photoPreviews = const {},
-    this.header,
-    this.showOwnerCards = true,
-    this.heroAction,
-    this.heroSignalRow,
-    this.interestHighlights = const {},
-    this.interestFooter,
-    this.bottomOverlay,
-    this.bottomPadding = 132,
-    this.locationFallback = 'Москва · Чистые пруды',
-    this.useShortHeroName = true,
-    super.key,
-  });
-
-  final ProfileData profile;
-  final Map<String, Uint8List> photoPreviews;
-  final Widget? header;
-  final bool showOwnerCards;
-  final Widget? heroAction;
-  final Widget? heroSignalRow;
-  final Set<String> interestHighlights;
-  final Widget? interestFooter;
-  final Widget? bottomOverlay;
-  final double bottomPadding;
-  final String? locationFallback;
-  final bool useShortHeroName;
-
-  @override
-  Widget build(BuildContext context) {
-    final content = Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(20, 32, 20, bottomPadding),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    header ??
-                        _ProfileHeader(
-                          onBack: () => context.goRoute(AppRoute.tonight),
-                          onSos: () => context.pushRoute(AppRoute.sos),
-                          onSettings: () =>
-                              context.pushRoute(AppRoute.settings),
-                        ),
-                    const SizedBox(height: 20),
-                    _ProfileHeroCard(
-                      profile: profile,
-                      photoPreviews: photoPreviews,
-                      locationFallback: locationFallback,
-                      useShortName: useShortHeroName,
-                      action: heroAction ??
-                          (showOwnerCards ? _ownerHeroAction(context) : null),
-                      signalRow: heroSignalRow,
-                    ),
-                    if (showOwnerCards) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      _ProfileQuickGrid(
-                        onPlus: () => context.pushRoute(AppRoute.paywall),
-                        onWallet: () => context.pushRoute(AppRoute.wallet),
-                        onVerification: () =>
-                            context.pushRoute(AppRoute.verification),
-                        onSos: () => context.pushRoute(AppRoute.sos),
-                      ),
-                    ],
-                    _ProfileSection(
-                      title: 'Зачем здесь',
-                      child: _ProfileTags(
-                        values: profile.intent,
-                        emptyLabel: 'Пока не выбрано',
-                        iconFor: (value) => value == 'Свидания'
-                            ? LucideIcons.heart
-                            : LucideIcons.users,
-                      ),
-                    ),
-                    _ProfileSection(
-                      title: 'Настроение',
-                      child: _VibeCard(vibe: profile.vibe),
-                    ),
-                    _ProfileSection(
-                      title: 'Интересы',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _ProfileTags(
-                            values: profile.interests,
-                            emptyLabel: 'Интересы появятся после заполнения',
-                            activeValues: interestHighlights,
-                          ),
-                          if (interestFooter != null) ...[
-                            const SizedBox(height: AppSpacing.sm),
-                            interestFooter!,
-                          ],
-                        ],
-                      ),
-                    ),
-                    _ProfileSection(
-                      title: 'О себе',
-                      child: _AboutCard(text: profile.bio),
-                    ),
-                    _ProfileSection(
-                      title: 'История',
-                      child: _HistoryGrid(profile: profile),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    return SafeArea(
-      bottom: false,
-      child: bottomOverlay == null
-          ? content
-          : Stack(
-              children: [
-                content,
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: bottomOverlay!,
-                ),
-              ],
-            ),
-    );
-  }
-
-  Widget _ownerHeroAction(BuildContext context) {
-    return BbV5PillButton(
-      label: 'Изменить',
-      icon: LucideIcons.pen_line,
-      height: 34,
-      fontSize: 11.5,
-      iconSize: 12,
-      padding: const EdgeInsets.symmetric(horizontal: 13),
-      onPressed: () => context.pushRoute(AppRoute.editProfile),
-    );
-  }
-}
-
-class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({
-    required this.onBack,
-    required this.onSos,
-    required this.onSettings,
-  });
-
-  final VoidCallback onBack;
-  final VoidCallback onSos;
-  final VoidCallback onSettings;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        BbV5IconButton(
-          icon: LucideIcons.arrow_left,
-          iconSize: 16,
-          onPressed: onBack,
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              BbV5Kicker('Аккаунт'),
-              SizedBox(height: 4),
-              BbV5HeroTitle(title: 'Твой', accent: 'профиль'),
-            ],
-          ),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        _ProfileHeaderSosButton(onTap: onSos),
-        const SizedBox(width: AppSpacing.xs),
-        BbV5IconButton(
-          icon: LucideIcons.settings,
-          iconSize: 16,
-          onPressed: onSettings,
-        ),
-      ],
-    );
-  }
-}
-
-class _ProfileHeaderSosButton extends StatelessWidget {
-  const _ProfileHeaderSosButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'SOS',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          key: const ValueKey('profile-header-sos'),
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(BbV5Radii.pill),
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD85B4A),
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFB5443B)),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x99B5443B),
-                  blurRadius: 18,
-                  spreadRadius: -8,
-                  offset: Offset(0, 8),
-                ),
-              ],
-            ),
-            child: const Icon(
-              LucideIcons.shield_alert,
-              size: 17,
-              color: BbV5Colors.paperHi,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileHeroCard extends StatelessWidget {
-  const _ProfileHeroCard({
-    required this.profile,
-    required this.photoPreviews,
-    required this.locationFallback,
-    required this.useShortName,
-    this.action,
-    this.signalRow,
-  });
-
-  final ProfileData profile;
-  final Map<String, Uint8List> photoPreviews;
-  final String? locationFallback;
-  final bool useShortName;
-  final Widget? action;
-  final Widget? signalRow;
-
-  @override
-  Widget build(BuildContext context) {
-    final name =
-        useShortName ? _shortName(profile.displayName) : profile.displayName;
-    final title = profile.age == null ? name : '$name, ${profile.age}';
-    final location = composeLocationLabel(profile.city, profile.area);
-    final locationLabel =
-        location.isEmpty ? locationFallback?.trim() ?? '' : location;
-    final photos = _heroPhotosFor(profile);
-
-    return BbV5Card(
-      tint: BbV5Colors.terraSoft,
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return DateasyPhoneFrame(
+      child: Stack(
         children: [
-          BbProfilePhotoGallery(
-            displayName: title,
-            photos: photos,
-            photoPreviews: photoPreviews,
-            badges: _profileBadges(profile),
-            height: 356,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: locationLabel.isEmpty
-                    ? const SizedBox.shrink()
-                    : Row(
-                        children: [
-                          const Icon(
-                            LucideIcons.map_pin,
-                            size: 13,
-                            color: BbV5Colors.inkMute,
-                          ),
-                          const SizedBox(width: 5),
-                          Expanded(
-                            child: Text(
-                              locationLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.meta.copyWith(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w400,
-                                color: BbV5Colors.inkMute,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+          DateasyRefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(ownProfileProvider);
+              ref.invalidate(tokenWalletProvider);
+              ref.invalidate(verificationProvider);
+              ref.invalidate(subscriptionProvider);
+              ref.invalidate(hostDashboardProvider);
+            },
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(
+                top: MediaQuery.paddingOf(context).top + 16,
+                bottom: 144,
               ),
-              if (action != null) ...[
-                const SizedBox(width: AppSpacing.sm),
-                action!,
+              children: [
+                _Header(userId: currentUser?.id),
+                if (profileState.isLoading && profile == null)
+                  const _ProfileLoadingBlock()
+                else if (profileState.hasError && profile == null)
+                  const _ProfileEmptyBlock(
+                    text: 'Профиль не загрузился',
+                  )
+                else
+                  _AvatarBlock(
+                    profile: profile,
+                    currentUser: currentUser,
+                    verification: verification,
+                    subscription: subscription,
+                  ),
+                _StatsCard(profile: profile),
+                const _PremiumCard(),
+                _VerificationCard(verification: verification),
+                _WalletCard(wallet: wallet),
+                _HostDashboardCard(
+                  pendingCount:
+                      hostDashboard.valueOrNull?.pendingRequestsCount ?? 0,
+                ),
+                const _GiveawaysCard(),
+                _InterestsSection(profile: profile),
+                _GallerySection(profile: profile),
+                _MyMeetingsSection(hostDashboard: hostDashboard),
               ],
-            ],
+            ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          const Divider(height: 1, color: BbV5Colors.hairSoft),
-          const SizedBox(height: AppSpacing.md),
-          _ProfileStatsRow(profile: profile),
-          if (signalRow != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            signalRow!,
-          ],
+          const DateasyBottomNav(),
         ],
       ),
     );
   }
 }
 
-List<Widget> _profileBadges(ProfileData profile) {
-  return [
-    if (profile.verified)
-      const _ProfileTrustBadge(
-        label: 'Verified',
-        icon: LucideIcons.shield_check,
-        backgroundStart: Color(0xFFE8F0E3),
-        backgroundEnd: Color(0xAAC9D5BE),
-        foreground: BbV5Colors.brandDeep,
-        border: Color(0x384F6A53),
-      ),
-    if (profile.frendlyPlus)
-      const _ProfileTrustBadge(
-        label: 'Frendly+',
-        icon: LucideIcons.crown,
-        backgroundStart: Color(0xFFF6D8B5),
-        backgroundEnd: BbV5Colors.terraSoft,
-        foreground: Color(0xFF7A3F22),
-        border: Color(0x4DB26F4A),
-      ),
-  ];
-}
-
-class _ProfileTrustBadge extends StatelessWidget {
-  const _ProfileTrustBadge({
-    required this.label,
-    required this.icon,
-    required this.backgroundStart,
-    required this.backgroundEnd,
-    required this.foreground,
-    required this.border,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color backgroundStart;
-  final Color backgroundEnd;
-  final Color foreground;
-  final Color border;
+class _ProfileLoadingBlock extends StatelessWidget {
+  const _ProfileLoadingBlock();
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message:
-          label == 'Verified' ? 'Профиль верифицирован' : 'Подписка Frendly+',
-      child: Container(
-        height: 24,
-        padding: const EdgeInsets.only(left: 7, right: 9),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [backgroundStart, backgroundEnd],
-          ),
-          borderRadius: BorderRadius.circular(BbV5Radii.pill),
-          border: Border.all(color: border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.white.withValues(alpha: 0.22),
-              blurRadius: 0,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: foreground),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: AppTextStyles.meta.copyWith(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                color: foreground,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-List<ProfilePhoto> _heroPhotosFor(ProfileData profile) {
-  if (profile.photos.isNotEmpty) {
-    return profile.photos;
-  }
-
-  final avatarUrl = profile.avatarUrl?.trim();
-  if (avatarUrl == null || avatarUrl.isEmpty) {
-    return const [];
-  }
-
-  return [
-    ProfilePhoto(
-      id: 'avatar-fallback',
-      url: avatarUrl,
-      order: 0,
-    ),
-  ];
-}
-
-void _prewarmProfilePhotos(WidgetRef ref, ProfileData profile) {
-  unawaited(
-    ref.read(appMediaPrewarmServiceProvider).warmProfileImages(
-          _heroPhotosFor(profile).map(
-            (photo) => photo.bestUrlFor(BbImageUsageProfile.hero),
-          ),
-          usageProfile: BbImageUsageProfile.hero,
-          limit: 3,
-          concurrency: 2,
-        ),
-  );
-}
-
-class _ProfileStatsRow extends StatelessWidget {
-  const _ProfileStatsRow({required this.profile});
-
-  final ProfileData profile;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _MetricTile(
-            key: const ValueKey('profile-stat-followers'),
-            icon: LucideIcons.users,
-            value: _formatCount(profile.social.followers),
-            semanticLabel: 'Подписчиков',
-          ),
-        ),
-        Expanded(
-          child: _MetricTile(
-            key: const ValueKey('profile-stat-likes'),
-            icon: LucideIcons.heart,
-            value: _formatCount(profile.social.likes),
-            semanticLabel: 'Лайков',
-          ),
-        ),
-        Expanded(
-          child: _MetricTile(
-            key: const ValueKey('profile-stat-rating'),
-            icon: LucideIcons.star,
-            value: profile.rating.toStringAsFixed(1),
-            semanticLabel: 'Рейтинг',
-          ),
-        ),
-        Expanded(
-          child: _MetricTile(
-            key: const ValueKey('profile-stat-meetups'),
-            icon: LucideIcons.shield_check,
-            value: '${profile.meetupCount}',
-            semanticLabel: 'Встреч',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MetricTile extends StatelessWidget {
-  const _MetricTile({
-    required this.icon,
-    required this.value,
-    required this.semanticLabel,
-    super.key,
-  });
-
-  final IconData icon;
-  final String value;
-  final String semanticLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: '$semanticLabel $value',
-      child: ExcludeSemantics(
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(20, 32, 20, 8),
+      child: Center(
         child: SizedBox(
-          height: 48,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 15, color: BbV5Colors.inkMute),
-              const SizedBox(height: 6),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  value,
-                  maxLines: 1,
-                  style: bbV5DisplayStyle(fontSize: 16, height: 1).copyWith(
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ),
-            ],
-          ),
+          width: 28,
+          height: 28,
+          child: CircularProgressIndicator(strokeWidth: 2),
         ),
       ),
     );
   }
 }
 
-class _ProfileQuickGrid extends ConsumerWidget {
-  const _ProfileQuickGrid({
-    required this.onPlus,
-    required this.onWallet,
-    required this.onVerification,
-    required this.onSos,
-  });
+class _ProfileEmptyBlock extends StatelessWidget {
+  const _ProfileEmptyBlock({required this.text});
 
-  final VoidCallback onPlus;
-  final VoidCallback onWallet;
-  final VoidCallback onVerification;
-  final VoidCallback onSos;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final balance = ref.watch(tokenWalletProvider).balance;
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _ProfileFeatureCard(
-                icon: LucideIcons.crown,
-                title: 'Frendly+',
-                subtitle: 'Фильтры, лайки, закрытые вечера',
-                tone: BbV5Colors.gold,
-                onTap: onPlus,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _ProfileFeatureCard(
-                icon: LucideIcons.wallet,
-                title: 'Wallet',
-                subtitle: '${_formatTokenBalance(balance)} токенов',
-                tone: BbV5Colors.brand,
-                onTap: onWallet,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _ProfileTrustButton(
-                icon: LucideIcons.badge_check,
-                label: 'Верификация',
-                sub: 'Быстрее проходят заявки',
-                onTap: onVerification,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _ProfileTrustButton(
-                icon: LucideIcons.shield_alert,
-                label: 'SOS',
-                sub: 'Контакты и быстрый сигнал',
-                danger: true,
-                onTap: onSos,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _ProfileFeatureCard extends StatelessWidget {
-  const _ProfileFeatureCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.tone,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color tone;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return BbV5Card(
-      radius: 20,
-      padding: const EdgeInsets.all(14),
-      tint: tone.withValues(alpha: 0.55),
-      onTap: onTap,
-      child: SizedBox(
-        height: 96,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: tone.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: tone.withValues(alpha: 0.28)),
-              ),
-              child: Icon(icon, size: 16, color: tone),
-            ),
-            const Spacer(),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: bbV5DisplayStyle(fontSize: 14, height: 1.15),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              subtitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.caption.copyWith(
-                fontSize: 10.8,
-                height: 1.2,
-                color: BbV5Colors.inkMute,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileTrustButton extends StatelessWidget {
-  const _ProfileTrustButton({
-    required this.icon,
-    required this.label,
-    required this.sub,
-    required this.onTap,
-    this.danger = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final String sub;
-  final VoidCallback onTap;
-  final bool danger;
-
-  @override
-  Widget build(BuildContext context) {
-    final tone = danger ? const Color(0xFFB5443B) : BbV5Colors.brandDeep;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          height: 72,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: BbV5Colors.paperHi,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: BbV5Colors.hair),
-            boxShadow: BbV5Shadows.pill,
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: tone.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, size: 17, color: tone),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: bbV5DisplayStyle(fontSize: 12.5),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      sub,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.caption.copyWith(
-                        fontSize: 10.5,
-                        height: 1.15,
-                        color: BbV5Colors.inkMute,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _formatTokenBalance(int value) {
-  final raw = value.toString();
-  final buffer = StringBuffer();
-  for (var index = 0; index < raw.length; index += 1) {
-    final fromEnd = raw.length - index;
-    buffer.write(raw[index]);
-    if (fromEnd > 1 && fromEnd % 3 == 1) {
-      buffer.write(' ');
-    }
-  }
-  return buffer.toString();
-}
-
-class _ProfileSection extends StatelessWidget {
-  const _ProfileSection({
-    required this.title,
-    required this.child,
-  });
-
-  final String title;
-  final Widget child;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      child: _GlassPanel(
+        borderRadius: 20,
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: DateasyColors.muted,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.userId});
+
+  final String? userId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
         children: [
-          BbV5Kicker(title),
-          const SizedBox(height: 10),
-          child,
+          _GlassIconButton(
+            icon: LucideIcons.share2,
+            onTap: () {
+              final id = userId == null || userId!.isEmpty
+                  ? 'me'
+                  : Uri.encodeComponent(userId!);
+              context.go('/share?targetType=profile&targetId=$id');
+            },
+          ),
+          Expanded(
+            child: Text(
+              'Профиль',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+          _GlassIconButton(
+            icon: LucideIcons.settings,
+            onTap: () => context.push('/settings'),
+          ),
         ],
       ),
     );
   }
 }
 
-class _ProfileTags extends StatelessWidget {
-  const _ProfileTags({
-    required this.values,
-    required this.emptyLabel,
-    this.activeValues = const {},
-    this.iconFor,
+class _AvatarBlock extends StatelessWidget {
+  const _AvatarBlock({
+    required this.profile,
+    required this.currentUser,
+    required this.verification,
+    required this.subscription,
   });
 
-  final List<String> values;
-  final String emptyLabel;
-  final Set<String> activeValues;
-  final IconData Function(String value)? iconFor;
+  final BackendCardItem? profile;
+  final BackendUser? currentUser;
+  final VerificationStateData? verification;
+  final SubscriptionStateData? subscription;
 
   @override
   Widget build(BuildContext context) {
-    if (values.isEmpty) {
-      return _EmptyInlineCard(label: emptyLabel);
-    }
+    final name = _profileName(profile, currentUser);
+    final age = _profileAge(profile);
+    final location = _profileLocation(profile, currentUser);
+    final bio = _profileBio(profile);
+    final imageUrl = profile?.imageUrl ?? currentUser?.avatarUrl;
+    final verified =
+        verification?.status == 'verified' || _profileVerified(profile);
+    final frendlyPlus = _subscriptionHasFrendlyPlus(subscription) ||
+        _profileFrendlyPlus(profile);
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: values
-          .map(
-            (value) => _ProfileTag(
-              label: value,
-              icon: iconFor?.call(value),
-              active: activeValues.contains(value),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      child: Column(
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 126,
+                height: 126,
+                padding: const EdgeInsets.all(3),
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: dateasyLimeGradient,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0x66BEFF67),
+                      blurRadius: 28,
+                      spreadRadius: -10,
+                      offset: Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: DateasyColors.background,
+                  ),
+                  child: ClipOval(
+                    child: DateasyRemoteImage(
+                      imageUrl: imageUrl,
+                      usage: DateasyImageUsage.avatar,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: GestureDetector(
+                  onTap: () => context.push('/profile/edit'),
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: DateasyColors.foreground,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: DateasyColors.background,
+                        width: 4,
+                      ),
+                    ),
+                    child: const Icon(
+                      LucideIcons.camera,
+                      color: DateasyColors.backgroundDeep,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              Text(
+                age == null ? name : '$name, $age',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              if (verified)
+                const _ProfileStatusBadge(
+                  label: 'Verified',
+                  icon: LucideIcons.badgeCheck,
+                  background: DateasyColors.surface2,
+                  foreground: DateasyColors.lime,
+                ),
+              if (frendlyPlus)
+                const _ProfileStatusBadge(
+                  label: 'Frendly+',
+                  icon: LucideIcons.crown,
+                  background: DateasyColors.pink,
+                  foreground: DateasyColors.backgroundDeep,
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                LucideIcons.mapPin,
+                size: 14,
+                color: DateasyColors.muted,
+              ),
+              const SizedBox(width: 5),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 300),
+                child: Text(
+                  location,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: DateasyColors.muted,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: Text(
+              bio.isEmpty ? 'Добавьте описание профиля' : bio,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: DateasyColors.muted,
+                    height: 1.35,
+                  ),
             ),
-          )
-          .toList(growable: false),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _ProfileTag extends StatelessWidget {
-  const _ProfileTag({
+class _ProfileStatusBadge extends StatelessWidget {
+  const _ProfileStatusBadge({
     required this.label,
-    this.active = false,
-    this.icon,
+    required this.icon,
+    required this.background,
+    required this.foreground,
   });
 
   final String label;
-  final bool active;
-  final IconData? icon;
+  final IconData icon;
+  final Color background;
+  final Color foreground;
 
   @override
   Widget build(BuildContext context) {
-    final foreground = active ? BbV5Colors.terra : BbV5Colors.ink;
     return Container(
-      height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
       decoration: BoxDecoration(
-        color: active ? BbV5Colors.terraSoft : BbV5Colors.paperHi,
-        borderRadius: BorderRadius.circular(BbV5Radii.pill),
-        border: Border.all(
-          color: active ? BbV5Colors.accent : BbV5Colors.hair,
-        ),
-        boxShadow: BbV5Shadows.pill,
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: 14, color: foreground),
-            const SizedBox(width: 6),
-          ] else if (active) ...[
-            Container(
-              width: 6,
-              height: 6,
-              decoration: const BoxDecoration(
-                color: BbV5Colors.terra,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 6),
-          ],
+          Icon(icon, size: 13, color: foreground),
+          const SizedBox(width: 4),
           Text(
             label,
-            style: AppTextStyles.caption.copyWith(
-              fontFamily: 'Sora',
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              height: 1,
-              letterSpacing: 0,
-              color: foreground,
-            ),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: foreground,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
           ),
         ],
       ),
@@ -913,233 +365,1288 @@ class _ProfileTag extends StatelessWidget {
   }
 }
 
-class _VibeCard extends StatelessWidget {
-  const _VibeCard({required this.vibe});
+class _StatsCard extends StatelessWidget {
+  const _StatsCard({required this.profile});
 
-  final String? vibe;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: BbV5Colors.paperHi,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: BbV5Colors.hair),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            (vibe == null || vibe!.trim().isEmpty) ? 'Спокойно' : vibe!,
-            style: bbV5DisplayStyle(fontSize: 15),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Камерные встречи, разговор без спешки',
-            style: AppTextStyles.meta.copyWith(
-              fontSize: 12.5,
-              color: BbV5Colors.inkSoft,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AboutCard extends StatelessWidget {
-  const _AboutCard({required this.text});
-
-  final String? text;
+  final BackendCardItem? profile;
 
   @override
   Widget build(BuildContext context) {
-    final value = text?.trim();
-    if (value == null || value.isEmpty) {
-      return const _EmptyInlineCard(label: 'Расскажи о себе в профиле');
-    }
+    final meetings = _profileNumber(profile, [
+      'meetingsCount',
+      'meetupCount',
+      'eventsCount',
+      'visitedEventsCount',
+    ]);
+    final matches = _profileNumber(profile, ['matchesCount', 'matchCount']);
+    final rating = _profileRating(profile);
 
-    return Text(
-      value,
-      style: AppTextStyles.body.copyWith(
-        fontSize: 13.5,
-        height: 1.625,
-        color: BbV5Colors.inkSoft,
-      ),
-    );
-  }
-}
-
-class _HistoryGrid extends StatelessWidget {
-  const _HistoryGrid({required this.profile});
-
-  final ProfileData profile;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      (value: '${profile.meetupCount}', label: 'встреч за 3 мес'),
-      (value: profile.rating.toStringAsFixed(1), label: 'рейтинг'),
-      (value: '${profile.interests.length}', label: 'интересов'),
-      (value: _formatCount(profile.social.followers), label: 'новых знакомых'),
-    ];
-
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      childAspectRatio: 2.2,
-      children: items
-          .map(
-            (item) => Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: BbV5Colors.paperHi,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: BbV5Colors.hair),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      child: _GlassPanel(
+        borderRadius: 24,
+        padding: const EdgeInsets.all(4),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Row(
+            children: [
+              Expanded(
+                child: _StatTile(
+                  value: meetings ?? '0',
+                  label: 'Встреч',
+                  color: DateasyColors.lime,
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      item.value,
+              const _Divider(),
+              Expanded(
+                child: _StatTile(
+                  value: matches ?? '0',
+                  label: 'Мэтчей',
+                  color: DateasyColors.pink,
+                ),
+              ),
+              const _Divider(),
+              Expanded(
+                child: _StatTile(
+                  value: rating ?? '—',
+                  label: 'Рейтинг',
+                  color: DateasyColors.lilac,
+                  icon: Icons.star,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.value,
+    required this.label,
+    required this.color,
+    this.icon,
+  });
+
+  final String value;
+  final String label;
+  final Color color;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 14, color: color),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                value,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontFamily: 'Sora',
+                      fontSize: 26,
+                      height: 1,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: DateasyColors.muted,
+                        fontSize: 11,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PremiumCard extends StatelessWidget {
+  const _PremiumCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      child: GestureDetector(
+        onTap: () => context.push('/paywall'),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: dateasyPinkGradient,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x55FF639F),
+                blurRadius: 28,
+                spreadRadius: -12,
+                offset: Offset(0, 16),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: DateasyColors.background.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  LucideIcons.crown,
+                  color: DateasyColors.foreground,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Frendly Plus',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: DateasyColors.foreground,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Безлимит свайпов, приоритет в радаре',
                       maxLines: 1,
-                      style: bbV5DisplayStyle(fontSize: 20, height: 1).copyWith(
-                        fontFeatures: const [FontFeature.tabularFigures()],
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: DateasyColors.foreground
+                                .withValues(alpha: 0.78),
+                            fontSize: 12,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                height: 30,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: DateasyColors.background.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  'Открыть',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: DateasyColors.foreground,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VerificationCard extends StatelessWidget {
+  const _VerificationCard({required this.verification});
+
+  final VerificationStateData? verification;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = verification?.status ?? 'not_started';
+    final verified = status == 'verified';
+    final waiting = status == 'under_review' || status == 'document_submitted';
+    final selfieSubmitted =
+        status == 'selfie_submitted' && verification?.documentDone != true;
+    final title = verified
+        ? 'Верификация пройдена'
+        : waiting
+            ? 'Проверка идёт'
+            : selfieSubmitted
+                ? 'Осталось добавить фото документа'
+                : 'Пройти верификацию';
+    final subtitle = verified
+        ? 'Галочка в профиле · 3 дня Frendly+'
+        : waiting
+            ? 'Заявка на проверке. Пришлём уведомление'
+            : selfieSubmitted
+                ? 'Селфи готово · добавь фото документа'
+                : 'Селфи + фото документа · 1 минута';
+    final badge = verified
+        ? 'готово'
+        : waiting
+            ? 'на проверке'
+            : selfieSubmitted
+                ? 'фото'
+                : '+ галочка';
+    final icon = verified
+        ? LucideIcons.badgeCheck
+        : waiting
+            ? LucideIcons.clock
+            : LucideIcons.badgeCheck;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: GestureDetector(
+        onTap: verified ? null : () => context.push('/verify'),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: DateasyColors.glass,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: DateasyColors.lime.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          DateasyColors.lime.withValues(alpha: 0.1),
+                          DateasyColors.lime2.withValues(alpha: 0.04),
+                        ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    item.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.caption.copyWith(
-                      fontSize: 10.5,
-                      letterSpacing: 0,
-                      color: BbV5Colors.inkMute,
-                    ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: dateasyLimeGradient,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x55BEFF67),
+                              blurRadius: 24,
+                              offset: Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          icon,
+                          color: DateasyColors.backgroundDeep,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: DateasyColors.lime
+                                        .withValues(alpha: 0.18),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    badge,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: DateasyColors.lime,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: DateasyColors.muted,
+                                    fontSize: 12,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Icon(
+                        verified ? LucideIcons.check : LucideIcons.chevronRight,
+                        color:
+                            verified ? DateasyColors.lime : DateasyColors.muted,
+                        size: 18,
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          )
-          .toList(growable: false),
+          ),
+        ),
+      ),
     );
   }
 }
 
-class _EmptyInlineCard extends StatelessWidget {
-  const _EmptyInlineCard({required this.label});
+class _WalletCard extends StatelessWidget {
+  const _WalletCard({required this.wallet});
+
+  final AsyncValue<TokenWalletData> wallet;
+
+  @override
+  Widget build(BuildContext context) {
+    final balance = wallet.valueOrNull?.balance;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: GestureDetector(
+        onTap: () => context.push('/wallet'),
+        child: _GlassPanel(
+          borderRadius: 24,
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: dateasyLimeGradient,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  LucideIcons.wallet,
+                  color: DateasyColors.backgroundDeep,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Кошелёк токенов',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      balance == null
+                          ? 'Пополнение, история, бусты'
+                          : '$balance FT на балансе',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: DateasyColors.muted,
+                            fontSize: 12,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                LucideIcons.chevronRight,
+                color: DateasyColors.muted,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HostDashboardCard extends StatelessWidget {
+  const _HostDashboardCard({required this.pendingCount});
+
+  final int pendingCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: GestureDetector(
+        onTap: () => context.push('/host'),
+        child: _GlassPanel(
+          borderRadius: 24,
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: DateasyColors.pink,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  LucideIcons.layoutDashboard,
+                  color: DateasyColors.backgroundDeep,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Host dashboard',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Заявки, встречи и бусты',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: DateasyColors.muted,
+                            fontSize: 12,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              if (pendingCount > 0) ...[
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: DateasyColors.lime,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$pendingCount заявки',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: DateasyColors.backgroundDeep,
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+              const Icon(
+                LucideIcons.chevronRight,
+                color: DateasyColors.muted,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GiveawaysCard extends StatelessWidget {
+  const _GiveawaysCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: GestureDetector(
+        onTap: () => context.push('/giveaways'),
+        child: _GlassPanel(
+          borderRadius: 24,
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: dateasyPinkGradient,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  LucideIcons.trophy,
+                  color: DateasyColors.foreground,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Розыгрыши месяца',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: DateasyColors.lime.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            'авто · iPhone',
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: DateasyColors.lime,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Билеты, история, победители',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: DateasyColors.muted,
+                            fontSize: 12,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Icon(
+                LucideIcons.chevronRight,
+                color: DateasyColors.muted,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InterestsSection extends StatelessWidget {
+  const _InterestsSection({required this.profile});
+
+  final BackendCardItem? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final interests = _profileInterests(profile);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      child: Column(
+        children: [
+          _SectionHeader(
+            title: 'Интересы',
+            action: 'Изменить',
+            onTap: () => context.push('/profile/edit'),
+          ),
+          const SizedBox(height: 12),
+          if (interests.isEmpty)
+            _EmptyInlineState(
+              text: 'Интересы не добавлены',
+              onTap: () => context.push('/profile/edit'),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final interest in interests)
+                  _InterestPill(
+                    label: interest,
+                    icon: _interestIcon(interest),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InterestPill extends StatelessWidget {
+  const _InterestPill({required this.label, required this.icon});
 
   final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      borderRadius: 999,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: DateasyColors.lime),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GallerySection extends StatelessWidget {
+  const _GallerySection({required this.profile});
+
+  final BackendCardItem? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final allPhotos = _profilePhotos(profile);
+    final photos = allPhotos.take(6).toList(growable: false);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      child: Column(
+        children: [
+          _SectionHeader(
+            title: 'Галерея',
+            action: 'Все',
+            showChevron: true,
+            onTap: () => context.push('/profile/gallery'),
+          ),
+          const SizedBox(height: 12),
+          if (photos.isEmpty)
+            _EmptyInlineState(
+              text: 'Фото не добавлены',
+              onTap: () => context.push('/profile/edit'),
+            )
+          else
+            GridView.builder(
+              padding: EdgeInsets.zero,
+              physics: const NeverScrollableScrollPhysics(),
+              shrinkWrap: true,
+              itemCount: photos.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+              ),
+              itemBuilder: (context, index) {
+                return GestureDetector(
+                  onTap: () => showDateasyMediaViewer(
+                    context,
+                    items: _mediaItems(allPhotos),
+                    initialIndex: index,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.1),
+                        ),
+                      ),
+                      child: DateasyRemoteImage(
+                        imageUrl: photos[index],
+                        usage: DateasyImageUsage.card,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MyMeetingsSection extends StatelessWidget {
+  const _MyMeetingsSection({required this.hostDashboard});
+
+  final AsyncValue<HostDashboardData> hostDashboard;
+
+  @override
+  Widget build(BuildContext context) {
+    final meetings = _profileMeetingItems(
+      hosted: hostDashboard.valueOrNull?.events ?? const <BackendCardItem>[],
+    );
+    final loading = hostDashboard.isLoading && meetings.isEmpty;
+    final hasError = hostDashboard.hasError && meetings.isEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      child: Column(
+        children: [
+          _SectionHeader(
+            title: 'Мои встречи',
+            action: 'История',
+            showChevron: true,
+            onTap: () => context.push('/profile/history'),
+          ),
+          const SizedBox(height: 12),
+          if (loading)
+            const _InlineLoadingState()
+          else if (hasError)
+            const _EmptyInlineState(text: 'Встречи не загрузились')
+          else if (meetings.isEmpty)
+            const _EmptyInlineState(text: 'Встреч пока нет')
+          else
+            for (var index = 0; index < meetings.take(2).length; index++) ...[
+              _MeetingRow(meeting: meetings[index]),
+              if (index != meetings.take(2).length - 1)
+                const SizedBox(height: 8),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+List<BackendCardItem> _profileMeetingItems({
+  required List<BackendCardItem> hosted,
+}) {
+  final byId = <String, BackendCardItem>{};
+  final now = DateTime.now();
+  for (final meeting in hosted) {
+    if (meeting.id.isEmpty) {
+      continue;
+    }
+    if (!_isActiveProfileMeeting(meeting, now)) {
+      continue;
+    }
+    byId.putIfAbsent(meeting.id, () => meeting);
+  }
+  final items = byId.values.toList(growable: false);
+  items.sort((left, right) {
+    final leftTime = left.startsAt;
+    final rightTime = right.startsAt;
+    final leftFuture = leftTime != null && !leftTime.isBefore(now);
+    final rightFuture = rightTime != null && !rightTime.isBefore(now);
+    if (leftFuture != rightFuture) {
+      return leftFuture ? -1 : 1;
+    }
+    if (leftTime == null || rightTime == null) {
+      return left.title.compareTo(right.title);
+    }
+    return leftFuture
+        ? leftTime.compareTo(rightTime)
+        : rightTime.compareTo(leftTime);
+  });
+  return items;
+}
+
+bool _isActiveProfileMeeting(BackendCardItem meeting, DateTime now) {
+  final status = (meeting.raw['liveStatus'] ?? meeting.raw['status'])
+      ?.toString()
+      .toLowerCase()
+      .trim();
+  if (status == 'finished' ||
+      status == 'completed' ||
+      status == 'canceled' ||
+      status == 'cancelled' ||
+      status == 'archived') {
+    return false;
+  }
+  final startsAt = meeting.startsAt;
+  if (startsAt == null) {
+    return true;
+  }
+  return startsAt.add(const Duration(hours: 24)).isAfter(now);
+}
+
+class _MeetingRow extends StatelessWidget {
+  const _MeetingRow({required this.meeting});
+
+  final BackendCardItem meeting;
+
+  @override
+  Widget build(BuildContext context) {
+    final role = meeting.raw['role']?.toString() ??
+        meeting.raw['participantRole']?.toString() ??
+        '';
+    final host = role == 'host' || role == 'Хост';
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => context.push('/meetings/${meeting.id}'),
+      child: _GlassPanel(
+        borderRadius: 16,
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                gradient: dateasyLimeGradient,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                host ? '★' : '→',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: DateasyColors.backgroundDeep,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    meeting.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _meetingSubtitle(meeting),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: DateasyColors.muted,
+                          fontSize: 11,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Icon(
+              LucideIcons.chevronRight,
+              size: 18,
+              color: DateasyColors.muted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.action,
+    this.showChevron = false,
+    this.onTap,
+  });
+
+  final String title;
+  final String action;
+  final bool showChevron;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ),
+        GestureDetector(
+          onTap: onTap,
+          child: Row(
+            children: [
+              Text(
+                action,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: DateasyColors.muted,
+                    ),
+              ),
+              if (showChevron) ...[
+                const SizedBox(width: 3),
+                const Icon(
+                  LucideIcons.chevronRight,
+                  color: DateasyColors.muted,
+                  size: 14,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GlassIconButton extends StatelessWidget {
+  const _GlassIconButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      borderRadius: 16,
+      padding: EdgeInsets.zero,
+      child: GestureDetector(
+        onTap: onTap,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(icon, size: 20),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassPanel extends StatelessWidget {
+  const _GlassPanel({
+    required this.child,
+    required this.borderRadius,
+    required this.padding,
+  });
+
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: DateasyColors.glass,
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  const _Divider();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: BbV5Colors.paperHi,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: BbV5Colors.hair),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.meta.copyWith(color: BbV5Colors.inkMute),
-      ),
+      width: 1,
+      height: 64,
+      color: Colors.white.withValues(alpha: 0.1),
     );
   }
 }
 
-class _ProfileLoadingState extends StatelessWidget {
-  const _ProfileLoadingState();
+class _InlineLoadingState extends StatelessWidget {
+  const _InlineLoadingState();
 
   @override
   Widget build(BuildContext context) {
-    return const SafeArea(
+    return const _GlassPanel(
+      borderRadius: 16,
+      padding: EdgeInsets.all(16),
       child: Center(
         child: SizedBox(
-          width: 26,
-          height: 26,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.4,
-            color: BbV5Colors.ink,
-          ),
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
         ),
       ),
     );
   }
 }
 
-class _ProfileErrorState extends StatelessWidget {
-  const _ProfileErrorState({required this.onRetry});
+class _EmptyInlineState extends StatelessWidget {
+  const _EmptyInlineState({required this.text, this.onTap});
 
-  final VoidCallback onRetry;
+  final String text;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: BbV5Card(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Не получилось загрузить профиль',
-                    textAlign: TextAlign.center,
-                    style: bbV5DisplayStyle(fontSize: 18),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Проверь соединение и попробуй ещё раз.',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.meta.copyWith(
-                      color: BbV5Colors.inkMute,
+    return GestureDetector(
+      onTap: onTap,
+      child: _GlassPanel(
+        borderRadius: 16,
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            const Icon(
+              LucideIcons.circleDashed,
+              size: 16,
+              color: DateasyColors.muted,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: DateasyColors.muted,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  BbV5PillButton(
-                    label: 'Повторить',
-                    onPressed: onRetry,
-                    dark: true,
-                  ),
-                ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-String _shortName(String value) {
-  final parts = value.trim().split(RegExp(r'\s+'));
-  if (parts.isEmpty || parts.first.isEmpty) {
-    return 'Профиль';
+String _profileName(BackendCardItem? profile, BackendUser? currentUser) {
+  final title = profile?.title.trim();
+  if (title != null && title.isNotEmpty) {
+    return title;
   }
-  return parts.first;
+  final name = currentUser?.name.trim();
+  return name == null || name.isEmpty ? 'Профиль' : name;
 }
 
-String _formatCount(int value) {
-  if (value >= 1000) {
-    final short = value / 1000;
-    final text = value >= 10000
-        ? short.toStringAsFixed(0)
-        : short.toStringAsFixed(1).replaceAll('.0', '');
-    return '${text}k';
+int? _profileAge(BackendCardItem? profile) {
+  final value = profile?.raw['age'];
+  if (value is int && value > 0) {
+    return value;
   }
-  return value.toString();
+  return int.tryParse(value?.toString() ?? '');
+}
+
+bool _profileVerified(BackendCardItem? profile) {
+  final raw = profile?.raw;
+  if (raw == null) {
+    return false;
+  }
+  return raw['verified'] == true ||
+      raw['isVerified'] == true ||
+      raw['verificationStatus'] == 'verified';
+}
+
+bool _profileFrendlyPlus(BackendCardItem? profile) {
+  final raw = profile?.raw;
+  if (raw == null) {
+    return false;
+  }
+  final status = raw['subscriptionStatus']?.toString().toLowerCase();
+  return raw['frendlyPlus'] == true ||
+      raw['isFrendlyPlus'] == true ||
+      raw['hasFrendlyPlus'] == true ||
+      raw['premium'] == true ||
+      raw['isPremium'] == true ||
+      status == 'active' ||
+      status == 'trial';
+}
+
+bool _subscriptionHasFrendlyPlus(SubscriptionStateData? subscription) {
+  final status = subscription?.status.toLowerCase();
+  return status == 'active' || status == 'trial';
+}
+
+String _profileLocation(BackendCardItem? profile, BackendUser? currentUser) {
+  final city = profile?.city ?? currentUser?.city;
+  final area = profile?.raw['area']?.toString().trim();
+  final distance = profile?.raw['distance']?.toString().trim() ??
+      profile?.raw['distanceText']?.toString().trim();
+  final parts = [
+    if (city != null && city.trim().isNotEmpty) city.trim(),
+    if (area != null && area.isNotEmpty) area,
+    if (distance != null && distance.isNotEmpty) distance,
+  ];
+  return parts.isEmpty ? 'Город не выбран' : parts.join(' · ');
+}
+
+String _profileBio(BackendCardItem? profile) {
+  final subtitle = profile?.subtitle?.trim();
+  if (subtitle != null && subtitle.isNotEmpty) {
+    return subtitle;
+  }
+  return profile?.raw['bio']?.toString().trim() ?? '';
+}
+
+String? _profileNumber(BackendCardItem? profile, List<String> keys) {
+  if (profile == null) {
+    return null;
+  }
+  final stats = profile.raw['stats'];
+  for (final key in keys) {
+    final value = profile.raw[key] ?? (stats is Map ? stats[key] : null);
+    final parsed = int.tryParse(value?.toString() ?? '');
+    if (parsed != null) {
+      return parsed.toString();
+    }
+  }
+  return null;
+}
+
+String? _profileRating(BackendCardItem? profile) {
+  if (profile == null) {
+    return null;
+  }
+  final stats = profile.raw['stats'];
+  final value = profile.raw['rating'] ??
+      profile.raw['score'] ??
+      (stats is Map ? stats['rating'] : null);
+  final parsed = double.tryParse(value?.toString() ?? '');
+  if (parsed == null || parsed <= 0) {
+    return null;
+  }
+  return parsed.toStringAsFixed(parsed.truncateToDouble() == parsed ? 0 : 1);
+}
+
+List<String> _profileInterests(BackendCardItem? profile) {
+  final raw = profile?.raw['interests'];
+  if (raw is! List) {
+    return const [];
+  }
+  return raw
+      .map((item) {
+        if (item is Map) {
+          return item['name'] ?? item['title'] ?? item['label'];
+        }
+        return item;
+      })
+      .map((item) => item?.toString().trim() ?? '')
+      .where((item) => item.isNotEmpty)
+      .toSet()
+      .toList(growable: false);
+}
+
+List<String> _profilePhotos(BackendCardItem? profile) {
+  if (profile == null) {
+    return const [];
+  }
+  final photos = profile.raw['photos'];
+  if (photos is! List) {
+    final avatar = profile.imageUrl;
+    return avatar == null || avatar.isEmpty ? const [] : [avatar];
+  }
+  final urls = photos
+      .whereType<Map>()
+      .map((photo) => photo['url'] ?? (photo['media'] as Map?)?['url'])
+      .map((url) => url?.toString() ?? '')
+      .where((url) => url.isNotEmpty)
+      .toList(growable: false);
+  if (urls.isNotEmpty) {
+    return urls;
+  }
+  final avatar = profile.imageUrl;
+  return avatar == null || avatar.isEmpty ? const [] : [avatar];
+}
+
+List<DateasyMediaItem> _mediaItems(List<String> photos) {
+  return photos
+      .map((url) => DateasyMediaItem(imageUrl: url))
+      .toList(growable: false);
+}
+
+IconData _interestIcon(String interest) {
+  final value = interest.toLowerCase();
+  if (value.contains('coffee') || value.contains('коф')) {
+    return LucideIcons.coffee;
+  }
+  if (value.contains('music') || value.contains('винил')) {
+    return LucideIcons.music2;
+  }
+  if (value.contains('art') || value.contains('галер')) {
+    return LucideIcons.palette;
+  }
+  if (value.contains('walk') || value.contains('прогул')) {
+    return LucideIcons.footprints;
+  }
+  return LucideIcons.sparkles;
+}
+
+String _meetingSubtitle(BackendCardItem meeting) {
+  final role = meeting.raw['role']?.toString() ??
+      meeting.raw['participantRole']?.toString() ??
+      meeting.raw['status']?.toString();
+  final date = _formatMeetingDate(meeting.startsAt);
+  if (date.isNotEmpty && role != null && role.isNotEmpty) {
+    return '$date · $role';
+  }
+  if (date.isNotEmpty) {
+    return date;
+  }
+  return role == null || role.isEmpty ? 'Детали встречи' : role;
+}
+
+String _formatMeetingDate(DateTime? date) {
+  if (date == null) {
+    return '';
+  }
+  final day = date.day.toString().padLeft(2, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final hour = date.hour.toString().padLeft(2, '0');
+  final minute = date.minute.toString().padLeft(2, '0');
+  return '$day.$month $hour:$minute';
 }

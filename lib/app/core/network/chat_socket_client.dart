@@ -1,822 +1,486 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:big_break_mobile/app/core/config/backend_config.dart';
-import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
-import 'package:big_break_mobile/app/core/local_cache/app_local_database.dart';
-import 'package:drift/drift.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mobile2/app/core/local_cache/chat_local_store.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-typedef ChatSocketChannelFactory = WebSocketChannel Function();
+typedef ChatSocketTransportFactory = ChatSocketTransport Function(Uri uri);
+typedef ChatReconnectDelay = Duration Function(int attempt);
+typedef ChatNotificationCreatedHandler = void Function(
+  Map<String, Object?> payload,
+);
+typedef ChatBeforeFlushOutbox = Future<void> Function(Set<String> chatIds);
 
-abstract class ChatOutboxStorage {
-  Future<List<Map<String, dynamic>>> readCommands();
-  Future<void> writeCommands(List<Map<String, dynamic>> commands);
+abstract class ChatSocketTransport {
+  Stream<Object?> get stream;
+
+  void send(String data);
+
+  Future<void> close();
 }
 
-class SharedPreferencesChatOutboxStorage implements ChatOutboxStorage {
-  const SharedPreferencesChatOutboxStorage(this._preferences);
+class WebSocketChatTransport implements ChatSocketTransport {
+  WebSocketChatTransport._(this._channel);
 
-  static const _storageKey = 'chat.outbox.commands';
-  final SharedPreferences _preferences;
+  final WebSocketChannel _channel;
 
-  static Future<void> clearStoredCommands(
-      SharedPreferences? preferences) async {
-    await preferences?.remove(_storageKey);
+  static WebSocketChatTransport connect(Uri uri) {
+    return WebSocketChatTransport._(WebSocketChannel.connect(uri));
   }
 
   @override
-  Future<List<Map<String, dynamic>>> readCommands() async {
-    final raw = _preferences.getString(_storageKey);
-    if (raw == null || raw.isEmpty) {
-      return const [];
-    }
+  Stream<Object?> get stream => _channel.stream;
 
-    final decoded = jsonDecode(raw);
-    if (decoded is! List) {
-      return const [];
-    }
-
-    return decoded
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList(growable: false);
+  @override
+  void send(String data) {
+    _channel.sink.add(data);
   }
 
   @override
-  Future<void> writeCommands(List<Map<String, dynamic>> commands) async {
-    if (commands.isEmpty) {
-      await _preferences.remove(_storageKey);
+  Future<void> close() async {
+    await _channel.sink.close();
+  }
+}
+
+class ChatRealtimeSession {
+  ChatRealtimeSession({
+    required this.transport,
+    required this.store,
+    required this.userId,
+    required this.chatId,
+    Iterable<String>? chatIds,
+    required this.accessToken,
+    this.reconnectTransportFactory,
+    this.reconnectUri,
+    this.reconnectDelay,
+    this.onNotificationCreated,
+    this.beforeFlushOutbox,
+  }) : _chatIds = _normalizeChatIds(chatId, chatIds);
+
+  ChatSocketTransport transport;
+  final ChatLocalStore store;
+  final String userId;
+  final String chatId;
+  final Set<String> _chatIds;
+  final String accessToken;
+  final ChatSocketTransportFactory? reconnectTransportFactory;
+  final Uri? reconnectUri;
+  final ChatReconnectDelay? reconnectDelay;
+  final ChatNotificationCreatedHandler? onNotificationCreated;
+  final ChatBeforeFlushOutbox? beforeFlushOutbox;
+
+  StreamSubscription<Object?>? _subscription;
+  Timer? _reconnectTimer;
+  int _reconnectAttempt = 0;
+  bool _closed = false;
+  bool _authenticated = false;
+
+  Future<void> start() async {
+    _listenToTransport();
+    _send('session.authenticate', {'accessToken': accessToken});
+  }
+
+  void _listenToTransport() {
+    _subscription = transport.stream.listen(
+      _handleSocketData,
+      onError: (_) => _scheduleReconnect(),
+      onDone: _scheduleReconnect,
+    );
+  }
+
+  Future<void> _openAuthenticatedSession() async {
+    for (final activeChatId in _chatIds) {
+      _send('chat.subscribe', {'chatId': activeChatId});
+      final cursor = await store.getSyncCursor(
+        userId: userId,
+        chatId: activeChatId,
+      );
+      _send('sync.request', {
+        'chatId': activeChatId,
+        if (cursor != null && cursor.isNotEmpty) 'sinceEventId': cursor,
+        'limit': 100,
+      });
+    }
+    await beforeFlushOutbox?.call(Set<String>.unmodifiable(_chatIds));
+    await flushOutbox();
+  }
+
+  Future<void> flushOutbox() async {
+    if (!_authenticated) {
       return;
     }
-
-    await _preferences.setString(_storageKey, jsonEncode(commands));
-  }
-}
-
-class DriftChatOutboxStorage implements ChatOutboxStorage {
-  DriftChatOutboxStorage(
-    this._database, {
-    required AppCacheUserScope userScope,
-    ChatOutboxStorage? legacyStorage,
-    DateTime Function()? now,
-  })  : _userId = userScope.storageId,
-        _legacyStorage = legacyStorage,
-        _now = now ?? DateTime.now;
-
-  final AppLocalDatabase _database;
-  final String _userId;
-  final ChatOutboxStorage? _legacyStorage;
-  final DateTime Function() _now;
-  bool _legacyMigrationAttempted = false;
-
-  @override
-  Future<List<Map<String, dynamic>>> readCommands() async {
-    var commands = await _readDbCommands();
-    if (_legacyMigrationAttempted || _legacyStorage == null) {
-      return commands;
-    }
-
-    _legacyMigrationAttempted = true;
-    final legacyCommands = await _legacyStorage.readCommands();
-    if (legacyCommands.isEmpty) {
-      return commands;
-    }
-
-    await writeCommands([...commands, ...legacyCommands]);
-    await _legacyStorage.writeCommands(const []);
-    commands = await _readDbCommands();
-    return commands;
-  }
-
-  @override
-  Future<void> writeCommands(List<Map<String, dynamic>> commands) async {
-    final normalized = _normalizeCommands(commands);
-    await _database.transaction(() async {
-      await (_database.delete(_database.pendingCommands)
-            ..where((table) => table.userId.equals(_userId)))
-          .go();
-      final updatedAt = _now();
-      for (final entry in normalized.entries) {
-        final command = entry.value;
-        final type = command['type'] as String?;
-        final payload = command['payload'];
-        if (type == null || payload is! Map) {
-          continue;
-        }
-        await _database.into(_database.pendingCommands).insert(
-              PendingCommandsCompanion.insert(
-                userId: _userId,
-                commandId: entry.key,
-                chatId: Value(payload['chatId'] as String?),
-                commandType: type,
-                payloadJson: jsonEncode(Map<String, dynamic>.from(payload)),
-                createdAt: updatedAt,
-                updatedAt: updatedAt,
-              ),
-            );
-      }
-    });
-  }
-
-  Future<List<Map<String, dynamic>>> _readDbCommands() async {
-    final rows = await (_database.select(_database.pendingCommands)
-          ..where((table) => table.userId.equals(_userId))
-          ..orderBy([
-            (table) => OrderingTerm.asc(table.createdAt),
-            (table) => OrderingTerm.asc(table.commandId),
-          ]))
-        .get();
-
-    return rows
-        .map(
-          (row) => <String, dynamic>{
-            'type': row.commandType,
-            'payload': jsonDecode(row.payloadJson),
-            'dedupeKey': row.commandId,
-          },
-        )
-        .toList(growable: false);
-  }
-
-  Map<String, Map<String, dynamic>> _normalizeCommands(
-    List<Map<String, dynamic>> commands,
-  ) {
-    final normalized = <String, Map<String, dynamic>>{};
-    for (var index = 0; index < commands.length; index++) {
-      final command = commands[index];
-      final type = command['type'] as String?;
-      final payload = command['payload'];
-      if (type == null || payload is! Map) {
+    final commands = await store.pendingCommands(userId: userId);
+    for (final command in commands) {
+      final payload = _map(command['payload']);
+      final commandChatId = payload['chatId']?.toString();
+      if (commandChatId == null) {
         continue;
       }
-      final dedupeKey = command['dedupeKey'] as String?;
-      final commandId = dedupeKey == null || dedupeKey.isEmpty
-          ? 'command:$index:${_now().microsecondsSinceEpoch}'
-          : dedupeKey;
-      normalized[commandId] = {
-        'type': type,
-        'payload': Map<String, dynamic>.from(payload),
-        'dedupeKey': commandId,
-      };
-    }
-    return normalized;
-  }
-}
-
-class ChatSocketClient {
-  ChatSocketClient({
-    required Future<String> Function() accessTokenProvider,
-    Future<void> Function()? refreshSession,
-    ChatSocketChannelFactory? channelFactory,
-    Duration reconnectDelay = const Duration(seconds: 1),
-    Duration maxReconnectDelay = const Duration(seconds: 30),
-    ChatOutboxStorage? outboxStorage,
-  })  : _accessTokenProvider = accessTokenProvider,
-        _refreshSession = refreshSession,
-        _channelFactory = channelFactory ??
-            (() =>
-                WebSocketChannel.connect(Uri.parse(BackendConfig.chatWsUrl))),
-        _reconnectBackoff = ChatReconnectBackoff(
-          baseDelay: reconnectDelay,
-          maxDelay: maxReconnectDelay,
-        ),
-        _outboxStorage = outboxStorage;
-
-  final Future<String> Function() _accessTokenProvider;
-  final Future<void> Function()? _refreshSession;
-  final ChatSocketChannelFactory _channelFactory;
-  final ChatReconnectBackoff _reconnectBackoff;
-  final ChatOutboxStorage? _outboxStorage;
-  WebSocketChannel? _channel;
-  StreamSubscription? _subscription;
-  final _events = StreamController<Map<String, dynamic>>.broadcast();
-  Future<void>? _connectFuture;
-  Timer? _reconnectTimer;
-  bool _authenticated = false;
-  bool _disposed = false;
-  bool _reconnectRequested = false;
-  final _subscriptions = <String>{};
-  final _syncCursorByChat = <String, String?>{};
-  final _pendingCommands = <_QueuedCommand>[];
-  Future<void>? _restoreOutboxFuture;
-
-  Stream<Map<String, dynamic>> get events => _events.stream;
-
-  Future<void> connect() async {
-    if (_disposed) {
-      throw StateError('chat_socket_disposed');
-    }
-
-    _reconnectRequested = true;
-    await _restoreOutbox();
-
-    if (_channel != null && _authenticated) {
-      return;
-    }
-
-    final pendingConnect = _connectFuture;
-    if (pendingConnect != null) {
-      return pendingConnect;
-    }
-
-    final future = _connectWithRecovery();
-    _connectFuture = future;
-
-    try {
-      await future;
-    } finally {
-      if (identical(_connectFuture, future)) {
-        _connectFuture = null;
+      if (!_chatIds.contains(commandChatId)) {
+        continue;
+      }
+      try {
+        transport.send(jsonEncode(command));
+      } catch (_) {
+        await _markPendingCommandFailed(command);
       }
     }
   }
 
-  void subscribe(String chatId) {
-    _subscriptions.add(chatId);
-    _queueOrSend(
-      'chat.subscribe',
-      {'chatId': chatId},
-      dedupeKey: 'subscribe:$chatId',
-    );
-    unawaited(connect());
-  }
-
-  void unsubscribe(String chatId) {
-    _subscriptions.remove(chatId);
-    _syncCursorByChat.remove(chatId);
-    _removeQueued('subscribe:$chatId');
-    _removeQueued('sync:$chatId');
-    _queueOrSend(
-      'chat.unsubscribe',
-      {'chatId': chatId},
-      dedupeKey: 'unsubscribe:$chatId',
-      keepQueued: false,
-    );
-  }
-
-  Future<void> sendMessage({
-    required String chatId,
-    required String text,
-    required String clientMessageId,
-    List<String> attachmentIds = const [],
-    String? replyToMessageId,
-  }) async {
-    final payload = {
-      'chatId': chatId,
-      'text': text,
-      'clientMessageId': clientMessageId,
-      if (attachmentIds.isNotEmpty) 'attachmentIds': attachmentIds,
-      if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
-    };
-    final dedupeKey = _messageDedupeKey(chatId, clientMessageId);
-
-    await _restoreOutbox();
-    await _persistCommand(
-      _QueuedCommand(
-        type: 'message.send',
-        payload: payload,
-        dedupeKey: dedupeKey,
-      ),
-    );
-    _queueOrSend(
-      'message.send',
-      payload,
-      dedupeKey: dedupeKey,
-    );
-
-    try {
-      await connect();
-    } catch (_) {
+  Future<void> close() async {
+    if (_closed) {
       return;
     }
-  }
-
-  Future<void> editMessage({
-    required String chatId,
-    required String messageId,
-    required String text,
-  }) async {
-    final dedupeKey = _editMessageDedupeKey(chatId, messageId);
-    final payload = {
-      'chatId': chatId,
-      'messageId': messageId,
-      'text': text,
-    };
-
-    await _restoreOutbox();
-    await _persistCommand(
-      _QueuedCommand(
-        type: 'message.edit',
-        payload: payload,
-        dedupeKey: dedupeKey,
-      ),
-    );
-    _queueOrSend(
-      'message.edit',
-      payload,
-      dedupeKey: dedupeKey,
-    );
-
-    try {
-      await connect();
-    } catch (_) {
-      return;
-    }
-  }
-
-  Future<void> deleteMessage({
-    required String chatId,
-    required String messageId,
-  }) async {
-    final editDedupeKey = _editMessageDedupeKey(chatId, messageId);
-    final deleteDedupeKey = _deleteMessageDedupeKey(chatId, messageId);
-    final payload = {
-      'chatId': chatId,
-      'messageId': messageId,
-    };
-
-    await _restoreOutbox();
-    await _removePersistedCommand(editDedupeKey);
-    await _persistCommand(
-      _QueuedCommand(
-        type: 'message.delete',
-        payload: payload,
-        dedupeKey: deleteDedupeKey,
-      ),
-    );
-    _queueOrSend(
-      'message.delete',
-      payload,
-      dedupeKey: deleteDedupeKey,
-    );
-
-    try {
-      await connect();
-    } catch (_) {
-      return;
-    }
-  }
-
-  void markRead({
-    required String chatId,
-    required String messageId,
-  }) {
-    _queueOrSend(
-        'message.read',
-        {
-          'chatId': chatId,
-          'messageId': messageId,
-        },
-        dedupeKey: 'read:$chatId');
-  }
-
-  void requestSync({
-    required String chatId,
-    String? sinceEventId,
-  }) {
-    _syncCursorByChat[chatId] = sinceEventId;
-    _queueOrSend(
-        'sync.request',
-        {
-          'chatId': chatId,
-          if (sinceEventId != null) 'sinceEventId': sinceEventId,
-        },
-        dedupeKey: 'sync:$chatId');
-  }
-
-  void rememberSyncCursor({
-    required String chatId,
-    String? eventId,
-  }) {
-    if (!_subscriptions.contains(chatId)) {
-      return;
-    }
-    _syncCursorByChat[chatId] = eventId;
-  }
-
-  Future<void> dispose() async {
-    _disposed = true;
-    _reconnectRequested = false;
+    _closed = true;
     _reconnectTimer?.cancel();
     await _subscription?.cancel();
-    await _channel?.sink.close();
+    for (final activeChatId in _chatIds) {
+      _send('chat.unsubscribe', {'chatId': activeChatId});
+    }
+    await transport.close();
+  }
+
+  void _scheduleReconnect() {
+    if (_closed ||
+        reconnectTransportFactory == null ||
+        reconnectUri == null ||
+        _reconnectTimer != null) {
+      return;
+    }
     _authenticated = false;
-    _channel = null;
-    _subscription = null;
-    _connectFuture = null;
-    _pendingCommands.clear();
-    _subscriptions.clear();
-    _syncCursorByChat.clear();
-    await _events.close();
-  }
-
-  Future<void> _connectWithRecovery() async {
-    var refreshed = false;
-
-    while (!_disposed) {
-      try {
-        await _openAndAuthenticate();
-        return;
-      } on _AuthHandshakeException catch (error) {
-        if (_canRefreshFor(error.code, refreshed)) {
-          refreshed = true;
-          await _refreshSession!.call();
-          continue;
-        }
-        rethrow;
-      }
-    }
-
-    throw StateError('chat_socket_disposed');
-  }
-
-  Future<void> _openAndAuthenticate() async {
-    final token = await _accessTokenProvider();
-    final channel = _channelFactory();
-    final authCompleter = Completer<void>();
-    var handshakeFinished = false;
-
-    _channel = channel;
-    _authenticated = false;
-
-    _subscription = channel.stream.listen(
-      (event) {
-        final decoded = jsonDecode(event as String) as Map<String, dynamic>;
-        final type = decoded['type'] as String?;
-
-        if (!handshakeFinished && type == 'session.authenticated') {
-          handshakeFinished = true;
-          _authenticated = true;
-          _reconnectBackoff.reset();
-          authCompleter.complete();
-          _restoreStateAfterAuth();
-        } else if (!handshakeFinished && type == 'error') {
-          final payload = decoded['payload'] as Map<String, dynamic>?;
-          final code = payload?['code'] as String? ?? 'auth_failed';
-          handshakeFinished = true;
-          authCompleter.completeError(_AuthHandshakeException(code));
-          unawaited(_resetConnection());
-        }
-
-        if (type == 'message.created') {
-          final payload = decoded['payload'] as Map<String, dynamic>?;
-          final chatId = payload?['chatId'] as String?;
-          final clientMessageId = payload?['clientMessageId'] as String?;
-          if (chatId != null && clientMessageId != null) {
-            unawaited(
-              _removePersistedCommand(
-                  _messageDedupeKey(chatId, clientMessageId)),
-            );
-          }
-        }
-
-        if (type == 'message.updated') {
-          final payload = decoded['payload'] as Map<String, dynamic>?;
-          final chatId = payload?['chatId'] as String?;
-          final messageId = payload?['id'] as String?;
-          if (chatId != null && messageId != null) {
-            unawaited(
-              _removePersistedCommand(
-                _editMessageDedupeKey(chatId, messageId),
-              ),
-            );
-          }
-        }
-
-        if (type == 'message.deleted') {
-          final payload = decoded['payload'] as Map<String, dynamic>?;
-          final chatId = payload?['chatId'] as String?;
-          final messageId = payload?['messageId'] as String?;
-          if (chatId != null && messageId != null) {
-            unawaited(
-              _removePersistedCommand(
-                _editMessageDedupeKey(chatId, messageId),
-              ),
-            );
-            unawaited(
-              _removePersistedCommand(
-                _deleteMessageDedupeKey(chatId, messageId),
-              ),
-            );
-          }
-        }
-
-        _events.add(decoded);
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!handshakeFinished) {
-          handshakeFinished = true;
-          authCompleter.completeError(error, stackTrace);
-        }
-        _handleDisconnect();
-      },
-      onDone: () {
-        if (!handshakeFinished) {
-          handshakeFinished = true;
-          authCompleter.completeError(StateError('socket_closed'));
-        }
-        _handleDisconnect();
-      },
-      cancelOnError: false,
-    );
-
-    channel.sink.add(
-      jsonEncode({
-        'type': 'session.authenticate',
-        'payload': {'accessToken': token},
-      }),
-    );
-
-    try {
-      await authCompleter.future;
-    } catch (_) {
-      await _subscription?.cancel();
-      _subscription = null;
-      rethrow;
-    }
-  }
-
-  void _restoreStateAfterAuth() {
-    for (final chatId in _subscriptions) {
-      _removeQueued('subscribe:$chatId');
-      _sendNow('chat.subscribe', {'chatId': chatId});
-    }
-
-    for (final chatId in _subscriptions) {
-      if (_syncCursorByChat.containsKey(chatId)) {
-        _removeQueued('sync:$chatId');
-        final cursor = _syncCursorByChat[chatId];
-        _sendNow('sync.request', {
-          'chatId': chatId,
-          if (cursor != null) 'sinceEventId': cursor,
-        });
-      }
-    }
-
-    _flushPendingCommands();
-  }
-
-  void _flushPendingCommands() {
-    if (_channel == null || !_authenticated) {
-      return;
-    }
-
-    final queued = List<_QueuedCommand>.from(_pendingCommands, growable: false);
-    _pendingCommands.clear();
-
-    for (final command in queued) {
-      _sendNow(command.type, command.payload);
-    }
-  }
-
-  void _queueOrSend(
-    String type,
-    Map<String, dynamic> payload, {
-    String? dedupeKey,
-    bool keepQueued = true,
-  }) {
-    if (_channel != null && _authenticated) {
-      _sendNow(type, payload);
-      return;
-    }
-
-    if (!keepQueued) {
-      return;
-    }
-
-    final command = _QueuedCommand(
-      type: type,
-      payload: payload,
-      dedupeKey: dedupeKey,
-    );
-
-    if (dedupeKey != null) {
-      final index = _pendingCommands.indexWhere(
-        (item) => item.dedupeKey == dedupeKey,
-      );
-      if (index != -1) {
-        _pendingCommands[index] = command;
-        return;
-      }
-    }
-
-    _pendingCommands.add(command);
-  }
-
-  void _removeQueued(String dedupeKey) {
-    _pendingCommands.removeWhere((item) => item.dedupeKey == dedupeKey);
-  }
-
-  String _messageDedupeKey(String chatId, String clientMessageId) {
-    return 'message:$chatId:$clientMessageId';
-  }
-
-  String _editMessageDedupeKey(String chatId, String messageId) {
-    return 'edit:$chatId:$messageId';
-  }
-
-  String _deleteMessageDedupeKey(String chatId, String messageId) {
-    return 'delete:$chatId:$messageId';
-  }
-
-  Future<void> _restoreOutbox() async {
-    final pending = _restoreOutboxFuture;
-    if (pending != null) {
-      return pending;
-    }
-
-    final future = _restoreOutboxInternal();
-    _restoreOutboxFuture = future;
-    try {
-      await future;
-    } finally {
-      if (identical(_restoreOutboxFuture, future)) {
-        _restoreOutboxFuture = null;
-      }
-    }
-  }
-
-  Future<void> _restoreOutboxInternal() async {
-    if (_outboxStorage == null) {
-      return;
-    }
-
-    final commands = await _outboxStorage.readCommands();
-    for (final item in commands) {
-      final type = item['type'] as String?;
-      final payload = item['payload'];
-      final dedupeKey = item['dedupeKey'] as String?;
-      if (type == null || payload is! Map) {
-        continue;
-      }
-      final command = _QueuedCommand(
-        type: type,
-        payload: Map<String, dynamic>.from(payload),
-        dedupeKey: dedupeKey,
-      );
-      if (dedupeKey != null) {
-        final index = _pendingCommands.indexWhere(
-          (entry) => entry.dedupeKey == dedupeKey,
-        );
-        if (index != -1) {
-          _pendingCommands[index] = command;
-          continue;
-        }
-      }
-      _pendingCommands.add(command);
-    }
-  }
-
-  Future<void> _persistCommand(_QueuedCommand command) async {
-    if (_outboxStorage == null) {
-      return;
-    }
-
-    final current = await _outboxStorage.readCommands();
-    final next = [...current];
-    if (command.dedupeKey != null) {
-      final index = next.indexWhere(
-        (item) => item['dedupeKey'] == command.dedupeKey,
-      );
-      final encoded = command.toJson();
-      if (index != -1) {
-        next[index] = encoded;
-      } else {
-        next.add(encoded);
-      }
-    } else {
-      next.add(command.toJson());
-    }
-
-    await _outboxStorage.writeCommands(next);
-  }
-
-  Future<void> _removePersistedCommand(String dedupeKey) async {
-    _removeQueued(dedupeKey);
-    if (_outboxStorage == null) {
-      return;
-    }
-
-    final current = await _outboxStorage.readCommands();
-    final next = current
-        .where((item) => item['dedupeKey'] != dedupeKey)
-        .toList(growable: false);
-    await _outboxStorage.writeCommands(next);
-  }
-
-  void _sendNow(String type, Map<String, dynamic> payload) {
-    if (_channel == null || !_authenticated) {
-      throw StateError('chat_socket_not_ready');
-    }
-
-    _channel!.sink.add(
-      jsonEncode({
-        'type': type,
-        'payload': payload,
-      }),
-    );
-  }
-
-  bool _canRefreshFor(String code, bool refreshed) {
-    if (refreshed || _refreshSession == null) {
-      return false;
-    }
-
-    return code == 'stale_access_token' || code == 'invalid_access_token';
-  }
-
-  void _handleDisconnect() {
-    _authenticated = false;
-    unawaited(_resetConnection());
-
-    if (_disposed || !_reconnectRequested) {
-      return;
-    }
-
-    if (_subscriptions.isEmpty) {
-      return;
-    }
-
-    if (_reconnectTimer != null) {
-      return;
-    }
-
-    _reconnectTimer = Timer(_reconnectBackoff.nextDelay(), () {
+    unawaited(_subscription?.cancel());
+    _reconnectAttempt += 1;
+    final delay = reconnectDelay?.call(_reconnectAttempt) ??
+        Duration(seconds: _defaultBackoffSeconds(_reconnectAttempt));
+    _reconnectTimer = Timer(delay, () {
       _reconnectTimer = null;
-      if (_disposed || !_reconnectRequested || _subscriptions.isEmpty) {
-        return;
-      }
-      unawaited(connect());
+      unawaited(_reconnect());
     });
   }
 
-  Future<void> _resetConnection() async {
-    final subscription = _subscription;
-    final channel = _channel;
-
-    _subscription = null;
-    _channel = null;
-
-    await subscription?.cancel();
-    await channel?.sink.close();
-  }
-}
-
-class ChatReconnectBackoff {
-  ChatReconnectBackoff({
-    required this.baseDelay,
-    required this.maxDelay,
-  });
-
-  final Duration baseDelay;
-  final Duration maxDelay;
-  int _attempt = 0;
-
-  Duration nextDelay() {
-    if (baseDelay <= Duration.zero || maxDelay <= baseDelay) {
-      _attempt += 1;
-      return baseDelay <= maxDelay ? baseDelay : maxDelay;
+  Future<void> _reconnect() async {
+    if (_closed || reconnectTransportFactory == null || reconnectUri == null) {
+      return;
     }
-
-    final cappedAttempt = _attempt > 20 ? 20 : _attempt;
-    _attempt += 1;
-    final delayMicros = baseDelay.inMicroseconds * (1 << cappedAttempt);
-    if (delayMicros >= maxDelay.inMicroseconds) {
-      return maxDelay;
+    try {
+      await transport.close();
+      transport = reconnectTransportFactory!(reconnectUri!);
+      _listenToTransport();
+      _send('session.authenticate', {'accessToken': accessToken});
+    } catch (_) {
+      _scheduleReconnect();
     }
-
-    return Duration(microseconds: delayMicros);
   }
 
-  void reset() {
-    _attempt = 0;
+  int _defaultBackoffSeconds(int attempt) {
+    if (attempt <= 1) {
+      return 1;
+    }
+    if (attempt == 2) {
+      return 2;
+    }
+    if (attempt == 3) {
+      return 4;
+    }
+    return 8;
   }
-}
 
-class _QueuedCommand {
-  const _QueuedCommand({
-    required this.type,
-    required this.payload,
-    this.dedupeKey,
-  });
+  void _send(String type, Map<String, Object?> payload) {
+    if (_closed) {
+      return;
+    }
+    transport.send(jsonEncode({'type': type, 'payload': payload}));
+  }
 
-  final String type;
-  final Map<String, dynamic> payload;
-  final String? dedupeKey;
+  void _handleSocketData(Object? data) {
+    final event = _decode(data);
+    if (event.isEmpty) {
+      return;
+    }
+    final type = event['type']?.toString();
+    final payload = _map(event['payload']);
+    switch (type) {
+      case 'session.authenticated':
+        _authenticated = true;
+        _reconnectAttempt = 0;
+        unawaited(_openAuthenticatedSession());
+        return;
+      case 'message.created':
+        unawaited(_storeMessage(payload, incrementUnread: true));
+        return;
+      case 'message.updated':
+        unawaited(_storeMessage(payload, incrementUnread: false));
+        return;
+      case 'message.deleted':
+        unawaited(_deleteMessage(payload));
+        return;
+      case 'unread.updated':
+        unawaited(_storeUnread(payload));
+        return;
+      case 'notification.created':
+        onNotificationCreated?.call(payload);
+        return;
+      case 'sync.snapshot':
+        unawaited(_handleSnapshot(payload));
+        return;
+      case 'error':
+        unawaited(_markSocketError(payload));
+        return;
+    }
+  }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'type': type,
-      'payload': payload,
-      'dedupeKey': dedupeKey,
+  Future<void> _markSocketError(Map<String, Object?> payload) async {
+    final clientMessageId = payload['clientMessageId']?.toString() ??
+        payload['commandId']?.toString();
+    final errorChatId = payload['chatId']?.toString();
+    if (clientMessageId == null ||
+        clientMessageId.isEmpty ||
+        errorChatId == null ||
+        errorChatId.isEmpty ||
+        !_chatIds.contains(errorChatId)) {
+      return;
+    }
+    await _markMessageFailed(
+      chatId: errorChatId,
+      clientMessageId: clientMessageId,
+    );
+  }
+
+  Future<void> _markPendingCommandFailed(Map<String, Object?> command) async {
+    final payload = _map(command['payload']);
+    final commandChatId = payload['chatId']?.toString();
+    final clientMessageId = payload['clientMessageId']?.toString() ??
+        command['commandId']?.toString();
+    if (commandChatId == null ||
+        commandChatId.isEmpty ||
+        clientMessageId == null ||
+        clientMessageId.isEmpty ||
+        !_chatIds.contains(commandChatId)) {
+      return;
+    }
+    await _markMessageFailed(
+      chatId: commandChatId,
+      clientMessageId: clientMessageId,
+    );
+  }
+
+  Future<void> _markMessageFailed({
+    required String chatId,
+    required String clientMessageId,
+  }) {
+    return store.patchMessageByClientMessageId(
+      userId: userId,
+      chatId: chatId,
+      clientMessageId: clientMessageId,
+      patch: (message) => {
+        ...message,
+        'pending': true,
+        'status': 'failed',
+        if (message['attachments'] is List)
+          'attachments': (message['attachments'] as List)
+              .whereType<Map>()
+              .map(
+                (attachment) => {
+                  ...attachment.map((key, value) => MapEntry('$key', value)),
+                  'status': 'failed',
+                },
+              )
+              .toList(growable: false),
+      },
+    );
+  }
+
+  Future<void> _handleSnapshot(Map<String, Object?> payload) async {
+    final eventChatId = payload['chatId']?.toString();
+    if (eventChatId == null || !_chatIds.contains(eventChatId)) {
+      return;
+    }
+    final events = payload['events'];
+    if (events is! List) {
+      return;
+    }
+    if (payload['reset'] == true) {
+      await store.clearMessages(userId: userId, chatId: eventChatId);
+    }
+    String? lastEventId;
+    for (final rawEvent in events.whereType<Map>()) {
+      final event = _map(rawEvent);
+      lastEventId = event['id']?.toString() ?? lastEventId;
+      final type = event['type']?.toString();
+      final eventPayload = _map(event['payload']);
+      if (type == 'message.created') {
+        await _storeMessage(eventPayload, incrementUnread: true);
+      } else if (type == 'message.updated') {
+        await _storeMessage(eventPayload, incrementUnread: false);
+      } else if (type == 'message.deleted') {
+        await _deleteMessage(eventPayload);
+      }
+    }
+    if (lastEventId != null && lastEventId.isNotEmpty) {
+      await store.setSyncCursor(
+        userId: userId,
+        chatId: eventChatId,
+        cursor: lastEventId,
+      );
+    }
+  }
+
+  Future<void> _storeMessage(
+    Map<String, Object?> payload, {
+    required bool incrementUnread,
+  }) async {
+    final eventChatId = payload['chatId']?.toString();
+    if (eventChatId == null || !_chatIds.contains(eventChatId)) {
+      return;
+    }
+    final message = {
+      ...payload,
+      if (_isOwnMessage(payload)) 'mine': true,
     };
+    await store.upsertMessages(
+      userId: userId,
+      chatId: eventChatId,
+      messages: [message],
+    );
+    await _patchSummaryForMessage(
+      eventChatId,
+      message,
+      incrementUnread: incrementUnread,
+    );
+    final clientMessageId = message['clientMessageId']?.toString();
+    if (clientMessageId != null && clientMessageId.isNotEmpty) {
+      await store.deletePendingCommand(
+        userId: userId,
+        commandId: clientMessageId,
+      );
+    }
   }
-}
 
-class _AuthHandshakeException implements Exception {
-  const _AuthHandshakeException(this.code);
+  Future<void> _deleteMessage(Map<String, Object?> payload) async {
+    final eventChatId = payload['chatId']?.toString();
+    final messageId = payload['messageId']?.toString() ??
+        payload['id']?.toString() ??
+        payload['clientMessageId']?.toString();
+    if (eventChatId == null ||
+        eventChatId.isEmpty ||
+        !_chatIds.contains(eventChatId) ||
+        messageId == null ||
+        messageId.isEmpty) {
+      return;
+    }
+    final clientMessageId = payload['clientMessageId']?.toString();
+    await store.deleteMessage(
+      userId: userId,
+      chatId: eventChatId,
+      messageId: messageId,
+      clientMessageId: clientMessageId,
+    );
+    await store.deletePendingCommand(
+      userId: userId,
+      commandId: 'message.delete:$messageId',
+    );
+    if (clientMessageId != null && clientMessageId.isNotEmpty) {
+      await store.deletePendingCommand(
+        userId: userId,
+        commandId: 'message.delete:$clientMessageId',
+      );
+    }
+  }
 
-  final String code;
+  Future<void> _patchSummaryForMessage(
+    String eventChatId,
+    Map<String, Object?> payload, {
+    required bool incrementUnread,
+  }) {
+    final text = payload['text']?.toString() ?? '';
+    final createdAt = payload['createdAt']?.toString();
+    final shouldIncrementUnread = incrementUnread && !_isOwnMessage(payload);
+    return store.patchSummary(
+      userId: userId,
+      chatId: eventChatId,
+      patch: (summary) {
+        final currentUnread =
+            int.tryParse(summary['unreadCount']?.toString() ?? '') ??
+                int.tryParse(summary['unread']?.toString() ?? '') ??
+                0;
+        return {
+          ...summary,
+          if (text.isNotEmpty) 'lastMessage': text,
+          if (text.isNotEmpty) 'preview': text,
+          if (createdAt != null && createdAt.isNotEmpty)
+            'lastMessageAt': createdAt,
+          'unreadCount':
+              shouldIncrementUnread ? currentUnread + 1 : currentUnread,
+          'unread': shouldIncrementUnread ? currentUnread + 1 : currentUnread,
+        };
+      },
+    );
+  }
+
+  bool _isOwnMessage(Map<String, Object?> payload) {
+    final sender = _map(payload['sender']);
+    final senderId = payload['senderId']?.toString() ??
+        payload['userId']?.toString() ??
+        sender['id']?.toString() ??
+        sender['userId']?.toString();
+    return senderId == userId;
+  }
+
+  Future<void> _storeUnread(Map<String, Object?> payload) async {
+    final eventChatId = payload['chatId']?.toString();
+    if (eventChatId == null || !_chatIds.contains(eventChatId)) {
+      return;
+    }
+    final count = int.tryParse(payload['unreadCount']?.toString() ?? '') ??
+        int.tryParse(payload['unread']?.toString() ?? '') ??
+        0;
+    await store.patchSummary(
+      userId: userId,
+      chatId: eventChatId,
+      patch: (summary) => {
+        ...summary,
+        'unreadCount': count,
+        'unread': count,
+      },
+    );
+  }
+
+  Map<String, Object?> _decode(Object? data) {
+    if (data is Map) {
+      return _map(data);
+    }
+    if (data is! String) {
+      return const {};
+    }
+    final decoded = jsonDecode(data);
+    return decoded is Map ? _map(decoded) : const {};
+  }
+
+  Map<String, Object?> _map(Object? value) {
+    if (value is Map) {
+      return value.map((key, value) => MapEntry('$key', value));
+    }
+    return const {};
+  }
+
+  static Set<String> _normalizeChatIds(
+    String primaryChatId,
+    Iterable<String>? chatIds,
+  ) {
+    final values = <String>{};
+    void add(String id) {
+      final trimmed = id.trim();
+      if (trimmed.isNotEmpty) {
+        values.add(trimmed);
+      }
+    }
+
+    add(primaryChatId);
+    if (chatIds != null) {
+      for (final id in chatIds) {
+        add(id);
+      }
+    }
+    return values;
+  }
 }

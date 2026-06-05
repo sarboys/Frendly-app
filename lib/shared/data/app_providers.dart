@@ -1,45 +1,47 @@
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:convert';
+import 'dart:io';
 
-import 'package:big_break_mobile/app/core/device/app_location_service.dart';
-import 'package:big_break_mobile/app/core/local_cache/app_cache_key.dart';
-import 'package:big_break_mobile/app/core/local_cache/app_cache_policy.dart';
-import 'package:big_break_mobile/app/core/local_cache/chat_cache_serializers.dart';
-import 'package:big_break_mobile/app/core/local_cache/chat_local_store.dart';
-import 'package:big_break_mobile/app/core/network/chat_socket_client.dart';
-import 'package:big_break_mobile/app/core/device/app_permission_preferences.dart';
-import 'package:big_break_mobile/app/core/providers/core_providers.dart';
-import 'package:big_break_mobile/shared/models/match.dart';
-import 'package:big_break_mobile/shared/models/after_party_state.dart';
-import 'package:big_break_mobile/shared/models/affiche_event.dart';
-import 'package:big_break_mobile/shared/models/message.dart';
-import 'package:big_break_mobile/shared/models/notification_item.dart';
-import 'package:big_break_mobile/shared/data/backend_repository.dart';
-import 'package:big_break_mobile/shared/data/location_override_provider.dart';
-import 'package:big_break_mobile/shared/models/story.dart';
-import 'package:big_break_mobile/shared/models/event.dart';
-import 'package:big_break_mobile/shared/models/event_check_in.dart';
-import 'package:big_break_mobile/shared/models/event_detail.dart';
-import 'package:big_break_mobile/shared/models/evening_route_template.dart';
-import 'package:big_break_mobile/shared/models/evening_session.dart';
-import 'package:big_break_mobile/shared/models/host_dashboard.dart';
-import 'package:big_break_mobile/shared/models/live_meetup.dart';
-import 'package:big_break_mobile/shared/models/meetup_chat.dart';
-import 'package:big_break_mobile/shared/models/media_variant.dart';
-import 'package:big_break_mobile/shared/models/onboarding_data.dart';
-import 'package:big_break_mobile/shared/models/paginated_response.dart';
-import 'package:big_break_mobile/shared/models/person_summary.dart';
-import 'package:big_break_mobile/shared/models/personal_chat.dart';
-import 'package:big_break_mobile/shared/models/payments.dart';
-import 'package:big_break_mobile/shared/models/profile.dart';
-import 'package:big_break_mobile/shared/models/safety_hub.dart';
-import 'package:big_break_mobile/shared/models/subscription.dart';
-import 'package:big_break_mobile/shared/models/tokens.dart';
-import 'package:big_break_mobile/shared/models/user_settings.dart';
-import 'package:big_break_mobile/shared/models/verification_state.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile2/app/core/auth/social_auth_session_reset.dart';
+import 'package:mobile2/app/core/config/backend_config.dart';
+import 'package:mobile2/app/core/device/app_push_token_service.dart';
+import 'package:mobile2/app/core/local_cache/app_cache_key.dart';
+import 'package:mobile2/app/core/local_cache/app_local_cache_store.dart';
+import 'package:mobile2/app/core/local_cache/local_first_repository.dart';
+import 'package:mobile2/app/core/network/chat_socket_client.dart';
+import 'package:mobile2/app/core/providers/core_providers.dart';
+import 'package:mobile2/features/payments/application/apple_iap_purchase_controller.dart';
+import 'package:mobile2/features/payments/application/in_app_purchase_apple_iap_gateway.dart';
+import 'package:mobile2/shared/data/affiche_client_geo_enrichment_service.dart';
+import 'package:mobile2/shared/data/backend_repository.dart';
+import 'package:mobile2/shared/models/backend_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+typedef CardPage = BackendPage<BackendCardItem>;
+typedef SafetyReportPage = BackendPage<SafetyReportData>;
+typedef BlockedUserPage = BackendPage<BlockedUserData>;
+
+final reportedEventIdsProvider =
+    StateProvider<Set<String>>((ref) => const <String>{});
+
+final afficheClientGeoEnrichmentServiceProvider =
+    Provider<AfficheClientGeoEnrichmentService>((ref) {
+  return AfficheClientGeoEnrichmentService(
+    searcher: const YandexMapKitAffichePlaceSearcher(),
+    backendSaver: (request, {cancelToken}) {
+      return ref.read(backendRepositoryProvider).saveAfficheClientGeo(
+            request,
+            cancelToken: cancelToken,
+          );
+    },
+    cacheStore: ref.watch(appLocalCacheStoreProvider),
+    userScope: ref.watch(currentCacheScopeProvider),
+  );
+});
+
+enum ChatListKind { all, meetups, personal, communities, archive, unread }
 
 const nearbyEventsDefaultRadiusKm = 50.0;
 const nearbyEventsMaxRadiusKm = 150.0;
@@ -77,509 +79,5966 @@ double clampNearbyEventsRadiusKm(double value) {
   return value.clamp(1, nearbyEventsMaxRadiusKm).toDouble();
 }
 
-final profilePhotoDraftProvider =
-    StateProvider<List<ProfilePhoto>>((ref) => const []);
+class EventListQuery {
+  const EventListQuery({
+    this.city,
+    this.filter,
+    this.query,
+    this.lifestyle,
+    this.price,
+    this.gender,
+    this.access,
+    this.requiresVerification = false,
+    this.requiresFrendlyPlus = false,
+    this.sort,
+    this.date,
+    this.limit = 20,
+  });
 
-final profilePhotoPreviewProvider =
-    StateProvider<Map<String, Uint8List>>((ref) => const {});
+  final String? city;
+  final String? filter;
+  final String? query;
+  final String? lifestyle;
+  final String? price;
+  final String? gender;
+  final String? access;
+  final bool requiresVerification;
+  final bool requiresFrendlyPlus;
+  final String? sort;
+  final String? date;
+  final int limit;
 
-final profileLocalStateProvider = StateProvider<ProfileData?>((ref) => null);
-
-final profileProvider = FutureProvider<ProfileData>((ref) async {
-  final localProfile = ref.watch(profileLocalStateProvider);
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final draftPhotos = ref.watch(profilePhotoDraftProvider);
-  final repository = ref.read(backendRepositoryProvider);
-  final onboardingFuture = ref.watch(onboardingProvider.future);
-  if (localProfile != null) {
-    return mergeProfileDraftPhotos(localProfile, draftPhotos);
+  String cacheValue({String? resolvedCity}) {
+    return [
+      'limit=$limit',
+      if ((resolvedCity ?? city) != null && (resolvedCity ?? city)!.isNotEmpty)
+        'city=${resolvedCity ?? city}',
+      if (filter != null && filter!.isNotEmpty) 'filter=$filter',
+      if (query != null && query!.isNotEmpty) 'q=$query',
+      if (lifestyle != null && lifestyle!.isNotEmpty) 'lifestyle=$lifestyle',
+      if (price != null && price!.isNotEmpty) 'price=$price',
+      if (gender != null && gender!.isNotEmpty) 'gender=$gender',
+      if (access != null && access!.isNotEmpty) 'access=$access',
+      if (requiresVerification) 'requiresVerification=true',
+      if (requiresFrendlyPlus) 'requiresFrendlyPlus=true',
+      if (sort != null && sort!.isNotEmpty) 'sort=$sort',
+      if (date != null && date!.isNotEmpty) 'date=$date',
+    ].join('&');
   }
-  final bootstrapProfileState = ref.read(authBootstrapProfileProvider.notifier);
-  await authBootstrap;
-  final bootstrapProfile = bootstrapProfileState.state;
-  if (bootstrapProfile != null) {
-    bootstrapProfileState.state = null;
-  }
-  final profile = await _fetchLocalFirst<ProfileData>(
-    ref,
-    namespace: AppCacheNamespace.profile,
-    cacheKey: AppCacheKey.build(path: '/profile/me'),
-    policy: AppCachePolicies.profile,
-    networkFetch: () => bootstrapProfile ?? repository.fetchMe(),
-    fromJson: _profileFromCacheJson,
-    toJson: _profileToCacheJson,
-  );
-  OnboardingData? onboarding;
-  try {
-    onboarding = await onboardingFuture;
-  } catch (_) {
-    onboarding = null;
-  }
-  final mergedProfile =
-      onboarding == null ? profile : profile.withOnboarding(onboarding);
-  return mergeProfileDraftPhotos(
-    mergedProfile,
-    draftPhotos,
-  );
-});
 
-final onboardingLocalStateProvider =
-    StateProvider<OnboardingData?>((ref) => null);
-
-final onboardingProvider = FutureProvider<OnboardingData>((ref) async {
-  final localValue = ref.watch(onboardingLocalStateProvider);
-  if (localValue != null) {
-    return localValue;
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is EventListQuery &&
+            other.city == city &&
+            other.filter == filter &&
+            other.query == query &&
+            other.lifestyle == lifestyle &&
+            other.price == price &&
+            other.gender == gender &&
+            other.access == access &&
+            other.requiresVerification == requiresVerification &&
+            other.requiresFrendlyPlus == requiresFrendlyPlus &&
+            other.sort == sort &&
+            other.date == date &&
+            other.limit == limit;
   }
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  await authBootstrap;
-  return _fetchLocalFirst<OnboardingData>(
-    ref,
-    namespace: AppCacheNamespace.profile,
-    cacheKey: AppCacheKey.build(path: '/onboarding/me'),
-    policy: AppCachePolicies.profile,
-    networkFetch: repository.fetchOnboarding,
-    fromJson: _onboardingFromCacheJson,
-    toJson: _onboardingToCacheJson,
-  );
-});
 
-OnboardingData _onboardingFromCacheJson(Object? json) {
-  return OnboardingData.fromJson(_jsonMap(json));
+  @override
+  int get hashCode => Object.hash(
+        filter,
+        city,
+        query,
+        lifestyle,
+        price,
+        gender,
+        access,
+        requiresVerification,
+        requiresFrendlyPlus,
+        sort,
+        date,
+        limit,
+      );
 }
 
-Map<String, dynamic> _onboardingToCacheJson(OnboardingData onboarding) {
-  return {
-    ...onboarding.toJson(),
-    'birthDate': onboarding.birthDate,
-    'requiredContact': onboarding.requiredContact?.toJson(),
-  };
+class BackendActionException implements Exception {
+  const BackendActionException({
+    required this.message,
+    this.code,
+    this.details,
+  });
+
+  final String message;
+  final String? code;
+  final Map<String, Object?>? details;
+
+  factory BackendActionException.fromDio(DioException error) {
+    final data = error.response?.data;
+    final code = data is Map ? data['code']?.toString() : null;
+    final rawDetails = data is Map ? data['details'] : null;
+    final backendMessage = data is Map
+        ? data['message']?.toString() ?? 'Backend request failed'
+        : 'Backend request failed';
+    final message = _friendlyBackendActionMessage(
+      code: code,
+      details: rawDetails is Map
+          ? rawDetails.map((key, value) => MapEntry(key.toString(), value))
+          : null,
+      fallback: backendMessage,
+      errorType: error.type,
+      hasResponse: error.response != null,
+    );
+    return BackendActionException(
+      message: message,
+      code: code,
+      details: rawDetails is Map
+          ? rawDetails.map((key, value) => MapEntry(key.toString(), value))
+          : null,
+    );
+  }
+
+  @override
+  String toString() {
+    return code == null ? message : '$message ($code)';
+  }
 }
 
-ProfileData _profileFromCacheJson(Object? json) {
-  final payload = _jsonMap(json);
-  return ProfileData(
-    id: payload['id'] as String? ?? '',
-    displayName: payload['displayName'] as String? ?? '',
-    verified: payload['verified'] as bool? ?? false,
-    frendlyPlus: payload['frendlyPlus'] as bool? ?? false,
-    online: payload['online'] as bool? ?? false,
-    age: (payload['age'] as num?)?.toInt(),
-    gender: payload['gender'] as String?,
-    city: payload['city'] as String?,
-    area: payload['area'] as String?,
-    bio: payload['bio'] as String?,
-    vibe: payload['vibe'] as String?,
-    rating: (payload['rating'] as num?)?.toDouble() ?? 0,
-    meetupCount: (payload['meetupCount'] as num?)?.toInt() ?? 0,
-    avatarUrl: payload['avatarUrl'] as String?,
-    interests: _stringList(payload['interests']),
-    intent: _stringList(payload['intent']),
-    photos: _profilePhotosFromCacheJson(payload['photos']),
-    social: ProfileSocialData.fromJson(payload['social']),
-  );
+String _friendlyBackendActionMessage({
+  required String? code,
+  required Map<String, Object?>? details,
+  required String fallback,
+  required DioExceptionType errorType,
+  required bool hasResponse,
+}) {
+  switch (code) {
+    case 'event_weekly_limit_reached':
+      final limit = details?['limit'];
+      if (limit is int && limit > 0) {
+        return 'Лимит встреч на неделю: $limit. Нужен Frendly+ или новая неделя';
+      }
+      return 'Лимит встреч на неделю исчерпан';
+    case 'evening_ai_candidates_not_found':
+      return 'Не нашёл подходящие места под запрос';
+    case 'evening_ai_exact_place_not_available':
+      if (fallback.isNotEmpty && fallback != 'Backend request failed') {
+        return fallback;
+      }
+      final requestedName = details?['requestedName']?.toString();
+      if (requestedName != null && requestedName.isNotEmpty) {
+        return 'Место «$requestedName» пока не подключено к партнерской программе';
+      }
+      return 'Это место пока не подключено к партнерской программе';
+    case 'evening_ai_regenerate_candidates_exhausted':
+      return 'Нет другой подходящей замены';
+    case 'apple_auth_unavailable':
+      return 'Вход через Apple не настроен на сервере';
+    case 'invalid_apple_token':
+      return 'Apple не подтвердил вход. Попробуй ещё раз';
+  }
+
+  if (!hasResponse ||
+      fallback == 'Backend request failed' ||
+      errorType == DioExceptionType.connectionTimeout ||
+      errorType == DioExceptionType.sendTimeout ||
+      errorType == DioExceptionType.receiveTimeout ||
+      errorType == DioExceptionType.connectionError) {
+    return 'Backend не ответил. Попробуй ещё раз';
+  }
+
+  return fallback;
 }
 
-Map<String, dynamic> _profileToCacheJson(ProfileData profile) {
-  return {
-    'id': profile.id,
-    'displayName': profile.displayName,
-    'verified': profile.verified,
-    'frendlyPlus': profile.frendlyPlus,
-    'online': profile.online,
-    'age': profile.age,
-    'gender': profile.gender,
-    'city': profile.city,
-    'area': profile.area,
-    'bio': profile.bio,
-    'vibe': profile.vibe,
-    'rating': profile.rating,
-    'meetupCount': profile.meetupCount,
-    'avatarUrl': profile.avatarUrl,
-    'interests': profile.interests,
-    'intent': profile.intent,
-    'photos': profile.photos.map(_profilePhotoToCacheJson).toList(),
-    'social': _profileSocialToCacheJson(profile.social),
-  };
-}
+final homeEventsProvider =
+    homeEventsQueryProvider(const EventListQuery(limit: 6));
 
-List<ProfilePhoto> _profilePhotosFromCacheJson(Object? json) {
-  return ((json as List?) ?? const [])
-      .whereType<Map>()
-      .map((item) => ProfilePhoto.fromJson(Map<String, dynamic>.from(item)))
+CardPage _withoutReportedEvents(CardPage page, Set<String> reportedEventIds) {
+  if (reportedEventIds.isEmpty) {
+    return page;
+  }
+  final items = page.items
+      .where((item) => !reportedEventIds.contains(item.id))
       .toList(growable: false);
-}
-
-Map<String, dynamic> _profilePhotoToCacheJson(ProfilePhoto photo) {
-  return {
-    'id': photo.id,
-    'url': photo.url,
-    'order': photo.order,
-    'variants': _mediaVariantsToCacheJson(photo.variants),
-  };
-}
-
-Map<String, dynamic> _profileSocialToCacheJson(ProfileSocialData social) {
-  return {
-    'followers': social.followers,
-    'likes': social.likes,
-    'superLikes': social.superLikes,
-    'iFollow': social.iFollow,
-    'iLike': social.iLike,
-    'iSuper': social.iSuper,
-  };
-}
-
-final eventsProvider =
-    FutureProvider.family<List<Event>, String>((ref, filter) {
-  return _fetchEventFeed(ref, filter);
-});
-
-final eventsForceRefreshProvider =
-    FutureProvider.autoDispose.family<List<Event>, String>((ref, filter) {
-  return _fetchEventFeed(ref, filter, forceRefresh: true);
-});
-
-Future<List<Event>> _fetchEventFeed(
-  Ref ref,
-  String filter, {
-  bool forceRefresh = false,
-}) async {
-  final manualLocation = ref.watch(manualLocationProvider);
-  final radiusKm =
-      filter == 'nearby' ? ref.watch(nearbyEventsRadiusKmProvider) : null;
-  final repository = ref.read(backendRepositoryProvider);
-  final locationService = filter == 'nearby' && manualLocation == null
-      ? ref.read(appLocationServiceProvider)
-      : null;
-  final location = await _eventFeedLocation(
-    filter,
-    manualLocation,
-    locationService,
+  if (items.length == page.items.length) {
+    return page;
+  }
+  return BackendPage(
+    items: items,
+    nextCursor: page.nextCursor,
+    raw: page.raw,
   );
-  if (filter == 'nearby' && location == null) {
+}
+
+final homeEventsQueryProvider =
+    StreamProvider.autoDispose.family<CardPage, EventListQuery>((ref, query) {
+  final city = query.city ?? _currentCity(ref);
+  final reportedEventIds = ref.watch(reportedEventIdsProvider);
+  return _localFirstPageStream(
+    ref,
+    namespace: 'events',
+    cacheValue: 'home?${query.cacheValue(resolvedCity: city)}',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchEvents(
+      city: city,
+      filter: query.filter,
+      query: query.query,
+      lifestyle: query.lifestyle,
+      price: query.price,
+      gender: query.gender,
+      access: query.access,
+      requiresVerification: query.requiresVerification,
+      requiresFrendlyPlus: query.requiresFrendlyPlus,
+      sort: query.sort,
+      date: query.date,
+      limit: query.limit,
+      cancelToken: cancelToken,
+    ),
+  ).map((page) => _withoutReportedEvents(page, reportedEventIds));
+});
+
+final meetingsProvider = meetingsQueryProvider(const EventListQuery(limit: 20));
+
+final meetingsQueryProvider =
+    StreamProvider.autoDispose.family<CardPage, EventListQuery>((ref, query) {
+  final city = query.city ?? _currentCity(ref);
+  final reportedEventIds = ref.watch(reportedEventIdsProvider);
+  return _localFirstPageStream(
+    ref,
+    namespace: 'events',
+    cacheValue: 'meetings?${query.cacheValue(resolvedCity: city)}',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchEvents(
+      city: city,
+      filter: query.filter,
+      query: query.query,
+      lifestyle: query.lifestyle,
+      price: query.price,
+      gender: query.gender,
+      access: query.access,
+      requiresVerification: query.requiresVerification,
+      requiresFrendlyPlus: query.requiresFrendlyPlus,
+      sort: query.sort,
+      date: query.date,
+      limit: query.limit,
+      cancelToken: cancelToken,
+    ),
+  ).map((page) => _withoutReportedEvents(page, reportedEventIds));
+});
+
+final meetingsPaginationProvider = StateNotifierProvider.autoDispose.family<
+    MeetingsPaginationController,
+    MeetingsPaginationState,
+    EventListQuery>((ref, query) {
+  return MeetingsPaginationController(ref, query);
+});
+
+class MeetingsPaginationState {
+  const MeetingsPaginationState({
+    this.items = const [],
+    this.nextCursor,
+    this.loading = false,
+    this.error = false,
+    this.initialized = false,
+  });
+
+  final List<BackendCardItem> items;
+  final String? nextCursor;
+  final bool loading;
+  final bool error;
+  final bool initialized;
+
+  bool get hasNextPage => nextCursor != null && nextCursor!.isNotEmpty;
+
+  MeetingsPaginationState copyWith({
+    List<BackendCardItem>? items,
+    String? nextCursor,
+    bool clearNextCursor = false,
+    bool? loading,
+    bool? error,
+    bool? initialized,
+  }) {
+    return MeetingsPaginationState(
+      items: items ?? this.items,
+      nextCursor: clearNextCursor ? null : nextCursor ?? this.nextCursor,
+      loading: loading ?? this.loading,
+      error: error ?? this.error,
+      initialized: initialized ?? this.initialized,
+    );
+  }
+}
+
+class MeetingsPaginationController
+    extends StateNotifier<MeetingsPaginationState> {
+  MeetingsPaginationController(this._ref, this._query)
+      : super(const MeetingsPaginationState()) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final EventListQuery _query;
+  final Set<CancelToken> _tokens = {};
+
+  void primeNextCursor(String? cursor) {
+    if (state.items.isNotEmpty || state.loading) {
+      return;
+    }
+    if (state.initialized && state.nextCursor == cursor) {
+      return;
+    }
+    state = state.copyWith(
+      nextCursor: cursor,
+      clearNextCursor: cursor == null || cursor.isEmpty,
+      error: false,
+      initialized: true,
+    );
+  }
+
+  Future<void> loadNextPage() async {
+    final cursor = state.nextCursor;
+    if (state.loading || cursor == null || cursor.isEmpty) {
+      return;
+    }
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    state = state.copyWith(loading: true, error: false);
+    try {
+      final city = _query.city ?? _currentCity(_ref);
+      final page = await _ref.read(backendRepositoryProvider).fetchEvents(
+            city: city,
+            filter: _query.filter,
+            query: _query.query,
+            lifestyle: _query.lifestyle,
+            price: _query.price,
+            gender: _query.gender,
+            access: _query.access,
+            requiresVerification: _query.requiresVerification,
+            requiresFrendlyPlus: _query.requiresFrendlyPlus,
+            sort: _query.sort,
+            date: _query.date,
+            limit: _query.limit,
+            cursor: cursor,
+            cancelToken: cancelToken,
+          );
+      final reportedEventIds = _ref.read(reportedEventIdsProvider);
+      final visibleItems = reportedEventIds.isEmpty
+          ? page.items
+          : page.items
+              .where((item) => !reportedEventIds.contains(item.id))
+              .toList(growable: false);
+      state = state.copyWith(
+        items: [...state.items, ...visibleItems],
+        nextCursor: page.nextCursor,
+        clearNextCursor: page.nextCursor == null || page.nextCursor!.isEmpty,
+        loading: false,
+        error: false,
+      );
+    } catch (_) {
+      if (!cancelToken.isCancelled) {
+        state = state.copyWith(loading: false, error: true);
+      }
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+final meetingDetailProvider =
+    StreamProvider.autoDispose.family<BackendCardItem, String>((ref, id) {
+  return _localFirstValueStream<BackendCardItem>(
+    ref,
+    namespace: 'events',
+    cacheValue: 'detail:media-v2:$id',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchEventDetail(
+      id,
+      cancelToken: cancelToken,
+    ),
+    encode: (event) => event.raw,
+    decode: BackendCardItem.fromJson,
+    useCached: _canUseCachedMeetingDetail,
+  );
+});
+
+final ownProfileProvider = FutureProvider.autoDispose<BackendCardItem>((ref) {
+  final localFirst = ref.read(localFirstRepositoryProvider);
+  final cancelToken = CancelToken();
+  ref.onDispose(cancelToken.cancel);
+  final repository = ref.read(backendRepositoryProvider);
+  if (localFirst == null) {
+    return repository.fetchOwnProfile(cancelToken: cancelToken);
+  }
+  return localFirst.fetch<BackendCardItem>(
+    key: AppCacheKey(
+      namespace: 'profile',
+      value: 'me',
+      userScope: ref.watch(currentCacheScopeProvider),
+    ),
+    ttl: const Duration(minutes: 5),
+    network: () async {
+      final profile = await repository.fetchOwnProfile(
+        cancelToken: cancelToken,
+      );
+      return profile.raw;
+    },
+    decode: BackendCardItem.fromJson,
+  );
+});
+
+final onboardingProvider = FutureProvider.autoDispose<OnboardingData>((ref) {
+  final localFirst = ref.read(localFirstRepositoryProvider);
+  final cancelToken = CancelToken();
+  ref.onDispose(cancelToken.cancel);
+  final repository = ref.read(backendRepositoryProvider);
+  if (localFirst == null) {
+    return repository.fetchOnboarding(cancelToken: cancelToken);
+  }
+  return localFirst.fetch<OnboardingData>(
+    key: AppCacheKey(
+      namespace: 'onboarding',
+      value: 'me',
+      userScope: ref.watch(currentCacheScopeProvider),
+    ),
+    ttl: const Duration(minutes: 5),
+    network: () async {
+      final onboarding = await repository.fetchOnboarding(
+        cancelToken: cancelToken,
+      );
+      return onboarding.raw;
+    },
+    decode: OnboardingData.fromJson,
+  );
+});
+
+final onboardingFlowControllerProvider = Provider<OnboardingFlowController>(
+  OnboardingFlowController.new,
+);
+
+final appSettingsProvider = FutureProvider.autoDispose<AppSettingsData>((ref) {
+  final localFirst = ref.read(localFirstRepositoryProvider);
+  final cancelToken = CancelToken();
+  ref.onDispose(cancelToken.cancel);
+  final repository = ref.read(backendRepositoryProvider);
+  if (localFirst == null) {
+    return repository.fetchSettings(cancelToken: cancelToken);
+  }
+  return localFirst.fetch<AppSettingsData>(
+    key: AppCacheKey(
+      namespace: 'settings',
+      value: 'me',
+      userScope: ref.watch(currentCacheScopeProvider),
+    ),
+    ttl: const Duration(minutes: 5),
+    network: () async {
+      final settings = await repository.fetchSettings(cancelToken: cancelToken);
+      return settings.raw;
+    },
+    decode: AppSettingsData.fromJson,
+  );
+});
+
+final safetyProvider = FutureProvider.autoDispose<SafetyData>((ref) {
+  return _privateValueFuture<SafetyData>(
+    ref,
+    fallback: const SafetyData(
+      trustScore: 0,
+      settings: AppSettingsData(),
+    ),
+    namespace: 'safety',
+    cacheValue: 'me',
+    ttl: const Duration(minutes: 5),
+    fetch: (repository, cancelToken) => repository.fetchSafety(
+      cancelToken: cancelToken,
+    ),
+    encode: (safety) => safety.raw,
+    decode: SafetyData.fromJson,
+  );
+});
+
+final settingsActionsProvider = Provider<SettingsActionsController>(
+  SettingsActionsController.new,
+);
+
+final authActionsProvider = Provider<AuthActionsController>(
+  AuthActionsController.new,
+);
+
+class SettingsActionsController {
+  SettingsActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<AppSettingsData> update(Map<String, Object?> data) async {
+    final cancelToken = _trackToken();
+    try {
+      final settings =
+          await _ref.read(backendRepositoryProvider).updateSettings(
+                data,
+                cancelToken: cancelToken,
+              );
+      _ref.invalidate(appSettingsProvider);
+      return settings;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> setPushEnabled(bool enabled) async {
+    final pushTokenService = _ref.read(appPushTokenServiceProvider);
+    final cancelToken = _trackToken();
+    try {
+      final repository = _ref.read(backendRepositoryProvider);
+      if (enabled) {
+        final token = await pushTokenService.registerDeviceToken();
+        if (token == null) {
+          throw const BackendActionException(message: 'push_unavailable');
+        }
+        await repository.registerPushToken(
+          token: token.token,
+          provider: token.provider,
+          deviceId: token.deviceId,
+          platform: token.platform,
+          cancelToken: cancelToken,
+        );
+        await update({'allowPush': true});
+      } else {
+        final deviceId = await pushTokenService.currentDeviceId();
+        if (deviceId != null && deviceId.isNotEmpty) {
+          await repository.deletePushTokenByDeviceId(
+            deviceId,
+            cancelToken: cancelToken,
+          );
+        }
+        await pushTokenService.clearRegisteredToken();
+        await update({'allowPush': false});
+      }
+      await _ref
+          .read(sharedPreferencesProvider)
+          ?.setBool(pushNotificationsEnabledStorageKey, enabled);
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> logout() async {
+    final userId = _ref.read(currentUserIdProvider);
+    final repository = _ref.read(backendRepositoryProvider);
+    final pushTokenService = _ref.read(appPushTokenServiceProvider);
+    final deviceId = await pushTokenService.currentDeviceId();
+    final cancelToken = _trackToken();
+    try {
+      if (deviceId != null && deviceId.isNotEmpty) {
+        try {
+          await repository.deletePushTokenByDeviceId(
+            deviceId,
+            cancelToken: cancelToken,
+          );
+        } catch (_) {}
+      }
+      try {
+        await repository.logout(cancelToken: cancelToken);
+      } catch (_) {}
+      await pushTokenService.clearRegisteredToken();
+      await _ref.read(socialAuthSessionResetterProvider).reset();
+      if (userId != null && userId.isNotEmpty) {
+        await _ref
+            .read(sessionCleanupControllerProvider)
+            .clearPrivateUserData(userId);
+      }
+      await _ref.read(authTokensProvider.notifier).clear();
+      _ref.read(currentUserProvider.notifier).state = null;
+      await _ref
+          .read(sharedPreferencesProvider)
+          ?.setBool(pushNotificationsEnabledStorageKey, false);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+class AuthActionsController {
+  AuthActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+  int _sessionReplacementGeneration = 0;
+
+  Future<PhoneAuthChallenge> requestPhoneCode(String phone) async {
+    final cancelToken = _trackToken();
+    try {
+      return await _ref.read(backendRepositoryProvider).requestPhoneCode(
+            phone,
+            cancelToken: cancelToken,
+          );
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<AuthSession> verifyPhone({
+    required String challengeId,
+    required String code,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final session = await _ref.read(backendRepositoryProvider).verifyPhone(
+            challengeId: challengeId,
+            code: code,
+            cancelToken: cancelToken,
+          );
+      await _replaceAuthenticatedSession(session, cancelToken: cancelToken);
+      return session;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<AuthSession> loginWithTestPhoneShortcut(String phone) async {
+    final cancelToken = _trackToken();
+    try {
+      final session =
+          await _ref.read(backendRepositoryProvider).loginWithTestPhoneShortcut(
+                phone,
+                cancelToken: cancelToken,
+              );
+      await _replaceAuthenticatedSession(session, cancelToken: cancelToken);
+      return session;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<TelegramAuthStart> startTelegramAuth() async {
+    final cancelToken = _trackToken();
+    try {
+      return await _ref.read(backendRepositoryProvider).startTelegramAuth(
+            cancelToken: cancelToken,
+          );
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<AuthSession> verifyTelegramAuth({
+    required String loginSessionId,
+    required String code,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final session =
+          await _ref.read(backendRepositoryProvider).verifyTelegramAuth(
+                loginSessionId: loginSessionId,
+                code: code,
+                cancelToken: cancelToken,
+              );
+      await _replaceAuthenticatedSession(session, cancelToken: cancelToken);
+      return session;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<AuthSession> verifyGoogleAuth({
+    required String idToken,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final session =
+          await _ref.read(backendRepositoryProvider).verifyGoogleAuth(
+                idToken: idToken,
+                cancelToken: cancelToken,
+              );
+      await _replaceAuthenticatedSession(session, cancelToken: cancelToken);
+      return session;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<AuthSession> verifyYandexAuth({
+    required String oauthToken,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final session =
+          await _ref.read(backendRepositoryProvider).verifyYandexAuth(
+                oauthToken: oauthToken,
+                cancelToken: cancelToken,
+              );
+      await _replaceAuthenticatedSession(session, cancelToken: cancelToken);
+      return session;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<AuthSession> verifyAppleAuth({
+    required String identityToken,
+    String? authorizationCode,
+    String? fullName,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final session =
+          await _ref.read(backendRepositoryProvider).verifyAppleAuth(
+                identityToken: identityToken,
+                authorizationCode: authorizationCode,
+                fullName: fullName,
+                cancelToken: cancelToken,
+              );
+      await _replaceAuthenticatedSession(session, cancelToken: cancelToken);
+      return session;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  Future<void> _replaceAuthenticatedSession(
+    AuthSession session, {
+    required CancelToken cancelToken,
+  }) async {
+    final generation = ++_sessionReplacementGeneration;
+    await _ref.read(authTokensProvider.notifier).setTokens(session.tokens);
+
+    try {
+      final user = await _ref.read(backendRepositoryProvider).fetchMe(
+            cancelToken: cancelToken,
+          );
+      final preparedUser = await prepareAuthenticatedUserForSession(_ref, user);
+      if (!_isCurrentSessionReplacement(generation, session.tokens)) {
+        return;
+      }
+      _ref.read(currentUserProvider.notifier).state = preparedUser;
+    } on DioException {
+      await _clearSessionIfCurrent(generation, session.tokens);
+      rethrow;
+    }
+  }
+
+  bool _isCurrentSessionReplacement(int generation, AuthTokens tokens) {
+    final current = _ref.read(authTokensProvider);
+    return generation == _sessionReplacementGeneration &&
+        current?.accessToken == tokens.accessToken &&
+        current?.refreshToken == tokens.refreshToken;
+  }
+
+  Future<void> _clearSessionIfCurrent(
+    int generation,
+    AuthTokens tokens,
+  ) async {
+    if (!_isCurrentSessionReplacement(generation, tokens)) {
+      return;
+    }
+    await _ref.read(authTokensProvider.notifier).clear();
+    _ref.read(currentUserProvider.notifier).state = null;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+class OnboardingFlowController {
+  OnboardingFlowController(this._ref);
+
+  final Ref _ref;
+
+  Future<OnboardingData> save(OnboardingData data) async {
+    final OnboardingData saved;
+    try {
+      saved = await _ref.read(backendRepositoryProvider).saveOnboarding(
+            data,
+          );
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    }
+    await _writeSavedOnboardingCache(saved);
+    _ref.invalidate(onboardingProvider);
+    _ref.invalidate(ownProfileProvider);
+    final currentUserId = _ref.read(currentUserIdProvider);
+    if (currentUserId != null && currentUserId.isNotEmpty) {
+      await _ref.read(sharedPreferencesProvider)?.setBool(
+            completedOnboardingUserStorageKey(currentUserId),
+            true,
+          );
+    }
+    final currentUser = _ref.read(currentUserProvider);
+    if (currentUser != null) {
+      _ref.read(currentUserProvider.notifier).state =
+          _withCompletedOnboarding(currentUser, saved);
+    }
+    try {
+      final user = await _ref.read(backendRepositoryProvider).fetchMe();
+      await _ref.read(sharedPreferencesProvider)?.setBool(
+            completedOnboardingUserStorageKey(user.id),
+            true,
+          );
+      _ref.read(currentUserProvider.notifier).state =
+          _withCompletedOnboarding(user, saved);
+    } catch (_) {}
+    return saved;
+  }
+
+  Future<void> _writeSavedOnboardingCache(OnboardingData saved) async {
+    final store = _ref.read(appLocalCacheStoreProvider);
+    if (store == null) {
+      return;
+    }
+    try {
+      await store.putJson(
+        AppCacheKey(
+          namespace: 'onboarding',
+          value: 'me',
+          userScope: _ref.read(currentCacheScopeProvider),
+        ),
+        saved.raw.isEmpty ? saved.toJson() : saved.raw,
+        expiresAt: DateTime.now().add(const Duration(minutes: 5)),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> checkContact({
+    String? email,
+    String? phoneNumber,
+  }) async {
+    try {
+      await _ref.read(backendRepositoryProvider).checkOnboardingContact(
+            email: email,
+            phoneNumber: phoneNumber,
+          );
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    }
+  }
+}
+
+BackendUser _withCompletedOnboarding(BackendUser user, OnboardingData data) {
+  return BackendUser(
+    id: user.id,
+    name: data.name ?? user.name,
+    avatarUrl: user.avatarUrl,
+    gender: data.gender ?? user.gender,
+    onboardingComplete: true,
+    city: data.city ?? user.city,
+    raw: user.raw,
+  );
+}
+
+final profileActionsProvider = Provider<ProfileActionsController>(
+  ProfileActionsController.new,
+);
+
+final publicProfileActionsProvider = Provider<PublicProfileActionsController>(
+  PublicProfileActionsController.new,
+);
+
+class PublicProfileActionsController {
+  PublicProfileActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<Map<String, Object?>> createDirectChat(String userId) async {
+    final cancelToken = _trackToken();
+    try {
+      return await _ref.read(backendRepositoryProvider).createDirectChat(
+            userId,
+            cancelToken: cancelToken,
+          );
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<ProfileSocialData> setLike(String userId, bool active) async {
+    final cancelToken = _trackToken();
+    try {
+      final json =
+          await _ref.read(backendRepositoryProvider).setProfileReaction(
+                userId: userId,
+                kind: 'like',
+                active: active,
+                cancelToken: cancelToken,
+              );
+      _ref.invalidate(publicUserProvider(userId));
+      _ref.invalidate(profileSocialProvider(userId));
+      return ProfileSocialData.fromJson(json);
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<ProfileSocialData> setFollow(String userId, bool active) async {
+    final cancelToken = _trackToken();
+    try {
+      final social =
+          await _ref.read(backendRepositoryProvider).setProfileFollow(
+                userId: userId,
+                active: active,
+                cancelToken: cancelToken,
+              );
+      _ref.invalidate(publicUserProvider(userId));
+      _ref.invalidate(profileSocialProvider(userId));
+      return social;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<ProfileSocialData> setFollowNotifications(
+    String userId,
+    bool enabled,
+  ) async {
+    final cancelToken = _trackToken();
+    try {
+      final social = await _ref
+          .read(backendRepositoryProvider)
+          .setProfileFollowNotifications(
+            userId: userId,
+            enabled: enabled,
+            cancelToken: cancelToken,
+          );
+      _ref.invalidate(publicUserProvider(userId));
+      _ref.invalidate(profileSocialProvider(userId));
+      return social;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+class ProfileActionsController {
+  ProfileActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<void> updateCity(String city, {String? area}) async {
+    final cancelToken = _trackToken();
+    final data = <String, Object?>{'city': city};
+    final cleanArea = area?.trim();
+    if (cleanArea != null && cleanArea.isNotEmpty) {
+      data['area'] = cleanArea;
+    }
+    try {
+      await _ref.read(backendRepositoryProvider).updateOwnProfile(
+            data: data,
+            cancelToken: cancelToken,
+          );
+      await _clearProfileCache();
+      _ref.invalidate(ownProfileProvider);
+      final user = _ref.read(currentUserProvider);
+      if (user != null) {
+        _ref.read(currentUserProvider.notifier).state = BackendUser(
+          id: user.id,
+          name: user.name,
+          avatarUrl: user.avatarUrl,
+          gender: user.gender,
+          onboardingComplete: user.onboardingComplete,
+          city: city,
+          raw: user.raw,
+        );
+      }
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> updateProfileAndInterests({
+    required Map<String, Object?> profileData,
+    required List<String> interests,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final repository = _ref.read(backendRepositoryProvider);
+      final onboarding = _ref.read(onboardingProvider).valueOrNull ??
+          await repository.fetchOnboarding(cancelToken: cancelToken);
+      await repository.updateOwnProfile(
+        data: profileData,
+        cancelToken: cancelToken,
+      );
+      await _clearProfileCache();
+      await repository.saveOnboarding(
+        OnboardingData(
+          intent: onboarding.intent,
+          gender: onboarding.gender,
+          birthDate: onboarding.birthDate,
+          city: onboarding.city,
+          area: onboarding.area,
+          interests: interests,
+          vibe: onboarding.vibe,
+          bio: onboarding.bio,
+          email: onboarding.email,
+          phoneNumber: onboarding.phoneNumber,
+        ),
+        cancelToken: cancelToken,
+      );
+      await _clearOnboardingCache();
+      _ref.invalidate(ownProfileProvider);
+      _ref.invalidate(onboardingProvider);
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<Map<String, Object?>> uploadProfilePhoto({
+    required String filePath,
+    required String fileName,
+    required String mimeType,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final result =
+          await _ref.read(backendRepositoryProvider).uploadProfilePhotoFile(
+                filePath: filePath,
+                fileName: fileName,
+                mimeType: mimeType,
+                cancelToken: cancelToken,
+              );
+      await _clearProfileCache();
+      _ref.invalidate(ownProfileProvider);
+      final user = _ref.read(currentUserProvider);
+      final url = _primaryUploadedProfilePhotoUrl(
+        result,
+        currentAvatarUrl: user?.avatarUrl,
+      );
+      if (user != null && url != null && url.isNotEmpty) {
+        _ref.read(currentUserProvider.notifier).state = BackendUser(
+          id: user.id,
+          name: user.name,
+          avatarUrl: url,
+          gender: user.gender,
+          onboardingComplete: user.onboardingComplete,
+          city: user.city,
+          raw: user.raw,
+        );
+      }
+      return result;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> deleteProfilePhoto(String photoId) async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref.read(backendRepositoryProvider).deleteProfilePhoto(
+            photoId,
+            cancelToken: cancelToken,
+          );
+      await _clearProfileCache();
+      _ref.invalidate(ownProfileProvider);
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> makePrimaryProfilePhoto(String photoId) async {
+    final cancelToken = _trackToken();
+    try {
+      final result =
+          await _ref.read(backendRepositoryProvider).makePrimaryProfilePhoto(
+                photoId,
+                cancelToken: cancelToken,
+              );
+      await _clearProfileCache();
+      _ref.invalidate(ownProfileProvider);
+      final user = _ref.read(currentUserProvider);
+      final url = _profileAvatarUrlFromActionResult(result);
+      if (user != null && url != null && url.isNotEmpty) {
+        _ref.read(currentUserProvider.notifier).state = BackendUser(
+          id: user.id,
+          name: user.name,
+          avatarUrl: url,
+          gender: user.gender,
+          onboardingComplete: user.onboardingComplete,
+          city: user.city,
+          raw: user.raw,
+        );
+      }
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> reorderProfilePhotos(List<String> photoIds) async {
+    final cancelToken = _trackToken();
+    try {
+      final result =
+          await _ref.read(backendRepositoryProvider).reorderProfilePhotos(
+                photoIds,
+                cancelToken: cancelToken,
+              );
+      await _clearProfileCache();
+      _ref.invalidate(ownProfileProvider);
+      final user = _ref.read(currentUserProvider);
+      final url = _profileAvatarUrlFromActionResult(result);
+      if (user != null && url != null && url.isNotEmpty) {
+        _ref.read(currentUserProvider.notifier).state = BackendUser(
+          id: user.id,
+          name: user.name,
+          avatarUrl: url,
+          gender: user.gender,
+          onboardingComplete: user.onboardingComplete,
+          city: user.city,
+          raw: user.raw,
+        );
+      }
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  Future<void> _clearProfileCache() {
+    return _deleteLocalCacheKey(
+      AppCacheKey(
+        namespace: 'profile',
+        value: 'me',
+        userScope: _ref.read(currentCacheScopeProvider),
+      ),
+    );
+  }
+
+  Future<void> _clearOnboardingCache() {
+    return _deleteLocalCacheKey(
+      AppCacheKey(
+        namespace: 'onboarding',
+        value: 'me',
+        userScope: _ref.read(currentCacheScopeProvider),
+      ),
+    );
+  }
+
+  Future<void> _deleteLocalCacheKey(AppCacheKey key) async {
+    final store = _ref.read(appLocalCacheStoreProvider);
+    if (store == null) {
+      return;
+    }
+    await store.deleteKey(key);
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+String? _primaryUploadedProfilePhotoUrl(
+  Map<String, Object?> result, {
+  String? currentAvatarUrl,
+}) {
+  final photo = _objectMap(result['photo']);
+  final order = _intValue(photo['order'] ?? photo['sortOrder']);
+  final url = _stringUrl(
+    photo['url'] ?? _objectMap(photo['media'])['url'] ?? result['url'],
+  );
+
+  if (order != null) {
+    return order == 0 ? url : null;
+  }
+  final hasCurrentAvatar =
+      currentAvatarUrl != null && currentAvatarUrl.isNotEmpty;
+  return hasCurrentAvatar ? null : url;
+}
+
+String? _profileAvatarUrlFromActionResult(Map<String, Object?> result) {
+  final direct = _stringUrl(
+    result['avatarUrl'] ?? result['imageUrl'] ?? result['url'],
+  );
+  if (direct != null) {
+    return direct;
+  }
+  final photos = result['photos'];
+  if (photos is List && photos.isNotEmpty) {
+    final firstPhoto = _objectMap(photos.first);
+    return _stringUrl(
+      firstPhoto['url'] ?? _objectMap(firstPhoto['media'])['url'],
+    );
+  }
+  return null;
+}
+
+String? _stringUrl(Object? value) {
+  final url = value?.toString();
+  return url != null && url.isNotEmpty ? url : null;
+}
+
+int? _intValue(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  if (value is String) {
+    return int.tryParse(value);
+  }
+  return null;
+}
+
+final meetingActionsProvider = Provider<MeetingActionsController>(
+  MeetingActionsController.new,
+);
+
+class MeetingActionsController {
+  MeetingActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<BackendCardItem> setJoined({
+    required String eventId,
+    required bool joined,
+    String? chatId,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final event = joined
+          ? await _ref.read(backendRepositoryProvider).joinEvent(
+                eventId,
+                cancelToken: cancelToken,
+              )
+          : await _ref.read(backendRepositoryProvider).leaveEvent(
+                eventId,
+                cancelToken: cancelToken,
+              );
+      if (!joined) {
+        await _deleteLocalChat(chatId ?? _stringOrNull(event.raw['chatId']));
+      }
+      _invalidateEvent(eventId);
+      _ref.invalidate(hostDashboardProvider);
+      return event;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> _deleteLocalChat(String? chatId) async {
+    final resolvedChatId = chatId?.trim();
+    if (resolvedChatId == null || resolvedChatId.isEmpty) {
+      return;
+    }
+    final userId = _ref.read(currentUserIdProvider);
+    final store = _ref.read(chatLocalStoreProvider);
+    if (userId == null || store == null) {
+      return;
+    }
+    try {
+      await store.deleteChat(userId: userId, chatId: resolvedChatId);
+      _ref.invalidate(chatSummaryProvider(resolvedChatId));
+    } catch (_) {}
+  }
+
+  Future<BackendCardItem> setJoinRequested({
+    required String eventId,
+    required bool requested,
+    String? note,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final event = requested
+          ? await _ref.read(backendRepositoryProvider).createJoinRequest(
+                eventId,
+                note: note,
+                cancelToken: cancelToken,
+              )
+          : await _ref.read(backendRepositoryProvider).cancelJoinRequest(
+                eventId,
+                cancelToken: cancelToken,
+              );
+      _invalidateEvent(eventId);
+      return event;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<BackendCardItem> createEvent({
+    required Map<String, Object?> data,
+    required String idempotencyKey,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final communityId = data['communityId']?.toString().trim();
+      final event = await _ref.read(backendRepositoryProvider).createEvent(
+            data: data,
+            idempotencyKey: idempotencyKey,
+            cancelToken: cancelToken,
+          );
+      unawaited(_refreshAfterEventCreate(communityId));
+      return event;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> _refreshAfterEventCreate(String? communityId) async {
+    try {
+      await _dropEventsCache();
+      await _dropMapEventsCache(_ref);
+      if (communityId != null && communityId.isNotEmpty) {
+        await _dropCommunitiesCache();
+      }
+      _ref.invalidate(homeEventsProvider);
+      _ref.invalidate(homeEventsQueryProvider);
+      _ref.invalidate(meetingsProvider);
+      _ref.invalidate(meetingsQueryProvider);
+      _invalidateMapEvents(_ref);
+      if (communityId != null && communityId.isNotEmpty) {
+        _ref.invalidate(communityDetailProvider(communityId));
+        _ref.invalidate(communitiesProvider);
+        _ref.invalidate(communitiesQueryProvider);
+      }
+    } catch (_) {}
+  }
+
+  Future<TokenWalletData> boostEvent(
+    String eventId, {
+    String optionId = 'boost-24',
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final wallet = await _ref.read(backendRepositoryProvider).createPromotion(
+            targetKind: 'event',
+            targetId: eventId,
+            optionId: optionId,
+            cancelToken: cancelToken,
+          );
+      _ref.invalidate(tokenWalletProvider);
+      await _dropMapEventsCache(_ref);
+      _invalidateMapEvents(_ref);
+      _invalidateEvent(eventId);
+      _ref.invalidate(hostDashboardProvider);
+      return wallet;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<BackendCardItem> fetchHostedEvent(String eventId) async {
+    final cancelToken = _trackToken();
+    try {
+      return await _ref.read(backendRepositoryProvider).fetchHostedEvent(
+            eventId,
+            cancelToken: cancelToken,
+          );
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<BackendCardItem> updateHostedEvent({
+    required String eventId,
+    required Map<String, Object?> data,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final event =
+          await _ref.read(backendRepositoryProvider).updateHostedEvent(
+                eventId,
+                data: data,
+                cancelToken: cancelToken,
+              );
+      await _dropEventsCache();
+      _invalidateEvent(eventId);
+      _ref.invalidate(hostDashboardProvider);
+      return event;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> finishHostedEvent({
+    required String eventId,
+    required List<String> attendedUserIds,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref.read(backendRepositoryProvider).finishHostedEvent(
+            eventId,
+            attendedUserIds: attendedUserIds,
+            cancelToken: cancelToken,
+          );
+      await _dropEventsCache();
+      await _dropDropsCache();
+      _invalidateEvent(eventId);
+      _ref.invalidate(hostDashboardProvider);
+      _ref.invalidate(dropsHomeProvider);
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  void _invalidateEvent(String eventId) {
+    _ref.invalidate(homeEventsProvider);
+    _ref.invalidate(homeEventsQueryProvider);
+    _ref.invalidate(meetingsProvider);
+    _ref.invalidate(meetingsQueryProvider);
+    _ref.invalidate(meetingDetailProvider(eventId));
+    _ref.invalidate(chatListProvider);
+    _ref.invalidate(chatsProvider);
+  }
+
+  Future<void> _dropEventsCache() async {
+    final store = _ref.read(appLocalCacheStoreProvider);
+    if (store == null) {
+      return;
+    }
+    await store.deleteNamespace(
+      namespace: 'events',
+      userScope: currentCacheScope(_ref),
+    );
+  }
+
+  Future<void> _dropDropsCache() async {
+    final store = _ref.read(appLocalCacheStoreProvider);
+    if (store == null) {
+      return;
+    }
+    await store.deleteKey(
+      AppCacheKey(
+        namespace: 'drops',
+        value: 'home',
+        userScope: currentCacheScope(_ref),
+      ),
+    );
+  }
+
+  Future<void> _dropCommunitiesCache() async {
+    final store = _ref.read(appLocalCacheStoreProvider);
+    if (store == null) {
+      return;
+    }
+    await store.deleteNamespace(
+      namespace: _communitiesCacheNamespace,
+      userScope: currentCacheScope(_ref),
+    );
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+String? _stringOrNull(Object? value) {
+  final text = value?.toString().trim();
+  if (text == null || text.isEmpty) {
+    return null;
+  }
+  return text;
+}
+
+final routeTemplatesProvider = routeTemplatesByQueryProvider(null);
+
+final routeTemplatesByQueryProvider =
+    StreamProvider.autoDispose.family<CardPage, String?>((ref, query) {
+  final city = _currentCity(ref);
+  return _localFirstPageStream(
+    ref,
+    namespace: 'routes',
+    cacheValue: 'templates?city=${city ?? ''}&q=${query ?? ''}&limit=20',
+    ttl: const Duration(minutes: 10),
+    fetch: (repository, cancelToken) => repository.fetchRoutes(
+      city: city,
+      query: query,
+      limit: 20,
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+final routeDetailProvider =
+    FutureProvider.autoDispose.family<BackendCardItem, String>((ref, id) {
+  final localFirst = ref.read(localFirstRepositoryProvider);
+  final cancelToken = CancelToken();
+  ref.onDispose(cancelToken.cancel);
+  final repository = ref.read(backendRepositoryProvider);
+  if (localFirst == null) {
+    return repository.fetchRouteDetail(id, cancelToken: cancelToken);
+  }
+  return localFirst.fetch<BackendCardItem>(
+    key: AppCacheKey(
+      namespace: 'routes',
+      value: 'detail:$id',
+      userScope: ref.watch(currentCacheScopeProvider),
+    ),
+    ttl: const Duration(minutes: 10),
+    network: () async {
+      final route = await repository.fetchRouteDetail(
+        id,
+        cancelToken: cancelToken,
+      );
+      return route.raw;
+    },
+    decode: BackendCardItem.fromJson,
+  );
+});
+
+final matchesProvider = StreamProvider.autoDispose<CardPage>((ref) {
+  return _privatePageStream(
+    ref,
+    namespace: 'matches',
+    cacheValue: 'list?limit=10',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchMatches(
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+class PostersQuery {
+  const PostersQuery({
+    this.city,
+    this.query,
+    this.date,
+    this.dateFrom,
+    this.dateTo,
+    this.priceMode,
+    this.category,
+    this.limit = 20,
+  });
+
+  final String? city;
+  final String? query;
+  final String? date;
+  final String? dateFrom;
+  final String? dateTo;
+  final String? priceMode;
+  final String? category;
+  final int limit;
+
+  String cacheValueFor(String? resolvedCity) {
+    return [
+      'events',
+      'city=${resolvedCity ?? city ?? ''}',
+      'q=${query ?? ''}',
+      'date=${date ?? ''}',
+      'dateFrom=${dateFrom ?? ''}',
+      'dateTo=${dateTo ?? ''}',
+      'priceMode=${priceMode ?? ''}',
+      'category=${category ?? ''}',
+      'limit=$limit',
+    ].join('&');
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is PostersQuery &&
+        other.city == city &&
+        other.query == query &&
+        other.date == date &&
+        other.dateFrom == dateFrom &&
+        other.dateTo == dateTo &&
+        other.priceMode == priceMode &&
+        other.category == category &&
+        other.limit == limit;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      city, query, date, dateFrom, dateTo, priceMode, category, limit);
+}
+
+final postersProvider = FutureProvider.autoDispose<CardPage>((ref) {
+  return ref.watch(postersQueryProvider(const PostersQuery(limit: 8)).future);
+});
+
+final postersQueryProvider =
+    StreamProvider.autoDispose.family<CardPage, PostersQuery>((ref, query) {
+  final city = query.city ?? _currentCity(ref);
+  return _localFirstPageStream(
+    ref,
+    namespace: 'affiche',
+    cacheValue: query.cacheValueFor(city),
+    ttl: const Duration(minutes: 10),
+    fetch: (repository, cancelToken) => repository.fetchAffiche(
+      city: city,
+      query: query.query,
+      limit: query.limit,
+      date: query.date,
+      dateFrom: query.dateFrom,
+      dateTo: query.dateTo,
+      priceMode: query.priceMode,
+      category: query.category,
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+final postersPaginationProvider = StateNotifierProvider.autoDispose
+    .family<PostersPaginationController, PostersPaginationState, PostersQuery>(
+        (ref, query) {
+  return PostersPaginationController(ref, query);
+});
+
+class PostersPaginationState {
+  const PostersPaginationState({
+    this.items = const [],
+    this.nextCursor,
+    this.loading = false,
+    this.error = false,
+    this.initialized = false,
+  });
+
+  final List<BackendCardItem> items;
+  final String? nextCursor;
+  final bool loading;
+  final bool error;
+  final bool initialized;
+
+  bool get hasNextPage => nextCursor != null && nextCursor!.isNotEmpty;
+
+  PostersPaginationState copyWith({
+    List<BackendCardItem>? items,
+    String? nextCursor,
+    bool clearNextCursor = false,
+    bool? loading,
+    bool? error,
+    bool? initialized,
+  }) {
+    return PostersPaginationState(
+      items: items ?? this.items,
+      nextCursor: clearNextCursor ? null : nextCursor ?? this.nextCursor,
+      loading: loading ?? this.loading,
+      error: error ?? this.error,
+      initialized: initialized ?? this.initialized,
+    );
+  }
+}
+
+class PostersPaginationController
+    extends StateNotifier<PostersPaginationState> {
+  PostersPaginationController(this._ref, this._query)
+      : super(const PostersPaginationState()) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final PostersQuery _query;
+  final Set<CancelToken> _tokens = {};
+
+  void primeNextCursor(String? cursor) {
+    if (state.items.isNotEmpty || state.loading) {
+      return;
+    }
+    if (state.initialized && state.nextCursor == cursor) {
+      return;
+    }
+    state = state.copyWith(
+      nextCursor: cursor,
+      clearNextCursor: cursor == null || cursor.isEmpty,
+      error: false,
+      initialized: true,
+    );
+  }
+
+  Future<void> loadNextPage() async {
+    final cursor = state.nextCursor;
+    if (state.loading || cursor == null || cursor.isEmpty) {
+      return;
+    }
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    state = state.copyWith(loading: true, error: false);
+    try {
+      final city = _query.city ?? _currentCity(_ref);
+      final page = await _ref.read(backendRepositoryProvider).fetchAffiche(
+            city: city,
+            query: _query.query,
+            date: _query.date,
+            dateFrom: _query.dateFrom,
+            dateTo: _query.dateTo,
+            priceMode: _query.priceMode,
+            category: _query.category,
+            limit: _query.limit,
+            cursor: cursor,
+            cancelToken: cancelToken,
+          );
+      state = state.copyWith(
+        items: [...state.items, ...page.items],
+        nextCursor: page.nextCursor,
+        clearNextCursor: page.nextCursor == null || page.nextCursor!.isEmpty,
+        loading: false,
+        error: false,
+      );
+    } catch (_) {
+      if (!cancelToken.isCancelled) {
+        state = state.copyWith(loading: false, error: true);
+      }
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+final posterDetailProvider =
+    FutureProvider.autoDispose.family<BackendCardItem, String>((ref, id) {
+  return _localFirstValueFuture<BackendCardItem>(
+    ref,
+    namespace: 'affiche',
+    cacheValue: 'detail:$id',
+    ttl: const Duration(minutes: 10),
+    fetch: (repository, cancelToken) => repository.fetchAfficheDetail(
+      id,
+      cancelToken: cancelToken,
+    ),
+    encode: (event) => event.raw.isEmpty
+        ? {
+            'id': event.id,
+            'title': event.title,
+            'subtitle': event.subtitle,
+            'imageUrl': event.imageUrl,
+            'startsAt': event.startsAt?.toIso8601String(),
+            'city': event.city,
+            'latitude': event.latitude,
+            'longitude': event.longitude,
+          }
+        : event.raw,
+    decode: BackendCardItem.fromJson,
+  );
+});
+
+class DatingDiscoverFilters {
+  const DatingDiscoverFilters({
+    this.gender,
+    this.ageMin = 18,
+    this.ageMax = 99,
+    this.radiusKm = 500,
+    this.interests = const [],
+    this.verifiedOnly = false,
+    this.frendlyPlusOnly = false,
+    this.onlineOnly = false,
+    this.newThisWeekOnly = false,
+  });
+
+  final String? gender;
+  final int ageMin;
+  final int ageMax;
+  final int radiusKm;
+  final List<String> interests;
+  final bool verifiedOnly;
+  final bool frendlyPlusOnly;
+  final bool onlineOnly;
+  final bool newThisWeekOnly;
+
+  String get cacheValue {
+    final sortedInterests = [...interests]..sort();
+    return [
+      'discover',
+      if (gender != null && gender!.isNotEmpty) 'gender=$gender',
+      'ageMin=$ageMin',
+      'ageMax=$ageMax',
+      'radiusKm=$radiusKm',
+      'interests=${sortedInterests.join(',')}',
+      'verifiedOnly=$verifiedOnly',
+      'frendlyPlusOnly=$frendlyPlusOnly',
+      'onlineOnly=$onlineOnly',
+      'newThisWeekOnly=$newThisWeekOnly',
+      'limit=10',
+    ].join('&');
+  }
+}
+
+final datingDiscoverFiltersProvider = StateProvider<DatingDiscoverFilters>(
+  (_) => const DatingDiscoverFilters(),
+);
+
+final datingHandledProfileIdsProvider =
+    StateNotifierProvider<DatingHandledProfileIdsController, Set<String>>(
+  (ref) {
+    ref.watch(currentUserIdProvider);
+    return DatingHandledProfileIdsController();
+  },
+);
+
+class DatingHandledProfileIdsController extends StateNotifier<Set<String>> {
+  DatingHandledProfileIdsController() : super(const <String>{});
+
+  void add(String profileId) {
+    final cleanId = profileId.trim();
+    if (cleanId.isEmpty || state.contains(cleanId)) {
+      return;
+    }
+    state = {...state, cleanId};
+  }
+
+  void remove(String profileId) {
+    final cleanId = profileId.trim();
+    if (cleanId.isEmpty || !state.contains(cleanId)) {
+      return;
+    }
+    state = state.where((id) => id != cleanId).toSet();
+  }
+}
+
+final datingLimitsProvider =
+    FutureProvider.autoDispose<DatingLimitsData>((ref) {
+  return _privateValueFuture<DatingLimitsData>(
+    ref,
+    fallback: const DatingLimitsData(
+      premium: false,
+      hourlySwipes: DatingHourlySwipesData(
+        unlimited: false,
+        limit: 50,
+        remaining: 50,
+      ),
+      superLikes: DatingLimitBucketData(
+        freeLimit: 1,
+        freeRemaining: 1,
+        paidCost: 50,
+      ),
+      rewinds: DatingLimitBucketData(
+        freeLimit: 0,
+        freeRemaining: 0,
+        paidCost: 25,
+      ),
+    ),
+    namespace: 'dating',
+    cacheValue: 'limits',
+    ttl: const Duration(minutes: 1),
+    fetch: (repository, cancelToken) => repository.fetchDatingLimits(
+      cancelToken: cancelToken,
+    ),
+    encode: (limits) => limits.raw,
+    decode: DatingLimitsData.fromJson,
+  );
+});
+
+final chatsProvider = chatListProvider(ChatListKind.meetups);
+
+final chatSummaryProvider = StreamProvider.autoDispose
+    .family<BackendChatSummary?, String>((ref, chatId) async* {
+  final userId = ref.read(currentUserIdProvider);
+  final chatStore = ref.read(chatLocalStoreProvider);
+  if (userId != null && chatStore != null) {
+    unawaited(
+      Future.wait([
+        _chatListForKind(ref, ChatListKind.meetups),
+        _chatListForKind(ref, ChatListKind.personal),
+        _chatListForKind(ref, ChatListKind.communities),
+      ]).catchError((_) => <BackendPage<BackendChatSummary>>[]),
+    );
+    yield* chatStore.watchSummary(userId: userId, chatId: chatId).map(
+          (json) => json == null ? null : BackendChatSummary.fromJson(json),
+        );
+    return;
+  }
+
+  final pages = await Future.wait([
+    _chatListForKind(ref, ChatListKind.meetups).catchError(
+      (_) => const BackendPage<BackendChatSummary>(items: []),
+    ),
+    _chatListForKind(ref, ChatListKind.personal).catchError(
+      (_) => const BackendPage<BackendChatSummary>(items: []),
+    ),
+    _chatListForKind(ref, ChatListKind.communities).catchError(
+      (_) => const BackendPage<BackendChatSummary>(items: []),
+    ),
+  ]);
+  for (final page in pages) {
+    for (final summary in page.items) {
+      if (summary.id == chatId) {
+        yield summary;
+        return;
+      }
+    }
+  }
+  yield null;
+});
+
+final chatListProvider = StreamProvider.autoDispose
+    .family<BackendPage<BackendChatSummary>, ChatListKind>((ref, kind) {
+  if (kind == ChatListKind.all || kind == ChatListKind.unread) {
+    return _watchCombinedChatLists(ref, kind);
+  }
+  return _watchVisibleChatListForKind(ref, kind);
+});
+
+Future<BackendPage<BackendChatSummary>> _chatListForKind(
+  Ref ref,
+  ChatListKind kind,
+) async {
+  final repository = ref.read(backendRepositoryProvider);
+  final cancelToken = CancelToken();
+  var disposed = false;
+  ref.onDispose(() {
+    disposed = true;
+    cancelToken.cancel();
+  });
+  final userId = ref.read(currentUserIdProvider);
+  final chatStore = ref.read(chatLocalStoreProvider);
+  final storeKind = switch (kind) {
+    ChatListKind.personal => 'personal',
+    ChatListKind.communities => 'communities',
+    _ => 'meetups',
+  };
+  Future<BackendPage<BackendChatSummary>> fetchFresh() {
+    return switch (kind) {
+      ChatListKind.personal =>
+        repository.fetchPersonalChats(cancelToken: cancelToken),
+      ChatListKind.communities =>
+        repository.fetchCommunityChats(cancelToken: cancelToken),
+      _ => repository.fetchMeetupChats(cancelToken: cancelToken),
+    };
+  }
+
+  Future<void> replaceCachedSummaries(
+    BackendPage<BackendChatSummary> page,
+  ) async {
+    if (disposed || userId == null || chatStore == null) {
+      return;
+    }
+    await chatStore.replaceSummaries(
+      userId: userId,
+      kind: storeKind,
+      summaries: page.items.map((item) => item.raw).toList(),
+    );
+  }
+
+  if (userId != null && chatStore != null) {
+    final cached =
+        await chatStore.watchSummaries(userId: userId, kind: storeKind).first;
+    if (disposed) {
+      return const BackendPage(items: []);
+    }
+    if (cached.isNotEmpty) {
+      unawaited(fetchFresh().then((freshPage) async {
+        if (disposed) {
+          return;
+        }
+        final fresh = _withChatKind(freshPage, storeKind);
+        await replaceCachedSummaries(fresh);
+      }).catchError((_) {}));
+      return BackendPage(
+        items: _orderedChatSummaries(
+          cached.map(BackendChatSummary.fromJson),
+        ),
+      );
+    }
+  }
+  final fresh = _orderedChatPage(_withChatKind(await fetchFresh(), storeKind));
+  if (!disposed) {
+    try {
+      await replaceCachedSummaries(fresh);
+    } catch (_) {}
+  }
+  return fresh;
+}
+
+BackendPage<BackendChatSummary> _withChatKind(
+  BackendPage<BackendChatSummary> page,
+  String kind,
+) {
+  return BackendPage(
+    items: page.items.map((item) {
+      final raw = {
+        ...item.raw,
+        'kind': switch (kind) {
+          'personal' => 'personal',
+          'communities' => 'community',
+          _ => 'meetup',
+        },
+      };
+      return BackendChatSummary.fromJson(raw);
+    }).toList(growable: false),
+    nextCursor: page.nextCursor,
+    raw: page.raw,
+  );
+}
+
+Stream<BackendPage<BackendChatSummary>> _watchVisibleChatListForKind(
+  Ref ref,
+  ChatListKind kind,
+) {
+  return _watchChatListForKind(ref, kind).map(
+    (page) => BackendPage(
+      items: _visibleChatSummariesForKind(kind, page.items),
+      nextCursor: page.nextCursor,
+      raw: page.raw,
+    ),
+  );
+}
+
+Stream<BackendPage<BackendChatSummary>> _watchChatListForKind(
+  Ref ref,
+  ChatListKind kind,
+) async* {
+  final repository = ref.read(backendRepositoryProvider);
+  final cancelToken = CancelToken();
+  var disposed = false;
+  try {
+    final userId = ref.read(currentUserIdProvider);
+    final chatStore = ref.read(chatLocalStoreProvider);
+    final storeKind = _chatStoreKind(kind);
+
+    Future<BackendPage<BackendChatSummary>> fetchFresh() {
+      return switch (kind) {
+        ChatListKind.personal =>
+          repository.fetchPersonalChats(cancelToken: cancelToken),
+        ChatListKind.communities =>
+          repository.fetchCommunityChats(cancelToken: cancelToken),
+        _ => repository.fetchMeetupChats(cancelToken: cancelToken),
+      };
+    }
+
+    if (userId == null || chatStore == null) {
+      yield _orderedChatPage(_withChatKind(await fetchFresh(), storeKind));
+      return;
+    }
+
+    Future<bool> replaceCachedSummaries(
+      BackendPage<BackendChatSummary> page,
+    ) async {
+      if (disposed) {
+        return false;
+      }
+      try {
+        await chatStore.replaceSummaries(
+          userId: userId,
+          kind: storeKind,
+          summaries: page.items.map((item) => item.raw).toList(),
+        );
+        return !disposed;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    final cached =
+        await chatStore.watchSummaries(userId: userId, kind: storeKind).first;
+    if (cached.isEmpty) {
+      final fresh = _withChatKind(await fetchFresh(), storeKind);
+      final cachedFresh = await replaceCachedSummaries(fresh);
+      if (!cachedFresh) {
+        yield _orderedChatPage(fresh);
+        return;
+      }
+    } else {
+      unawaited(
+        fetchFresh().then((freshPage) async {
+          if (disposed) {
+            return;
+          }
+          final fresh = _withChatKind(freshPage, storeKind);
+          await replaceCachedSummaries(fresh);
+        }).catchError((_) {}),
+      );
+    }
+
+    yield* chatStore.watchSummaries(userId: userId, kind: storeKind).map(
+          (rows) => BackendPage(
+            items: _orderedChatSummaries(
+              rows.map(BackendChatSummary.fromJson),
+            ),
+          ),
+        );
+  } finally {
+    disposed = true;
+    if (!cancelToken.isCancelled) {
+      cancelToken.cancel();
+    }
+  }
+}
+
+Stream<BackendPage<BackendChatSummary>> _watchCombinedChatLists(
+  Ref ref,
+  ChatListKind kind,
+) {
+  late final StreamSubscription<BackendPage<BackendChatSummary>> meetupsSub;
+  late final StreamSubscription<BackendPage<BackendChatSummary>> personalSub;
+  late final StreamSubscription<BackendPage<BackendChatSummary>> communitiesSub;
+  final controller = StreamController<BackendPage<BackendChatSummary>>();
+  List<BackendChatSummary>? meetups;
+  List<BackendChatSummary>? personal;
+  List<BackendChatSummary>? communities;
+  var canceled = false;
+
+  void emitIfReady() {
+    if (meetups == null && personal == null && communities == null) {
+      return;
+    }
+    final items = [
+      ...?meetups,
+      ...?personal,
+      ...?communities,
+    ];
+    final visibleItems = _visibleChatSummariesForKind(kind, items);
+    controller.add(
+      BackendPage(
+        items: _orderedChatSummaries(visibleItems),
+      ),
+    );
+  }
+
+  controller.onListen = () {
+    meetupsSub = _watchChatListForKind(ref, ChatListKind.meetups).listen(
+      (page) {
+        meetups = page.items;
+        emitIfReady();
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!canceled && !controller.isClosed) {
+          controller.addError(error, stackTrace);
+        }
+      },
+    );
+    personalSub = _watchChatListForKind(ref, ChatListKind.personal).listen(
+      (page) {
+        personal = page.items;
+        emitIfReady();
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!canceled && !controller.isClosed) {
+          controller.addError(error, stackTrace);
+        }
+      },
+    );
+    communitiesSub =
+        _watchChatListForKind(ref, ChatListKind.communities).listen(
+      (page) {
+        communities = page.items;
+        emitIfReady();
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!canceled && !controller.isClosed) {
+          controller.addError(error, stackTrace);
+        }
+      },
+    );
+  };
+  controller.onCancel = () async {
+    canceled = true;
+    await Future.wait([
+      meetupsSub.cancel().catchError((_) {}),
+      personalSub.cancel().catchError((_) {}),
+      communitiesSub.cancel().catchError((_) {}),
+    ]);
+  };
+  return controller.stream;
+}
+
+String _chatStoreKind(ChatListKind kind) {
+  return switch (kind) {
+    ChatListKind.personal => 'personal',
+    ChatListKind.communities => 'communities',
+    _ => 'meetups',
+  };
+}
+
+BackendPage<BackendChatSummary> _orderedChatPage(
+  BackendPage<BackendChatSummary> page,
+) {
+  return BackendPage(
+    items: _orderedChatSummaries(page.items),
+    nextCursor: page.nextCursor,
+    raw: page.raw,
+  );
+}
+
+List<BackendChatSummary> _orderedChatSummaries(
+  Iterable<BackendChatSummary> items,
+) {
+  final indexed = items
+      .toList(growable: false)
+      .asMap()
+      .entries
+      .map((entry) => (index: entry.key, item: entry.value))
+      .toList(growable: false);
+  indexed.sort((left, right) {
+    final delta = _compareChatSummaries(left.item, right.item);
+    if (delta != 0) {
+      return delta;
+    }
+    return left.index - right.index;
+  });
+  return indexed.map((entry) => entry.item).toList(growable: false);
+}
+
+List<BackendChatSummary> _visibleChatSummariesForKind(
+  ChatListKind kind,
+  Iterable<BackendChatSummary> items,
+) {
+  final visible = switch (kind) {
+    ChatListKind.archive => items.where(_isArchivedMeetupChat),
+    ChatListKind.unread => items.where(
+        (item) => item.unreadCount > 0 && !_isArchivedMeetupChat(item),
+      ),
+    ChatListKind.all => items.where((item) => !_isArchivedMeetupChat(item)),
+    ChatListKind.meetups => items.where((item) => !_isArchivedMeetupChat(item)),
+    ChatListKind.personal => items,
+    ChatListKind.communities => items,
+  };
+  return _orderedChatSummaries(visible);
+}
+
+int _compareChatSummaries(
+  BackendChatSummary left,
+  BackendChatSummary right,
+) {
+  final pinnedDelta = _boolSortDelta(
+    left: _chatIsPinned(left),
+    right: _chatIsPinned(right),
+  );
+  if (pinnedDelta != 0) {
+    return pinnedDelta;
+  }
+
+  final timeDelta = _chatSortTime(right).compareTo(_chatSortTime(left));
+  if (timeDelta != 0) {
+    return timeDelta;
+  }
+
+  final messageDelta = _boolSortDelta(
+    left: _chatHasMessages(left),
+    right: _chatHasMessages(right),
+  );
+  if (messageDelta != 0) {
+    return messageDelta;
+  }
+
+  final unreadDelta = _boolSortDelta(
+    left: _chatHasUnread(left),
+    right: _chatHasUnread(right),
+  );
+  if (unreadDelta != 0) {
+    return unreadDelta;
+  }
+
+  return 0;
+}
+
+bool _chatHasUnread(BackendChatSummary summary) => summary.unreadCount > 0;
+
+bool _chatHasMessages(BackendChatSummary summary) {
+  final raw = summary.raw;
+  return _stringOrNull(raw['lastMessageId']) != null ||
+      _stringOrNull(raw['lastMessageAt']) != null ||
+      _stringOrNull(raw['lastMessage']) != null ||
+      _stringOrNull(raw['preview']) != null;
+}
+
+int _boolSortDelta({required bool left, required bool right}) {
+  return (right ? 1 : 0) - (left ? 1 : 0);
+}
+
+bool _chatIsPinned(BackendChatSummary summary) {
+  return summary.raw['isPinned'] == true || summary.raw['pinned'] == true;
+}
+
+DateTime _chatSortTime(BackendChatSummary summary) {
+  final raw = summary.raw;
+  final values = [
+    raw['lastMessageAt'],
+    raw['updatedAt'],
+    raw['createdAt'],
+  ]
+      .map((value) => DateTime.tryParse(value?.toString() ?? ''))
+      .whereType<DateTime>();
+  var latest = DateTime.fromMillisecondsSinceEpoch(0);
+  for (final value in values) {
+    if (value.isAfter(latest)) {
+      latest = value;
+    }
+  }
+  return latest;
+}
+
+bool _isArchivedMeetupChat(BackendChatSummary summary) {
+  final kind = summary.kind == 'meetup' || summary.raw['kind'] == 'meetup';
+  if (!kind) {
+    return false;
+  }
+  final raw = summary.raw;
+  return raw['phase'] == 'done' ||
+      raw['meetupPhase'] == 'done' ||
+      raw['status'] == 'done';
+}
+
+final chatMessagesProvider = StreamProvider.autoDispose
+    .family<List<BackendChatMessage>, String>((ref, chatId) async* {
+  final userId = ref.read(currentUserIdProvider);
+  final chatStore = ref.read(chatLocalStoreProvider);
+  if (userId != null && chatStore != null) {
+    final repository = ref.read(backendRepositoryProvider);
+    final cancelToken = CancelToken();
+    ref.onDispose(cancelToken.cancel);
+    Future<List<BackendChatMessage>> refreshMessages() async {
+      final page = await repository.fetchChatMessages(
+        chatId,
+        cancelToken: cancelToken,
+      );
+      await chatStore.upsertMessages(
+        userId: userId,
+        chatId: chatId,
+        messages: page.items.map((item) => item.raw).toList(),
+      );
+      ref
+          .read(chatHistoryPaginationProvider(chatId).notifier)
+          .setNextCursor(page.nextCursor);
+      _prewarmChatAttachments(ref, page.items);
+      final lastMessageId = _lastServerMessageId(page.items);
+      if (lastMessageId != null) {
+        unawaited(
+          repository
+              .markChatRead(
+            chatId,
+            messageId: lastMessageId,
+            cancelToken: cancelToken,
+          )
+              .then((_) {
+            return chatStore.markSummaryRead(userId: userId, chatId: chatId);
+          }).catchError((_) {}),
+        );
+      }
+      return page.items;
+    }
+
+    unawaited(
+      refreshMessages().then<void>((_) {}).catchError((_) {}),
+    );
+    yield* chatStore.watchRecentMessages(userId: userId, chatId: chatId).map(
+        (rows) => rows
+            .map((json) => BackendChatMessage.fromJson(chatId, json))
+            .toList(growable: false));
+    return;
+  }
+  final cancelToken = CancelToken();
+  ref.onDispose(cancelToken.cancel);
+  final page = await ref.read(backendRepositoryProvider).fetchChatMessages(
+        chatId,
+        cancelToken: cancelToken,
+      );
+  ref
+      .read(chatHistoryPaginationProvider(chatId).notifier)
+      .setNextCursor(page.nextCursor);
+  yield page.items;
+});
+
+final chatOptimisticMessagesProvider = StateNotifierProvider.autoDispose
+    .family<ChatOptimisticMessagesController, List<BackendChatMessage>, String>(
+        (ref, chatId) {
+  return ChatOptimisticMessagesController(chatId);
+});
+
+class ChatOptimisticMessagesController
+    extends StateNotifier<List<BackendChatMessage>> {
+  ChatOptimisticMessagesController(this.chatId) : super(const []);
+
+  final String chatId;
+
+  void upsert(Map<String, Object?> raw) {
+    if (!mounted) {
+      return;
+    }
+    final message = BackendChatMessage.fromJson(chatId, raw);
+    final key = _optimisticKey(message);
+    state = [
+      for (final item in state)
+        if (_optimisticKey(item) != key) item,
+      message,
+    ];
+  }
+
+  void patchByClientMessageId(
+    String clientMessageId,
+    Map<String, Object?> Function(Map<String, Object?> raw) patch,
+  ) {
+    if (!mounted) {
+      return;
+    }
+    state = [
+      for (final item in state)
+        if (item.clientMessageId == clientMessageId)
+          BackendChatMessage.fromJson(chatId, patch(item.raw))
+        else
+          item,
+    ];
+  }
+
+  void remove({
+    required String messageId,
+    String? clientMessageId,
+  }) {
+    if (!mounted) {
+      return;
+    }
+    state = [
+      for (final item in state)
+        if (item.id != messageId &&
+            (clientMessageId == null ||
+                clientMessageId.isEmpty ||
+                item.clientMessageId != clientMessageId))
+          item,
+    ];
+  }
+
+  String _optimisticKey(BackendChatMessage message) {
+    final clientMessageId = message.clientMessageId;
+    if (clientMessageId != null && clientMessageId.isNotEmpty) {
+      return clientMessageId;
+    }
+    return message.id;
+  }
+}
+
+final chatHistoryPaginationProvider = StateNotifierProvider.autoDispose.family<
+    ChatHistoryPaginationController,
+    ChatHistoryPaginationState,
+    String>((ref, chatId) {
+  return ChatHistoryPaginationController(ref, chatId);
+});
+
+final chatMessageSenderProvider = Provider<ChatMessageSender>((ref) {
+  return ChatMessageSender(ref);
+});
+
+final chatActionsProvider = Provider<ChatActions>((ref) {
+  return ChatActions(ref);
+});
+
+final signedMediaUrlProvider =
+    FutureProvider.autoDispose.family<String, String>((ref, path) {
+  return ref.read(appAttachmentServiceProvider).resolveSignedUrl(path);
+});
+
+String? _lastServerMessageId(List<BackendChatMessage> messages) {
+  for (var index = messages.length - 1; index >= 0; index -= 1) {
+    final message = messages[index];
+    if (!message.pending && message.id.isNotEmpty) {
+      return message.id;
+    }
+  }
+  return null;
+}
+
+class ChatHistoryPaginationState {
+  const ChatHistoryPaginationState({
+    this.nextCursor,
+    this.loading = false,
+    this.error = false,
+  });
+
+  final String? nextCursor;
+  final bool loading;
+  final bool error;
+
+  bool get hasNextPage => nextCursor != null && nextCursor!.isNotEmpty;
+
+  ChatHistoryPaginationState copyWith({
+    String? nextCursor,
+    bool clearNextCursor = false,
+    bool? loading,
+    bool? error,
+  }) {
+    return ChatHistoryPaginationState(
+      nextCursor: clearNextCursor ? null : nextCursor ?? this.nextCursor,
+      loading: loading ?? this.loading,
+      error: error ?? this.error,
+    );
+  }
+}
+
+class ChatHistoryPaginationController
+    extends StateNotifier<ChatHistoryPaginationState> {
+  ChatHistoryPaginationController(this._ref, this._chatId)
+      : super(const ChatHistoryPaginationState());
+
+  final Ref _ref;
+  final String _chatId;
+
+  void setNextCursor(String? cursor) {
+    state = state.copyWith(
+      nextCursor: cursor,
+      clearNextCursor: cursor == null || cursor.isEmpty,
+      error: false,
+    );
+  }
+
+  Future<void> loadNextPage() async {
+    final cursor = state.nextCursor;
+    if (state.loading || cursor == null || cursor.isEmpty) {
+      return;
+    }
+    final userId = _ref.read(currentUserIdProvider);
+    final store = _ref.read(chatLocalStoreProvider);
+    if (userId == null || store == null) {
+      return;
+    }
+    state = state.copyWith(loading: true, error: false);
+    try {
+      final page = await _ref.read(backendRepositoryProvider).fetchChatMessages(
+            _chatId,
+            cursor: cursor,
+          );
+      await store.upsertMessages(
+        userId: userId,
+        chatId: _chatId,
+        messages: page.items.map((item) => item.raw).toList(),
+      );
+      _prewarmChatAttachments(_ref, page.items);
+      state = state.copyWith(
+        nextCursor: page.nextCursor,
+        clearNextCursor: page.nextCursor == null || page.nextCursor!.isEmpty,
+        loading: false,
+        error: false,
+      );
+    } catch (_) {
+      state = state.copyWith(loading: false, error: true);
+    }
+  }
+}
+
+void _prewarmChatAttachments(Ref ref, List<BackendChatMessage> messages) {
+  final paths = _recentChatAttachmentWarmupPaths(messages);
+  final service = ref.read(appAttachmentServiceProvider);
+  unawaited(service.warmCache(paths.cacheFiles));
+  unawaited(service.warmSignedUrls(paths.signedOnly));
+}
+
+_ChatAttachmentWarmupPaths _recentChatAttachmentWarmupPaths(
+  List<BackendChatMessage> messages,
+) {
+  final candidates = <_ChatAttachmentWarmupCandidate>[];
+  for (final message in messages.reversed) {
+    candidates.addAll(
+      _chatAttachmentWarmupCandidates(message.raw['attachments']),
+    );
+    if (candidates.length >= 6) {
+      break;
+    }
+  }
+  final selected = candidates.take(6);
+  return _ChatAttachmentWarmupPaths(
+    cacheFiles: selected
+        .where((candidate) => candidate.warmFile)
+        .map((candidate) => candidate.path)
+        .toList(growable: false),
+    signedOnly: selected
+        .where((candidate) => !candidate.warmFile)
+        .map((candidate) => candidate.path)
+        .toList(growable: false),
+  );
+}
+
+List<_ChatAttachmentWarmupCandidate> _chatAttachmentWarmupCandidates(
+  Object? value,
+) {
+  final candidates = <_ChatAttachmentWarmupCandidate>[];
+  if (value is! List) {
     return const [];
   }
-  final cacheKey = AppCacheKey.build(
-    path: '/events',
-    query: {
-      'filter': filter,
-      'latitude': location?.latitude,
-      'longitude': location?.longitude,
-      'radiusKm': location == null ? null : radiusKm,
+  for (final raw in value.whereType<Map>()) {
+    final attachment = raw.map((key, value) => MapEntry('$key', value));
+    final status = attachment['status']?.toString();
+    if (status != 'ready') {
+      continue;
+    }
+    final mimeType = attachment['mimeType']?.toString() ?? '';
+    final kind = attachment['kind']?.toString() ?? '';
+    final fileName = attachment['fileName']?.toString() ?? '';
+    final shouldWarm = mimeType.startsWith('image/') ||
+        kind == 'image' ||
+        kind == 'chat_attachment' && _looksLikeImageFileName(fileName);
+    final shouldWarmSignedOnly =
+        kind == 'chat_voice' || mimeType.startsWith('audio/');
+    final path = attachment['downloadUrlPath']?.toString();
+    if (path == null || path.isEmpty) {
+      continue;
+    }
+    if (shouldWarm) {
+      candidates.add(
+        _ChatAttachmentWarmupCandidate(path: path, warmFile: true),
+      );
+    } else if (shouldWarmSignedOnly) {
+      candidates.add(
+        _ChatAttachmentWarmupCandidate(path: path, warmFile: false),
+      );
+    }
+  }
+  return candidates;
+}
+
+class _ChatAttachmentWarmupPaths {
+  const _ChatAttachmentWarmupPaths({
+    this.cacheFiles = const [],
+    this.signedOnly = const [],
+  });
+
+  final Iterable<String> cacheFiles;
+  final Iterable<String> signedOnly;
+}
+
+class _ChatAttachmentWarmupCandidate {
+  const _ChatAttachmentWarmupCandidate({
+    required this.path,
+    required this.warmFile,
+  });
+
+  final String path;
+  final bool warmFile;
+}
+
+bool _looksLikeImageFileName(String fileName) {
+  final lower = fileName.toLowerCase();
+  return lower.endsWith('.jpg') ||
+      lower.endsWith('.jpeg') ||
+      lower.endsWith('.png') ||
+      lower.endsWith('.webp') ||
+      lower.endsWith('.heic');
+}
+
+final chatRealtimeProvider =
+    Provider.autoDispose.family<ChatRealtimeSession?, String>((ref, chatId) {
+  final userId = ref.watch(currentUserIdProvider);
+  final tokens = ref.watch(authTokensProvider);
+  final store = ref.watch(chatLocalStoreProvider);
+  if (userId == null || tokens == null || store == null) {
+    return null;
+  }
+  final transportFactory = ref.watch(chatSocketTransportFactoryProvider);
+  final socketUri = Uri.parse(BackendConfig.chatWebSocketUrl);
+  final transport = transportFactory(socketUri);
+  final session = ChatRealtimeSession(
+    transport: transport,
+    store: store,
+    userId: userId,
+    chatId: chatId,
+    accessToken: tokens.accessToken,
+    reconnectTransportFactory: transportFactory,
+    reconnectUri: socketUri,
+    beforeFlushOutbox: (_) async {
+      await ref.read(chatMediaUploadQueueProvider)?.processForChats(
+            userId: userId,
+          );
+    },
+    onNotificationCreated: (payload) {
+      unawaited(
+        ref
+            .read(notificationsActionsProvider)
+            .applyRealtimeNotificationCreated(payload),
+      );
     },
   );
-  return _fetchLocalFirst<List<Event>>(
-    ref,
-    namespace: AppCacheNamespace.meetups,
-    cacheKey: cacheKey,
-    policy: AppCachePolicies.meetups,
-    networkFetch: () => repository
-        .fetchEvents(
-          filter: filter,
-          latitude: location?.latitude,
-          longitude: location?.longitude,
-          radiusKm: location == null ? null : radiusKm,
-        )
-        .then((value) => value.items),
-    fromJson: (json) => _decodeCacheList(json, Event.fromJson),
-    toJson: _eventsToCacheJson,
-    forceRefresh: forceRefresh,
+  unawaited(session.start());
+  ref.onDispose(() => unawaited(session.close()));
+  return session;
+});
+
+final chatListRealtimeProvider = Provider.autoDispose
+    .family<ChatRealtimeSession?, ChatListKind>((ref, kind) {
+  final chatIdKey = ref.watch(
+    chatListProvider(kind).select(
+      (value) => _chatRealtimeKey(value.valueOrNull?.items ?? const []),
+    ),
   );
-}
-
-Future<T> _fetchLocalFirst<T>(
-  Ref ref, {
-  required AppCacheNamespace namespace,
-  required String cacheKey,
-  required AppCachePolicy policy,
-  required FutureOr<T> Function() networkFetch,
-  required T Function(Object? json) fromJson,
-  required Object? Function(T value) toJson,
-  bool forceRefresh = false,
-}) async {
-  final repository = ref.read(localFirstRepositoryProvider);
-  if (repository == null) {
-    return Future<T>.sync(networkFetch);
+  if (chatIdKey.isEmpty) {
+    return null;
   }
-
-  final result = await repository.fetch<T>(
-    userScope: ref.read(appCacheUserScopeProvider),
-    namespace: namespace,
-    cacheKey: cacheKey,
-    policy: policy,
-    networkFetch: networkFetch,
-    fromJson: fromJson,
-    toJson: toJson,
-    forceRefresh: forceRefresh,
-  );
-  final refresh = result.refresh;
-  if (refresh != null) {
-    unawaited(refresh);
-  }
-  return result.data;
-}
-
-Future<void> clearLocalFirstCacheKey(
-  Ref ref, {
-  required AppCacheNamespace namespace,
-  required String cacheKey,
-}) async {
-  final repository = ref.read(localFirstRepositoryProvider);
-  if (repository == null) {
-    return;
-  }
-  await repository.deleteKey(
-    userScope: ref.read(appCacheUserScopeProvider),
-    namespace: namespace,
-    cacheKey: cacheKey,
-  );
-}
-
-Future<void> clearWidgetLocalFirstCacheKey(
-  WidgetRef ref, {
-  required AppCacheNamespace namespace,
-  required String cacheKey,
-}) async {
-  final repository = ref.read(localFirstRepositoryProvider);
-  if (repository == null) {
-    return;
-  }
-  await repository.deleteKey(
-    userScope: ref.read(appCacheUserScopeProvider),
-    namespace: namespace,
-    cacheKey: cacheKey,
-  );
-}
-
-Future<void> clearLocalFirstCacheNamespace(
-  Ref ref,
-  AppCacheNamespace namespace,
-) async {
-  final repository = ref.read(localFirstRepositoryProvider);
-  if (repository == null) {
-    return;
-  }
-  await repository.deleteNamespace(
-    userScope: ref.read(appCacheUserScopeProvider),
-    namespace: namespace,
-  );
-}
-
-Future<void> clearWidgetLocalFirstCacheNamespace(
-  WidgetRef ref,
-  AppCacheNamespace namespace,
-) async {
-  final repository = ref.read(localFirstRepositoryProvider);
-  if (repository == null) {
-    return;
-  }
-  await repository.deleteNamespace(
-    userScope: ref.read(appCacheUserScopeProvider),
-    namespace: namespace,
-  );
-}
-
-Future<void> clearLocalFirstCacheNamespaceFromContainer(
-  ProviderContainer container,
-  AppCacheNamespace namespace,
-) async {
-  final repository = container.read(localFirstRepositoryProvider);
-  if (repository == null) {
-    return;
-  }
-  await repository.deleteNamespace(
-    userScope: container.read(appCacheUserScopeProvider),
-    namespace: namespace,
-  );
-}
-
-Future<void> clearEventListLocalFirstCaches(WidgetRef ref) async {
-  await clearWidgetLocalFirstCacheNamespace(ref, AppCacheNamespace.meetups);
-  await clearWidgetLocalFirstCacheNamespace(ref, AppCacheNamespace.map);
-}
-
-Future<void> clearEventListLocalFirstCachesForRef(Ref ref) async {
-  await clearLocalFirstCacheNamespace(ref, AppCacheNamespace.meetups);
-  await clearLocalFirstCacheNamespace(ref, AppCacheNamespace.map);
-}
-
-List<T> _decodeCacheList<T>(
-  Object? json,
-  T Function(Map<String, dynamic> json) fromJson,
-) {
-  final items = json is List ? json : const [];
-  return items
-      .whereType<Map>()
-      .map((item) => fromJson(Map<String, dynamic>.from(item)))
-      .toList(growable: false);
-}
-
-Map<String, dynamic> _jsonMap(Object? json) {
-  return json is Map ? Map<String, dynamic>.from(json) : <String, dynamic>{};
-}
-
-List<String> _stringList(Object? json) {
-  return ((json as List?) ?? const [])
-      .whereType<String>()
-      .toList(growable: false);
-}
-
-List<Map<String, dynamic>> _eventsToCacheJson(List<Event> items) {
-  return items.map(_eventToCacheJson).toList(growable: false);
-}
-
-Map<String, dynamic> _eventToCacheJson(Event event) {
-  return {
-    'id': event.id,
-    'title': event.title,
-    'emoji': event.emoji,
-    'time': event.time,
-    'startsAtIso': event.startsAtIso,
-    'imageUrl': event.imageUrl,
-    'place': event.place,
-    'distance': event.distance,
-    'attendees': event.attendees,
-    'going': event.going,
-    'capacity': event.capacity,
-    'vibe': event.vibe,
-    'tone': _eventToneToJson(event.tone),
-    'lifestyle': event.lifestyle,
-    'priceMode': event.priceMode,
-    'priceAmountFrom': event.priceAmountFrom,
-    'priceAmountTo': event.priceAmountTo,
-    'accessMode': event.accessMode,
-    'genderMode': event.genderMode,
-    'visibilityMode': event.visibilityMode,
-    'requiresVerification': event.requiresVerification,
-    'requiresFrendlyPlus': event.requiresFrendlyPlus,
-    'routeId': event.routeId,
-    'routePointCount': event.routePointCount,
-    'routePoints': event.routePoints.map(_eventRoutePointToJson).toList(),
-    'isAfficheBacked': event.isAfficheBacked,
-    'isDate': event.isDate,
-    'hostNote': event.hostNote,
-    'latitude': event.latitude,
-    'longitude': event.longitude,
-    'joined': event.joined,
-    'joinMode': _eventJoinModeToJson(event.joinMode),
-    'joinRequestStatus': _eventJoinRequestStatusToJson(event.joinRequestStatus),
-    'attendanceStatus': _eventAttendanceStatusToJson(event.attendanceStatus),
-    'liveStatus': _eventLiveStatusToJson(event.liveStatus),
-    'isHost': event.isHost,
-    'ticketUrl': event.ticketUrl,
-    'ticketSourceKind': _eventTicketSourceKindToJson(event.ticketSourceKind),
-    'ticketSourceId': event.ticketSourceId,
-    'ticketPriceFrom': event.ticketPriceFrom,
-    'ticketProvider': event.ticketProvider,
-    'ticketVenue': event.ticketVenue,
-    'bookingUrl': event.bookingUrl,
-    'bookingProvider': event.bookingProvider,
-    'bookingPlaceId': event.bookingPlaceId,
-    'bookingAverageCheck': event.bookingAverageCheck,
-    'bookingCurrency': event.bookingCurrency,
-    'bookingPromos': event.bookingPromos.map(_eventBookingPromoToJson).toList(),
-  };
-}
-
-Map<String, dynamic> _eventRoutePointToJson(EventRoutePoint point) {
-  return {
-    'id': point.id,
-    'title': point.title,
-    'emoji': point.emoji,
-    'latitude': point.latitude,
-    'longitude': point.longitude,
-  };
-}
-
-Map<String, dynamic> _eventBookingPromoToJson(EventBookingPromo promo) {
-  return {
-    'title': promo.title,
-    'description': promo.description,
-    'validUntil': promo.validUntil,
-    'bookingUrl': promo.bookingUrl,
-    'sourceUrl': promo.sourceUrl,
-  };
-}
-
-String _eventToneToJson(EventTone tone) {
-  return switch (tone) {
-    EventTone.evening => 'evening',
-    EventTone.sage => 'sage',
-    EventTone.warm => 'warm',
-  };
-}
-
-String _eventJoinModeToJson(EventJoinMode mode) {
-  return switch (mode) {
-    EventJoinMode.request => 'request',
-    EventJoinMode.open => 'open',
-  };
-}
-
-String? _eventJoinRequestStatusToJson(EventJoinRequestStatus? status) {
-  return switch (status) {
-    EventJoinRequestStatus.pending => 'pending',
-    EventJoinRequestStatus.approved => 'approved',
-    EventJoinRequestStatus.rejected => 'rejected',
-    EventJoinRequestStatus.canceled => 'canceled',
-    null => null,
-  };
-}
-
-String _eventAttendanceStatusToJson(EventAttendanceStatus status) {
-  return switch (status) {
-    EventAttendanceStatus.checkedIn => 'checked_in',
-    EventAttendanceStatus.left => 'left',
-    EventAttendanceStatus.notCheckedIn => 'not_checked_in',
-  };
-}
-
-String _eventLiveStatusToJson(EventLiveStatus status) {
-  return switch (status) {
-    EventLiveStatus.live => 'live',
-    EventLiveStatus.finished => 'finished',
-    EventLiveStatus.idle => 'idle',
-  };
-}
-
-String? _eventTicketSourceKindToJson(EventTicketSourceKind? kind) {
-  return switch (kind) {
-    EventTicketSourceKind.affiche => 'affiche',
-    null => null,
-  };
-}
-
-Future<({double latitude, double longitude})?> _eventFeedLocation(
-  String filter,
-  ManualLocation? manualLocation,
-  AppLocationService? locationService,
-) async {
-  if (filter != 'nearby') {
+  final userId = ref.watch(currentUserIdProvider);
+  final tokens = ref.watch(authTokensProvider);
+  final store = ref.watch(chatLocalStoreProvider);
+  if (userId == null || tokens == null || store == null) {
     return null;
   }
 
-  if (manualLocation != null) {
-    return (
-      latitude: manualLocation.latitude,
-      longitude: manualLocation.longitude,
-    );
-  }
+  final chatIds = chatIdKey.split(_chatRealtimeKeySeparator);
+  final transportFactory = ref.watch(chatSocketTransportFactoryProvider);
+  final socketUri = Uri.parse(BackendConfig.chatWebSocketUrl);
+  final transport = transportFactory(socketUri);
+  final session = ChatRealtimeSession(
+    transport: transport,
+    store: store,
+    userId: userId,
+    chatId: chatIds.first,
+    chatIds: chatIds,
+    accessToken: tokens.accessToken,
+    reconnectTransportFactory: transportFactory,
+    reconnectUri: socketUri,
+    beforeFlushOutbox: (_) async {
+      await ref.read(chatMediaUploadQueueProvider)?.processForChats(
+            userId: userId,
+          );
+    },
+    onNotificationCreated: (payload) {
+      unawaited(
+        ref
+            .read(notificationsActionsProvider)
+            .applyRealtimeNotificationCreated(payload),
+      );
+    },
+  );
+  unawaited(session.start());
+  ref.onDispose(() => unawaited(session.close()));
+  return session;
+});
 
-  try {
-    final position = await locationService?.getCurrentPosition();
-    if (position == null) {
-      return null;
+const _chatRealtimeKeySeparator = '\u001F';
+
+String _chatRealtimeKey(Iterable<BackendChatSummary> items) {
+  final ids = items
+      .map((item) => item.id.trim())
+      .where((id) => id.isNotEmpty)
+      .take(50)
+      .toSet()
+      .toList(growable: false)
+    ..sort();
+  return ids.join(_chatRealtimeKeySeparator);
+}
+
+class ChatMessageSender {
+  ChatMessageSender(this._ref);
+
+  final Ref _ref;
+  static const Duration _directSendTimeout = Duration(seconds: 12);
+
+  Future<void> sendText({
+    required String chatId,
+    required String text,
+    String? clientMessageId,
+    Map<String, Object?>? replyTo,
+  }) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      return;
     }
-    return (
-      latitude: position.latitude,
-      longitude: position.longitude,
+    final userId = _ref.read(currentUserIdProvider);
+    final store = _ref.read(chatLocalStoreProvider);
+    if (userId == null) {
+      throw StateError('Current user is unavailable');
+    }
+    final resolvedClientMessageId =
+        clientMessageId ?? 'mobile2-${DateTime.now().microsecondsSinceEpoch}';
+    final now = DateTime.now();
+    final user = _ref.read(currentUserProvider);
+    Map<String, Object?> buildTextMessage(String status) => <String, Object?>{
+          'chatId': chatId,
+          'text': trimmed,
+          'id': resolvedClientMessageId,
+          'clientMessageId': resolvedClientMessageId,
+          'senderId': userId,
+          'sender': {
+            'displayName': user?.name ?? 'Вы',
+          },
+          'createdAt': now.toIso8601String(),
+          'pending': status != 'sent',
+          'mine': true,
+          'status': status,
+          if (replyTo != null) 'replyTo': replyTo,
+        };
+    if (store == null) {
+      final optimistic = _ref.read(
+        chatOptimisticMessagesProvider(chatId).notifier,
+      );
+      optimistic.upsert(buildTextMessage('pending'));
+      try {
+        await _sendDirect(
+          chatId: chatId,
+          clientMessageId: resolvedClientMessageId,
+          text: trimmed,
+          replyToMessageId: _stringOrNull(replyTo?['id']),
+        );
+        optimistic.patchByClientMessageId(
+          resolvedClientMessageId,
+          (raw) => {
+            ...raw,
+            'pending': false,
+            'status': 'sent',
+          },
+        );
+      } catch (_) {
+        optimistic.patchByClientMessageId(
+          resolvedClientMessageId,
+          (raw) => {
+            ...raw,
+            'pending': true,
+            'status': 'failed',
+          },
+        );
+        rethrow;
+      }
+      return;
+    }
+    await store.upsertMessages(
+      userId: userId,
+      chatId: chatId,
+      messages: [buildTextMessage('pending')],
     );
-  } catch (_) {
-    return null;
+    await store.enqueuePendingCommand(
+      userId: userId,
+      commandId: resolvedClientMessageId,
+      dedupeKey: 'message.send:$chatId:$resolvedClientMessageId',
+      payload: {
+        'type': 'message.send',
+        'payload': {
+          'chatId': chatId,
+          'text': trimmed,
+          'clientMessageId': resolvedClientMessageId,
+          if (_stringOrNull(replyTo?['id']) != null)
+            'replyToMessageId': _stringOrNull(replyTo?['id']),
+        },
+      },
+    );
+  }
+
+  Future<void> retryMessage({
+    required String chatId,
+    required String clientMessageId,
+  }) async {
+    final userId = _ref.read(currentUserIdProvider);
+    final store = _ref.read(chatLocalStoreProvider);
+    if (userId == null || store == null) {
+      return;
+    }
+    final message = await store.readMessageByClientMessageId(
+      userId: userId,
+      chatId: chatId,
+      clientMessageId: clientMessageId,
+    );
+    if (message == null) {
+      return;
+    }
+    final attachments = message['attachments'];
+    if (attachments is List && attachments.isNotEmpty) {
+      await store.retryPendingMediaUpload(
+        userId: userId,
+        uploadId: clientMessageId,
+      );
+      await store.patchMessageByClientMessageId(
+        userId: userId,
+        chatId: chatId,
+        clientMessageId: clientMessageId,
+        patch: (current) => {
+          ...current,
+          'pending': true,
+          'status': 'uploading',
+          'attachments': _withAttachmentStatus(
+            current['attachments'],
+            'uploading',
+          ),
+        },
+      );
+      final uploadQueue = _ref.read(chatMediaUploadQueueProvider);
+      if (uploadQueue != null) {
+        unawaited(
+          (() async {
+            await uploadQueue.processForChats(
+              userId: userId,
+              chatIds: [chatId],
+            );
+            unawaited(
+              _ref.read(chatRealtimeProvider(chatId))?.flushOutbox() ??
+                  Future<void>.value(),
+            );
+          })(),
+        );
+      }
+      return;
+    }
+    final text = message['text']?.toString() ?? '';
+    final location = _objectMap(message['location']);
+    if (text.trim().isEmpty && location.isEmpty) {
+      return;
+    }
+    await store.patchMessageByClientMessageId(
+      userId: userId,
+      chatId: chatId,
+      clientMessageId: clientMessageId,
+      patch: (current) => {
+        ...current,
+        'pending': true,
+        'status': 'pending',
+      },
+    );
+    await store.enqueuePendingCommand(
+      userId: userId,
+      commandId: clientMessageId,
+      dedupeKey: 'message.send:$chatId:$clientMessageId',
+      payload: {
+        'type': 'message.send',
+        'payload': {
+          'chatId': chatId,
+          if (text.trim().isNotEmpty) 'text': text.trim(),
+          if (location.isNotEmpty) 'location': location,
+          'clientMessageId': clientMessageId,
+          if (_stringOrNull(message['replyTo'] is Map
+                  ? (message['replyTo'] as Map)['id']
+                  : null) !=
+              null)
+            'replyToMessageId': _stringOrNull(
+              (message['replyTo'] as Map)['id'],
+            ),
+        },
+      },
+    );
+    unawaited(
+      _ref.read(chatRealtimeProvider(chatId))?.flushOutbox() ??
+          Future<void>.value(),
+    );
+  }
+
+  Future<void> sendLocation({
+    required String chatId,
+    required double latitude,
+    required double longitude,
+    String? label,
+    Map<String, Object?>? replyTo,
+  }) async {
+    final userId = _ref.read(currentUserIdProvider);
+    final store = _ref.read(chatLocalStoreProvider);
+    if (userId == null) {
+      throw StateError('Current user is unavailable');
+    }
+    final clientMessageId = 'mobile2-${DateTime.now().microsecondsSinceEpoch}';
+    final now = DateTime.now();
+    final expiresAt = now.add(const Duration(minutes: 15));
+    final user = _ref.read(currentUserProvider);
+    final location = <String, Object?>{
+      'latitude': latitude,
+      'longitude': longitude,
+      if (_stringOrNull(label) != null) 'label': _stringOrNull(label),
+      'expiresAt': expiresAt.toUtc().toIso8601String(),
+    };
+    Map<String, Object?> buildLocationMessage(String status) =>
+        <String, Object?>{
+          'chatId': chatId,
+          'text': '',
+          'id': clientMessageId,
+          'clientMessageId': clientMessageId,
+          'senderId': userId,
+          'sender': {
+            'displayName': user?.name ?? 'Вы',
+          },
+          'createdAt': now.toIso8601String(),
+          'pending': status != 'sent',
+          'mine': true,
+          'status': status,
+          'location': location,
+          if (replyTo != null) 'replyTo': replyTo,
+        };
+
+    if (store == null) {
+      final optimistic = _ref.read(
+        chatOptimisticMessagesProvider(chatId).notifier,
+      );
+      optimistic.upsert(buildLocationMessage('pending'));
+      try {
+        await _sendDirect(
+          chatId: chatId,
+          clientMessageId: clientMessageId,
+          location: location,
+          replyToMessageId: _stringOrNull(replyTo?['id']),
+        );
+        optimistic.patchByClientMessageId(
+          clientMessageId,
+          (raw) => {
+            ...raw,
+            'pending': false,
+            'status': 'sent',
+          },
+        );
+      } catch (_) {
+        optimistic.patchByClientMessageId(
+          clientMessageId,
+          (raw) => {
+            ...raw,
+            'pending': true,
+            'status': 'failed',
+          },
+        );
+        rethrow;
+      }
+      return;
+    }
+
+    await store.upsertMessages(
+      userId: userId,
+      chatId: chatId,
+      messages: [buildLocationMessage('pending')],
+    );
+    await store.enqueuePendingCommand(
+      userId: userId,
+      commandId: clientMessageId,
+      dedupeKey: 'message.send:$chatId:$clientMessageId',
+      payload: {
+        'type': 'message.send',
+        'payload': {
+          'chatId': chatId,
+          'location': location,
+          'clientMessageId': clientMessageId,
+          if (_stringOrNull(replyTo?['id']) != null)
+            'replyToMessageId': _stringOrNull(replyTo?['id']),
+        },
+      },
+    );
+  }
+
+  Future<void> sendAttachment({
+    required String chatId,
+    required String filePath,
+    required String fileName,
+    required String mimeType,
+    String kind = 'chat_attachment',
+    int? durationMs,
+    List<double> waveform = const [],
+    Map<String, Object?>? replyTo,
+  }) async {
+    final userId = _ref.read(currentUserIdProvider);
+    final store = _ref.read(chatLocalStoreProvider);
+    if (userId == null) {
+      throw StateError('Current user is unavailable');
+    }
+    final clientMessageId = 'mobile2-${DateTime.now().microsecondsSinceEpoch}';
+    final now = DateTime.now();
+    final user = _ref.read(currentUserProvider);
+    Map<String, Object?> buildMessage(Map<String, Object?> attachment) {
+      final attachmentStatus = attachment['status']?.toString();
+      return <String, Object?>{
+        'id': clientMessageId,
+        'chatId': chatId,
+        'text': '',
+        'clientMessageId': clientMessageId,
+        'senderId': userId,
+        'sender': {
+          'displayName': user?.name ?? 'Вы',
+        },
+        'createdAt': now.toIso8601String(),
+        'pending': attachmentStatus != null && attachmentStatus != 'ready',
+        'mine': true,
+        if (attachmentStatus != null && attachmentStatus.isNotEmpty)
+          'status': attachmentStatus,
+        if (replyTo != null) 'replyTo': replyTo,
+        'attachments': [attachment],
+      };
+    }
+
+    if (store == null) {
+      final optimistic = _ref.read(
+        chatOptimisticMessagesProvider(chatId).notifier,
+      );
+      final uploadingAttachment = {
+        'id': 'local-$clientMessageId',
+        'kind': kind,
+        'status': 'uploading',
+        'fileName': fileName,
+        'mimeType': mimeType,
+        'localPath': filePath,
+        if (durationMs != null) 'durationMs': durationMs,
+        if (waveform.isNotEmpty) 'waveform': waveform,
+      };
+      optimistic.upsert(buildMessage(uploadingAttachment));
+      try {
+        final asset =
+            await _ref.read(backendRepositoryProvider).uploadChatAttachmentFile(
+                  chatId: chatId,
+                  filePath: filePath,
+                  fileName: fileName,
+                  mimeType: mimeType,
+                  kind: kind,
+                  durationMs: durationMs,
+                  waveform: waveform,
+                );
+        final assetId = _stringOrNull(asset['assetId'] ?? asset['id']);
+        if (assetId == null) {
+          throw StateError('Attachment upload did not return assetId');
+        }
+        optimistic.upsert(
+          buildMessage({
+            ...uploadingAttachment,
+            'id': assetId,
+            'status': 'pending',
+            'url': '/media/$assetId',
+            'downloadUrlPath': '/media/$assetId/download-url',
+          }),
+        );
+        await _sendDirect(
+          chatId: chatId,
+          clientMessageId: clientMessageId,
+          attachmentIds: [assetId],
+          replyToMessageId: _stringOrNull(replyTo?['id']),
+        );
+        optimistic.patchByClientMessageId(
+          clientMessageId,
+          (raw) => {
+            ...raw,
+            'pending': false,
+            'status': 'sent',
+            'attachments': _withAttachmentStatus(raw['attachments'], 'ready'),
+          },
+        );
+      } catch (_) {
+        optimistic.patchByClientMessageId(
+          clientMessageId,
+          (raw) => {
+            ...raw,
+            'pending': true,
+            'status': 'failed',
+            'attachments': _withAttachmentStatus(raw['attachments'], 'failed'),
+          },
+        );
+        rethrow;
+      }
+      return;
+    }
+
+    String pendingPath;
+    try {
+      pendingPath =
+          await _ref.read(appChatMediaFileStoreProvider).copyForPendingUpload(
+                sourcePath: filePath,
+                uploadId: clientMessageId,
+                fileName: fileName,
+              );
+    } on FileSystemException {
+      pendingPath = filePath;
+      await store.upsertMessages(
+        userId: userId,
+        chatId: chatId,
+        messages: [
+          buildMessage({
+            'id': 'local-$clientMessageId',
+            'kind': kind,
+            'status': 'failed',
+            'fileName': fileName,
+            'mimeType': mimeType,
+            'localPath': pendingPath,
+            if (durationMs != null) 'durationMs': durationMs,
+            if (waveform.isNotEmpty) 'waveform': waveform,
+          }),
+        ],
+      );
+      await store.enqueuePendingMediaUpload(
+        userId: userId,
+        uploadId: clientMessageId,
+        chatId: chatId,
+        clientMessageId: clientMessageId,
+        localPath: pendingPath,
+        fileName: fileName,
+        mimeType: mimeType,
+        kind: kind,
+        durationMs: durationMs,
+        waveform: waveform,
+      );
+      await store.markPendingMediaUploadFailed(
+        userId: userId,
+        uploadId: clientMessageId,
+        error: 'local_file_missing',
+      );
+      return;
+    }
+
+    final uploadingAttachment = {
+      'id': 'local-$clientMessageId',
+      'kind': kind,
+      'status': 'uploading',
+      'fileName': fileName,
+      'mimeType': mimeType,
+      'localPath': pendingPath,
+      if (durationMs != null) 'durationMs': durationMs,
+      if (waveform.isNotEmpty) 'waveform': waveform,
+    };
+    await store.upsertMessages(
+      userId: userId,
+      chatId: chatId,
+      messages: [buildMessage(uploadingAttachment)],
+    );
+    Future<void> markUploadFailed() {
+      return store.upsertMessages(
+        userId: userId,
+        chatId: chatId,
+        messages: [
+          buildMessage({
+            ...uploadingAttachment,
+            'status': 'failed',
+          }),
+        ],
+      );
+    }
+
+    await store.enqueuePendingMediaUpload(
+      userId: userId,
+      uploadId: clientMessageId,
+      chatId: chatId,
+      clientMessageId: clientMessageId,
+      localPath: pendingPath,
+      fileName: fileName,
+      mimeType: mimeType,
+      kind: kind,
+      durationMs: durationMs,
+      waveform: waveform,
+    );
+    final uploadQueue = _ref.read(chatMediaUploadQueueProvider);
+    if (uploadQueue != null) {
+      unawaited(
+        (() async {
+          try {
+            await uploadQueue.processForChats(
+              userId: userId,
+              chatIds: [chatId],
+            );
+            unawaited(
+              _ref.read(chatRealtimeProvider(chatId))?.flushOutbox() ??
+                  Future<void>.value(),
+            );
+          } catch (_) {
+            await markUploadFailed();
+          }
+        })(),
+      );
+    }
+  }
+
+  Future<void> _sendDirect({
+    required String chatId,
+    required String clientMessageId,
+    String text = '',
+    List<String> attachmentIds = const [],
+    Map<String, Object?>? location,
+    String? replyToMessageId,
+  }) async {
+    final tokens = _ref.read(authTokensProvider);
+    if (tokens == null || tokens.accessToken.isEmpty) {
+      throw StateError('Chat auth token is unavailable');
+    }
+    final transport = _ref
+        .read(chatSocketTransportFactoryProvider)
+        .call(Uri.parse(BackendConfig.chatWebSocketUrl));
+    final done = Completer<void>();
+    StreamSubscription<Object?>? subscription;
+
+    void completeError(Object error) {
+      if (!done.isCompleted) {
+        done.completeError(error);
+      }
+    }
+
+    try {
+      subscription = transport.stream.listen(
+        (data) {
+          final event = _decodeChatSocketEvent(data);
+          if (event.isEmpty || done.isCompleted) {
+            return;
+          }
+          final type = event['type']?.toString();
+          final payload = _objectMap(event['payload']);
+          if (type == 'session.authenticated') {
+            transport.send(
+              jsonEncode({
+                'type': 'message.send',
+                'payload': {
+                  'chatId': chatId,
+                  'clientMessageId': clientMessageId,
+                  if (text.trim().isNotEmpty) 'text': text.trim(),
+                  if (attachmentIds.isNotEmpty) 'attachmentIds': attachmentIds,
+                  if (location != null && location.isNotEmpty)
+                    'location': location,
+                  if (replyToMessageId != null && replyToMessageId.isNotEmpty)
+                    'replyToMessageId': replyToMessageId,
+                },
+              }),
+            );
+            return;
+          }
+          if (type == 'message.created' &&
+              payload['chatId']?.toString() == chatId &&
+              payload['clientMessageId']?.toString() == clientMessageId) {
+            done.complete();
+            return;
+          }
+          if (type == 'error') {
+            completeError(
+              StateError(
+                payload['message']?.toString() ?? 'Unable to send message',
+              ),
+            );
+          }
+        },
+        onError: completeError,
+        onDone: () {
+          if (!done.isCompleted) {
+            completeError(StateError('Chat socket closed before send ack'));
+          }
+        },
+      );
+      transport.send(
+        jsonEncode({
+          'type': 'session.authenticate',
+          'payload': {'accessToken': tokens.accessToken},
+        }),
+      );
+      await done.future.timeout(_directSendTimeout);
+    } finally {
+      await subscription?.cancel();
+      await transport.close();
+    }
+  }
+
+  Future<void> deleteMessage({
+    required String chatId,
+    required String messageId,
+    String? clientMessageId,
+    bool pending = false,
+  }) async {
+    final userId = _ref.read(currentUserIdProvider);
+    final store = _ref.read(chatLocalStoreProvider);
+    if (userId == null) {
+      throw StateError('Current user is unavailable');
+    }
+    if (store == null) {
+      _ref.read(chatOptimisticMessagesProvider(chatId).notifier).remove(
+            messageId: messageId,
+            clientMessageId: clientMessageId,
+          );
+      if (pending) {
+        return;
+      }
+      await _deleteDirect(chatId: chatId, messageId: messageId);
+      return;
+    }
+    await store.deleteMessage(
+      userId: userId,
+      chatId: chatId,
+      messageId: messageId,
+      clientMessageId: clientMessageId,
+    );
+    final localCommandId =
+        clientMessageId?.isNotEmpty == true ? clientMessageId! : messageId;
+    if (pending) {
+      await store.deletePendingCommand(
+        userId: userId,
+        commandId: localCommandId,
+      );
+      await store.deletePendingMediaUpload(
+        userId: userId,
+        uploadId: localCommandId,
+      );
+      return;
+    }
+    await store.enqueuePendingCommand(
+      userId: userId,
+      commandId: 'message.delete:$messageId',
+      dedupeKey: 'message.delete:$chatId:$messageId',
+      payload: {
+        'type': 'message.delete',
+        'payload': {
+          'chatId': chatId,
+          'messageId': messageId,
+        },
+      },
+    );
+    unawaited(
+      _ref.read(chatRealtimeProvider(chatId))?.flushOutbox() ??
+          Future<void>.value(),
+    );
+  }
+
+  Future<void> _deleteDirect({
+    required String chatId,
+    required String messageId,
+  }) async {
+    final tokens = _ref.read(authTokensProvider);
+    if (tokens == null || tokens.accessToken.isEmpty) {
+      throw StateError('Chat auth token is unavailable');
+    }
+    final transport = _ref
+        .read(chatSocketTransportFactoryProvider)
+        .call(Uri.parse(BackendConfig.chatWebSocketUrl));
+    final done = Completer<void>();
+    StreamSubscription<Object?>? subscription;
+
+    void completeError(Object error) {
+      if (!done.isCompleted) {
+        done.completeError(error);
+      }
+    }
+
+    try {
+      subscription = transport.stream.listen(
+        (data) {
+          final event = _decodeChatSocketEvent(data);
+          if (event.isEmpty || done.isCompleted) {
+            return;
+          }
+          final type = event['type']?.toString();
+          final payload = _objectMap(event['payload']);
+          if (type == 'session.authenticated') {
+            transport.send(
+              jsonEncode({
+                'type': 'message.delete',
+                'payload': {
+                  'chatId': chatId,
+                  'messageId': messageId,
+                },
+              }),
+            );
+            return;
+          }
+          if (type == 'message.deleted' &&
+              payload['chatId']?.toString() == chatId &&
+              payload['messageId']?.toString() == messageId) {
+            done.complete();
+            return;
+          }
+          if (type == 'error') {
+            completeError(
+              StateError(
+                payload['message']?.toString() ?? 'Unable to delete message',
+              ),
+            );
+          }
+        },
+        onError: completeError,
+        onDone: () {
+          if (!done.isCompleted) {
+            completeError(StateError('Chat socket closed before delete ack'));
+          }
+        },
+      );
+      transport.send(
+        jsonEncode({
+          'type': 'session.authenticate',
+          'payload': {'accessToken': tokens.accessToken},
+        }),
+      );
+      await done.future.timeout(_directSendTimeout);
+    } finally {
+      await subscription?.cancel();
+      await transport.close();
+    }
   }
 }
+
+Map<String, Object?> _decodeChatSocketEvent(Object? data) {
+  try {
+    final decoded = data is String ? jsonDecode(data) : data;
+    if (decoded is Map) {
+      return decoded.map((key, value) => MapEntry('$key', value));
+    }
+  } catch (_) {}
+  return const {};
+}
+
+List<Map<String, Object?>> _withAttachmentStatus(
+  Object? value,
+  String status,
+) {
+  if (value is! List) {
+    return const [];
+  }
+  return value.whereType<Map>().map((attachment) {
+    return {
+      ...attachment.map((key, value) => MapEntry('$key', value)),
+      'status': status,
+    };
+  }).toList(growable: false);
+}
+
+Map<String, Object?> _objectMap(Object? value) {
+  if (value is Map) {
+    return value.map((key, value) => MapEntry('$key', value));
+  }
+  return const {};
+}
+
+class ChatActions {
+  ChatActions(this._ref);
+
+  final Ref _ref;
+
+  Future<void> setPinned({
+    required String chatId,
+    required bool isPinned,
+  }) async {
+    await _ref.read(backendRepositoryProvider).setChatPinned(
+          chatId,
+          isPinned: isPinned,
+        );
+    final userId = _ref.read(currentUserIdProvider);
+    final store = _ref.read(chatLocalStoreProvider);
+    if (userId != null && store != null) {
+      await store.setSummaryPinned(
+        userId: userId,
+        chatId: chatId,
+        isPinned: isPinned,
+      );
+    }
+    _ref.invalidate(chatListProvider);
+    _ref.invalidate(chatSummaryProvider(chatId));
+  }
+
+  Future<void> deleteChat(String chatId) async {
+    final userId = _ref.read(currentUserIdProvider);
+    final store = _ref.read(chatLocalStoreProvider);
+    List<Map<String, Object?>> rollbackRows = const [];
+    if (userId != null && store != null) {
+      rollbackRows = await store.readSummariesForChat(
+        userId: userId,
+        chatId: chatId,
+      );
+      await store.deleteChat(userId: userId, chatId: chatId);
+    }
+    try {
+      final deletedChat =
+          await _ref.read(backendRepositoryProvider).deleteChat(chatId);
+      final eventId = _stringOrNull(deletedChat['eventId']);
+      if (eventId != null) {
+        _invalidateEventAfterChatDelete(eventId);
+      }
+      _ref.invalidate(chatListProvider);
+      _ref.invalidate(chatSummaryProvider(chatId));
+    } catch (_) {
+      if (userId != null && store != null && rollbackRows.isNotEmpty) {
+        await store.restoreSummaries(userId: userId, rows: rollbackRows);
+      }
+      _ref.invalidate(chatListProvider);
+      _ref.invalidate(chatSummaryProvider(chatId));
+      rethrow;
+    }
+  }
+
+  void _invalidateEventAfterChatDelete(String eventId) {
+    _ref.invalidate(homeEventsProvider);
+    _ref.invalidate(homeEventsQueryProvider);
+    _ref.invalidate(meetingsProvider);
+    _ref.invalidate(meetingsQueryProvider);
+    _ref.invalidate(meetingDetailProvider(eventId));
+  }
+}
+
+final tokenWalletProvider = FutureProvider.autoDispose<TokenWalletData>((ref) {
+  return _privateValueFuture<TokenWalletData>(
+    ref,
+    fallback: const TokenWalletData(balance: 0),
+    namespace: 'wallet',
+    cacheValue: 'tokens',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchTokenWallet(
+      cancelToken: cancelToken,
+    ),
+    encode: (wallet) =>
+        wallet.raw.isEmpty ? {'balance': wallet.balance} : wallet.raw,
+    decode: TokenWalletData.fromJson,
+  );
+});
+
+final paymentsCatalogProvider =
+    FutureProvider.autoDispose<PaymentsCatalog>((ref) {
+  return _localFirstValueFuture<PaymentsCatalog>(
+    ref,
+    namespace: 'payments',
+    cacheValue: 'catalog',
+    ttl: const Duration(seconds: 30),
+    fetch: (repository, cancelToken) => repository.fetchPaymentsCatalog(
+      cancelToken: cancelToken,
+    ),
+    encode: (catalog) => catalog.raw,
+    decode: PaymentsCatalog.fromJson,
+  );
+});
+
+final subscriptionProvider =
+    FutureProvider.autoDispose<SubscriptionStateData>((ref) {
+  return _privateValueFuture<SubscriptionStateData>(
+    ref,
+    fallback: const SubscriptionStateData(status: 'inactive'),
+    namespace: 'subscription',
+    cacheValue: 'state',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchSubscription(
+      cancelToken: cancelToken,
+    ),
+    encode: (subscription) => subscription.raw,
+    decode: SubscriptionStateData.fromJson,
+  );
+});
+
+final subscriptionPlansProvider =
+    FutureProvider.autoDispose<List<SubscriptionPlan>>((ref) {
+  final localFirst = ref.read(localFirstRepositoryProvider);
+  final cancelToken = CancelToken();
+  ref.onDispose(cancelToken.cancel);
+  final repository = ref.read(backendRepositoryProvider);
+  if (localFirst == null) {
+    return repository.fetchSubscriptionPlans(cancelToken: cancelToken);
+  }
+  return localFirst.fetch<List<SubscriptionPlan>>(
+    key: AppCacheKey(
+      namespace: 'subscription',
+      value: 'plans',
+      userScope: ref.watch(currentCacheScopeProvider),
+    ),
+    ttl: const Duration(seconds: 30),
+    network: () async {
+      final plans = await repository.fetchSubscriptionPlans(
+        cancelToken: cancelToken,
+      );
+      return {'items': plans.map((plan) => plan.raw).toList(growable: false)};
+    },
+    decode: (json) =>
+        _items(json).map(SubscriptionPlan.fromJson).toList(growable: false),
+  );
+});
+
+final verificationProvider =
+    FutureProvider.autoDispose<VerificationStateData>((ref) {
+  return _privateValueFuture<VerificationStateData>(
+    ref,
+    fallback: const VerificationStateData(
+      status: 'not_started',
+      selfieDone: false,
+      documentDone: false,
+    ),
+    namespace: 'verification',
+    cacheValue: 'state',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchVerification(
+      cancelToken: cancelToken,
+    ),
+    encode: (verification) => verification.raw,
+    decode: VerificationStateData.fromJson,
+  );
+});
+
+final paymentActionsProvider = Provider<PaymentActionsController>(
+  PaymentActionsController.new,
+);
+
+final appleIapGatewayProvider = Provider<AppleIapGateway>((ref) {
+  return InAppPurchaseAppleIapGateway();
+});
+
+final appleIapPurchaseControllerProvider =
+    Provider<AppleIapPurchaseController>((ref) {
+  return AppleIapPurchaseController(
+    gateway: ref.read(appleIapGatewayProvider),
+    confirmPurchase: (input) {
+      return ref.read(backendRepositoryProvider).confirmAppleIapPurchase(
+            productKind: input.productKind,
+            productId: input.productId,
+            appleProductId: input.appleProductId,
+            transactionId: input.transactionId,
+            verificationData: input.verificationData,
+          );
+    },
+  );
+});
+
+final verificationActionsProvider = Provider<VerificationActionsController>(
+  VerificationActionsController.new,
+);
+
+final frendlySeasonActionsProvider = Provider<FrendlySeasonActionsController>(
+  FrendlySeasonActionsController.new,
+);
+
+final dropsActionsProvider = Provider<DropsActionsController>(
+  DropsActionsController.new,
+);
+
+final safetyActionsProvider = Provider<SafetyActionsController>(
+  SafetyActionsController.new,
+);
+
+final datingActionsProvider = Provider<DatingActionsController>(
+  DatingActionsController.new,
+);
+
+final afterDarkActionsProvider = Provider<AfterDarkActionsController>(
+  AfterDarkActionsController.new,
+);
+
+final routeActionsProvider = Provider<RouteActionsController>(
+  RouteActionsController.new,
+);
+
+final eveningAiActionsProvider = Provider<EveningAiActionsController>(
+  EveningAiActionsController.new,
+);
+
+class PaymentActionsController {
+  PaymentActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<PaymentOrderData> initTokenPayment(String productId) async {
+    final cancelToken = _trackToken();
+    try {
+      return await _ref.read(backendRepositoryProvider).initTokenPayment(
+            productId: productId,
+            cancelToken: cancelToken,
+          );
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<SubscriptionStateData> subscribeWithTokens(String plan) async {
+    final cancelToken = _trackToken();
+    try {
+      final subscription =
+          await _ref.read(backendRepositoryProvider).subscribeWithTokens(
+                plan: plan,
+                cancelToken: cancelToken,
+              );
+      _ref.invalidate(tokenWalletProvider);
+      _ref.invalidate(subscriptionProvider);
+      _ref.invalidate(ownProfileProvider);
+      return subscription;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<PaymentOrderData> purchaseAppleProduct({
+    required String productKind,
+    required String productId,
+    required String appleProductId,
+  }) async {
+    try {
+      final order = await _ref.read(appleIapPurchaseControllerProvider).buy(
+            AppleIapProductPurchase(
+              productKind: productKind,
+              productId: productId,
+              appleProductId: appleProductId,
+            ),
+          );
+      _ref.invalidate(tokenWalletProvider);
+      _ref.invalidate(paymentsCatalogProvider);
+      _ref.invalidate(subscriptionProvider);
+      _ref.invalidate(subscriptionPlansProvider);
+      _ref.invalidate(ownProfileProvider);
+      return order;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    }
+  }
+
+  Future<void> handlePaymentReturn({String? orderId}) async {
+    final normalizedOrderId = orderId?.trim();
+    try {
+      if (normalizedOrderId != null && normalizedOrderId.isNotEmpty) {
+        await _ref.read(backendRepositoryProvider).checkPayment(
+              orderId: normalizedOrderId,
+            );
+      }
+    } catch (_) {
+      // The webhook may still refresh the order. The wallet must refetch anyway.
+    } finally {
+      _ref.invalidate(tokenWalletProvider);
+      _ref.invalidate(paymentsCatalogProvider);
+      _ref.invalidate(subscriptionProvider);
+      _ref.invalidate(subscriptionPlansProvider);
+      _ref.invalidate(ownProfileProvider);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+class VerificationActionsController {
+  VerificationActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<VerificationStateData> submitStep({
+    required String step,
+    required String assetId,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final state =
+          await _ref.read(backendRepositoryProvider).submitVerification(
+                step: step,
+                assetId: assetId,
+                cancelToken: cancelToken,
+              );
+      _ref.invalidate(verificationProvider);
+      _ref.invalidate(ownProfileProvider);
+      _ref.invalidate(subscriptionProvider);
+      return state;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+class FrendlySeasonActionsController {
+  FrendlySeasonActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<void> claimReward(String rewardKey) async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref.read(backendRepositoryProvider).claimFrendlySeasonReward(
+            rewardKey,
+            cancelToken: cancelToken,
+          );
+      _ref.invalidate(frendlySeasonProvider);
+      _ref.invalidate(tokenWalletProvider);
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+class DropsActionsController {
+  DropsActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<void> claimVerification() async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref.read(backendRepositoryProvider).claimDropsVerification(
+            cancelToken: cancelToken,
+          );
+      await _invalidateDrops();
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> claimDailyLogin() async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref.read(backendRepositoryProvider).claimDropsDailyLogin(
+            cancelToken: cancelToken,
+          );
+      await _invalidateDrops();
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<DropApplyResult> applyTickets(String dropId, int ticketCount) async {
+    final cancelToken = _trackToken();
+    try {
+      final result =
+          await _ref.read(backendRepositoryProvider).applyDropTickets(
+                dropId: dropId,
+                ticketCount: ticketCount,
+                cancelToken: cancelToken,
+              );
+      await _invalidateDrops();
+      return result;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<DropReferralLinkData> createReferralLink() async {
+    final cancelToken = _trackToken();
+    try {
+      final result =
+          await _ref.read(backendRepositoryProvider).createDropsReferralLink(
+                cancelToken: cancelToken,
+              );
+      await _invalidateDrops();
+      return result;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  Future<void> _invalidateDrops() async {
+    await _clearDropsCache();
+    _ref.invalidate(dropsHomeProvider);
+  }
+
+  Future<void> _clearDropsCache() async {
+    final store = _ref.read(appLocalCacheStoreProvider);
+    if (store == null) {
+      return;
+    }
+    await store.deleteKey(
+      AppCacheKey(
+        namespace: 'drops',
+        value: 'home',
+        userScope: _ref.read(currentCacheScopeProvider),
+      ),
+    );
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+class SafetyActionsController {
+  SafetyActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<Map<String, Object?>> createSos() async {
+    final cancelToken = _trackToken();
+    try {
+      return await _ref.read(backendRepositoryProvider).createSos(
+            cancelToken: cancelToken,
+          );
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> createTrustedContact({
+    required String name,
+    required String value,
+    required String channel,
+    String mode = 'sos_only',
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref.read(backendRepositoryProvider).createTrustedContact(
+            name: name,
+            value: value,
+            channel: channel,
+            mode: mode,
+            cancelToken: cancelToken,
+          );
+      _ref.invalidate(trustedContactsProvider);
+      _ref.invalidate(safetyProvider);
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> deleteTrustedContact(String contactId) async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref.read(backendRepositoryProvider).deleteTrustedContact(
+            contactId,
+            cancelToken: cancelToken,
+          );
+      _ref.invalidate(trustedContactsProvider);
+      _ref.invalidate(safetyProvider);
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  Future<SafetyData> updateSafety(Map<String, Object?> data) async {
+    final cancelToken = _trackToken();
+    try {
+      final safety = await _ref.read(backendRepositoryProvider).updateSafety(
+            data,
+            cancelToken: cancelToken,
+          );
+      _ref.invalidate(safetyProvider);
+      return safety;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+class DatingActionsController {
+  DatingActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<DatingActionResult> recordAction({
+    required String targetUserId,
+    required String action,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final result =
+          await _ref.read(backendRepositoryProvider).recordDatingAction(
+                targetUserId: targetUserId,
+                action: action,
+                cancelToken: cancelToken,
+              );
+      _ref.read(datingHandledProfileIdsProvider.notifier).add(targetUserId);
+      if (result.matched) {
+        _ref.invalidate(matchesProvider);
+      }
+      if (result.chargedTokens > 0) {
+        _ref.invalidate(tokenWalletProvider);
+      }
+      _ref.invalidate(datingLimitsProvider);
+      _ref.invalidate(datingLikesProvider);
+      return result;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<DatingRewindResult> rewindLastPass() async {
+    final cancelToken = _trackToken();
+    try {
+      final result =
+          await _ref.read(backendRepositoryProvider).rewindDatingPass(
+                cancelToken: cancelToken,
+              );
+      if (result.chargedTokens > 0) {
+        _ref.invalidate(tokenWalletProvider);
+      }
+      final peerId = result.peer?.id;
+      if (peerId != null && peerId.isNotEmpty) {
+        _ref.read(datingHandledProfileIdsProvider.notifier).remove(peerId);
+      }
+      _ref.invalidate(datingLimitsProvider);
+      _ref.invalidate(datingDiscoverProvider);
+      return result;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+class AfterDarkActionsController {
+  AfterDarkActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<void> unlock({
+    required String plan,
+    required bool ageConfirmed,
+    required bool codeAccepted,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref.read(backendRepositoryProvider).unlockAfterDark(
+            plan: plan,
+            ageConfirmed: ageConfirmed,
+            codeAccepted: codeAccepted,
+            cancelToken: cancelToken,
+          );
+      _ref.invalidate(afterDarkAccessProvider);
+      _ref.invalidate(afterDarkEventsProvider);
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<BackendCardItem> joinEvent(String eventId) async {
+    final cancelToken = _trackToken();
+    try {
+      final event =
+          await _ref.read(backendRepositoryProvider).joinAfterDarkEvent(
+                eventId,
+                acceptedRules: true,
+                cancelToken: cancelToken,
+              );
+      _ref.invalidate(afterDarkEventProvider(eventId));
+      _ref.invalidate(afterDarkEventsProvider);
+      return event;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+class RouteActionsController {
+  RouteActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<EveningRouteSessionData> createTemplateSession({
+    required String templateId,
+    required DateTime startsAt,
+    String privacy = 'open',
+    int? capacity,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      return await _ref
+          .read(backendRepositoryProvider)
+          .createRouteTemplateSession(
+            templateId: templateId,
+            startsAt: startsAt,
+            privacy: privacy,
+            capacity: capacity,
+            cancelToken: cancelToken,
+          );
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+class EveningAiActionsController {
+  EveningAiActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<EveningAiDraftData> createDraft(String prompt) async {
+    final cancelToken = _trackToken();
+    try {
+      final user = _ref.read(currentUserProvider);
+      return await _ref.read(backendRepositoryProvider).createEveningAiDraft(
+            prompt: prompt,
+            city: user?.city,
+            cancelToken: cancelToken,
+          );
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<EveningAiDraftData> acceptStep({
+    required String draftId,
+    required int stepIndex,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final draft =
+          await _ref.read(backendRepositoryProvider).acceptEveningAiDraftStep(
+                draftId: draftId,
+                stepIndex: stepIndex,
+                cancelToken: cancelToken,
+              );
+      _ref.invalidate(eveningAiDraftProvider(draft.draftId));
+      return draft;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<EveningAiDraftData> regenerate(String draftId) async {
+    final cancelToken = _trackToken();
+    try {
+      final draft =
+          await _ref.read(backendRepositoryProvider).regenerateEveningAiDraft(
+                draftId,
+                cancelToken: cancelToken,
+              );
+      _ref.invalidate(eveningAiDraftProvider(draft.draftId));
+      return draft;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<EveningAiDraftData> regenerateStep({
+    required String draftId,
+    required int stepIndex,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final draft = await _ref
+          .read(backendRepositoryProvider)
+          .regenerateEveningAiDraftStep(
+            draftId: draftId,
+            stepIndex: stepIndex,
+            cancelToken: cancelToken,
+          );
+      _ref.invalidate(eveningAiDraftProvider(draft.draftId));
+      return draft;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<EveningAiDraftData> confirm(String draftId) async {
+    final cancelToken = _trackToken();
+    try {
+      final draft =
+          await _ref.read(backendRepositoryProvider).confirmEveningAiDraft(
+                draftId,
+                cancelToken: cancelToken,
+              );
+      _ref.invalidate(eveningAiDraftProvider(draft.draftId));
+      return draft;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+final notificationsProvider = StreamProvider.autoDispose<CardPage>((ref) {
+  return _privatePageStream(
+    ref,
+    namespace: _notificationsCacheNamespace,
+    cacheValue: _notificationsListCacheValue,
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchNotifications(
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+final notificationUnreadCountProvider =
+    FutureProvider.autoDispose<int>((ref) async {
+  return _privateValueFuture<int>(
+    ref,
+    fallback: 0,
+    namespace: _notificationsCacheNamespace,
+    cacheValue: _notificationsUnreadCountCacheValue,
+    ttl: const Duration(minutes: 1),
+    fetch: (repository, cancelToken) {
+      return repository.fetchNotificationUnreadCount(
+        cancelToken: cancelToken,
+      );
+    },
+    encode: (count) => {'unreadCount': count},
+    decode: (json) => int.tryParse(json['unreadCount']?.toString() ?? '') ?? 0,
+  );
+});
+
+final reportActionsProvider = Provider<ReportActionsController>(
+  ReportActionsController.new,
+);
+
+final shareActionsProvider = Provider<ShareActionsController>(
+  ShareActionsController.new,
+);
+
+class ShareActionsController {
+  ShareActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<Map<String, Object?>> createShare({
+    required String targetType,
+    required String targetId,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      return await _ref.read(backendRepositoryProvider).createShare(
+            targetType: targetType,
+            targetId: targetId,
+            cancelToken: cancelToken,
+          );
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+class ReportActionsController {
+  ReportActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<void> createReport({
+    required String targetUserId,
+    required String reason,
+    String details = '',
+    bool blockRequested = false,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref.read(backendRepositoryProvider).createReport(
+            targetUserId: targetUserId,
+            reason: reason,
+            details: details,
+            blockRequested: blockRequested,
+            cancelToken: cancelToken,
+          );
+      _ref.invalidate(reportsProvider);
+      _ref.invalidate(safetyProvider);
+      if (blockRequested) {
+        _ref.invalidate(blocksProvider);
+        _ref.invalidate(publicUserProvider(targetUserId));
+        _ref.invalidate(profileSocialProvider(targetUserId));
+      }
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> reportEvent({
+    required String eventId,
+    String reason = 'bad_content',
+    String details = '',
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref.read(backendRepositoryProvider).createReport(
+            targetType: 'event',
+            targetEventId: eventId,
+            reason: reason,
+            details: details,
+            blockRequested: false,
+            cancelToken: cancelToken,
+          );
+      final current = _ref.read(reportedEventIdsProvider);
+      _ref.read(reportedEventIdsProvider.notifier).state = {
+        ...current,
+        eventId,
+      };
+      _ref.invalidate(reportsProvider);
+      _ref.invalidate(safetyProvider);
+      _ref.invalidate(homeEventsProvider);
+      _ref.invalidate(homeEventsQueryProvider);
+      _ref.invalidate(meetingsProvider);
+      _ref.invalidate(meetingsQueryProvider);
+      _ref.invalidate(meetingDetailProvider(eventId));
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<BlockedUserData> createBlock({
+    required String targetUserId,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final block = await _ref.read(backendRepositoryProvider).createBlock(
+            targetUserId: targetUserId,
+            cancelToken: cancelToken,
+          );
+      _ref.invalidate(blocksProvider);
+      _ref.invalidate(safetyProvider);
+      _ref.invalidate(publicUserProvider(targetUserId));
+      _ref.invalidate(profileSocialProvider(targetUserId));
+      return block;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> deleteBlock({
+    required String targetUserId,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref.read(backendRepositoryProvider).deleteBlock(
+            targetUserId: targetUserId,
+            cancelToken: cancelToken,
+          );
+      _ref.invalidate(blocksProvider);
+      _ref.invalidate(safetyProvider);
+      _ref.invalidate(publicUserProvider(targetUserId));
+      _ref.invalidate(profileSocialProvider(targetUserId));
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+final notificationsActionsProvider = Provider<NotificationsActionsController>(
+  NotificationsActionsController.new,
+);
+
+final reportsProvider = FutureProvider.autoDispose<SafetyReportPage>((ref) {
+  return _privateValueFuture<SafetyReportPage>(
+    ref,
+    fallback: const BackendPage(items: []),
+    namespace: 'reports',
+    cacheValue: 'me',
+    ttl: const Duration(minutes: 5),
+    fetch: (repository, cancelToken) => repository.fetchReports(
+      cancelToken: cancelToken,
+    ),
+    encode: (page) => page.raw,
+    decode: _decodeSafetyReportPage,
+  );
+});
+
+final blocksProvider = FutureProvider.autoDispose<BlockedUserPage>((ref) {
+  return _privateValueFuture<BlockedUserPage>(
+    ref,
+    fallback: const BackendPage(items: []),
+    namespace: 'blocks',
+    cacheValue: 'me',
+    ttl: const Duration(minutes: 5),
+    fetch: (repository, cancelToken) => repository.fetchBlocks(
+      cancelToken: cancelToken,
+    ),
+    encode: (page) => page.raw,
+    decode: _decodeBlockedUserPage,
+  );
+});
+
+const _notificationsCacheNamespace = 'notifications';
+const _notificationsListCacheValue = 'list?limit=30';
+const _notificationsUnreadCountCacheValue = 'unread-count';
+
+class NotificationsActionsController {
+  NotificationsActionsController(this._ref) {
+    _ref.onDispose(() {
+      for (final token in _tokens) {
+        token.cancel();
+      }
+      _tokens.clear();
+    });
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<void> markRead(String notificationId) async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref.read(backendRepositoryProvider).markNotificationRead(
+            notificationId,
+            cancelToken: cancelToken,
+          );
+      await _markNotificationReadLocally(notificationId);
+      _ref.invalidate(notificationUnreadCountProvider);
+      _ref.invalidate(notificationsProvider);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> markAllRead() async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref
+          .read(backendRepositoryProvider)
+          .markAllNotificationsRead(cancelToken: cancelToken);
+      await _markAllNotificationsReadLocally();
+      _ref.invalidate(notificationUnreadCountProvider);
+      _ref.invalidate(notificationsProvider);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> applyRealtimeNotificationCreated(
+    Map<String, Object?> payload,
+  ) async {
+    final notification = _realtimeNotificationFromPayload(payload);
+    if (notification == null) {
+      _ref.invalidate(notificationUnreadCountProvider);
+      _ref.invalidate(notificationsProvider);
+      return;
+    }
+    _invalidateFromRealtimeNotification(notification);
+
+    final store = _ref.read(appLocalCacheStoreProvider);
+    if (store == null) {
+      _ref.invalidate(notificationUnreadCountProvider);
+      _ref.invalidate(notificationsProvider);
+      return;
+    }
+
+    final userScope = currentCacheScope(_ref);
+    final now = DateTime.now();
+    final listKey = AppCacheKey(
+      namespace: _notificationsCacheNamespace,
+      value: _notificationsListCacheValue,
+      userScope: userScope,
+    );
+    final countKey = AppCacheKey(
+      namespace: _notificationsCacheNamespace,
+      value: _notificationsUnreadCountCacheValue,
+      userScope: userScope,
+    );
+    final cachedList = await store.getFreshJson(listKey, now: now);
+    final cachedCount = await store.getFreshJson(countKey, now: now);
+    var insertedUnread = false;
+
+    if (cachedList != null) {
+      final notificationId = notification['id']?.toString();
+      final existingItems = _items(cachedList);
+      final hadItem = existingItems.any(
+        (item) => item['id']?.toString() == notificationId,
+      );
+      insertedUnread = !hadItem && _notificationIsUnread(notification);
+      final updatedItems = <Map<String, Object?>>[
+        notification,
+        ...existingItems.where(
+          (item) => item['id']?.toString() != notificationId,
+        ),
+      ].take(30).toList(growable: false);
+      await store.putJson(
+        listKey,
+        <String, Object?>{
+          ...cachedList,
+          'items': updatedItems,
+        },
+        expiresAt: now.add(const Duration(minutes: 2)),
+      );
+    }
+
+    if (cachedCount != null && insertedUnread) {
+      final count =
+          int.tryParse(cachedCount['unreadCount']?.toString() ?? '') ?? 0;
+      await store.putJson(
+        countKey,
+        <String, Object?>{'unreadCount': count + 1},
+        expiresAt: now.add(const Duration(minutes: 1)),
+      );
+    } else if (cachedCount == null && _notificationIsUnread(notification)) {
+      _ref.invalidate(notificationUnreadCountProvider);
+    }
+
+    _ref.invalidate(notificationUnreadCountProvider);
+    _ref.invalidate(notificationsProvider);
+  }
+
+  void _invalidateFromRealtimeNotification(Map<String, Object?> notification) {
+    final kind = notification['kind']?.toString();
+    final rawPayload = notification['payload'];
+    final payload = rawPayload is Map
+        ? rawPayload.map((key, value) => MapEntry('$key', value))
+        : const <String, Object?>{};
+    if (payload['source'] == 'verification') {
+      _ref.invalidate(verificationProvider);
+      _ref.invalidate(ownProfileProvider);
+      _ref.invalidate(subscriptionProvider);
+    }
+    if (kind == 'event_joined' || kind == 'event_invite') {
+      final eventId = payload['eventId']?.toString();
+      if (eventId != null && eventId.isNotEmpty) {
+        _ref.invalidate(meetingDetailProvider(eventId));
+      }
+      _ref.invalidate(homeEventsProvider);
+      _ref.invalidate(homeEventsQueryProvider);
+      _ref.invalidate(meetingsProvider);
+      _ref.invalidate(meetingsQueryProvider);
+      _invalidateMapEvents(_ref);
+      _ref.invalidate(chatListProvider);
+      _ref.invalidate(chatsProvider);
+    }
+  }
+
+  Future<BackendCardItem> acceptEventInvite({
+    required String eventId,
+    required String requestId,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final event =
+          await _ref.read(backendRepositoryProvider).acceptEventInvite(
+                eventId: eventId,
+                requestId: requestId,
+                cancelToken: cancelToken,
+              );
+      await _dropNotificationCache();
+      _ref.invalidate(homeEventsProvider);
+      _ref.invalidate(homeEventsQueryProvider);
+      _ref.invalidate(meetingsProvider);
+      _ref.invalidate(meetingsQueryProvider);
+      _ref.invalidate(meetingDetailProvider(eventId));
+      _invalidateMapEvents(_ref);
+      _ref.invalidate(chatListProvider);
+      _ref.invalidate(chatsProvider);
+      _ref.invalidate(publicUserProvider);
+      _ref.invalidate(notificationUnreadCountProvider);
+      _ref.invalidate(notificationsProvider);
+      return event;
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<void> declineEventInvite({
+    required String eventId,
+    required String requestId,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      await _ref.read(backendRepositoryProvider).declineEventInvite(
+            eventId: eventId,
+            requestId: requestId,
+            cancelToken: cancelToken,
+          );
+      await _dropNotificationCache();
+      _ref.invalidate(meetingDetailProvider(eventId));
+      _ref.invalidate(notificationUnreadCountProvider);
+      _ref.invalidate(notificationsProvider);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  Future<void> _dropNotificationCache() async {
+    final store = _ref.read(appLocalCacheStoreProvider);
+    if (store == null) {
+      return;
+    }
+    final userScope = currentCacheScope(_ref);
+    await store.deleteKey(
+      AppCacheKey(
+        namespace: _notificationsCacheNamespace,
+        value: _notificationsListCacheValue,
+        userScope: userScope,
+      ),
+    );
+    await store.deleteKey(
+      AppCacheKey(
+        namespace: _notificationsCacheNamespace,
+        value: _notificationsUnreadCountCacheValue,
+        userScope: userScope,
+      ),
+    );
+  }
+
+  Future<void> _markNotificationReadLocally(String notificationId) async {
+    final store = _ref.read(appLocalCacheStoreProvider);
+    if (store == null) {
+      return;
+    }
+    final userScope = currentCacheScope(_ref);
+    final now = DateTime.now();
+    final listKey = AppCacheKey(
+      namespace: _notificationsCacheNamespace,
+      value: _notificationsListCacheValue,
+      userScope: userScope,
+    );
+    final countKey = AppCacheKey(
+      namespace: _notificationsCacheNamespace,
+      value: _notificationsUnreadCountCacheValue,
+      userScope: userScope,
+    );
+    final cachedList = await store.getFreshJson(listKey, now: now);
+    final cachedCount = await store.getFreshJson(countKey, now: now);
+    final items = cachedList == null ? null : _items(cachedList);
+    var wasUnread = false;
+
+    if (cachedList != null && items != null) {
+      final updatedItems = items.map((item) {
+        if (item['id']?.toString() != notificationId) {
+          return item;
+        }
+        wasUnread = _notificationIsUnread(item);
+        return <String, Object?>{
+          ...item,
+          'read': true,
+          'isRead': true,
+          'readAt': item['readAt'] ?? now.toUtc().toIso8601String(),
+        };
+      }).toList(growable: false);
+      await store.putJson(
+        listKey,
+        <String, Object?>{
+          ...cachedList,
+          'items': updatedItems,
+        },
+        expiresAt: now.add(const Duration(minutes: 2)),
+      );
+    }
+
+    if (cachedCount != null && (wasUnread || cachedList == null)) {
+      final count =
+          int.tryParse(cachedCount['unreadCount']?.toString() ?? '') ?? 0;
+      await store.putJson(
+        countKey,
+        <String, Object?>{'unreadCount': count > 0 ? count - 1 : 0},
+        expiresAt: now.add(const Duration(minutes: 1)),
+      );
+    }
+  }
+
+  Future<void> _markAllNotificationsReadLocally() async {
+    final store = _ref.read(appLocalCacheStoreProvider);
+    if (store == null) {
+      return;
+    }
+    final userScope = currentCacheScope(_ref);
+    final now = DateTime.now();
+    final listKey = AppCacheKey(
+      namespace: _notificationsCacheNamespace,
+      value: _notificationsListCacheValue,
+      userScope: userScope,
+    );
+    final countKey = AppCacheKey(
+      namespace: _notificationsCacheNamespace,
+      value: _notificationsUnreadCountCacheValue,
+      userScope: userScope,
+    );
+    final cachedList = await store.getFreshJson(listKey, now: now);
+
+    if (cachedList != null) {
+      final readAt = now.toUtc().toIso8601String();
+      final updatedItems = _items(cachedList).map((item) {
+        return <String, Object?>{
+          ...item,
+          'read': true,
+          'isRead': true,
+          'readAt': item['readAt'] ?? readAt,
+        };
+      }).toList(growable: false);
+      await store.putJson(
+        listKey,
+        <String, Object?>{
+          ...cachedList,
+          'items': updatedItems,
+        },
+        expiresAt: now.add(const Duration(minutes: 2)),
+      );
+    }
+
+    await store.putJson(
+      countKey,
+      const <String, Object?>{'unreadCount': 0},
+      expiresAt: now.add(const Duration(minutes: 1)),
+    );
+  }
+}
+
+bool _notificationIsUnread(Map<String, Object?> item) {
+  final read = item['read'];
+  if (read is bool) {
+    return !read;
+  }
+  final isRead = item['isRead'];
+  if (isRead is bool) {
+    return !isRead;
+  }
+  return item['readAt'] == null;
+}
+
+Map<String, Object?>? _realtimeNotificationFromPayload(
+  Map<String, Object?> payload,
+) {
+  final notificationId = payload['notificationId']?.toString();
+  final kind = payload['kind']?.toString();
+  final title = payload['title']?.toString();
+  final body = payload['body']?.toString();
+  final createdAt = payload['createdAt']?.toString();
+  if (notificationId == null ||
+      notificationId.isEmpty ||
+      kind == null ||
+      kind.isEmpty ||
+      title == null ||
+      body == null ||
+      createdAt == null ||
+      createdAt.isEmpty) {
+    return null;
+  }
+  final readAt = payload['readAt']?.toString();
+  final rawPayload = payload['payload'];
+  return <String, Object?>{
+    'id': notificationId,
+    'notificationId': notificationId,
+    'kind': kind,
+    'title': title,
+    'body': body,
+    'payload': rawPayload is Map
+        ? rawPayload.map((key, value) => MapEntry('$key', value))
+        : const <String, Object?>{},
+    'readAt': readAt == null || readAt.isEmpty ? null : readAt,
+    'read': readAt != null && readAt.isNotEmpty,
+    'isRead': readAt != null && readAt.isNotEmpty,
+    'createdAt': createdAt,
+  };
+}
+
+final communitiesProvider = StreamProvider.autoDispose<CardPage>((ref) {
+  return _localFirstPageStream(
+    ref,
+    namespace: _communitiesCacheNamespace,
+    cacheValue: _communitiesListCacheValue,
+    ttl: const Duration(minutes: 5),
+    fetch: (repository, cancelToken) => repository.fetchCommunities(
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+class CommunityListQuery {
+  const CommunityListQuery({
+    this.q,
+    this.topics = const [],
+    this.privacy,
+    this.sort = 'popular',
+  });
+
+  final String? q;
+  final List<String> topics;
+  final String? privacy;
+  final String sort;
+
+  bool get isDefault {
+    return (q == null || q!.trim().isEmpty) &&
+        topics.isEmpty &&
+        (privacy == null || privacy!.isEmpty) &&
+        sort == 'popular';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is CommunityListQuery &&
+        other.q == q &&
+        other.privacy == privacy &&
+        other.sort == sort &&
+        _stringListsEqual(other.topics, topics);
+  }
+
+  @override
+  int get hashCode => Object.hash(q, privacy, sort, Object.hashAll(topics));
+}
+
+bool _stringListsEqual(List<String> left, List<String> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+final communitiesQueryProvider = StreamProvider.autoDispose
+    .family<CardPage, CommunityListQuery>((ref, query) {
+  return _localFirstPageStream(
+    ref,
+    namespace: _communitiesCacheNamespace,
+    cacheValue:
+        'list?q=${query.q ?? ''}&topics=${query.topics.join(',')}&privacy=${query.privacy ?? ''}&sort=${query.sort}',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchCommunities(
+      q: query.q,
+      topics: query.topics,
+      privacy: query.privacy,
+      sort: query.sort,
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+final communitiesPaginationProvider = StateNotifierProvider.autoDispose<
+    CommunitiesPaginationController, CommunitiesPaginationState>((ref) {
+  return CommunitiesPaginationController(ref);
+});
+
+class CommunitiesPaginationState {
+  const CommunitiesPaginationState({
+    this.items = const [],
+    this.nextCursor,
+    this.loading = false,
+    this.error = false,
+    this.initialized = false,
+  });
+
+  final List<BackendCardItem> items;
+  final String? nextCursor;
+  final bool loading;
+  final bool error;
+  final bool initialized;
+
+  bool get hasNextPage => nextCursor != null && nextCursor!.isNotEmpty;
+
+  CommunitiesPaginationState copyWith({
+    List<BackendCardItem>? items,
+    String? nextCursor,
+    bool clearNextCursor = false,
+    bool? loading,
+    bool? error,
+    bool? initialized,
+  }) {
+    return CommunitiesPaginationState(
+      items: items ?? this.items,
+      nextCursor: clearNextCursor ? null : nextCursor ?? this.nextCursor,
+      loading: loading ?? this.loading,
+      error: error ?? this.error,
+      initialized: initialized ?? this.initialized,
+    );
+  }
+}
+
+class CommunitiesPaginationController
+    extends StateNotifier<CommunitiesPaginationState> {
+  CommunitiesPaginationController(this._ref)
+      : super(const CommunitiesPaginationState()) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = {};
+
+  void primeNextCursor(String? cursor) {
+    if (state.items.isNotEmpty || state.loading) {
+      return;
+    }
+    if (state.initialized && state.nextCursor == cursor) {
+      return;
+    }
+    state = state.copyWith(
+      nextCursor: cursor,
+      clearNextCursor: cursor == null || cursor.isEmpty,
+      error: false,
+      initialized: true,
+    );
+  }
+
+  Future<void> loadNextPage() async {
+    final cursor = state.nextCursor;
+    if (state.loading || cursor == null || cursor.isEmpty) {
+      return;
+    }
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    state = state.copyWith(loading: true, error: false);
+    try {
+      final page = await _ref.read(backendRepositoryProvider).fetchCommunities(
+            cursor: cursor,
+            cancelToken: cancelToken,
+          );
+      state = state.copyWith(
+        items: [...state.items, ...page.items],
+        nextCursor: page.nextCursor,
+        clearNextCursor: page.nextCursor == null || page.nextCursor!.isEmpty,
+        loading: false,
+        error: false,
+      );
+    } catch (_) {
+      if (!cancelToken.isCancelled) {
+        state = state.copyWith(loading: false, error: true);
+      }
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+final communityActionsProvider = Provider<CommunityActionsController>(
+  CommunityActionsController.new,
+);
+
+const _communitiesCacheNamespace = 'communities';
+const _communitiesListCacheValue = 'list?limit=20';
+
+class CommunityActionsController {
+  CommunityActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = <CancelToken>{};
+
+  Future<BackendCardItem> createCommunity({
+    required Map<String, Object?> data,
+    required String idempotencyKey,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final community =
+          await _ref.read(backendRepositoryProvider).createCommunity(
+                data: data,
+                idempotencyKey: idempotencyKey,
+                cancelToken: cancelToken,
+              );
+      await _prependCommunityToCaches(community);
+      _ref.invalidate(communitiesProvider);
+      _invalidateChatLists(chatId: _stringOrNull(community.raw['chatId']));
+      return community;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<BackendCardItem> setJoined({
+    required String communityId,
+    required bool joined,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final community = joined
+          ? await _ref.read(backendRepositoryProvider).joinCommunity(
+                communityId,
+                cancelToken: cancelToken,
+              )
+          : await _ref.read(backendRepositoryProvider).leaveCommunity(
+                communityId,
+                cancelToken: cancelToken,
+              );
+      await _updateCommunityCaches(community);
+      final chatId = _stringOrNull(community.raw['chatId']);
+      if (!joined) {
+        await _deleteLocalChat(chatId);
+      }
+      _ref.invalidate(communityDetailProvider(communityId));
+      _ref.invalidate(communitiesProvider);
+      _invalidateChatLists(chatId: chatId);
+      return community;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<BackendCardItem> requestJoin({
+    required String communityId,
+    String? note,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final community =
+          await _ref.read(backendRepositoryProvider).createCommunityJoinRequest(
+                communityId,
+                note: note,
+                cancelToken: cancelToken,
+              );
+      await _updateCommunityCaches(community);
+      _ref.invalidate(communityDetailProvider(communityId));
+      _ref.invalidate(communitiesProvider);
+      return community;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<BackendCardItem> cancelJoinRequest({
+    required String communityId,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final community =
+          await _ref.read(backendRepositoryProvider).cancelCommunityJoinRequest(
+                communityId,
+                cancelToken: cancelToken,
+              );
+      await _updateCommunityCaches(community);
+      _ref.invalidate(communityDetailProvider(communityId));
+      _ref.invalidate(communitiesProvider);
+      return community;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<BackendCardItem> createNews({
+    required String communityId,
+    required String title,
+    required String body,
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final community =
+          await _ref.read(backendRepositoryProvider).createCommunityNews(
+                communityId: communityId,
+                title: title,
+                body: body,
+                cancelToken: cancelToken,
+              );
+      await _writeCommunityDetailCache(community);
+      _ref.invalidate(communityDetailProvider(communityId));
+      return community;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+
+  Future<void> _prependCommunityToCaches(BackendCardItem community) async {
+    final store = _ref.read(appLocalCacheStoreProvider);
+    if (store == null) {
+      return;
+    }
+    final scope = currentCacheScope(_ref);
+    final now = DateTime.now();
+    final expiresAt = now.add(const Duration(minutes: 5));
+    final communityJson = _communityCacheJson(community);
+    await _writeCommunityDetailCache(
+      community,
+      store: store,
+      scope: scope,
+      expiresAt: expiresAt,
+    );
+
+    final listKey = AppCacheKey(
+      namespace: _communitiesCacheNamespace,
+      value: _communitiesListCacheValue,
+      userScope: scope,
+    );
+    final cachedList = await store.getFreshJson(listKey, now: now);
+    final items = cachedList?['items'];
+    if (cachedList == null || items is! List) {
+      await store.putJson(
+        listKey,
+        {
+          'items': [communityJson],
+          'nextCursor': null,
+        },
+        expiresAt: expiresAt,
+      );
+      return;
+    }
+    final nextItems = [
+      communityJson,
+      for (final item in items)
+        if (item is! Map || item['id']?.toString() != community.id) item,
+    ];
+    await store.putJson(
+      listKey,
+      {...cachedList, 'items': nextItems},
+      expiresAt: expiresAt,
+    );
+  }
+
+  Future<void> _updateCommunityCaches(BackendCardItem community) async {
+    final store = _ref.read(appLocalCacheStoreProvider);
+    if (store == null) {
+      return;
+    }
+    final scope = currentCacheScope(_ref);
+    final now = DateTime.now();
+    final expiresAt = now.add(const Duration(minutes: 5));
+    final communityJson = _communityCacheJson(community);
+    await _writeCommunityDetailCache(
+      community,
+      store: store,
+      scope: scope,
+      expiresAt: expiresAt,
+    );
+
+    final listKey = AppCacheKey(
+      namespace: _communitiesCacheNamespace,
+      value: _communitiesListCacheValue,
+      userScope: scope,
+    );
+    final cachedList = await store.getFreshJson(listKey, now: now);
+    final items = cachedList?['items'];
+    if (cachedList == null || items is! List) {
+      return;
+    }
+    var updated = false;
+    final nextItems = [
+      for (final item in items)
+        if (item is Map && item['id']?.toString() == community.id) ...[
+          _mergeCacheJson(item, communityJson)
+        ] else
+          item,
+    ];
+    updated = nextItems.any(
+      (item) => item is Map && item['id']?.toString() == community.id,
+    );
+    if (!updated) {
+      return;
+    }
+    await store.putJson(
+      listKey,
+      {...cachedList, 'items': nextItems},
+      expiresAt: expiresAt,
+    );
+  }
+
+  Map<String, Object?> _communityCacheJson(BackendCardItem community) {
+    return {
+      ...community.raw,
+      'id': community.id,
+      if (community.title.isNotEmpty && !community.raw.containsKey('name'))
+        'name': community.title,
+      if (community.subtitle != null && !community.raw.containsKey('subtitle'))
+        'subtitle': community.subtitle,
+      if (community.imageUrl != null && !community.raw.containsKey('imageUrl'))
+        'imageUrl': community.imageUrl,
+    };
+  }
+
+  Future<void> _writeCommunityDetailCache(
+    BackendCardItem community, {
+    AppLocalCacheStore? store,
+    AppCacheUserScope? scope,
+    DateTime? expiresAt,
+  }) async {
+    final cacheStore = store ?? _ref.read(appLocalCacheStoreProvider);
+    if (cacheStore == null) {
+      return;
+    }
+    await cacheStore.putJson(
+      AppCacheKey(
+        namespace: _communitiesCacheNamespace,
+        value: 'detail:${community.id}',
+        userScope: scope ?? currentCacheScope(_ref),
+      ),
+      _communityCacheJson(community),
+      expiresAt: expiresAt ?? DateTime.now().add(const Duration(minutes: 5)),
+    );
+  }
+
+  Future<void> _deleteLocalChat(String? chatId) async {
+    final resolvedChatId = chatId?.trim();
+    if (resolvedChatId == null || resolvedChatId.isEmpty) {
+      return;
+    }
+    final userId = _ref.read(currentUserIdProvider);
+    final store = _ref.read(chatLocalStoreProvider);
+    if (userId == null || store == null) {
+      return;
+    }
+    try {
+      await store.deleteChat(userId: userId, chatId: resolvedChatId);
+    } catch (_) {}
+  }
+
+  void _invalidateChatLists({String? chatId}) {
+    _ref.invalidate(chatListProvider);
+    _ref.invalidate(chatsProvider);
+    final resolvedChatId = chatId?.trim();
+    if (resolvedChatId != null && resolvedChatId.isNotEmpty) {
+      _ref.invalidate(chatSummaryProvider(resolvedChatId));
+    }
+  }
+
+  Map<String, Object?> _mergeCacheJson(
+    Map<Object?, Object?> cached,
+    Map<String, Object?> fresh,
+  ) {
+    return {
+      for (final entry in cached.entries) '${entry.key}': entry.value,
+      ...fresh,
+    };
+  }
+}
+
+final communityDetailProvider =
+    FutureProvider.autoDispose.family<BackendCardItem, String>((ref, id) {
+  final localFirst = ref.read(localFirstRepositoryProvider);
+  final cancelToken = CancelToken();
+  ref.onDispose(cancelToken.cancel);
+  final repository = ref.read(backendRepositoryProvider);
+  if (localFirst == null) {
+    return repository.fetchCommunityDetail(id, cancelToken: cancelToken);
+  }
+  return localFirst.fetch<BackendCardItem>(
+    key: AppCacheKey(
+      namespace: 'communities',
+      value: 'detail:$id',
+      userScope: ref.watch(currentCacheScopeProvider),
+    ),
+    ttl: const Duration(minutes: 5),
+    network: () async {
+      final community = await repository.fetchCommunityDetail(
+        id,
+        cancelToken: cancelToken,
+      );
+      return community.raw;
+    },
+    decode: BackendCardItem.fromJson,
+  );
+});
+
+final communityMediaProvider =
+    StreamProvider.autoDispose.family<CardPage, String>((ref, communityId) {
+  return _localFirstPageStream(
+    ref,
+    namespace: 'communities',
+    cacheValue: 'media:$communityId?limit=20',
+    ttl: const Duration(minutes: 10),
+    fetch: (repository, cancelToken) => repository.fetchCommunityMedia(
+      communityId,
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+final communityMediaPaginationProvider = StateNotifierProvider.autoDispose
+    .family<CommunityMediaPaginationController, CommunityMediaPaginationState,
+        String>((ref, communityId) {
+  return CommunityMediaPaginationController(ref, communityId);
+});
+
+class CommunityMediaPaginationState {
+  const CommunityMediaPaginationState({
+    this.items = const [],
+    this.nextCursor,
+    this.loading = false,
+    this.error = false,
+    this.initialized = false,
+  });
+
+  final List<BackendCardItem> items;
+  final String? nextCursor;
+  final bool loading;
+  final bool error;
+  final bool initialized;
+
+  bool get hasNextPage => nextCursor != null && nextCursor!.isNotEmpty;
+
+  CommunityMediaPaginationState copyWith({
+    List<BackendCardItem>? items,
+    String? nextCursor,
+    bool clearNextCursor = false,
+    bool? loading,
+    bool? error,
+    bool? initialized,
+  }) {
+    return CommunityMediaPaginationState(
+      items: items ?? this.items,
+      nextCursor: clearNextCursor ? null : nextCursor ?? this.nextCursor,
+      loading: loading ?? this.loading,
+      error: error ?? this.error,
+      initialized: initialized ?? this.initialized,
+    );
+  }
+}
+
+class CommunityMediaPaginationController
+    extends StateNotifier<CommunityMediaPaginationState> {
+  CommunityMediaPaginationController(this._ref, this._communityId)
+      : super(const CommunityMediaPaginationState()) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final String _communityId;
+  final Set<CancelToken> _tokens = {};
+
+  void primeNextCursor(String? cursor) {
+    if (state.items.isNotEmpty || state.loading) {
+      return;
+    }
+    if (state.initialized && state.nextCursor == cursor) {
+      return;
+    }
+    state = state.copyWith(
+      nextCursor: cursor,
+      clearNextCursor: cursor == null || cursor.isEmpty,
+      error: false,
+      initialized: true,
+    );
+  }
+
+  Future<void> loadNextPage() async {
+    final cursor = state.nextCursor;
+    if (state.loading || cursor == null || cursor.isEmpty) {
+      return;
+    }
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    state = state.copyWith(loading: true, error: false);
+    try {
+      final page =
+          await _ref.read(backendRepositoryProvider).fetchCommunityMedia(
+                _communityId,
+                cursor: cursor,
+                cancelToken: cancelToken,
+              );
+      state = state.copyWith(
+        items: [...state.items, ...page.items],
+        nextCursor: page.nextCursor,
+        clearNextCursor: page.nextCursor == null || page.nextCursor!.isEmpty,
+        loading: false,
+        error: false,
+      );
+    } catch (_) {
+      if (!cancelToken.isCancelled) {
+        state = state.copyWith(loading: false, error: true);
+      }
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+final eveningAiDraftProvider =
+    FutureProvider.autoDispose.family<EveningAiDraftData, String>(
+  (ref, draftId) {
+    final localFirst = ref.read(localFirstRepositoryProvider);
+    final cancelToken = CancelToken();
+    ref.onDispose(cancelToken.cancel);
+    final repository = ref.read(backendRepositoryProvider);
+    if (localFirst == null) {
+      return repository.fetchEveningAiDraft(
+        draftId,
+        cancelToken: cancelToken,
+      );
+    }
+    return localFirst.fetch<EveningAiDraftData>(
+      key: AppCacheKey(
+        namespace: 'evening-ai-drafts',
+        value: draftId,
+        userScope: ref.watch(currentCacheScopeProvider),
+      ),
+      ttl: const Duration(minutes: 15),
+      network: () async {
+        final draft = await repository.fetchEveningAiDraft(
+          draftId,
+          cancelToken: cancelToken,
+        );
+        return draft.raw;
+      },
+      decode: EveningAiDraftData.fromJson,
+    );
+  },
+);
+
+final afterDarkAccessProvider =
+    FutureProvider.autoDispose<AfterDarkAccessData>((ref) {
+  return _privateValueFuture<AfterDarkAccessData>(
+    ref,
+    fallback: const AfterDarkAccessData(unlocked: false),
+    namespace: 'after_dark_access',
+    cacheValue: 'me',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchAfterDarkAccess(
+      cancelToken: cancelToken,
+    ),
+    encode: (access) => access.raw,
+    decode: AfterDarkAccessData.fromJson,
+  );
+});
+
+final afterDarkEventsProvider = StreamProvider.autoDispose<CardPage>((ref) {
+  return _privatePageStream(
+    ref,
+    namespace: 'after_dark_events',
+    cacheValue: 'events?limit=20',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchAfterDarkEvents(
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+final afterDarkEventProvider =
+    FutureProvider.autoDispose.family<BackendCardItem, String>((ref, eventId) {
+  return _localFirstValueFuture<BackendCardItem>(
+    ref,
+    namespace: 'after_dark_events',
+    cacheValue: 'detail:$eventId',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchAfterDarkEvent(
+      eventId,
+      cancelToken: cancelToken,
+    ),
+    encode: (event) => event.raw,
+    decode: BackendCardItem.fromJson,
+  );
+});
+
+final publicUserProvider =
+    FutureProvider.autoDispose.family<BackendCardItem, String>((ref, userId) {
+  return _localFirstValueFuture<BackendCardItem>(
+    ref,
+    namespace: 'people',
+    cacheValue: 'profile:$userId',
+    ttl: const Duration(minutes: 5),
+    fetch: (repository, cancelToken) => repository.fetchPublicUser(
+      userId,
+      cancelToken: cancelToken,
+    ),
+    encode: (user) => user.raw,
+    decode: BackendCardItem.fromJson,
+  );
+});
+
+final profileSocialProvider =
+    FutureProvider.autoDispose.family<ProfileSocialData, String>((ref, userId) {
+  return _localFirstValueFuture<ProfileSocialData>(
+    ref,
+    namespace: 'people',
+    cacheValue: 'social:$userId',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchProfileSocial(
+      userId,
+      cancelToken: cancelToken,
+    ),
+    encode: (social) => social.raw,
+    decode: ProfileSocialData.fromJson,
+  );
+});
+
+final hostDashboardProvider =
+    FutureProvider.autoDispose<HostDashboardData>((ref) {
+  return _privateValueFuture<HostDashboardData>(
+    ref,
+    fallback: const HostDashboardData(stats: HostDashboardStats()),
+    namespace: 'host',
+    cacheValue: 'dashboard',
+    ttl: const Duration(minutes: 1),
+    fetch: (repository, cancelToken) => repository.fetchHostDashboard(
+      cancelToken: cancelToken,
+    ),
+    encode: (dashboard) => dashboard.raw,
+    decode: HostDashboardData.fromJson,
+  );
+});
+
+final hostDashboardActionsProvider = Provider<HostDashboardActionsController>(
+    HostDashboardActionsController.new);
+
+class HostDashboardActionsController {
+  HostDashboardActionsController(this._ref) {
+    _ref.onDispose(_cancelActiveRequests);
+  }
+
+  final Ref _ref;
+  final Set<CancelToken> _tokens = {};
+
+  Future<HostJoinRequestData> approveRequest(String requestId) async {
+    final cancelToken = _trackToken();
+    try {
+      final request =
+          await _ref.read(backendRepositoryProvider).approveHostRequest(
+                requestId,
+                cancelToken: cancelToken,
+              );
+      _ref.invalidate(hostDashboardProvider);
+      return request;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<HostJoinRequestData> rejectRequest(String requestId) async {
+    final cancelToken = _trackToken();
+    try {
+      final request =
+          await _ref.read(backendRepositoryProvider).rejectHostRequest(
+                requestId,
+                cancelToken: cancelToken,
+              );
+      _ref.invalidate(hostDashboardProvider);
+      return request;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  Future<TokenWalletData> boostEvent(
+    String eventId, {
+    String optionId = 'boost-24',
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      final wallet = await _ref.read(backendRepositoryProvider).createPromotion(
+            targetKind: 'event',
+            targetId: eventId,
+            optionId: optionId,
+            cancelToken: cancelToken,
+          );
+      _ref.invalidate(tokenWalletProvider);
+      await _dropMapEventsCache(_ref);
+      _invalidateMapEvents(_ref);
+      _ref.invalidate(hostDashboardProvider);
+      return wallet;
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
+  CancelToken _trackToken() {
+    final cancelToken = CancelToken();
+    _tokens.add(cancelToken);
+    return cancelToken;
+  }
+
+  void _cancelActiveRequests() {
+    for (final token in _tokens) {
+      token.cancel();
+    }
+    _tokens.clear();
+  }
+}
+
+final searchResultsProvider =
+    FutureProvider.autoDispose.family<CardPage, String>((ref, query) {
+  final trimmed = query.trim();
+  if (trimmed.isEmpty) {
+    return Future.value(const BackendPage(items: []));
+  }
+  final city = _currentCity(ref);
+  return _privateValueFuture<CardPage>(
+    ref,
+    fallback: const BackendPage(items: []),
+    namespace: 'search',
+    cacheValue: 'city:${city ?? ''};q:$trimmed',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.search(
+      trimmed,
+      city: city,
+      cancelToken: cancelToken,
+    ),
+    encode: (page) => page.raw.isEmpty
+        ? {'items': page.items.map((item) => item.raw).toList()}
+        : page.raw,
+    decode: _decodeCardPage,
+  );
+});
 
 class MapEventsQuery {
   const MapEventsQuery({
@@ -590,7 +6049,7 @@ class MapEventsQuery {
     this.southWestLongitude,
     this.northEastLatitude,
     this.northEastLongitude,
-    this.limit = 50,
+    this.limit = 80,
   });
 
   final double? centerLatitude;
@@ -602,1947 +6061,735 @@ class MapEventsQuery {
   final double? northEastLongitude;
   final int limit;
 
-  @override
-  bool operator ==(Object other) {
-    return other is MapEventsQuery &&
-        other.centerLatitude == centerLatitude &&
-        other.centerLongitude == centerLongitude &&
-        other.radiusKm == radiusKm &&
-        other.southWestLatitude == southWestLatitude &&
-        other.southWestLongitude == southWestLongitude &&
-        other.northEastLatitude == northEastLatitude &&
-        other.northEastLongitude == northEastLongitude &&
-        other.limit == limit;
-  }
-
-  @override
-  int get hashCode => Object.hash(
-        centerLatitude,
-        centerLongitude,
-        radiusKm,
-        southWestLatitude,
-        southWestLongitude,
-        northEastLatitude,
-        northEastLongitude,
-        limit,
-      );
-}
-
-final mapEventsProvider = FutureProvider.autoDispose
-    .family<List<Event>, MapEventsQuery>((ref, query) async {
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  return _fetchLocalFirst<List<Event>>(
-    ref,
-    namespace: AppCacheNamespace.map,
-    cacheKey: _mapEventsCacheKey(query),
-    policy: AppCachePolicies.map,
-    networkFetch: () => repository
-        .fetchEvents(
-          filter: 'nearby',
-          limit: query.limit,
-          latitude: query.centerLatitude,
-          longitude: query.centerLongitude,
-          radiusKm: query.radiusKm,
-          southWestLatitude: query.southWestLatitude,
-          southWestLongitude: query.southWestLongitude,
-          northEastLatitude: query.northEastLatitude,
-          northEastLongitude: query.northEastLongitude,
-          cancelToken: cancelToken,
-        )
-        .then((value) => value.items),
-    fromJson: (json) => _decodeCacheList(json, Event.fromJson),
-    toJson: _eventsToCacheJson,
-  );
-});
-
-String _mapEventsCacheKey(MapEventsQuery query) {
-  return AppCacheKey.build(
-    path: '/events/map',
-    query: {
-      'limit': query.limit,
-      'centerLatitude': _roundedCoordinate(query.centerLatitude),
-      'centerLongitude': _roundedCoordinate(query.centerLongitude),
-      'radiusKm': query.radiusKm,
-      'southWestLatitude': _roundedCoordinate(query.southWestLatitude),
-      'southWestLongitude': _roundedCoordinate(query.southWestLongitude),
-      'northEastLatitude': _roundedCoordinate(query.northEastLatitude),
-      'northEastLongitude': _roundedCoordinate(query.northEastLongitude),
-    },
-  );
-}
-
-double? _roundedCoordinate(double? value) {
-  if (value == null) {
-    return null;
-  }
-  return double.parse(value.toStringAsFixed(4));
-}
-
-final eventDetailProvider = FutureProvider.autoDispose
-    .family<EventDetail, String>((ref, eventId) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository.fetchEventDetail(eventId, cancelToken: cancelToken);
-});
-
-final eventDetailRouteStopsProvider = FutureProvider.autoDispose
-    .family<List<EventDetailRouteStop>, String>((ref, routeId) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  final routeJson = await repository.fetchEveningRoute(
-    routeId,
-    cancelToken: cancelToken,
-  );
-  final steps = routeJson['steps'];
-  if (steps is! List) {
-    return const [];
-  }
-  return EventDetailRouteStop.listFromJson(steps);
-});
-
-class AfficheEventsQuery {
-  const AfficheEventsQuery({
-    required this.city,
-    this.query = '',
-    this.date,
-    this.priceMode = 'any',
-    this.source,
-    this.category,
-    this.featured,
-    this.limit = 12,
-  });
-
-  final String city;
-  final String query;
-  final String? date;
-  final String priceMode;
-  final String? source;
-  final String? category;
-  final bool? featured;
-  final int limit;
+  String get cacheValue => [
+        'limit=$limit',
+        if (centerLatitude != null) 'lat=${centerLatitude!.toStringAsFixed(3)}',
+        if (centerLongitude != null)
+          'lng=${centerLongitude!.toStringAsFixed(3)}',
+        if (radiusKm != null) 'radius=${radiusKm!.toStringAsFixed(1)}',
+        if (southWestLatitude != null)
+          'swLat=${southWestLatitude!.toStringAsFixed(3)}',
+        if (southWestLongitude != null)
+          'swLng=${southWestLongitude!.toStringAsFixed(3)}',
+        if (northEastLatitude != null)
+          'neLat=${northEastLatitude!.toStringAsFixed(3)}',
+        if (northEastLongitude != null)
+          'neLng=${northEastLongitude!.toStringAsFixed(3)}',
+      ].join('&');
 
   @override
   bool operator ==(Object other) {
-    return other is AfficheEventsQuery &&
-        other.city == city &&
-        other.query == query &&
-        other.date == date &&
-        other.priceMode == priceMode &&
-        other.source == source &&
-        other.category == category &&
-        other.featured == featured &&
-        other.limit == limit;
+    return other is MapEventsQuery && other.cacheValue == cacheValue;
   }
 
   @override
-  int get hashCode => Object.hash(
-        city,
-        query,
-        date,
-        priceMode,
-        source,
-        category,
-        featured,
-        limit,
-      );
+  int get hashCode => cacheValue.hashCode;
 }
 
-final afficheEventsProvider =
-    FutureProvider.autoDispose.family<List<AfficheEvent>, AfficheEventsQuery>((
-  ref,
-  query,
-) async {
-  final cancelToken = _autoDisposeCancelToken(ref);
-  final page = await _fetchAfficheEventsPage(
+final mapEventsProvider =
+    StreamProvider.autoDispose.family<CardPage, MapEventsQuery>((ref, query) {
+  ref.watch(_mapEventsRefreshTickProvider);
+  final city = _currentCity(ref);
+  final date = _todayIsoDate(DateTime.now());
+  return _localFirstPageStream(
     ref,
-    query,
-    cancelToken: cancelToken,
-  );
-  return page.items;
-});
-
-Future<PaginatedResponse<AfficheEvent>> _fetchAfficheEventsPage(
-  Ref ref,
-  AfficheEventsQuery query, {
-  String? cursor,
-  CancelToken? cancelToken,
-  bool forceRefresh = false,
-}) {
-  final repository = ref.read(backendRepositoryProvider);
-  Future<PaginatedResponse<AfficheEvent>> fetchNetwork() {
-    return repository.fetchAfficheEvents(
-      city: query.city,
-      q: query.query.isEmpty ? null : query.query,
-      date: query.date,
-      priceMode: query.priceMode,
-      source: query.source,
-      category: query.category,
-      featured: query.featured,
-      cursor: cursor,
+    namespace: 'map_events',
+    cacheValue: 'radar-v8:city=${city ?? ''}:date=$date:${query.cacheValue}',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchMapEvents(
+      city: city,
+      date: date,
+      centerLatitude: query.centerLatitude,
+      centerLongitude: query.centerLongitude,
+      radiusKm: query.radiusKm,
+      southWestLatitude: query.southWestLatitude,
+      southWestLongitude: query.southWestLongitude,
+      northEastLatitude: query.northEastLatitude,
+      northEastLongitude: query.northEastLongitude,
       limit: query.limit,
       cancelToken: cancelToken,
-    );
-  }
-
-  if (cursor != null) {
-    return fetchNetwork();
-  }
-
-  return _fetchLocalFirst<PaginatedResponse<AfficheEvent>>(
-    ref,
-    namespace: AppCacheNamespace.affiche,
-    cacheKey: _afficheEventsCacheKey(query),
-    policy: AppCachePolicies.affiche,
-    networkFetch: fetchNetwork,
-    fromJson: _afficheEventsPageFromCacheJson,
-    toJson: _afficheEventsPageToCacheJson,
-    forceRefresh: forceRefresh,
-  );
-}
-
-String _afficheEventsCacheKey(AfficheEventsQuery query) {
-  return AppCacheKey.build(
-    path: '/affiche/events',
-    query: {
-      'city': query.city,
-      'q': query.query.isEmpty ? null : query.query,
-      'date': query.date,
-      'priceMode': query.priceMode,
-      'source': query.source,
-      'category': query.category,
-      'featured': query.featured,
-      'limit': query.limit,
-    },
-  );
-}
-
-PaginatedResponse<AfficheEvent> _afficheEventsPageFromCacheJson(
-  Object? json,
-) {
-  final payload =
-      json is Map ? Map<String, dynamic>.from(json) : const <String, dynamic>{};
-  return PaginatedResponse.fromJson(payload, AfficheEvent.fromJson);
-}
-
-Map<String, dynamic> _afficheEventsPageToCacheJson(
-  PaginatedResponse<AfficheEvent> page,
-) {
-  return {
-    'items': page.items.map(_afficheEventToCacheJson).toList(growable: false),
-    'nextCursor': page.nextCursor,
-    'lastEventId': page.lastEventId,
-  };
-}
-
-Map<String, dynamic> _afficheEventToCacheJson(AfficheEvent event) {
-  return {
-    'id': event.id,
-    'title': event.title,
-    'description': event.description,
-    'city': event.city,
-    'venue': event.venue,
-    'address': event.address,
-    'lat': event.latitude,
-    'lng': event.longitude,
-    'startsAt': event.startsAt?.toUtc().toIso8601String(),
-    'endsAt': event.endsAt?.toUtc().toIso8601String(),
-    'dateLabel': event.dateLabel,
-    'timeLabel': event.timeLabel,
-    'category': event.category,
-    'priceFrom': event.priceFrom,
-    'priceMode': _affichePriceModeToJson(event.priceMode),
-    'currency': event.currency,
-    'imageUrl': event.imageUrl,
-    'imageVariants': _mediaVariantsToCacheJson(event.imageVariants),
-    'provider': event.provider,
-    'sourceCode': event.sourceCode,
-    'actionUrl': event.actionUrl,
-    'actionKind': event.actionKind,
-    'isAffiliate': event.isAffiliate,
-    'tags': event.tags,
-  };
-}
-
-String _affichePriceModeToJson(AffichePriceMode mode) {
-  return switch (mode) {
-    AffichePriceMode.free => 'free',
-    AffichePriceMode.paid => 'paid',
-    AffichePriceMode.unknown => 'unknown',
-  };
-}
-
-Map<String, dynamic> _mediaVariantsToCacheJson(
-  Map<String, MediaVariantData> variants,
-) {
-  return variants.map(
-    (key, value) => MapEntry(
-      key,
-      {
-        'url': value.url,
-        'downloadUrl': value.downloadUrl,
-        'mimeType': value.mimeType,
-        'byteSize': value.byteSize,
-        'cacheKey': value.cacheKey,
-        'expiresAt': value.expiresAt?.toUtc().toIso8601String(),
-      },
     ),
   );
+});
+
+final _mapEventsRefreshTickProvider = StateProvider<int>((ref) => 0);
+
+void _invalidateMapEvents(Ref ref) {
+  ref.read(_mapEventsRefreshTickProvider.notifier).state += 1;
+  ref.invalidate(mapEventsProvider);
 }
 
-const _afficheFilterPageCacheTtl = Duration(minutes: 3);
-
-class AfficheEventsPagedState {
-  const AfficheEventsPagedState({
-    required this.items,
-    required this.nextCursor,
-    this.isLoadingMore = false,
-  });
-
-  final List<AfficheEvent> items;
-  final String? nextCursor;
-  final bool isLoadingMore;
-
-  bool get hasMore => nextCursor != null;
-
-  AfficheEventsPagedState copyWith({
-    List<AfficheEvent>? items,
-    String? nextCursor,
-    bool clearNextCursor = false,
-    bool? isLoadingMore,
-  }) {
-    return AfficheEventsPagedState(
-      items: items ?? this.items,
-      nextCursor: clearNextCursor ? null : nextCursor ?? this.nextCursor,
-      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
-    );
-  }
-}
-
-final afficheEventsPagedProvider = StateNotifierProvider.autoDispose.family<
-    AfficheEventsPager,
-    AsyncValue<AfficheEventsPagedState>,
-    AfficheEventsQuery>((ref, query) {
-  if (query.query.isEmpty) {
-    final keepAliveLink = ref.keepAlive();
-    Timer? cacheTimer;
-
-    ref.onCancel(() {
-      cacheTimer?.cancel();
-      cacheTimer = Timer(_afficheFilterPageCacheTtl, keepAliveLink.close);
-    });
-    ref.onResume(() {
-      cacheTimer?.cancel();
-      cacheTimer = null;
-    });
-    ref.onDispose(() {
-      cacheTimer?.cancel();
-    });
-  }
-
-  final pager = AfficheEventsPager(ref, query);
-  unawaited(pager.loadFirstPage());
-  return pager;
-});
-
-class AfficheEventsPager
-    extends StateNotifier<AsyncValue<AfficheEventsPagedState>> {
-  AfficheEventsPager(this.ref, this.query) : super(const AsyncLoading()) {
-    ref.onDispose(() {
-      if (!_cancelToken.isCancelled) {
-        _cancelToken.cancel('affiche_pager_disposed');
-      }
-    });
-  }
-
-  final Ref ref;
-  final AfficheEventsQuery query;
-  final _cancelToken = CancelToken();
-
-  Future<bool> loadFirstPage({bool forceRefresh = false}) async {
-    final current = state.valueOrNull;
-    if (current == null) {
-      state = const AsyncLoading();
-    }
-    try {
-      final page = await _fetchPage(forceRefresh: forceRefresh);
-      if (!mounted) {
-        return false;
-      }
-      state = AsyncData(
-        AfficheEventsPagedState(
-          items: page.items,
-          nextCursor: page.nextCursor,
-        ),
-      );
-      return true;
-    } catch (error, stackTrace) {
-      if (!mounted) {
-        return false;
-      }
-      if (current != null) {
-        state = AsyncData(current);
-        return false;
-      }
-      state = AsyncError(error, stackTrace);
-      return false;
-    }
-  }
-
-  Future<void> loadNextPage() async {
-    final current = state.valueOrNull;
-    if (current == null ||
-        current.isLoadingMore ||
-        current.nextCursor == null) {
-      return;
-    }
-    state = AsyncData(current.copyWith(isLoadingMore: true));
-    try {
-      final page = await _fetchPage(cursor: current.nextCursor);
-      if (!mounted) {
-        return;
-      }
-      state = AsyncData(
-        AfficheEventsPagedState(
-          items: [...current.items, ...page.items],
-          nextCursor: page.nextCursor,
-        ),
-      );
-    } catch (_) {
-      if (mounted) {
-        state = AsyncData(current.copyWith(isLoadingMore: false));
-      }
-    }
-  }
-
-  Future<PaginatedResponse<AfficheEvent>> _fetchPage({
-    String? cursor,
-    bool forceRefresh = false,
-  }) async {
-    return _fetchAfficheEventsPage(
-      ref,
-      query,
-      cursor: cursor,
-      cancelToken: _cancelToken,
-      forceRefresh: forceRefresh,
-    );
-  }
-}
-
-final afficheEventDetailProvider = FutureProvider.autoDispose
-    .family<AfficheEvent, String>((ref, eventId) async {
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  return repository.fetchAfficheEventDetail(eventId, cancelToken: cancelToken);
-});
-
-final checkInProvider = FutureProvider.autoDispose
-    .family<EventCheckInData, String>((ref, eventId) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository.fetchCheckIn(eventId, cancelToken: cancelToken);
-});
-
-final liveMeetupProvider = FutureProvider.autoDispose
-    .family<LiveMeetupData, String>((ref, eventId) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository.fetchLiveMeetup(eventId, cancelToken: cancelToken);
-});
-
-final afterPartyProvider = FutureProvider.autoDispose
-    .family<AfterPartyData, String>((ref, eventId) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository.fetchAfterParty(eventId, cancelToken: cancelToken);
-});
-
-final hostDashboardProvider =
-    FutureProvider.autoDispose<HostDashboardData>((ref) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository.fetchHostDashboard(cancelToken: cancelToken);
-});
-
-final hostEventProvider = FutureProvider.autoDispose
-    .family<HostEventData, String>((ref, eventId) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository.fetchHostEvent(eventId, cancelToken: cancelToken);
-});
-
-final settingsLocalStateProvider =
-    StateProvider<UserSettingsData?>((ref) => null);
-
-final settingsProvider = FutureProvider<UserSettingsData>((ref) async {
-  final watchedTokens = ref.watch(authTokensProvider);
-  if (watchedTokens == null) {
-    return UserSettingsData.fallback;
-  }
-  final localSettings = ref.watch(settingsLocalStateProvider);
-  if (localSettings != null) {
-    return localSettings;
-  }
-  final repository = ref.read(backendRepositoryProvider);
-  final authTokens = ref.read(authTokensProvider.notifier);
-  final currentUser = ref.read(currentUserIdProvider.notifier);
-  final permissionPreferences = ref.read(appPermissionPreferencesProvider);
-  bool sessionStillCurrent(AuthTokens? expectedTokens, String expectedUserId) {
-    final currentTokens = authTokens.currentTokens;
-    return currentUser.state == expectedUserId &&
-        currentTokens?.accessToken == expectedTokens?.accessToken &&
-        currentTokens?.refreshToken == expectedTokens?.refreshToken;
-  }
-
-  final userId = currentUser.state;
-  final sessionTokens = authTokens.currentTokens;
-  if (userId == null || sessionTokens == null) {
-    return UserSettingsData.fallback;
-  }
-  Future<UserSettingsData> fetchAndSyncSettings() async {
-    final settings = await repository.fetchSettings();
-    if (!sessionStillCurrent(sessionTokens, userId)) {
-      return UserSettingsData.fallback;
-    }
-    await permissionPreferences.syncFromSettings(settings);
-    if (!sessionStillCurrent(sessionTokens, userId)) {
-      return UserSettingsData.fallback;
-    }
-    return settings;
-  }
-
-  final settings = await _fetchLocalFirst<UserSettingsData>(
-    ref,
-    namespace: AppCacheNamespace.settings,
-    cacheKey: AppCacheKey.build(path: '/settings/me'),
-    policy: AppCachePolicies.settings,
-    networkFetch: fetchAndSyncSettings,
-    fromJson: (json) => UserSettingsData.fromJson(_jsonMap(json)),
-    toJson: (value) => value.toJson(),
-  );
-  if (!sessionStillCurrent(sessionTokens, userId)) {
-    return UserSettingsData.fallback;
-  }
-  await permissionPreferences.syncFromSettings(settings);
-  if (!sessionStillCurrent(sessionTokens, userId)) {
-    return UserSettingsData.fallback;
-  }
-  return settings;
-});
-
-final verificationProvider =
-    FutureProvider.autoDispose<VerificationStateData>((ref) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository.fetchVerification(cancelToken: cancelToken);
-});
-
-final safetyHubProvider =
-    FutureProvider.autoDispose<SafetyHubData>((ref) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository.fetchSafetyHub(cancelToken: cancelToken);
-});
-
-final storiesProvider = FutureProvider.autoDispose
-    .family<List<StoryData>, String>((ref, eventId) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository.fetchStories(eventId, cancelToken: cancelToken);
-});
-
-final matchesProvider =
-    FutureProvider.autoDispose<List<MatchData>>((ref) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository.fetchMatches(cancelToken: cancelToken);
-});
-
-final paymentCatalogProvider = FutureProvider<PaymentCatalog>((ref) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  await authBootstrap;
-  return repository.fetchPaymentCatalog();
-});
-
-final subscriptionPlansProvider =
-    FutureProvider<List<SubscriptionPlanData>>((ref) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  await authBootstrap;
-  try {
-    return (await repository.fetchPaymentCatalog()).subscriptions;
-  } catch (_) {
-    return repository.fetchSubscriptionPlans();
-  }
-});
-
-final subscriptionStateProvider =
-    FutureProvider<SubscriptionStateData>((ref) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  await authBootstrap;
-  return repository.fetchSubscriptionState();
-});
-
-final peopleProvider = FutureProvider<List<PersonSummary>>((ref) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  await authBootstrap;
-  return repository.fetchPeople().then((value) => value.items);
-});
-
-final personProfileProvider =
-    FutureProvider.autoDispose.family<ProfileData, String>((ref, userId) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return _fetchLocalFirst<ProfileData>(
-    ref,
-    namespace: AppCacheNamespace.publicProfile,
-    cacheKey: AppCacheKey.build(path: '/people/$userId'),
-    policy: AppCachePolicies.publicProfile,
-    networkFetch: () =>
-        repository.fetchPersonProfile(userId, cancelToken: cancelToken),
-    fromJson: _profileFromCacheJson,
-    toJson: _profileToCacheJson,
-  );
-});
-
-final profileSocialProvider = StateNotifierProvider.autoDispose
-    .family<ProfileSocialController, AsyncValue<ProfileSocialData>, String>(
-        (ref, userId) {
-  final initial = ref.watch(personProfileProvider(userId)).valueOrNull?.social;
-  final controller = ProfileSocialController(ref, userId, initial);
-  if (initial == null) {
-    unawaited(controller.load());
-  }
-  return controller;
-});
-
-class ProfileSocialController
-    extends StateNotifier<AsyncValue<ProfileSocialData>> {
-  ProfileSocialController(this.ref, this.userId, ProfileSocialData? initial)
-      : super(initial == null ? const AsyncLoading() : AsyncData(initial)) {
-    ref.onDispose(() {
-      final cancelToken = _loadCancelToken;
-      if (cancelToken != null && !cancelToken.isCancelled) {
-        cancelToken.cancel('profile_social_disposed');
-      }
-    });
-  }
-
-  final Ref ref;
-  final String userId;
-  CancelToken? _loadCancelToken;
-
-  Future<void> load() async {
-    final cancelToken = _replaceLoadCancelToken();
-    final repository = ref.read(backendRepositoryProvider);
-    final result = await AsyncValue.guard(
-      () => repository.fetchProfileSocial(userId, cancelToken: cancelToken),
-    );
-    try {
-      if (!mounted ||
-          cancelToken.isCancelled ||
-          !identical(_loadCancelToken, cancelToken)) {
-        return;
-      }
-      state = result;
-    } finally {
-      if (identical(_loadCancelToken, cancelToken)) {
-        _loadCancelToken = null;
-      }
-    }
-  }
-
-  Future<void> toggleFollow() async {
-    final current = state.valueOrNull;
-    if (current == null) {
-      return;
-    }
-    final next = current.copyWith(
-      iFollow: !current.iFollow,
-      followers: current.followers + (current.iFollow ? -1 : 1),
-    );
-    final repository = ref.read(backendRepositoryProvider);
-    await _submitOptimistic(
-      next,
-      () => repository.setProfileFollow(
-        userId,
-        follow: !current.iFollow,
-      ),
-    );
-  }
-
-  Future<void> toggleLike() async {
-    final current = state.valueOrNull;
-    if (current == null) {
-      return;
-    }
-    final next = current.copyWith(
-      iLike: !current.iLike,
-      likes: current.likes + (current.iLike ? -1 : 1),
-    );
-    final repository = ref.read(backendRepositoryProvider);
-    await _submitOptimistic(
-      next,
-      () => repository.setProfileReaction(
-        userId,
-        kind: 'like',
-        active: !current.iLike,
-      ),
-    );
-  }
-
-  Future<void> toggleSuper() async {
-    final current = state.valueOrNull;
-    if (current == null) {
-      return;
-    }
-    final next = current.copyWith(
-      iSuper: !current.iSuper,
-      superLikes: current.superLikes + (current.iSuper ? -1 : 1),
-    );
-    final repository = ref.read(backendRepositoryProvider);
-    await _submitOptimistic(
-      next,
-      () => repository.setProfileReaction(
-        userId,
-        kind: 'super_like',
-        active: !current.iSuper,
-      ),
-    );
-  }
-
-  Future<void> _submitOptimistic(
-    ProfileSocialData optimistic,
-    Future<ProfileSocialData> Function() submit,
-  ) async {
-    final previous = state;
-    state = AsyncData(optimistic);
-    try {
-      final result = await submit();
-      if (!mounted) {
-        return;
-      }
-      state = AsyncData(result);
-      await clearLocalFirstCacheKey(
-        ref,
-        namespace: AppCacheNamespace.publicProfile,
-        cacheKey: AppCacheKey.build(path: '/people/$userId'),
-      );
-    } catch (error, stackTrace) {
-      if (mounted) {
-        state = previous;
-      }
-      Error.throwWithStackTrace(error, stackTrace);
-    }
-  }
-
-  CancelToken _replaceLoadCancelToken() {
-    final activeToken = _loadCancelToken;
-    if (activeToken != null && !activeToken.isCancelled) {
-      activeToken.cancel('profile_social_load_replaced');
-    }
-    final cancelToken = CancelToken();
-    _loadCancelToken = cancelToken;
-    return cancelToken;
-  }
-}
-
-final meetupChatsLocalStateProvider =
-    StateProvider<List<MeetupChat>?>((ref) => null);
-
-final meetupChatsProvider = FutureProvider<List<MeetupChat>>((ref) async {
-  final authTokens = ref.watch(authTokensProvider);
-  if (authTokens == null) {
-    return const [];
-  }
-  final localItems = ref.watch(meetupChatsLocalStateProvider);
-  if (localItems != null) {
-    return localItems;
-  }
-  final localStore = ref.read(chatLocalStoreProvider);
-  final userScope = ref.read(appCacheUserScopeProvider);
-  if (localStore != null) {
-    final cached = await _readChatSummariesCache(
-      ref,
-      localStore,
-      userScope: userScope,
-      kind: ChatSummaryKind.meetup,
-    );
-    if (cached.isNotEmpty) {
-      unawaited(_refreshMeetupChatsCache(ref, localStore, userScope));
-      return sortMeetupChatsByPinned(
-        cached.map(MeetupChat.fromJson).toList(growable: false),
-      );
-    }
-  }
-  final repository = ref.read(backendRepositoryProvider);
-  final result = await repository.fetchMeetupChats();
-  if (localStore != null) {
-    unawaited(
-      _writeMeetupChatsCache(localStore, userScope, result.items).catchError(
-        (_) {},
-      ),
-    );
-  }
-  return sortMeetupChatsByPinned(result.items);
-});
-
-final meetupChatSummaryProvider =
-    Provider.autoDispose.family<MeetupChat?, String>((ref, chatId) {
-  return ref.watch(meetupChatsProvider.select((value) {
-    final items = value.valueOrNull;
-    if (items == null) {
-      return null;
-    }
-
-    for (final chat in items) {
-      if (chat.id == chatId) {
-        return chat;
-      }
-    }
-
-    return null;
-  }));
-});
-
-final eveningSessionsProvider =
-    FutureProvider<List<EveningSessionSummary>>((ref) async {
-  final authTokens = ref.watch(authTokensProvider);
-  if (authTokens == null) {
-    return const [];
-  }
-  final repository = ref.read(backendRepositoryProvider);
-  return repository.fetchEveningSessions().then((value) => value.items);
-});
-
-final eveningSessionProvider = FutureProvider.autoDispose
-    .family<EveningSessionDetail, String>((ref, sessionId) async {
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository.fetchEveningSession(sessionId, cancelToken: cancelToken);
-});
-
-final eveningRouteTemplatesProvider =
-    FutureProvider.family<List<EveningRouteTemplateSummary>, String>(
-        (ref, city) async {
-  final authTokens = ref.watch(authTokensProvider);
-  if (authTokens == null) {
-    return const [];
-  }
-  final normalizedCity = city.trim();
-  if (normalizedCity.isEmpty) {
-    return const [];
-  }
-  final repository = ref.read(backendRepositoryProvider);
-  return _fetchLocalFirst<List<EveningRouteTemplateSummary>>(
-    ref,
-    namespace: AppCacheNamespace.routeTemplates,
-    cacheKey: AppCacheKey.build(
-      path: '/evening/route-templates',
-      query: {
-        'city': normalizedCity,
-        'limit': 20,
-      },
-    ),
-    policy: AppCachePolicies.routeTemplates,
-    networkFetch: () => repository
-        .fetchEveningRouteTemplates(city: normalizedCity)
-        .then((value) => value.items),
-    fromJson: (json) =>
-        _decodeCacheList(json, EveningRouteTemplateSummary.fromJson),
-    toJson: _routeTemplatesToCacheJson,
-  );
-});
-
-List<Map<String, dynamic>> _routeTemplatesToCacheJson(
-  List<EveningRouteTemplateSummary> items,
-) {
-  return items.map(_routeTemplateToCacheJson).toList(growable: false);
-}
-
-Map<String, dynamic> _routeTemplateToCacheJson(
-  EveningRouteTemplateSummary template,
-) {
-  return {
-    'id': template.id,
-    'routeId': template.routeId,
-    'title': template.title,
-    'blurb': template.blurb,
-    'city': template.city,
-    'area': template.area,
-    'badgeLabel': template.badgeLabel,
-    'coverUrl': template.coverUrl,
-    'vibe': template.vibe,
-    'budget': template.budget,
-    'durationLabel': template.durationLabel,
-    'totalPriceFrom': template.totalPriceFrom,
-    'totalSavings': template.totalSavings,
-    'mood': template.mood,
-    'premium': template.premium,
-    'hostsCount': template.hostsCount,
-    'stepsPreview':
-        template.stepsPreview.map(_routeStepPreviewToCacheJson).toList(),
-    'partnerOffersPreview': template.partnerOffersPreview
-        .map(_routePartnerOfferPreviewToCacheJson)
-        .toList(),
-    'nearestSessions':
-        template.nearestSessions.map(_routeSessionToCacheJson).toList(),
-  };
-}
-
-Map<String, dynamic> _routeStepPreviewToCacheJson(
-  EveningRouteTemplateStepPreview step,
-) {
-  return {
-    'title': step.title,
-    'venue': step.venue,
-    'emoji': step.emoji,
-    'time': step.time,
-    'kind': step.kind,
-  };
-}
-
-Map<String, dynamic> _routePartnerOfferPreviewToCacheJson(
-  EveningPartnerOfferPreview offer,
-) {
-  return {
-    'partnerId': offer.partnerId,
-    'title': offer.title,
-    'shortLabel': offer.shortLabel,
-  };
-}
-
-Map<String, dynamic> _routeSessionToCacheJson(
-  EveningRouteTemplateSession session,
-) {
-  return {
-    'sessionId': session.sessionId,
-    'startsAt': session.startsAt,
-    'joinedCount': session.joinedCount,
-    'capacity': session.capacity,
-  };
-}
-
-final eveningRouteTemplateProvider = FutureProvider.autoDispose
-    .family<EveningRouteTemplateDetail, String>((ref, templateId) async {
-  final authTokens = ref.watch(authTokensProvider);
-  if (authTokens == null) {
-    throw StateError('Evening route template requires auth');
-  }
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository.fetchEveningRouteTemplate(
-    templateId,
-    cancelToken: cancelToken,
-  );
-});
-
-final eveningRouteTemplateSessionsProvider = FutureProvider.autoDispose
-    .family<List<EveningRouteTemplateSession>, String>((ref, templateId) async {
-  final authTokens = ref.watch(authTokensProvider);
-  if (authTokens == null) {
-    return const [];
-  }
-  final authBootstrap = ref.watch(authBootstrapProvider.future);
-  final repository = ref.read(backendRepositoryProvider);
-  final cancelToken = _autoDisposeCancelToken(ref);
-  await authBootstrap;
-  return repository
-      .fetchEveningRouteTemplateSessions(
-        templateId,
-        cancelToken: cancelToken,
-      )
-      .then((value) => value.items);
-});
-
-final personalChatsLocalStateProvider =
-    StateProvider<List<PersonalChat>?>((ref) => null);
-
-final knownPersonalChatsProvider =
-    StateProvider<Map<String, PersonalChat>>((ref) => const {});
-
-final personalChatsProvider = FutureProvider<List<PersonalChat>>((ref) async {
-  final authTokens = ref.watch(authTokensProvider);
-  if (authTokens == null) {
-    return const [];
-  }
-  final localItems = ref.watch(personalChatsLocalStateProvider);
-  if (localItems != null) {
-    return localItems;
-  }
-  final localStore = ref.read(chatLocalStoreProvider);
-  final userScope = ref.read(appCacheUserScopeProvider);
-  if (localStore != null) {
-    final cached = await _readChatSummariesCache(
-      ref,
-      localStore,
-      userScope: userScope,
-      kind: ChatSummaryKind.personal,
-    );
-    if (cached.isNotEmpty) {
-      unawaited(_refreshPersonalChatsCache(ref, localStore, userScope));
-      return sortPersonalChatsByPinned(
-        cached.map(PersonalChat.fromJson).toList(growable: false),
-      );
-    }
-  }
-  final repository = ref.read(backendRepositoryProvider);
-  final result = await repository.fetchPersonalChats();
-  if (localStore != null) {
-    unawaited(
-      _writePersonalChatsCache(localStore, userScope, result.items).catchError(
-        (_) {},
-      ),
-    );
-  }
-  return sortPersonalChatsByPinned(result.items);
-});
-
-final personalChatSummaryProvider =
-    Provider.autoDispose.family<PersonalChat?, String>((ref, chatId) {
-  final loadedChat = ref.watch(personalChatsProvider.select((value) {
-    final items = value.valueOrNull;
-    if (items == null) {
-      return null;
-    }
-
-    for (final chat in items) {
-      if (chat.id == chatId) {
-        return chat;
-      }
-    }
-
-    return null;
-  }));
-  if (loadedChat != null) {
-    return loadedChat;
-  }
-
-  return ref.watch(
-    knownPersonalChatsProvider.select((value) => value[chatId]),
-  );
-});
-
-Future<void> _refreshMeetupChatsCache(
-  Ref ref,
-  ChatLocalStore localStore,
-  AppCacheUserScope userScope,
-) async {
-  try {
-    final result = await ref.read(backendRepositoryProvider).fetchMeetupChats();
-    await _writeMeetupChatsCache(localStore, userScope, result.items);
-    ref.read(meetupChatsLocalStateProvider.notifier).state =
-        sortMeetupChatsByPinned(result.items);
-  } catch (_) {}
-}
-
-Future<void> _refreshPersonalChatsCache(
-  Ref ref,
-  ChatLocalStore localStore,
-  AppCacheUserScope userScope,
-) async {
-  try {
-    final result =
-        await ref.read(backendRepositoryProvider).fetchPersonalChats();
-    await _writePersonalChatsCache(localStore, userScope, result.items);
-    ref.read(personalChatsLocalStateProvider.notifier).state =
-        sortPersonalChatsByPinned(result.items);
-  } catch (_) {}
-}
-
-Future<List<Map<String, dynamic>>> _readChatSummariesCache(
-  Ref ref,
-  ChatLocalStore localStore, {
-  required AppCacheUserScope userScope,
-  required ChatSummaryKind kind,
-}) async {
-  try {
-    return await localStore.readSummaries(
-      userScope: userScope,
-      kind: kind,
-    );
-  } catch (_) {
-    _disableLocalCacheAfterFailure(ref);
-    return const [];
-  }
-}
-
-void _disableLocalCacheAfterFailure(Ref ref) {
-  Future<void>.microtask(() {
-    try {
-      ref.read(appLocalCacheRuntimeDisabledProvider.notifier).state = true;
-    } catch (_) {}
-  });
-}
-
-Future<void> _writeMeetupChatsCache(
-  ChatLocalStore localStore,
-  AppCacheUserScope userScope,
-  List<MeetupChat> chats,
-) async {
-  final now = DateTime.now();
-  await localStore.replaceSummariesForKind(
-    userScope: userScope,
-    kind: ChatSummaryKind.meetup,
-    summaries: chats
-        .map(
-          (chat) => ChatSummaryCachePayload(
-            chatId: chat.id,
-            summaryJson: meetupChatToCacheJson(chat),
-            updatedAt: chat.lastMessageAt ?? now,
-          ),
-        )
-        .toList(growable: false),
-  );
-}
-
-Future<void> _writePersonalChatsCache(
-  ChatLocalStore localStore,
-  AppCacheUserScope userScope,
-  List<PersonalChat> chats,
-) async {
-  final now = DateTime.now();
-  await localStore.replaceSummariesForKind(
-    userScope: userScope,
-    kind: ChatSummaryKind.personal,
-    summaries: chats
-        .map(
-          (chat) => ChatSummaryCachePayload(
-            chatId: chat.id,
-            summaryJson: personalChatToCacheJson(chat),
-            updatedAt: chat.lastMessageAt ?? now,
-          ),
-        )
-        .toList(growable: false),
-  );
-}
-
-final notificationsLocalStateProvider =
-    StateProvider<List<NotificationItem>?>((ref) => null);
-
-final notificationsProvider =
-    FutureProvider<List<NotificationItem>>((ref) async {
-  final authTokens = ref.watch(authTokensProvider);
-  if (authTokens == null) {
-    return const [];
-  }
-
-  final localItems = ref.watch(notificationsLocalStateProvider);
-  if (localItems != null) {
-    return localItems;
-  }
-  final repository = ref.read(backendRepositoryProvider);
-  return _fetchLocalFirst<List<NotificationItem>>(
-    ref,
-    namespace: AppCacheNamespace.notifications,
-    cacheKey: AppCacheKey.build(
-      path: '/notifications',
-      query: const {'limit': 20},
-    ),
-    policy: AppCachePolicies.notifications,
-    networkFetch: () =>
-        repository.fetchNotifications().then((value) => value.items),
-    fromJson: (json) => _decodeCacheList(json, NotificationItem.fromJson),
-    toJson: _notificationsToCacheJson,
-  );
-});
-
-List<Map<String, dynamic>> _notificationsToCacheJson(
-  List<NotificationItem> items,
-) {
-  return items.map(_notificationToCacheJson).toList(growable: false);
-}
-
-Map<String, dynamic> _notificationToCacheJson(NotificationItem item) {
-  return {
-    'id': item.id,
-    'kind': item.kind,
-    'title': item.title,
-    'body': item.body,
-    'payload': item.payload,
-    'readAt': item.readAt?.toIso8601String(),
-    'createdAt': item.createdAt.toIso8601String(),
-  };
-}
-
-final notificationUnreadCountOverrideProvider =
-    StateProvider<int?>((ref) => null);
-
-final notificationUnreadCountProvider = FutureProvider<int>((ref) async {
-  final authTokens = ref.watch(authTokensProvider);
-  if (authTokens == null) {
-    return 0;
-  }
-
-  final overrideCount = ref.watch(notificationUnreadCountOverrideProvider);
-  if (overrideCount != null) {
-    return overrideCount;
-  }
-
-  final localItems = ref.watch(notificationsLocalStateProvider);
-  if (localItems != null) {
-    return localItems.where((item) => item.unread).length;
-  }
-
-  final repository = ref.read(backendRepositoryProvider);
-  return _fetchLocalFirst<int>(
-    ref,
-    namespace: AppCacheNamespace.notifications,
-    cacheKey: AppCacheKey.build(path: '/notifications/unread-count'),
-    policy: AppCachePolicies.notifications,
-    networkFetch: repository.fetchUnreadNotificationCount,
-    fromJson: (json) => (json as num?)?.toInt() ?? 0,
-    toJson: (value) => value,
-  );
-});
-
-final chatUnreadBadgeProvider = Provider<int>((ref) {
-  final meetupUnread = ref.watch(meetupChatsProvider.select((value) {
-    final items = value.valueOrNull;
-    if (items == null) {
-      return 0;
-    }
-
-    return items.fold<int>(0, (sum, item) => sum + item.unread);
-  }));
-  final personalUnread = ref.watch(personalChatsProvider.select((value) {
-    final items = value.valueOrNull;
-    if (items == null) {
-      return 0;
-    }
-
-    return items.fold<int>(0, (sum, item) => sum + item.unread);
-  }));
-
-  return meetupUnread + personalUnread;
-});
-
-CancelToken _autoDisposeCancelToken(Ref ref) {
-  final cancelToken = CancelToken();
-  ref.onDispose(() {
-    if (!cancelToken.isCancelled) {
-      cancelToken.cancel('provider_disposed');
-    }
-  });
-  return cancelToken;
-}
-
-final hasLiveMeetupChatProvider = Provider<bool>((ref) {
-  return ref.watch(meetupChatsProvider.select((value) {
-    final items = value.valueOrNull;
-    if (items == null) {
-      return false;
-    }
-
-    return items.any((item) => item.phase == MeetupPhase.live);
-  }));
-});
-
-enum ChatRealtimeSyncScope { all, meetups, personal }
-
-final chatRealtimeSyncProvider = Provider<void>((ref) {
-  ref.watch(chatRealtimeSyncForScopeProvider(ChatRealtimeSyncScope.all));
-});
-
-final chatRealtimeSyncForScopeProvider =
-    Provider.family<void, ChatRealtimeSyncScope>((ref, scope) {
-  final authTokens = ref.watch(authTokensProvider);
-  if (authTokens == null) {
+Future<void> _dropMapEventsCache(Ref ref) async {
+  final store = ref.read(appLocalCacheStoreProvider);
+  if (store == null) {
     return;
   }
-
-  final coordinator = _ChatRealtimeSyncCoordinator(
-    ref,
-    syncMeetups: scope == ChatRealtimeSyncScope.all ||
-        scope == ChatRealtimeSyncScope.meetups,
-    syncPersonal: scope == ChatRealtimeSyncScope.all ||
-        scope == ChatRealtimeSyncScope.personal,
+  await store.deleteNamespace(
+    namespace: 'map_events',
+    userScope: currentCacheScope(ref),
   );
-  ref.onDispose(coordinator.dispose);
+}
+
+final datingDiscoverProvider = StreamProvider.autoDispose<CardPage>((ref) {
+  if (ref.watch(authTokensProvider) == null) {
+    return Stream.value(const BackendPage(items: []));
+  }
+  final filters = ref.watch(datingDiscoverFiltersProvider);
+  final handledIds = ref.watch(datingHandledProfileIdsProvider);
+  return _localFirstPageStream(
+    ref,
+    namespace: 'dating',
+    cacheValue: filters.cacheValue,
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchDatingDiscover(
+      gender: filters.gender,
+      ageMin: filters.ageMin,
+      ageMax: filters.ageMax,
+      radiusKm: filters.radiusKm,
+      interests: filters.interests,
+      verifiedOnly: filters.verifiedOnly,
+      onlineOnly: filters.onlineOnly,
+      newThisWeekOnly: filters.newThisWeekOnly,
+      cancelToken: cancelToken,
+    ),
+  ).map((page) => _applyDatingClientFilters(page, filters, handledIds));
 });
 
-ProfileData mergeProfileDraftPhotos(
-  ProfileData profile,
-  List<ProfilePhoto> draftPhotos,
+final datingLikesProvider = StreamProvider.autoDispose<CardPage>((ref) {
+  return _privatePageStream(
+    ref,
+    namespace: 'dating',
+    cacheValue: 'likes?limit=20',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchDatingLikes(
+      limit: 20,
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+CardPage _applyDatingClientFilters(
+  CardPage page,
+  DatingDiscoverFilters filters,
+  Set<String> handledIds,
 ) {
-  if (draftPhotos.isEmpty) {
-    return profile;
+  if (!filters.frendlyPlusOnly && handledIds.isEmpty) {
+    return page;
   }
-
-  final existingIds = profile.photos.map((photo) => photo.id).toSet();
-  final mergedPhotos = [
-    ...profile.photos,
-    ...draftPhotos.where((photo) => !existingIds.contains(photo.id)),
-  ];
-
-  if (mergedPhotos.isEmpty) {
-    return profile;
-  }
-
-  return profile.copyWith(
-    avatarUrl: mergedPhotos.first.url,
-    photos: mergedPhotos,
+  final items = page.items.where((item) {
+    if (handledIds.contains(item.id)) {
+      return false;
+    }
+    final raw = item.raw;
+    if (filters.frendlyPlusOnly && raw['premium'] != true) {
+      return false;
+    }
+    return true;
+  }).toList(growable: false);
+  return BackendPage(
+    items: items,
+    nextCursor: page.nextCursor,
+    raw: page.raw,
   );
 }
 
-List<MeetupChat> upsertMeetupChatSummary(
-  List<MeetupChat> chats, {
-  required String chatId,
-  required String lastMessage,
-  required String lastAuthor,
-  required String lastTime,
-  required int unread,
-  String? lastMessageId,
-  DateTime? lastMessageAt,
-}) {
-  final updated = chats
-      .map(
-        (chat) => chat.id == chatId
-            ? chat.copyWith(
-                lastMessage: lastMessage,
-                lastMessageId: lastMessageId,
-                lastAuthor: lastAuthor,
-                lastTime: lastTime,
-                lastMessageAt: lastMessageAt ?? DateTime.now(),
-                unread: unread,
-                typing: false,
-              )
-            : chat,
-      )
-      .toList(growable: false);
+final perksProvider = perksByCategoryProvider(null);
 
-  final index = updated.indexWhere((chat) => chat.id == chatId);
-  if (index <= 0) {
-    return sortMeetupChatsByPinned(updated);
+final perksByCategoryProvider =
+    StreamProvider.autoDispose.family<CardPage, String?>((ref, category) {
+  final city = _currentCity(ref);
+  return _localFirstPageStream(
+    ref,
+    namespace: 'perks',
+    cacheValue: 'promos?city=${city ?? ''}&category=${category ?? ''}&limit=20',
+    ttl: const Duration(minutes: 10),
+    fetch: (repository, cancelToken) => repository.fetchPerks(
+      city: city,
+      category: category,
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+final placeSearchProvider =
+    StreamProvider.autoDispose.family<CardPage, String>((ref, query) {
+  final city = _currentCity(ref);
+  return _localFirstPageStream(
+    ref,
+    namespace: 'places',
+    cacheValue: 'search?city=${city ?? ''}&q=$query&limit=20',
+    ttl: const Duration(minutes: 10),
+    fetch: (repository, cancelToken) => repository.searchPlaces(
+      query: query,
+      city: city,
+      limit: 20,
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+final profileHistoryProvider = StreamProvider.autoDispose<CardPage>((ref) {
+  return _privatePageStream(
+    ref,
+    namespace: 'profile',
+    cacheValue: 'frendly-history?limit=20',
+    ttl: const Duration(minutes: 5),
+    fetch: (repository, cancelToken) => repository.fetchHistory(
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+final frendlySeasonProvider =
+    FutureProvider.autoDispose<FrendlySeasonData>((ref) {
+  final localFirst = ref.read(localFirstRepositoryProvider);
+  final cancelToken = CancelToken();
+  ref.onDispose(cancelToken.cancel);
+  final repository = ref.read(backendRepositoryProvider);
+  if (localFirst == null) {
+    return repository.fetchFrendlySeason(cancelToken: cancelToken);
   }
-
-  return sortMeetupChatsByPinned([
-    updated[index],
-    ...updated.take(index),
-    ...updated.skip(index + 1),
-  ]);
-}
-
-List<MeetupChat> upsertMeetupChat(
-  List<MeetupChat> chats,
-  MeetupChat nextChat,
-) {
-  return sortMeetupChatsByPinned([
-    nextChat,
-    ...chats.where((chat) => chat.id != nextChat.id),
-  ]);
-}
-
-void clearChatListLocalStateForRefetch(Ref ref) {
-  ref.read(meetupChatsLocalStateProvider.notifier).state = null;
-  ref.read(personalChatsLocalStateProvider.notifier).state = null;
-}
-
-List<PersonalChat> mergeKnownPersonalChats(
-  List<PersonalChat> chats,
-  Iterable<PersonalChat> knownChats,
-) {
-  final byId = <String, PersonalChat>{
-    for (final chat in chats) chat.id: chat,
-  };
-  for (final chat in knownChats) {
-    byId.putIfAbsent(chat.id, () => chat);
-  }
-  return sortPersonalChatsByPinned(byId.values.toList(growable: false));
-}
-
-List<PersonalChat> upsertPersonalChatSummary(
-  List<PersonalChat> chats, {
-  required String chatId,
-  required String lastMessage,
-  required String lastTime,
-  required int unread,
-  String? lastMessageId,
-  DateTime? lastMessageAt,
-}) {
-  final updated = chats
-      .map(
-        (chat) => chat.id == chatId
-            ? chat.copyWith(
-                lastMessage: lastMessage,
-                lastMessageId: lastMessageId,
-                lastTime: lastTime,
-                lastMessageAt: lastMessageAt ?? DateTime.now(),
-                unread: unread,
-              )
-            : chat,
-      )
-      .toList(growable: false);
-
-  final index = updated.indexWhere((chat) => chat.id == chatId);
-  if (index <= 0) {
-    return sortPersonalChatsByPinned(updated);
-  }
-
-  return sortPersonalChatsByPinned([
-    updated[index],
-    ...updated.take(index),
-    ...updated.skip(index + 1),
-  ]);
-}
-
-List<MeetupChat> sortMeetupChatsByPinned(List<MeetupChat> chats) {
-  final indexed = chats.indexed.toList(growable: false);
-  indexed.sort((left, right) {
-    final pinComparison = _comparePinned(left.$2.isPinned, right.$2.isPinned);
-    if (pinComparison != 0) {
-      return pinComparison;
-    }
-    final recencyComparison =
-        _compareNullableDateDesc(left.$2.lastMessageAt, right.$2.lastMessageAt);
-    if (recencyComparison != 0) {
-      return recencyComparison;
-    }
-    return left.$1.compareTo(right.$1);
-  });
-  return indexed.map((entry) => entry.$2).toList(growable: false);
-}
-
-List<PersonalChat> sortPersonalChatsByPinned(List<PersonalChat> chats) {
-  final indexed = chats.indexed.toList(growable: false);
-  indexed.sort((left, right) {
-    final pinComparison = _comparePinned(left.$2.isPinned, right.$2.isPinned);
-    if (pinComparison != 0) {
-      return pinComparison;
-    }
-    final recencyComparison =
-        _compareNullableDateDesc(left.$2.lastMessageAt, right.$2.lastMessageAt);
-    if (recencyComparison != 0) {
-      return recencyComparison;
-    }
-    return left.$1.compareTo(right.$1);
-  });
-  return indexed.map((entry) => entry.$2).toList(growable: false);
-}
-
-int _comparePinned(bool left, bool right) {
-  if (left == right) {
-    return 0;
-  }
-  return left ? -1 : 1;
-}
-
-int _compareNullableDateDesc(DateTime? left, DateTime? right) {
-  if (left == null && right == null) {
-    return 0;
-  }
-  if (left == null) {
-    return 1;
-  }
-  if (right == null) {
-    return -1;
-  }
-  return right.compareTo(left);
-}
-
-List<MeetupChat> setMeetupChatTyping(
-  List<MeetupChat> chats, {
-  required String chatId,
-  required bool isTyping,
-}) {
-  return chats
-      .map(
-        (chat) => chat.id == chatId ? chat.copyWith(typing: isTyping) : chat,
-      )
-      .toList(growable: false);
-}
-
-List<MeetupChat> setMeetupChatUnread(
-  List<MeetupChat> chats, {
-  required String chatId,
-  required int unread,
-}) {
-  return chats
-      .map(
-        (chat) => chat.id == chatId ? chat.copyWith(unread: unread) : chat,
-      )
-      .toList(growable: false);
-}
-
-List<PersonalChat> setPersonalChatUnread(
-  List<PersonalChat> chats, {
-  required String chatId,
-  required int unread,
-}) {
-  return chats
-      .map(
-        (chat) => chat.id == chatId ? chat.copyWith(unread: unread) : chat,
-      )
-      .toList(growable: false);
-}
-
-List<MeetupChat> updateMeetupChatFromRealtime(
-  List<MeetupChat> chats, {
-  required String chatId,
-  MeetupPhase? phase,
-  bool hasCurrentStep = false,
-  int? currentStep,
-  bool hasTotalSteps = false,
-  int? totalSteps,
-  bool hasCurrentPlace = false,
-  String? currentPlace,
-  bool hasEndTime = false,
-  String? endTime,
-  String? startsInLabel,
-}) {
-  return chats
-      .map(
-        (chat) => chat.id == chatId
-            ? MeetupChat(
-                id: chat.id,
-                eventId: chat.eventId,
-                title: chat.title,
-                emoji: chat.emoji,
-                time: chat.time,
-                lastMessage: chat.lastMessage,
-                lastMessageId: chat.lastMessageId,
-                lastAuthor: chat.lastAuthor,
-                lastTime: chat.lastTime,
-                lastMessageAt: chat.lastMessageAt,
-                unread: chat.unread,
-                members: chat.members,
-                memberProfiles: chat.memberProfiles,
-                status: chat.status,
-                isPinned: chat.isPinned,
-                typing: chat.typing,
-                phase: phase ?? chat.phase,
-                currentStep: hasCurrentStep ? currentStep : chat.currentStep,
-                totalSteps: hasTotalSteps ? totalSteps : chat.totalSteps,
-                currentPlace:
-                    hasCurrentPlace ? currentPlace : chat.currentPlace,
-                endTime: hasEndTime ? endTime : chat.endTime,
-                startsInLabel: startsInLabel ?? chat.startsInLabel,
-                routeId: chat.routeId,
-                routeTemplateId: chat.routeTemplateId,
-                isCurated: chat.isCurated,
-                badgeLabel: chat.badgeLabel,
-                sessionId: chat.sessionId,
-                mode: chat.mode,
-                privacy: chat.privacy,
-                joinedCount: chat.joinedCount,
-                maxGuests: chat.maxGuests,
-                hostUserId: chat.hostUserId,
-                hostName: chat.hostName,
-                area: chat.area,
-                ticketUrl: chat.ticketUrl,
-                ticketSourceKind: chat.ticketSourceKind,
-                ticketSourceId: chat.ticketSourceId,
-                ticketPriceFrom: chat.ticketPriceFrom,
-                ticketProvider: chat.ticketProvider,
-                ticketVenue: chat.ticketVenue,
-              )
-            : chat,
-      )
-      .toList(growable: false);
-}
-
-List<NotificationItem> prependNotificationItem(
-  List<NotificationItem> items,
-  NotificationItem notification,
-) {
-  return [
-    notification,
-    ...items.where((item) => item.id != notification.id),
-  ];
-}
-
-class _ChatRealtimeSyncCoordinator {
-  _ChatRealtimeSyncCoordinator(
-    this.ref, {
-    required this.syncMeetups,
-    required this.syncPersonal,
-  }) : _socket = ref.read(chatSocketClientProvider) {
-    _eventsSubscription = _socket.events.listen(_handleSocketEvent);
-
-    if (syncMeetups) {
-      ref.listen<AsyncValue<List<MeetupChat>>>(meetupChatsProvider, (_, __) {
-        _syncSubscriptions();
-      });
-    }
-    if (syncPersonal) {
-      ref.listen<AsyncValue<List<PersonalChat>>>(personalChatsProvider,
-          (_, __) {
-        _syncSubscriptions();
-      });
-    }
-
-    unawaited(_connectAndSync());
-  }
-
-  final Ref ref;
-  final bool syncMeetups;
-  final bool syncPersonal;
-  final ChatSocketClient _socket;
-  final _subscribedChatIds = <String>{};
-  late final StreamSubscription<Map<String, dynamic>> _eventsSubscription;
-  bool _disposed = false;
-
-  Future<void> dispose() async {
-    _disposed = true;
-    for (final chatId in _subscribedChatIds) {
-      _socket.unsubscribe(chatId);
-    }
-    _subscribedChatIds.clear();
-    await _eventsSubscription.cancel();
-  }
-
-  Future<void> _connectAndSync() async {
-    try {
-      await _socket.connect();
-      if (_disposed) {
-        return;
-      }
-      _syncSubscriptions();
-    } catch (_) {}
-  }
-
-  void _syncSubscriptions() {
-    if (_disposed) {
-      return;
-    }
-
-    final nextChatIds = <String>{
-      if (syncMeetups)
-        ...(ref.read(meetupChatsProvider).valueOrNull ?? const <MeetupChat>[])
-            .map((chat) => chat.id),
-      if (syncPersonal)
-        ...(ref.read(personalChatsProvider).valueOrNull ??
-                const <PersonalChat>[])
-            .map((chat) => chat.id),
-    };
-
-    final removedChatIds = _subscribedChatIds.difference(nextChatIds);
-    for (final chatId in removedChatIds) {
-      _socket.unsubscribe(chatId);
-    }
-
-    final addedChatIds = nextChatIds.difference(_subscribedChatIds);
-    for (final chatId in addedChatIds) {
-      _socket.subscribe(chatId);
-    }
-
-    _subscribedChatIds
-      ..clear()
-      ..addAll(nextChatIds);
-  }
-
-  void _handleSocketEvent(Map<String, dynamic> envelope) {
-    final type = envelope['type'] as String?;
-    final payload = envelope['payload'];
-
-    if (payload is! Map<String, dynamic>) {
-      return;
-    }
-
-    switch (type) {
-      case 'message.created':
-        _applyMessageCreated(payload);
-        return;
-      case 'typing.changed':
-        _applyTypingChanged(payload);
-        return;
-      case 'unread.updated':
-        _applyUnreadUpdated(payload);
-        return;
-      case 'chat.updated':
-        _applyChatUpdated(payload);
-        return;
-      case 'notification.created':
-        _applyNotificationCreated(payload);
-        return;
-    }
-  }
-
-  void _applyMessageCreated(Map<String, dynamic> payload) {
-    final chatId = payload['chatId'] as String?;
-    if (chatId == null) {
-      return;
-    }
-
-    final currentUserId = ref.read(currentUserIdProvider) ?? 'user-me';
-    final message = Message.fromJson(payload, currentUserId: currentUserId);
-    final preview = _buildMessagePreview(message);
-
-    final meetupChats = _currentMeetupChats();
-    final meetupChat =
-        meetupChats.where((chat) => chat.id == chatId).firstOrNull;
-    if (meetupChat != null) {
-      ref.read(meetupChatsLocalStateProvider.notifier).state =
-          upsertMeetupChatSummary(
-        meetupChats,
-        chatId: chatId,
-        lastMessage: preview,
-        lastAuthor: message.author,
-        lastTime: message.time,
-        lastMessageAt: message.createdAt,
-        unread: meetupChat.unread,
-        lastMessageId: message.id,
+  return localFirst.fetch<FrendlySeasonData>(
+    key: AppCacheKey(
+      namespace: 'profile',
+      value: 'frendly-season',
+      userScope: ref.watch(currentCacheScopeProvider),
+    ),
+    ttl: const Duration(minutes: 5),
+    network: () async {
+      final season = await repository.fetchFrendlySeason(
+        cancelToken: cancelToken,
       );
-      return;
-    }
+      return season.raw;
+    },
+    decode: FrendlySeasonData.fromJson,
+  );
+});
 
-    final personalChats = _currentPersonalChats();
-    final personalChat =
-        personalChats.where((chat) => chat.id == chatId).firstOrNull;
-    if (personalChat != null) {
-      ref.read(personalChatsLocalStateProvider.notifier).state =
-          upsertPersonalChatSummary(
-        personalChats,
-        chatId: chatId,
-        lastMessage: preview,
-        lastTime: message.time,
-        lastMessageAt: message.createdAt,
-        unread: personalChat.unread,
-        lastMessageId: message.id,
-      );
-      return;
-    }
-
-    clearChatListLocalStateForRefetch(ref);
-    ref.invalidate(meetupChatsProvider);
-    ref.invalidate(personalChatsProvider);
-  }
-
-  void _applyTypingChanged(Map<String, dynamic> payload) {
-    final chatId = payload['chatId'] as String?;
-    final isTyping = payload['isTyping'] as bool?;
-    if (chatId == null || isTyping == null) {
-      return;
-    }
-
-    final meetupChats = _currentMeetupChats();
-    if (meetupChats.any((chat) => chat.id == chatId)) {
-      ref.read(meetupChatsLocalStateProvider.notifier).state =
-          setMeetupChatTyping(
-        meetupChats,
-        chatId: chatId,
-        isTyping: isTyping,
-      );
-    }
-  }
-
-  void _applyUnreadUpdated(Map<String, dynamic> payload) {
-    final chatId = payload['chatId'] as String?;
-    final unread = (payload['unreadCount'] as num?)?.toInt();
-    if (chatId == null || unread == null) {
-      return;
-    }
-
-    final meetupChats = _currentMeetupChats();
-    if (meetupChats.any((chat) => chat.id == chatId)) {
-      ref.read(meetupChatsLocalStateProvider.notifier).state =
-          setMeetupChatUnread(
-        meetupChats,
-        chatId: chatId,
-        unread: unread,
-      );
-      return;
-    }
-
-    final personalChats = _currentPersonalChats();
-    if (personalChats.any((chat) => chat.id == chatId)) {
-      ref.read(personalChatsLocalStateProvider.notifier).state =
-          setPersonalChatUnread(
-        personalChats,
-        chatId: chatId,
-        unread: unread,
-      );
-    }
-  }
-
-  void _applyChatUpdated(Map<String, dynamic> payload) {
-    final chatId = payload['chatId'] as String?;
-    if (chatId == null) {
-      return;
-    }
-
-    final sessionId = payload['sessionId'] as String?;
-    final phaseRaw = payload['phase'] as String?;
-    final currentStep = (payload['currentStep'] as num?)?.toInt();
-    final totalSteps = (payload['totalSteps'] as num?)?.toInt();
-    final currentPlace = payload['currentPlace'] as String?;
-    final endTime = payload['endTime'] as String?;
-
-    final meetupChats = _currentMeetupChats();
-    if (meetupChats.any((chat) => chat.id == chatId)) {
-      ref.read(meetupChatsLocalStateProvider.notifier).state =
-          updateMeetupChatFromRealtime(
-        meetupChats,
-        chatId: chatId,
-        phase: phaseRaw == null ? null : parseMeetupPhase(phaseRaw),
-        hasCurrentStep: payload.containsKey('currentStep'),
-        currentStep: currentStep,
-        hasTotalSteps: payload.containsKey('totalSteps'),
-        totalSteps: totalSteps,
-        hasCurrentPlace: payload.containsKey('currentPlace'),
-        currentPlace: currentPlace,
-        hasEndTime: payload.containsKey('endTime'),
-        endTime: endTime,
-        startsInLabel: payload['startsInLabel'] as String?,
-      );
-    } else {
-      ref.read(meetupChatsLocalStateProvider.notifier).state = null;
-      ref.invalidate(meetupChatsProvider);
-    }
-
-    ref.invalidate(eveningSessionsProvider);
-    if (sessionId != null) {
-      ref.invalidate(eveningSessionProvider(sessionId));
-    }
-  }
-
-  void _applyNotificationCreated(Map<String, dynamic> payload) {
-    final nextNotification = _mapRealtimeNotification(payload);
-
-    final currentOverride = ref.read(notificationUnreadCountOverrideProvider);
-    if (currentOverride != null) {
-      ref.read(notificationUnreadCountOverrideProvider.notifier).state =
-          currentOverride + 1;
-    } else {
-      final currentCount =
-          ref.read(notificationUnreadCountProvider).valueOrNull;
-      if (currentCount != null) {
-        ref.read(notificationUnreadCountOverrideProvider.notifier).state =
-            currentCount + 1;
-      } else {
-        ref.invalidate(notificationUnreadCountProvider);
-      }
-    }
-
-    if (nextNotification == null) {
-      ref.read(notificationsLocalStateProvider.notifier).state = null;
-      ref.invalidate(notificationsProvider);
-      return;
-    }
-    _invalidateEveningFromNotification(nextNotification.payload);
-
-    final localItems = ref.read(notificationsLocalStateProvider);
-    if (localItems != null) {
-      ref.read(notificationsLocalStateProvider.notifier).state =
-          prependNotificationItem(localItems, nextNotification);
-      return;
-    }
-
-    final fetchedItems = ref.read(notificationsProvider).valueOrNull;
-    if (fetchedItems != null) {
-      ref.read(notificationsLocalStateProvider.notifier).state =
-          prependNotificationItem(fetchedItems, nextNotification);
-      return;
-    }
-
-    ref.invalidate(notificationsProvider);
-  }
-
-  void _invalidateEveningFromNotification(Map<String, dynamic> payload) {
-    final sessionId = payload['sessionId'] as String?;
-    if (sessionId == null || sessionId.isEmpty) {
-      return;
-    }
-    ref.invalidate(eveningSessionsProvider);
-    ref.invalidate(eveningSessionProvider(sessionId));
-  }
-
-  List<MeetupChat> _currentMeetupChats() {
-    return ref.read(meetupChatsLocalStateProvider) ??
-        ref.read(meetupChatsProvider).valueOrNull ??
-        const <MeetupChat>[];
-  }
-
-  List<PersonalChat> _currentPersonalChats() {
-    return ref.read(personalChatsLocalStateProvider) ??
-        ref.read(personalChatsProvider).valueOrNull ??
-        const <PersonalChat>[];
-  }
-
-  NotificationItem? _mapRealtimeNotification(Map<String, dynamic> payload) {
-    final notificationId = payload['notificationId'] as String?;
-    final kind = payload['kind'] as String?;
-    final title = payload['title'] as String?;
-    final body = payload['body'] as String?;
-    final createdAtRaw = payload['createdAt'] as String?;
-
-    if (notificationId == null ||
-        kind == null ||
-        title == null ||
-        body == null ||
-        createdAtRaw == null) {
-      return null;
-    }
-
-    final rawPayload = payload['payload'];
-    return NotificationItem(
-      id: notificationId,
-      kind: kind,
-      title: title,
-      body: body,
-      payload: rawPayload is Map
-          ? Map<String, dynamic>.from(rawPayload)
-          : const <String, dynamic>{},
-      readAt: payload['readAt'] == null
-          ? null
-          : DateTime.parse(payload['readAt'] as String),
-      createdAt: DateTime.parse(createdAtRaw),
+final dropsHomeProvider = FutureProvider.autoDispose<DropsHomeData>((ref) {
+  if (ref.watch(authTokensProvider) == null ||
+      ref.watch(currentUserIdProvider) == null) {
+    return Future.value(
+      const DropsHomeData(
+        ticketProgress: DropTicketProgressData(),
+        eligibility: DropUserEligibilityData(),
+      ),
     );
   }
+  return _localFirstValueFuture<DropsHomeData>(
+    ref,
+    namespace: 'drops',
+    cacheValue: 'home',
+    ttl: const Duration(minutes: 1),
+    fetch: (repository, cancelToken) => repository.fetchDropsHome(
+      cancelToken: cancelToken,
+    ),
+    encode: (home) => home.raw,
+    decode: DropsHomeData.fromJson,
+  );
+});
 
-  String _buildMessagePreview(Message message) {
-    final text = message.text.trim();
-    if (text.isNotEmpty) {
-      return text;
+final trustedContactsProvider = StreamProvider.autoDispose<CardPage>((ref) {
+  return _privatePageStream(
+    ref,
+    namespace: 'safety',
+    cacheValue: 'trusted-contacts',
+    ttl: const Duration(minutes: 5),
+    fetch: (repository, cancelToken) => repository.fetchTrustedContacts(
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+final eventStoriesProvider =
+    StreamProvider.autoDispose.family<CardPage, String>((ref, eventId) {
+  return _privatePageStream(
+    ref,
+    namespace: 'stories',
+    cacheValue: 'event:$eventId?limit=20',
+    ttl: const Duration(minutes: 2),
+    fetch: (repository, cancelToken) => repository.fetchEventStories(
+      eventId,
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+final memoryPeopleProvider = StreamProvider.autoDispose<CardPage>((ref) {
+  return _privatePageStream(
+    ref,
+    namespace: 'profile',
+    cacheValue: 'frendly-people?limit=20',
+    ttl: const Duration(minutes: 10),
+    fetch: (repository, cancelToken) => repository.fetchMemoryPeople(
+      cancelToken: cancelToken,
+    ),
+  );
+});
+
+Stream<CardPage> _privatePageStream(
+  Ref ref, {
+  required String namespace,
+  required String cacheValue,
+  required Duration ttl,
+  required Future<CardPage> Function(BackendRepository, CancelToken) fetch,
+}) {
+  if (ref.watch(authTokensProvider) == null) {
+    return Stream.value(const BackendPage(items: []));
+  }
+  final userId = ref.read(currentUserIdProvider);
+  if (userId == null) {
+    return _pendingPrivatePageStream(
+      ref,
+      namespace: namespace,
+      cacheValue: cacheValue,
+      ttl: ttl,
+      fetch: fetch,
+    );
+  }
+  ref.watch(currentUserIdProvider);
+  return _localFirstPageStream(
+    ref,
+    namespace: namespace,
+    cacheValue: cacheValue,
+    ttl: ttl,
+    fetch: fetch,
+  );
+}
+
+Future<T> _privateValueFuture<T>(
+  Ref ref, {
+  required T fallback,
+  required String namespace,
+  required String cacheValue,
+  required Duration ttl,
+  required Future<T> Function(BackendRepository, CancelToken) fetch,
+  required Map<String, Object?> Function(T) encode,
+  required T Function(Map<String, Object?>) decode,
+  bool Function(Map<String, Object?> json)? useCached,
+}) {
+  if (ref.watch(authTokensProvider) == null) {
+    return Future.value(fallback);
+  }
+  final userId = ref.read(currentUserIdProvider);
+  if (userId == null) {
+    return _pendingPrivateValueFuture(
+      ref,
+      fallback: fallback,
+      namespace: namespace,
+      cacheValue: cacheValue,
+      ttl: ttl,
+      fetch: fetch,
+      encode: encode,
+      decode: decode,
+    );
+  }
+  ref.watch(currentUserIdProvider);
+  return _localFirstValueFuture<T>(
+    ref,
+    namespace: namespace,
+    cacheValue: cacheValue,
+    ttl: ttl,
+    fetch: fetch,
+    encode: encode,
+    decode: decode,
+    useCached: useCached,
+  );
+}
+
+Stream<CardPage> _pendingPrivatePageStream(
+  Ref ref, {
+  required String namespace,
+  required String cacheValue,
+  required Duration ttl,
+  required Future<CardPage> Function(BackendRepository, CancelToken) fetch,
+}) {
+  final controller = StreamController<CardPage>();
+  final repository = ref.read(backendRepositoryProvider);
+  final localFirst = ref.read(localFirstRepositoryProvider);
+  final cancelToken = CancelToken();
+  StreamSubscription<CardPage>? subscription;
+  var disposed = false;
+  ref.onDispose(() {
+    disposed = true;
+    cancelToken.cancel();
+    final activeSubscription = subscription;
+    if (activeSubscription != null) {
+      unawaited(activeSubscription.cancel());
     }
-
-    if (message.attachments.any((attachment) => attachment.isVoice)) {
-      return 'Голосовое сообщение';
+    unawaited(controller.close());
+  });
+  unawaited(() async {
+    try {
+      await ref.read(authBootstrapProvider.future);
+      if (disposed) {
+        return;
+      }
+      final userId = ref.read(currentUserIdProvider);
+      if (userId == null || ref.read(authTokensProvider) == null) {
+        controller.add(const BackendPage(items: []));
+        await controller.close();
+        return;
+      }
+      final stream = _localFirstPageStreamForScope(
+        namespace: namespace,
+        cacheValue: cacheValue,
+        ttl: ttl,
+        repository: repository,
+        localFirst: localFirst,
+        cancelToken: cancelToken,
+        userScope: AppCacheUserScope.user(userId),
+        fetch: fetch,
+      );
+      subscription = stream.listen(
+        controller.add,
+        onError: controller.addError,
+        onDone: controller.close,
+      );
+    } catch (error, stackTrace) {
+      if (!disposed) {
+        controller.addError(error, stackTrace);
+      }
     }
+  }());
+  return controller.stream;
+}
 
-    if (message.attachments.any((attachment) => attachment.isLocation)) {
-      return 'Локация';
+Future<T> _pendingPrivateValueFuture<T>(
+  Ref ref, {
+  required T fallback,
+  required String namespace,
+  required String cacheValue,
+  required Duration ttl,
+  required Future<T> Function(BackendRepository, CancelToken) fetch,
+  required Map<String, Object?> Function(T) encode,
+  required T Function(Map<String, Object?>) decode,
+}) async {
+  final repository = ref.read(backendRepositoryProvider);
+  final localFirst = ref.read(localFirstRepositoryProvider);
+  final cancelToken = CancelToken();
+  var disposed = false;
+  ref.onDispose(() {
+    disposed = true;
+    cancelToken.cancel();
+  });
+  await ref.read(authBootstrapProvider.future);
+  if (disposed) {
+    return fallback;
+  }
+  final userId = ref.read(currentUserIdProvider);
+  if (userId == null || ref.read(authTokensProvider) == null) {
+    return fallback;
+  }
+  return _localFirstValueFutureForScope<T>(
+    namespace: namespace,
+    cacheValue: cacheValue,
+    ttl: ttl,
+    repository: repository,
+    localFirst: localFirst,
+    cancelToken: cancelToken,
+    userScope: AppCacheUserScope.user(userId),
+    fetch: fetch,
+    encode: encode,
+    decode: decode,
+  );
+}
+
+String? _currentCity(Ref ref) {
+  final city = ref.watch(currentUserProvider)?.city?.trim();
+  return city == null || city.isEmpty ? null : city;
+}
+
+String _todayIsoDate(DateTime value) {
+  final local = value.toLocal();
+  return '${local.year.toString().padLeft(4, '0')}-'
+      '${local.month.toString().padLeft(2, '0')}-'
+      '${local.day.toString().padLeft(2, '0')}';
+}
+
+Stream<CardPage> _localFirstPageStream(
+  Ref ref, {
+  required String namespace,
+  required String cacheValue,
+  required Duration ttl,
+  required Future<CardPage> Function(BackendRepository, CancelToken) fetch,
+}) {
+  final repository = ref.read(backendRepositoryProvider);
+  final localFirst = ref.read(localFirstRepositoryProvider);
+  final cancelToken = CancelToken();
+  ref.onDispose(cancelToken.cancel);
+  return _localFirstPageStreamForScope(
+    namespace: namespace,
+    cacheValue: cacheValue,
+    ttl: ttl,
+    repository: repository,
+    localFirst: localFirst,
+    cancelToken: cancelToken,
+    userScope: ref.watch(currentCacheScopeProvider),
+    fetch: fetch,
+  );
+}
+
+Stream<CardPage> _localFirstPageStreamForScope({
+  required String namespace,
+  required String cacheValue,
+  required Duration ttl,
+  required BackendRepository repository,
+  required LocalFirstRepository? localFirst,
+  required CancelToken cancelToken,
+  required AppCacheUserScope userScope,
+  required Future<CardPage> Function(BackendRepository, CancelToken) fetch,
+}) {
+  if (localFirst == null) {
+    return _withoutCancelledRequestError(
+      Stream.fromFuture(fetch(repository, cancelToken)),
+    );
+  }
+  return localFirst.watch<CardPage>(
+    key: AppCacheKey(
+      namespace: namespace,
+      value: cacheValue,
+      userScope: userScope,
+    ),
+    ttl: ttl,
+    policy: _cacheReadPolicyForNamespace(namespace),
+    network: () async {
+      final page = await fetch(repository, cancelToken);
+      return page.raw.isEmpty
+          ? {'items': page.items.map((item) => item.raw).toList()}
+          : page.raw;
+    },
+    decode: _decodeCardPage,
+  );
+}
+
+Future<T> _localFirstValueFuture<T>(
+  Ref ref, {
+  required String namespace,
+  required String cacheValue,
+  required Duration ttl,
+  required Future<T> Function(BackendRepository, CancelToken) fetch,
+  required Map<String, Object?> Function(T) encode,
+  required T Function(Map<String, Object?>) decode,
+  bool Function(Map<String, Object?> json)? useCached,
+}) {
+  final repository = ref.read(backendRepositoryProvider);
+  final localFirst = ref.read(localFirstRepositoryProvider);
+  final cancelToken = CancelToken();
+  ref.onDispose(cancelToken.cancel);
+  return _localFirstValueFutureForScope<T>(
+    namespace: namespace,
+    cacheValue: cacheValue,
+    ttl: ttl,
+    repository: repository,
+    localFirst: localFirst,
+    cancelToken: cancelToken,
+    userScope: ref.watch(currentCacheScopeProvider),
+    fetch: fetch,
+    encode: encode,
+    decode: decode,
+    useCached: useCached,
+  );
+}
+
+Stream<T> _localFirstValueStream<T>(
+  Ref ref, {
+  required String namespace,
+  required String cacheValue,
+  required Duration ttl,
+  required Future<T> Function(BackendRepository, CancelToken) fetch,
+  required Map<String, Object?> Function(T) encode,
+  required T Function(Map<String, Object?>) decode,
+  bool Function(Map<String, Object?> json)? useCached,
+}) {
+  final repository = ref.read(backendRepositoryProvider);
+  final localFirst = ref.read(localFirstRepositoryProvider);
+  final cancelToken = CancelToken();
+  ref.onDispose(cancelToken.cancel);
+  return _localFirstValueStreamForScope<T>(
+    namespace: namespace,
+    cacheValue: cacheValue,
+    ttl: ttl,
+    repository: repository,
+    localFirst: localFirst,
+    cancelToken: cancelToken,
+    userScope: ref.watch(currentCacheScopeProvider),
+    fetch: fetch,
+    encode: encode,
+    decode: decode,
+    useCached: useCached,
+  );
+}
+
+Future<T> _localFirstValueFutureForScope<T>({
+  required String namespace,
+  required String cacheValue,
+  required Duration ttl,
+  required BackendRepository repository,
+  required LocalFirstRepository? localFirst,
+  required CancelToken cancelToken,
+  required AppCacheUserScope userScope,
+  required Future<T> Function(BackendRepository, CancelToken) fetch,
+  required Map<String, Object?> Function(T) encode,
+  required T Function(Map<String, Object?>) decode,
+  bool Function(Map<String, Object?> json)? useCached,
+}) {
+  if (localFirst == null) {
+    return fetch(repository, cancelToken);
+  }
+  return localFirst.fetch<T>(
+    key: AppCacheKey(
+      namespace: namespace,
+      value: cacheValue,
+      userScope: userScope,
+    ),
+    ttl: ttl,
+    policy: _cacheReadPolicyForNamespace(namespace),
+    network: () async {
+      final value = await fetch(repository, cancelToken);
+      return encode(value);
+    },
+    decode: decode,
+    useCached: useCached,
+  );
+}
+
+Stream<T> _localFirstValueStreamForScope<T>({
+  required String namespace,
+  required String cacheValue,
+  required Duration ttl,
+  required BackendRepository repository,
+  required LocalFirstRepository? localFirst,
+  required CancelToken cancelToken,
+  required AppCacheUserScope userScope,
+  required Future<T> Function(BackendRepository, CancelToken) fetch,
+  required Map<String, Object?> Function(T) encode,
+  required T Function(Map<String, Object?>) decode,
+  bool Function(Map<String, Object?> json)? useCached,
+}) {
+  if (localFirst == null) {
+    return _withoutCancelledRequestError(
+      Stream.fromFuture(fetch(repository, cancelToken)),
+    );
+  }
+  return _withoutCancelledRequestError(
+    localFirst.watch<T>(
+      key: AppCacheKey(
+        namespace: namespace,
+        value: cacheValue,
+        userScope: userScope,
+      ),
+      ttl: ttl,
+      policy: _cacheReadPolicyForNamespace(namespace),
+      network: () async {
+        final value = await fetch(repository, cancelToken);
+        return encode(value);
+      },
+      decode: decode,
+      useCached: useCached,
+    ),
+  );
+}
+
+Stream<T> _withoutCancelledRequestError<T>(Stream<T> stream) async* {
+  try {
+    yield* stream;
+  } on DioException catch (error) {
+    if (error.type == DioExceptionType.cancel) {
+      return;
     }
-
-    if (message.attachments.isNotEmpty) {
-      return 'Вложение';
-    }
-
-    return '';
+    rethrow;
   }
 }
 
-extension<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
+LocalCacheReadPolicy _cacheReadPolicyForNamespace(String namespace) {
+  return switch (namespace) {
+    'payments' ||
+    'subscription' ||
+    'verification' ||
+    'safety' ||
+    'reports' ||
+    'blocks' ||
+    'after_dark_access' ||
+    'settings' ||
+    'wallet' =>
+      LocalCacheReadPolicy.sensitiveFreshOnly,
+    _ => LocalCacheReadPolicy.staleWhileRefresh,
+  };
+}
+
+bool _canUseCachedMeetingDetail(Map<String, Object?> json) {
+  final access = _firstCacheLower(json, const [
+    'accessMode',
+    'joinMode',
+    'visibilityMode',
+  ]);
+  final requestOnly = access == 'request' || access == 'friends';
+  if (!requestOnly) {
+    return true;
+  }
+  final joined = json['joined'] ?? json['isJoined'];
+  if (joined is bool) {
+    return joined;
+  }
+  final state = _firstCacheLower(json, const [
+    'participantState',
+    'viewerState',
+    'participationState',
+    'attendanceState',
+    'rsvpState',
+  ]);
+  return state == 'joined' ||
+      state == 'going' ||
+      state == 'approved' ||
+      state == 'participant' ||
+      state == 'host';
+}
+
+String? _firstCacheLower(
+  Map<String, Object?> json,
+  Iterable<String> keys,
+) {
+  for (final key in keys) {
+    final value = json[key]?.toString().trim().toLowerCase();
+    if (value != null && value.isNotEmpty) {
+      return value;
+    }
+  }
+  return null;
+}
+
+CardPage _decodeCardPage(Map<String, Object?> json) {
+  return BackendPage(
+    items: _items(json).map(BackendCardItem.fromJson).toList(growable: false),
+    nextCursor: json['nextCursor']?.toString(),
+    raw: json,
+  );
+}
+
+SafetyReportPage _decodeSafetyReportPage(Map<String, Object?> json) {
+  return BackendPage(
+    items: _items(json).map(SafetyReportData.fromJson).toList(growable: false),
+    nextCursor: json['nextCursor']?.toString(),
+    raw: json,
+  );
+}
+
+BlockedUserPage _decodeBlockedUserPage(Map<String, Object?> json) {
+  return BackendPage(
+    items: _items(json).map(BlockedUserData.fromJson).toList(growable: false),
+    nextCursor: json['nextCursor']?.toString(),
+    raw: json,
+  );
+}
+
+List<Map<String, Object?>> _items(Map<String, Object?> json) {
+  final value = json['items'];
+  if (value is! List) {
+    return const [];
+  }
+  return value
+      .whereType<Map>()
+      .map((item) => item.map((key, value) => MapEntry('$key', value)))
+      .toList(growable: false);
 }

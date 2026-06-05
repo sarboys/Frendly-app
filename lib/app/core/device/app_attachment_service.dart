@@ -1,371 +1,19 @@
-import 'dart:io';
+import 'package:mobile2/shared/widgets/dateasy_image_cache.dart';
 
-import 'package:big_break_mobile/app/core/config/backend_config.dart';
-import 'package:big_break_mobile/app/core/providers/core_providers.dart';
-import 'package:big_break_mobile/shared/models/backend_url.dart';
-import 'package:big_break_mobile/shared/models/message.dart';
-import 'package:big_break_mobile/shared/utils/voice_metrics.dart';
-import 'package:dio/dio.dart';
-import 'package:file_saver/file_saver.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:open_filex/open_filex.dart';
-
-final appAttachmentServiceProvider = Provider<AppAttachmentService>(
-  (ref) => DefaultAppAttachmentService(
-    apiDio: ref.read(apiClientProvider).dio,
-    accessTokenProvider: ref.read(authTokensProvider.notifier).readAccessToken,
-  ),
+typedef AppAttachmentFetchFile = Future<void> Function(
+  String url,
+  String cacheKey,
 );
 
-abstract class AppAttachmentService {
-  Future<String?> getDownloadUrl(MessageAttachment attachment);
-  Future<File?> getLocalFileIfAvailable(MessageAttachment attachment);
-  Future<File> getCachedFile(MessageAttachment attachment);
-  Future<void> openAttachment(MessageAttachment attachment);
-  Future<String> saveAttachmentToDevice(MessageAttachment attachment);
-  Future<void> clearPrivateCache();
-  Future<void> warmCache(MessageAttachment attachment);
-}
+typedef AppAttachmentCacheFile = Future<String> Function(
+  String url,
+  String cacheKey,
+);
 
-class DefaultAppAttachmentService implements AppAttachmentService {
-  DefaultAppAttachmentService({
-    CacheManager? cacheManager,
-    Future<String?> Function()? accessTokenProvider,
-    Dio? apiDio,
-    VoiceMetricReporter? voiceMetricReporter,
-    Duration downloadUrlTtl = _defaultDownloadUrlTtl,
-  })  : _cacheManager = cacheManager ?? chatAttachmentCacheManager,
-        _accessTokenProvider = accessTokenProvider,
-        _apiDio = apiDio,
-        _voiceMetricReporter = voiceMetricReporter,
-        _downloadUrlTtl = downloadUrlTtl;
+typedef AppAttachmentClearCachedFiles = Future<void> Function();
 
-  final Future<String?> Function()? _accessTokenProvider;
-  final CacheManager _cacheManager;
-  final Dio? _apiDio;
-  final VoiceMetricReporter? _voiceMetricReporter;
-  final Duration _downloadUrlTtl;
-  final Map<String, _CachedDownloadUrl> _downloadUrlCache =
-      <String, _CachedDownloadUrl>{};
-  final Map<String, Future<String?>> _downloadUrlRequests =
-      <String, Future<String?>>{};
-  var _downloadUrlCacheGeneration = 0;
-
-  static const _defaultDownloadUrlTtl = Duration(minutes: 4);
-
-  @override
-  Future<String?> getDownloadUrl(MessageAttachment attachment) async {
-    final downloadUrlPath = attachment.downloadUrlPath;
-    if (downloadUrlPath != null &&
-        downloadUrlPath.isNotEmpty &&
-        _apiDio != null) {
-      final signedUrl = await _getSignedDownloadUrl(
-        cacheKey: 'path:$downloadUrlPath',
-        requestPath: downloadUrlPath,
-      );
-      if (signedUrl != null && signedUrl.isNotEmpty) {
-        return signedUrl;
-      }
-    }
-
-    final url = attachment.url;
-    if (url == null || url.isEmpty) {
-      return null;
-    }
-
-    if (!_isProtectedBackendMediaUrl(url) || _apiDio == null) {
-      return url;
-    }
-
-    final assetId = _extractAssetId(url);
-    if (assetId == null) {
-      return url;
-    }
-
-    final signedUrl = await _getSignedDownloadUrl(
-      cacheKey: 'asset:$assetId',
-      requestPath: '/media/$assetId/download-url',
-    );
-    return signedUrl ?? url;
-  }
-
-  @override
-  Future<File?> getLocalFileIfAvailable(MessageAttachment attachment) async {
-    final localPath = attachment.localPath;
-    if (localPath != null && localPath.isNotEmpty) {
-      final file = File(localPath);
-      try {
-        if (await file.exists()) {
-          return file;
-        }
-      } catch (_) {}
-    }
-
-    if (attachment.localBytes != null) {
-      return _persistLocalAttachment(attachment);
-    }
-
-    final cached = await _cacheManager.getFileFromCache(_cacheKey(attachment));
-    final file = cached?.file;
-    if (file == null) {
-      return null;
-    }
-
-    try {
-      if (await file.exists()) {
-        return file;
-      }
-    } catch (_) {}
-
-    return null;
-  }
-
-  @override
-  Future<File> getCachedFile(MessageAttachment attachment) async {
-    final stopwatch = attachment.isVoice ? (Stopwatch()..start()) : null;
-    final localFile = await getLocalFileIfAvailable(attachment);
-    if (localFile != null) {
-      if (stopwatch != null) {
-        emitVoiceMetric(
-          'voice_cache_fetch_ms',
-          stopwatch,
-          reporter: _voiceMetricReporter,
-        );
-      }
-      return localFile;
-    }
-
-    final downloadUrl = await getDownloadUrl(attachment);
-    final url = attachment.url;
-    if ((downloadUrl == null || downloadUrl.isEmpty) &&
-        (url == null || url.isEmpty)) {
-      throw StateError('attachment_url_missing');
-    }
-
-    final effectiveUrl = downloadUrl ?? url!;
-    final headers =
-        effectiveUrl == url ? await _buildHeadersForUrl(url!) : null;
-    final file = headers == null
-        ? await _cacheManager.getSingleFile(
-            effectiveUrl,
-            key: _cacheKey(attachment),
-          )
-        : await _cacheManager.getSingleFile(
-            effectiveUrl,
-            key: _cacheKey(attachment),
-            headers: headers,
-          );
-
-    if (stopwatch != null) {
-      emitVoiceMetric(
-        'voice_cache_fetch_ms',
-        stopwatch,
-        reporter: _voiceMetricReporter,
-      );
-    }
-
-    return file;
-  }
-
-  @override
-  Future<void> openAttachment(MessageAttachment attachment) async {
-    final file = await getCachedFile(attachment);
-    final result = await OpenFilex.open(file.path);
-    if (result.type != ResultType.done) {
-      throw StateError(result.message);
-    }
-  }
-
-  @override
-  Future<String> saveAttachmentToDevice(MessageAttachment attachment) async {
-    final file = await getCachedFile(attachment);
-    final fileName = _baseName(attachment.fileName);
-    final extension = _extension(attachment.fileName);
-
-    return FileSaver.instance.saveFile(
-      name: fileName,
-      file: file,
-      fileExtension: extension,
-      mimeType: _mimeTypeFor(attachment.mimeType),
-    );
-  }
-
-  @override
-  Future<void> clearPrivateCache() async {
-    _downloadUrlCacheGeneration += 1;
-    _downloadUrlCache.clear();
-    _downloadUrlRequests.clear();
-    await _cacheManager.emptyCache();
-  }
-
-  @override
-  Future<void> warmCache(MessageAttachment attachment) async {
-    try {
-      await getCachedFile(attachment);
-    } catch (_) {}
-  }
-
-  Future<Map<String, String>?> _buildHeadersForUrl(String url) async {
-    if (!_isProtectedBackendMediaUrl(url) || _accessTokenProvider == null) {
-      return null;
-    }
-
-    final token = await _accessTokenProvider();
-    if (token == null || token.isEmpty) {
-      return null;
-    }
-
-    return {'Authorization': 'Bearer $token'};
-  }
-
-  Future<String?> _getSignedDownloadUrl({
-    required String cacheKey,
-    required String requestPath,
-  }) {
-    final now = DateTime.now();
-    final cached = _downloadUrlCache[cacheKey];
-    if (cached != null) {
-      if (cached.expiresAt.isAfter(now)) {
-        return Future.value(cached.url);
-      }
-      _downloadUrlCache.remove(cacheKey);
-    }
-
-    final inFlight = _downloadUrlRequests[cacheKey];
-    if (inFlight != null) {
-      return inFlight;
-    }
-
-    final request = _fetchSignedDownloadUrl(
-      cacheKey: cacheKey,
-      requestPath: requestPath,
-      requestedAt: now,
-      generation: _downloadUrlCacheGeneration,
-    );
-    _downloadUrlRequests[cacheKey] = request;
-    return request.whenComplete(() {
-      if (identical(_downloadUrlRequests[cacheKey], request)) {
-        _downloadUrlRequests.remove(cacheKey);
-      }
-    });
-  }
-
-  Future<String?> _fetchSignedDownloadUrl({
-    required String cacheKey,
-    required String requestPath,
-    required DateTime requestedAt,
-    required int generation,
-  }) async {
-    try {
-      final response = await _apiDio!.get<Map<String, dynamic>>(requestPath);
-      final url = resolveBackendUrl(response.data?['url'] as String?);
-      if (url != null &&
-          url.isNotEmpty &&
-          generation == _downloadUrlCacheGeneration) {
-        _downloadUrlCache[cacheKey] = _CachedDownloadUrl(
-          url: url,
-          expiresAt: requestedAt.add(_downloadUrlTtl),
-        );
-      }
-      return url;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  String _cacheKey(MessageAttachment attachment) {
-    return 'chat-attachment-${attachment.id}';
-  }
-
-  String? _extractAssetId(String url) {
-    final targetUri = Uri.tryParse(url);
-    if (targetUri == null || targetUri.pathSegments.length < 2) {
-      return null;
-    }
-
-    if (targetUri.pathSegments[0] != 'media') {
-      return null;
-    }
-
-    return targetUri.pathSegments[1];
-  }
-
-  bool _isProtectedBackendMediaUrl(String url) {
-    final targetUri = Uri.tryParse(url);
-    final backendUri = Uri.tryParse(BackendConfig.apiBaseUrl);
-    if (targetUri == null || backendUri == null) {
-      return false;
-    }
-
-    final sameOrigin = targetUri.scheme == backendUri.scheme &&
-        targetUri.host == backendUri.host &&
-        targetUri.port == backendUri.port;
-    if (!sameOrigin) {
-      return false;
-    }
-
-    return targetUri.path.startsWith('/media/');
-  }
-
-  Future<File> _persistLocalAttachment(MessageAttachment attachment) async {
-    final tempDirectory = await Directory.systemTemp.createTemp(
-      'bb-attachment-',
-    );
-    final fileName = _safeFileName(
-      attachment.fileName.isEmpty ? attachment.id : attachment.fileName,
-    );
-    final file = File('${tempDirectory.path}/$fileName');
-    await file.writeAsBytes(attachment.localBytes!, flush: true);
-    return file;
-  }
-
-  String _baseName(String value) {
-    final dot = value.lastIndexOf('.');
-    if (dot <= 0) {
-      return value;
-    }
-    return value.substring(0, dot);
-  }
-
-  String _extension(String value) {
-    final dot = value.lastIndexOf('.');
-    if (dot <= 0 || dot == value.length - 1) {
-      return '';
-    }
-    return value.substring(dot + 1);
-  }
-
-  String _safeFileName(String value) {
-    final sanitized = value.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
-    return sanitized.isEmpty ? 'attachment' : sanitized;
-  }
-
-  MimeType _mimeTypeFor(String raw) {
-    switch (raw) {
-      case 'application/pdf':
-        return MimeType.pdf;
-      case 'image/png':
-        return MimeType.png;
-      case 'image/jpeg':
-      case 'image/jpg':
-        return MimeType.jpeg;
-      case 'image/gif':
-        return MimeType.gif;
-      case 'image/webp':
-        return MimeType.webp;
-      case 'text/plain':
-        return MimeType.text;
-      case 'application/zip':
-        return MimeType.zip;
-      default:
-        return MimeType.other;
-    }
-  }
-}
-
-class _CachedDownloadUrl {
-  const _CachedDownloadUrl({
+class SignedMediaUrl {
+  const SignedMediaUrl({
     required this.url,
     required this.expiresAt,
   });
@@ -374,15 +22,125 @@ class _CachedDownloadUrl {
   final DateTime expiresAt;
 }
 
-final chatAttachmentCacheManager = _ChatAttachmentCacheManager();
+class AppAttachmentService {
+  AppAttachmentService({
+    required Future<SignedMediaUrl> Function(String path) fetchSignedUrl,
+    AppAttachmentFetchFile? fetchFile,
+    AppAttachmentCacheFile? cacheFile,
+    AppAttachmentClearCachedFiles? clearCachedFiles,
+  })  : _fetchSignedUrl = fetchSignedUrl,
+        _fetchFile = fetchFile ??
+            ((url, cacheKey) async {
+              await dateasyPrivateAttachmentCacheManager.getSingleFile(
+                url,
+                key: cacheKey,
+              );
+            }),
+        _cacheFile = cacheFile ??
+            ((url, cacheKey) async {
+              final file =
+                  await dateasyPrivateAttachmentCacheManager.getSingleFile(
+                url,
+                key: cacheKey,
+              );
+              return file.path;
+            }),
+        _clearCachedFiles = clearCachedFiles ??
+            (() {
+              return dateasyPrivateAttachmentCacheManager.emptyCache();
+            });
 
-class _ChatAttachmentCacheManager extends CacheManager with ImageCacheManager {
-  _ChatAttachmentCacheManager()
-      : super(
-          Config(
-            'chatAttachmentCacheV2',
-            stalePeriod: const Duration(days: 14),
-            maxNrOfCacheObjects: 256,
-          ),
+  final Future<SignedMediaUrl> Function(String path) _fetchSignedUrl;
+  final AppAttachmentFetchFile _fetchFile;
+  final AppAttachmentCacheFile _cacheFile;
+  final AppAttachmentClearCachedFiles _clearCachedFiles;
+  final Map<String, SignedMediaUrl> _cache = {};
+  final Map<String, Future<String>> _inFlight = {};
+
+  static const _expirySafetyWindow = Duration(seconds: 60);
+
+  Future<String> resolveSignedUrl(String path) {
+    final now = DateTime.now();
+    final cached = _cache[path];
+    if (cached != null &&
+        cached.expiresAt.isAfter(now.add(_expirySafetyWindow))) {
+      return Future.value(cached.url);
+    }
+    final pending = _inFlight[path];
+    if (pending != null) {
+      return pending;
+    }
+    final future = _fetchSignedUrl(path).then((signed) {
+      _cache[path] = signed;
+      return signed.url;
+    });
+    _inFlight[path] = future;
+    return future.whenComplete(() {
+      _inFlight.remove(path);
+    });
+  }
+
+  Future<void> warmCache(
+    Iterable<String> paths, {
+    DateasyImageUsage usage = DateasyImageUsage.card,
+  }) async {
+    final queue = _boundedUniquePaths(paths);
+    await _runBounded(queue, (path) async {
+      final url = await resolveSignedUrl(path);
+      try {
+        await _fetchFile(
+          url,
+          dateasyPrivateMediaCacheKeyFor(path, usage),
         );
+      } catch (_) {
+        _cache.remove(path);
+      }
+    });
+  }
+
+  Future<void> warmSignedUrls(Iterable<String> paths) async {
+    final queue = _boundedUniquePaths(paths);
+    await _runBounded(queue, (path) async {
+      await resolveSignedUrl(path);
+    });
+  }
+
+  Future<String> resolveCachedFilePath(String path) async {
+    final url = await resolveSignedUrl(path);
+    return _cacheFile(
+      url,
+      dateasyPrivateMediaCacheKeyFor(path, DateasyImageUsage.card),
+    );
+  }
+
+  List<String> _boundedUniquePaths(Iterable<String> paths) {
+    return paths.where((path) => path.isNotEmpty).toSet().take(6).toList(
+          growable: false,
+        );
+  }
+
+  Future<void> _runBounded(
+    List<String> queue,
+    Future<void> Function(String path) task,
+  ) async {
+    var nextIndex = 0;
+    Future<void> worker() async {
+      while (nextIndex < queue.length) {
+        final index = nextIndex;
+        nextIndex += 1;
+        await task(queue[index]);
+      }
+    }
+
+    await Future.wait([
+      for (var index = 0; index < 2 && index < queue.length; index += 1)
+        worker(),
+    ]);
+  }
+
+  Future<void> clearPrivateCache() async {
+    _cache.clear();
+    _inFlight.clear();
+    await _clearCachedFiles();
+  }
 }

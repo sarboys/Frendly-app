@@ -1,573 +1,95 @@
 import 'dart:async';
-import 'dart:ui';
+import 'dart:ui' show ImageFilter;
 
-import 'package:big_break_mobile/app/core/device/app_media_prewarm_service.dart';
-import 'package:big_break_mobile/app/navigation/app_routes.dart';
-import 'package:big_break_mobile/app/theme/app_text_styles.dart';
-import 'package:big_break_mobile/features/dating/presentation/dating_providers.dart';
-import 'package:big_break_mobile/shared/data/app_providers.dart';
-import 'package:big_break_mobile/shared/data/backend_repository.dart';
-import 'package:big_break_mobile/shared/models/dating_profile.dart';
-import 'package:big_break_mobile/shared/models/profile.dart';
-import 'package:big_break_mobile/shared/widgets/bb_profile_photo_image.dart';
-import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:mobile2/app/core/providers/core_providers.dart';
+import 'package:mobile2/shared/data/app_providers.dart';
+import 'package:mobile2/shared/models/backend_models.dart';
+import 'package:mobile2/shared/theme/dateasy_theme.dart';
+import 'package:mobile2/shared/widgets/dateasy_bottom_nav.dart';
+import 'package:mobile2/shared/widgets/dateasy_phone_frame.dart';
+import 'package:mobile2/shared/widgets/dateasy_remote_image.dart';
+import 'package:mobile2/shared/widgets/dateasy_top_bar.dart';
 
-const _datingInterestFilters = [
-  'вино',
-  'кофе',
-  'кино',
-  'концерты',
-  'wellness',
-  'юмор',
-  'книги',
-  'театр',
-  'выставки',
-  'прогулки',
-  'музыка',
-  'танцы',
-  'еда',
-  'джаз',
-];
-const _datingDefaultAgeRange = RangeValues(22, 35);
-const _datingDefaultRadiusKm = 10.0;
-const _datingMinRadiusKm = 1.0;
-const _datingMaxRadiusKm = 50.0;
+const double _datingTopInset = 12;
+const double _datingTopControlsGap = 14;
+const double _datingCardTopGap = 12;
+const double _datingCardActionGap = 18;
+const double _datingActionNavGap = 14;
+const double _datingActionMaxDiameter = 58;
+const double _datingMinCardHeight = 320;
+const double _datingMaxCardHeight = 600;
 
-double? _parseDatingDistanceKm(String label) {
-  final normalized = label.trim().toLowerCase().replaceAll(',', '.');
-  if (normalized.isEmpty || normalized.contains('рядом')) {
-    return null;
-  }
-
-  final match = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(normalized);
-  final value = match == null ? null : double.tryParse(match.group(1)!);
-  if (value == null) {
-    return null;
-  }
-
-  if (normalized.contains('км') || normalized.contains('km')) {
-    return value;
-  }
-  if (normalized.contains('м') || normalized.contains('m')) {
-    return value / 1000;
-  }
-  return value;
-}
-
-class DatingScreen extends ConsumerStatefulWidget {
-  const DatingScreen({
-    this.initialProfileId,
-    super.key,
-  });
-
-  final String? initialProfileId;
+class DatingScreen extends StatefulWidget {
+  const DatingScreen({super.key});
 
   @override
-  ConsumerState<DatingScreen> createState() => _DatingScreenState();
+  State<DatingScreen> createState() => _DatingScreenState();
 }
 
-class _DatingScreenState extends ConsumerState<DatingScreen> {
-  String _tab = 'discover';
+class _DatingScreenState extends State<DatingScreen> {
+  static const int _discoverPageSize = 10;
+  static const int _prefetchRemaining = 5;
+
+  final List<BackendCardItem> _deckCards = <BackendCardItem>[];
+  final Set<String> _handledIds = <String>{};
+  final List<_DatingActionHistoryItem> _history = <_DatingActionHistoryItem>[];
+  int _index = 0;
   bool _submitting = false;
-  final Map<String, int> _photoIndexes = <String, int>{};
-  final Set<String> _handledProfileIds = <String>{};
-  final Map<String, String> _matchedChatIds = <String, String>{};
-  final Set<String> _savedProfileIds = <String>{};
-  List<DatingProfileData> _lastDiscoverProfiles = const [];
-  final Set<String> _filterInterests = <String>{};
-  RangeValues _filterAge = _datingDefaultAgeRange;
-  double _filterRadiusKm = _datingDefaultRadiusKm;
+  bool _loadingMore = false;
+  bool _pagingExhausted = false;
+  bool _loadedMore = false;
+  String? _nextCursor;
+  String? _filtersKey;
+  String? _initialPageSignature;
 
-  @override
-  Widget build(BuildContext context) {
-    final discoverAsync = ref.watch(datingDiscoverProvider);
-    final subscriptionAsync =
-        _tab == 'likes' ? ref.watch(subscriptionStateProvider) : null;
-    final subscription = subscriptionAsync?.valueOrNull;
-    final hasFrendlyPlus =
-        subscription?.status == 'trial' || subscription?.status == 'active';
-    final subscriptionLoading = subscriptionAsync != null &&
-        subscriptionAsync.isLoading &&
-        !subscriptionAsync.hasValue;
-    final likesAsync = _tab == 'likes' && hasFrendlyPlus
-        ? ref.watch(datingLikesProvider)
-        : null;
-    final likes = likesAsync?.valueOrNull ?? const <DatingProfileData>[];
-    final loadedDiscover = discoverAsync.valueOrNull;
-    if (loadedDiscover != null) {
-      _lastDiscoverProfiles = loadedDiscover;
-    }
-    final discover = loadedDiscover ?? _lastDiscoverProfiles;
-    final filteredDiscover = _filterProfiles(discover);
-    final current = _currentProfile(filteredDiscover);
-    if (_tab == 'discover' && filteredDiscover.isNotEmpty) {
-      unawaited(
-        ref.read(appMediaPrewarmServiceProvider).warmProfileImages(
-              _prewarmPhotoUrls(filteredDiscover),
-              usageProfile: BbImageUsageProfile.hero,
-              limit: 3,
-              concurrency: 2,
-            ),
-      );
-    }
-    final hasWidePhotoTapZone = _tab == 'discover' &&
-        current != null &&
-        _photosFor(current).length > 1 &&
-        MediaQuery.sizeOf(context).width > 520;
-
-    return BbV5Scaffold(
-      child: Stack(
-        children: [
-          BbV5Page(
-            padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
-            child: Column(
-              children: [
-                _DatingHeader(
-                  filtersActive: _filtersActive,
-                  onBack: () => _handleBack(context),
-                  onFilter: () => _openFilters(context),
-                ),
-                const SizedBox(height: 20),
-                _DatingTabs(
-                  activeTab: _tab,
-                  likesCount: likes.length,
-                  onTabChanged: (tab) {
-                    setState(() {
-                      _tab = tab;
-                    });
-                  },
-                ),
-                const SizedBox(height: 14),
-                Expanded(
-                  child: _tab == 'discover'
-                      ? _buildDiscover(
-                          context,
-                          current,
-                          discoverAsync,
-                          filteredDiscover,
-                        )
-                      : !hasFrendlyPlus
-                          ? subscriptionLoading
-                              ? const _DatingLoadingState()
-                              : _DatingPlusLockedState(
-                                  onOpenPaywall: () =>
-                                      context.pushRoute(AppRoute.paywall),
-                                )
-                          : _buildLikes(context, likesAsync, likes),
-                ),
-              ],
-            ),
-          ),
-          if (hasWidePhotoTapZone)
-            Positioned(
-              top: 128,
-              right: 0,
-              width: MediaQuery.sizeOf(context).width * 0.34,
-              height: MediaQuery.sizeOf(context).height * 0.5,
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: _submitting ? null : () => _showNextPhoto(current),
-                child: const SizedBox.expand(),
-              ),
-            ),
-        ],
+  void _showSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: DateasyColors.surface2,
       ),
     );
   }
 
-  void _handleBack(BuildContext context) async {
-    final popped = await Navigator.of(context).maybePop();
-    if (!popped && context.mounted) {
-      context.goRoute(AppRoute.tonight);
-    }
-  }
-
-  Widget _buildDiscover(
-    BuildContext context,
-    DatingProfileData? current,
-    AsyncValue<List<DatingProfileData>> discoverAsync,
-    List<DatingProfileData> visibleProfiles,
-  ) {
-    if (visibleProfiles.isNotEmpty && current != null) {
-      return _buildDiscoverList(context, current, visibleProfiles);
-    }
-    if (visibleProfiles.isNotEmpty && current == null) {
-      return const _DatingEmptyState(
-        icon: LucideIcons.sparkles,
-        title: 'Пока нет новых профилей',
-        subtitle: 'Загляни позже, когда рядом появятся новые анкеты',
-      );
-    }
-
-    return discoverAsync.when(
-      data: (profiles) {
-        if (profiles.isEmpty) {
-          return const _DatingEmptyState(
-            icon: LucideIcons.sparkles,
-            title: 'Пока нет новых профилей',
-            subtitle: 'Загляни позже, когда рядом появятся новые анкеты',
-          );
-        }
-
-        if (visibleProfiles.isEmpty || current == null) {
-          return const _DatingEmptyState(
-            icon: LucideIcons.sparkles,
-            title: 'Никого под фильтр',
-            subtitle: 'Попробуй сбросить интересы или радиус',
-          );
-        }
-
-        return const _DatingEmptyState(
-          icon: LucideIcons.sparkles,
-          title: 'Пока нет новых профилей',
-          subtitle: 'Загляни позже, когда рядом появятся новые анкеты',
-        );
-      },
-      loading: () => const _DatingLoadingState(),
-      error: (_, __) => const _DatingEmptyState(
-        icon: LucideIcons.wifi_off,
-        title: 'Не получилось загрузить анкеты',
-        subtitle: 'Проверь соединение и попробуй обновить экран',
-      ),
-    );
-  }
-
-  Widget _buildDiscoverList(
-    BuildContext context,
-    DatingProfileData current,
-    List<DatingProfileData> visibleProfiles,
-  ) {
-    final currentIndex = visibleProfiles.indexWhere(
-          (profile) => profile.userId == current.userId,
-        ) +
-        1;
-
-    return ListView(
-      padding: EdgeInsets.fromLTRB(
-        0,
-        0,
-        0,
-        _datingBottomScrollPadding(context, base: 156),
-      ),
-      children: [
-        _SwipeableDatingCard(
-          key: const ValueKey('dating-discover-card'),
-          enabled: !_submitting,
-          onSwipe: (direction) => _handleAction(
-            context,
-            current,
-            action: direction == DatingSwipeDirection.like ? 'like' : 'pass',
-          ),
-          child: _DatingProfileCard(
-            key: ValueKey('dating-profile-card-${current.userId}'),
-            profile: current,
-            saved: _savedProfileIds.contains(current.userId),
-            photoIndex: _photoIndexFor(current),
-            actionsEnabled: !_submitting,
-            onPreviousPhoto:
-                _submitting ? null : () => _showPreviousPhoto(current),
-            onNextPhoto: _submitting ? null : () => _showNextPhoto(current),
-            onSaveToggle: () {
-              setState(() {
-                if (_savedProfileIds.contains(current.userId)) {
-                  _savedProfileIds.remove(current.userId);
-                } else {
-                  _savedProfileIds.add(current.userId);
-                }
-              });
-            },
-            onSkip: () => _handleAction(context, current, action: 'pass'),
-            onSuper: () => _handleAction(
-              context,
-              current,
-              action: 'super_like',
-            ),
-            onLike: () => _handleAction(context, current, action: 'like'),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Text(
-          '${currentIndex.toString().padLeft(2, '0')} / '
-          '${visibleProfiles.length.toString().padLeft(2, '0')}',
-          textAlign: TextAlign.center,
-          style: AppTextStyles.caption.copyWith(
-            color: BbV5Colors.inkMute,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.68,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLikes(
-    BuildContext context,
-    AsyncValue<List<DatingProfileData>>? likesAsync,
-    List<DatingProfileData> likes,
-  ) {
-    return likesAsync!.when(
-      data: (_) {
-        if (likes.isEmpty) {
-          return const _DatingEmptyState(
-            icon: LucideIcons.heart,
-            title: 'Пока нет входящих лайков',
-            subtitle: 'Лайкни пару карточек, и здесь появятся ответы',
-          );
-        }
-
-        return ListView.separated(
-          padding: EdgeInsets.fromLTRB(
-            0,
-            0,
-            0,
-            _datingBottomScrollPadding(context, base: 156),
-          ),
-          itemCount: likes.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final profile = likes[index];
-            final chatId = _matchedChatIds[profile.userId];
-            final isMatch = chatId != null;
-            return BbV5Card(
-              radius: 24,
-              padding: const EdgeInsets.all(14),
-              onTap: _submitting
-                  ? null
-                  : () {
-                      if (chatId != null) {
-                        context.pushRoute(
-                          AppRoute.personalChat,
-                          pathParameters: {'chatId': chatId},
-                        );
-                        return;
-                      }
-                      _handleAction(
-                        context,
-                        profile,
-                        action: 'like',
-                        fromLikes: true,
-                      );
-                    },
-              child: Row(
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          BbV5Colors.terraSoft,
-                          BbV5Colors.brandSoft,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: BbV5Colors.hair),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    alignment: Alignment.center,
-                    child: _DatingThumbnail(profile: profile),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          profile.age == null
-                              ? profile.name
-                              : '${profile.name}, ${profile.age}',
-                          overflow: TextOverflow.ellipsis,
-                          style: bbV5DisplayStyle(
-                            fontSize: 15,
-                            height: 1.25,
-                          ).copyWith(
-                            fontFeatures: const [
-                              FontFeature.tabularFigures(),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          profile.about,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.bodySoft.copyWith(
-                            color: BbV5Colors.inkMute,
-                            fontSize: 11.5,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isMatch ? LucideIcons.check : LucideIcons.eye,
-                              size: 12,
-                              color:
-                                  isMatch ? BbV5Colors.brand : BbV5Colors.terra,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              isMatch
-                                  ? 'MATCH · ОТКРЫТЬ ЧАТ'
-                                  : 'Лайкнул(а) тебя',
-                              style: AppTextStyles.caption.copyWith(
-                                color: isMatch
-                                    ? BbV5Colors.brand
-                                    : BbV5Colors.terra,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.6,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: BbV5Colors.accent,
-                        shape: BoxShape.circle,
-                        boxShadow: BbV5Shadows.ink,
-                      ),
-                      child: Icon(
-                        LucideIcons.message_circle,
-                        size: 16,
-                        color: BbV5Colors.paperHi,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-      loading: () => const _DatingLoadingState(),
-      error: (_, __) => const _DatingEmptyState(
-        icon: LucideIcons.wifi_off,
-        title: 'Не получилось загрузить лайки',
-        subtitle: 'Проверь соединение и вернись к вкладке позже',
-      ),
-    );
-  }
-
-  Future<void> _handleAction(
-    BuildContext context,
-    DatingProfileData profile, {
-    required String action,
-    bool fromLikes = false,
-  }) async {
+  Future<void> _rewind(WidgetRef ref, BuildContext context) async {
     if (_submitting) {
       return;
     }
+    final last = _history.isEmpty ? null : _history.last;
+    if (last == null || last.action != 'pass') {
+      _showSnackBar(context, 'Можно вернуть только последний пропуск');
+      return;
+    }
 
-    final repository = ref.read(backendRepositoryProvider);
-    final container = ProviderScope.containerOf(context, listen: false);
-    final targetUserId = profile.userId;
-    final previousPhotoIndex = _photoIndexes[targetUserId];
-    final previousTombstones = ref.read(datingActionTombstonesProvider);
-    final shouldAdvanceOptimistically = !fromLikes;
-    final tombstoneAction = action == 'pass' ? 'skip' : action;
     setState(() {
       _submitting = true;
-      if (shouldAdvanceOptimistically) {
-        _handledProfileIds.add(targetUserId);
-        _photoIndexes.remove(targetUserId);
-      }
     });
-    ref.read(datingActionTombstonesProvider.notifier).state = {
-      ...previousTombstones,
-      targetUserId: tombstoneAction,
-    };
 
     try {
-      final result = await repository.sendDatingAction(
-        targetUserId: targetUserId,
-        action: action,
-      );
-
+      final result = await ref.read(datingActionsProvider).rewindLastPass();
       if (!mounted || !context.mounted) {
         return;
       }
-
-      final isMatched = result.matched;
-      final matchedChatId = isMatched ? result.chatId : null;
+      final restored = result.peer ?? last.card;
       setState(() {
-        if (matchedChatId != null) {
-          _matchedChatIds[targetUserId] = matchedChatId;
-        }
+        _history.removeLast();
+        _handledIds.remove(last.card.id);
+        _index = last.index;
+        _restoreCard(restored, last.index);
       });
-      if (isMatched) {
-        ref.read(datingActionTombstonesProvider.notifier).state = {
-          ...ref.read(datingActionTombstonesProvider),
-          targetUserId: 'match_open',
-        };
-      }
-
-      container.invalidate(datingDiscoverProvider);
-      if (isMatched) {
-        container.invalidate(matchesProvider);
-      }
-      if (!(fromLikes && matchedChatId != null)) {
-        container.invalidate(datingLikesProvider);
-      }
-
-      final remaining = result.superLikeQuota?.remaining;
-      if (action == 'super_like' && remaining != null && !result.matched) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Суперлайков осталось: $remaining')),
-        );
-      }
-
-      if (isMatched && !fromLikes) {
-        context.pushRoute(
-          AppRoute.match,
-          pathParameters: {'userId': targetUserId},
-        );
-      }
-    } on DioException catch (error) {
-      _rollbackOptimisticAction(
-        targetUserId,
-        shouldAdvanceOptimistically,
-        previousPhotoIndex,
-        previousTombstones,
-      );
+      _showSnackBar(
+          context, 'Вернули ${_DatingProfile.fromBackend(restored).name}');
+    } on BackendActionException catch (error) {
       if (!context.mounted) {
         return;
       }
-      if (_isDatingPaywallError(error)) {
-        await context.pushRoute(AppRoute.paywall);
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не получилось сохранить действие')),
-      );
-    } catch (_) {
-      _rollbackOptimisticAction(
-        targetUserId,
-        shouldAdvanceOptimistically,
-        previousPhotoIndex,
-        previousTombstones,
-      );
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не получилось сохранить действие')),
-      );
+      _handleBackendActionError(context, error);
     } finally {
       if (mounted) {
         setState(() {
@@ -577,1458 +99,1782 @@ class _DatingScreenState extends ConsumerState<DatingScreen> {
     }
   }
 
-  void _rollbackOptimisticAction(
-    String targetUserId,
-    bool shouldRollback,
-    int? previousPhotoIndex,
-    Map<String, String> previousTombstones,
-  ) {
-    ref.read(datingActionTombstonesProvider.notifier).state =
-        previousTombstones;
-    if (!shouldRollback || !mounted) {
+  Future<void> _sendAction(
+      WidgetRef ref, BuildContext context, BackendCardItem card, String action,
+      {required int cardIndex, bool fromLikes = false}) async {
+    if (_submitting || card.id.isEmpty) {
       return;
     }
+
+    final previousIndex = _index;
     setState(() {
-      _handledProfileIds.remove(targetUserId);
-      if (previousPhotoIndex == null) {
-        _photoIndexes.remove(targetUserId);
-      } else {
-        _photoIndexes[targetUserId] = previousPhotoIndex;
+      _submitting = true;
+      if (!fromLikes) {
+        _handledIds.add(card.id);
+        _history.add(
+          _DatingActionHistoryItem(
+            card: card,
+            action: action,
+            index: cardIndex,
+          ),
+        );
+        _index = cardIndex + 1;
       }
     });
-  }
 
-  bool _isDatingPaywallError(DioException error) {
-    final data = error.response?.data;
-    final code = data is Map ? data['code'] : null;
-    return code == 'super_like_limit_reached' ||
-        code == 'frendly_plus_required';
-  }
-
-  List<DatingProfileData> _filterProfiles(List<DatingProfileData> profiles) {
-    return profiles.where((profile) {
-      final age = profile.age;
-      if (age != null &&
-          (age < _filterAge.start.round() || age > _filterAge.end.round())) {
-        return false;
+    try {
+      final result = await ref.read(datingActionsProvider).recordAction(
+            targetUserId: card.id,
+            action: action,
+          );
+      if (!mounted || !context.mounted) {
+        return;
       }
-
-      final distanceKm = _parseDatingDistanceKm(profile.distance);
-      if (distanceKm != null && distanceKm > _filterRadiusKm) {
-        return false;
+      if (result.matched) {
+        _openMatch(context, card.id, result.chatId);
+        return;
       }
-
-      if (_filterInterests.isNotEmpty) {
-        final tags = profile.tags
-            .map((tag) => tag.trim().toLowerCase())
-            .where((tag) => tag.isNotEmpty)
-            .toSet();
-        final hasCommonInterest = _filterInterests.any(
-          (interest) => tags.contains(interest.toLowerCase()),
-        );
-        if (!hasCommonInterest) {
-          return false;
-        }
+      if (fromLikes) {
+        _showSnackBar(context, 'Лайк отправлен');
       }
-
-      return true;
-    }).toList(growable: false);
+    } on BackendActionException catch (error) {
+      if (!fromLikes && mounted) {
+        setState(() {
+          _handledIds.remove(card.id);
+          _history.removeWhere((item) => item.card.id == card.id);
+          _index = previousIndex;
+        });
+      }
+      if (!context.mounted) {
+        return;
+      }
+      _handleBackendActionError(context, error);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+        });
+      }
+    }
   }
 
-  bool get _filtersActive {
-    return _filterInterests.isNotEmpty ||
-        _filterAge.start.round() != _datingDefaultAgeRange.start.round() ||
-        _filterAge.end.round() != _datingDefaultAgeRange.end.round() ||
-        _filterRadiusKm.round() != _datingDefaultRadiusKm.round();
-  }
+  @override
+  Widget build(BuildContext context) {
+    return DateasyPhoneFrame(
+      child: Consumer(
+        builder: (context, ref, _) {
+          final filters = ref.watch(datingDiscoverFiltersProvider);
+          final cardsState = ref.watch(datingDiscoverProvider);
+          _syncFilters(filters);
+          final page = cardsState.asData?.value;
+          if (page != null) {
+            _mergeInitialPage(page);
+          }
+          final subscription = ref.watch(subscriptionProvider).valueOrNull;
+          final hasPlus = _hasFrendlyPlus(subscription);
+          final likesState = ref.watch(datingLikesProvider);
+          final limits = ref.watch(datingLimitsProvider).valueOrNull;
+          final currentEntry = _currentEntry();
+          final currentIndex = currentEntry?.key ?? _index;
+          final currentCard = currentEntry?.value;
+          final current = currentCard == null
+              ? null
+              : _DatingProfile.fromBackend(currentCard);
+          final prewarmUrls = datingPrewarmImageUrls(
+            _deckCards,
+            currentIndex: currentIndex,
+          );
+          if (prewarmUrls.isNotEmpty) {
+            unawaited(
+              ref.read(appMediaPrewarmServiceProvider).warmRemoteImages(
+                    prewarmUrls,
+                    usage: DateasyImageUsage.fullscreen,
+                    limit: 3,
+                    concurrency: 2,
+                  ),
+            );
+          }
+          _maybePrefetch(ref, currentIndex);
+          final isFirstLoading = cardsState.isLoading && _deckCards.isEmpty;
+          final likePreviewProfiles = _likePreviewProfiles(
+            likesState: likesState,
+          );
+          final likesPage = likesState.valueOrNull;
+          final likesCount =
+              likesPage?.items.length ?? (likesState.isLoading ? null : 0);
 
-  void _openFilters(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: BbV5Colors.ink.withValues(alpha: 0.5),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, sheetSetState) {
-            void update(VoidCallback fn) {
-              setState(fn);
-              sheetSetState(() {});
-            }
-
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
-                  child: BbV5Card(
-                    padding: const EdgeInsets.all(20),
-                    radius: 28,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const BbV5Kicker('Фильтры'),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      'Найти своих',
-                                      style: bbV5DisplayStyle(
-                                        fontSize: 18,
-                                        height: 1.25,
-                                        letterSpacing: 0,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+          return Stack(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(
+                  top: MediaQuery.paddingOf(context).top + _datingTopInset,
+                  bottom: DateasyBottomNavMetrics.reservedHeight(
+                    context,
+                    extraGap: _datingActionNavGap,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    const DateasyTopBar(),
+                    const SizedBox(height: _datingTopControlsGap),
+                    _DatingHeaderControls(
+                      hasPlus: hasPlus,
+                      count: likesCount,
+                      profiles: likePreviewProfiles,
+                      onTap: () => context.go(
+                        Uri(
+                          path: '/dating/likes',
+                          queryParameters: {
+                            if (likesCount != null) 'count': '$likesCount',
+                          },
+                        ).toString(),
+                      ),
+                    ),
+                    const SizedBox(height: _datingCardTopGap),
+                    Expanded(
+                      child: isFirstLoading
+                          ? const Align(
+                              alignment: Alignment.topCenter,
+                              child: _DatingStatusCard(
+                                message: 'Загружаем подборку',
                               ),
-                              BbV5IconButton(
-                                icon: LucideIcons.x,
-                                size: 36,
-                                iconSize: 16,
-                                onPressed: () =>
-                                    Navigator.of(sheetContext).pop(),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          const BbV5Kicker('Интересы'),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: _datingInterestFilters
-                                .map(
-                                  (interest) => _DatingFilterChip(
-                                    group: 'Интерес',
-                                    label: interest,
-                                    visualLabel: '#$interest',
-                                    active: _filterInterests.contains(interest),
-                                    onTap: () => update(() {
-                                      if (_filterInterests.contains(interest)) {
-                                        _filterInterests.remove(interest);
-                                      } else {
-                                        _filterInterests.add(interest);
-                                      }
-                                    }),
+                            )
+                          : current == null
+                              ? Align(
+                                  alignment: Alignment.topCenter,
+                                  child: _DatingStatusCard(
+                                    message: cardsState.hasError
+                                        ? 'Не удалось загрузить подборку'
+                                        : 'Пока нет анкет. Попробуй расширить фильтры',
                                   ),
                                 )
-                                .toList(growable: false),
-                          ),
-                          const SizedBox(height: 16),
-                          BbV5Kicker(
-                            'Возраст · ${_filterAge.start.round()}-'
-                            '${_filterAge.end.round()}',
-                          ),
-                          const SizedBox(height: 8),
-                          RangeSlider(
-                            min: 18,
-                            max: 50,
-                            divisions: 32,
-                            values: _filterAge,
-                            activeColor: BbV5Colors.accent,
-                            inactiveColor: BbV5Colors.hair,
-                            labels: RangeLabels(
-                              _filterAge.start.round().toString(),
-                              _filterAge.end.round().toString(),
-                            ),
-                            onChanged: (values) => update(() {
-                              _filterAge = values;
-                            }),
-                          ),
-                          const SizedBox(height: 16),
-                          BbV5Kicker(
-                            'Радиус · ${_filterRadiusKm.round()} км',
-                          ),
-                          const SizedBox(height: 8),
-                          Semantics(
-                            label: 'Радиус дейтинга',
-                            value: '${_filterRadiusKm.round()} км',
-                            child: Slider(
-                              min: _datingMinRadiusKm,
-                              max: _datingMaxRadiusKm,
-                              divisions:
-                                  (_datingMaxRadiusKm - _datingMinRadiusKm)
-                                      .round(),
-                              value: _filterRadiusKm,
-                              activeColor: BbV5Colors.accent,
-                              inactiveColor: BbV5Colors.hair,
-                              label: '${_filterRadiusKm.round()} км',
-                              onChanged: (value) => update(() {
-                                _filterRadiusKm = value;
-                              }),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: BbV5PillButton(
-                                  label: 'Сбросить',
-                                  onPressed: () => update(() {
-                                    _filterInterests.clear();
-                                    _filterAge = _datingDefaultAgeRange;
-                                    _filterRadiusKm = _datingDefaultRadiusKm;
-                                  }),
-                                  height: 48,
-                                  fontSize: 13,
-                                  expanded: true,
+                              : _DatingDeckLayout(
+                                  enabled: !_submitting,
+                                  card: current,
+                                  limits: limits,
+                                  onSwipe: (action) => unawaited(
+                                    _sendAction(
+                                      ref,
+                                      context,
+                                      currentCard!,
+                                      action,
+                                      cardIndex: currentIndex,
+                                    ),
+                                  ),
+                                  onRewind: () =>
+                                      unawaited(_rewind(ref, context)),
+                                  onPass: () => unawaited(
+                                    _sendAction(
+                                      ref,
+                                      context,
+                                      currentCard!,
+                                      'pass',
+                                      cardIndex: currentIndex,
+                                    ),
+                                  ),
+                                  onSuper: () => unawaited(
+                                    _sendAction(
+                                      ref,
+                                      context,
+                                      currentCard!,
+                                      'super_like',
+                                      cardIndex: currentIndex,
+                                    ),
+                                  ),
+                                  onLike: () => unawaited(
+                                    _sendAction(
+                                      ref,
+                                      context,
+                                      currentCard!,
+                                      'like',
+                                      cardIndex: currentIndex,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: BbV5PillButton(
-                                  label: 'Показать',
-                                  onPressed: () {
-                                    Navigator.of(sheetContext).pop();
-                                    ref
-                                        .read(
-                                          datingDiscoverFiltersProvider
-                                              .notifier,
-                                        )
-                                        .state = _currentDiscoverFilters;
-                                    setState(() {
-                                      _photoIndexes.clear();
-                                    });
-                                  },
-                                  dark: true,
-                                  height: 48,
-                                  fontSize: 13,
-                                  expanded: true,
-                                ),
-                              ),
-                            ],
+                    ),
+                  ],
+                ),
+              ),
+              const DateasyBottomNav(),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _syncFilters(DatingDiscoverFilters filters) {
+    if (_filtersKey == filters.cacheValue) {
+      return;
+    }
+    _filtersKey = filters.cacheValue;
+    _deckCards.clear();
+    _handledIds.clear();
+    _history.clear();
+    _index = 0;
+    _nextCursor = null;
+    _pagingExhausted = false;
+    _loadingMore = false;
+    _loadedMore = false;
+    _initialPageSignature = null;
+  }
+
+  void _mergeInitialPage(CardPage page) {
+    final signature =
+        '${page.items.map((item) => item.id).join(',')}|${page.nextCursor ?? ''}';
+    if (_initialPageSignature == signature) {
+      return;
+    }
+    _initialPageSignature = signature;
+    _mergeCards(page.items);
+    if (!_loadedMore) {
+      _nextCursor = page.nextCursor;
+      _pagingExhausted = page.nextCursor == null || page.nextCursor!.isEmpty;
+    }
+  }
+
+  void _mergeCards(List<BackendCardItem> cards) {
+    for (final card in cards) {
+      if (card.id.isEmpty) {
+        continue;
+      }
+      final index = _deckCards.indexWhere((item) => item.id == card.id);
+      if (index == -1) {
+        _deckCards.add(card);
+      } else {
+        _deckCards[index] = card;
+      }
+    }
+  }
+
+  MapEntry<int, BackendCardItem>? _currentEntry() {
+    for (var index = _index; index < _deckCards.length; index += 1) {
+      final card = _deckCards[index];
+      if (!_handledIds.contains(card.id)) {
+        return MapEntry(index, card);
+      }
+    }
+    return null;
+  }
+
+  List<_DatingProfile> _likePreviewProfiles({
+    required AsyncValue<CardPage>? likesState,
+  }) {
+    return likesState?.valueOrNull?.items
+            .map(_DatingProfile.fromBackend)
+            .take(3)
+            .toList(growable: false) ??
+        const <_DatingProfile>[];
+  }
+
+  void _restoreCard(BackendCardItem card, int index) {
+    final existing = _deckCards.indexWhere((item) => item.id == card.id);
+    if (existing == -1) {
+      _deckCards.insert(index.clamp(0, _deckCards.length), card);
+    } else {
+      _deckCards[existing] = card;
+    }
+  }
+
+  void _maybePrefetch(WidgetRef ref, int currentIndex) {
+    if (_loadingMore || _pagingExhausted || _nextCursor == null) {
+      return;
+    }
+    final remaining = _deckCards.length - currentIndex - 1;
+    if (remaining <= _prefetchRemaining) {
+      unawaited(_loadMore(ref));
+    }
+  }
+
+  Future<void> _loadMore(WidgetRef ref) async {
+    final cursor = _nextCursor;
+    if (_loadingMore || cursor == null || cursor.isEmpty) {
+      return;
+    }
+    _loadingMore = true;
+    try {
+      final filters = ref.read(datingDiscoverFiltersProvider);
+      final requestFiltersKey = filters.cacheValue;
+      final page =
+          await ref.read(backendRepositoryProvider).fetchDatingDiscover(
+                limit: _discoverPageSize,
+                cursor: cursor,
+                gender: filters.gender,
+                ageMin: filters.ageMin,
+                ageMax: filters.ageMax,
+                radiusKm: filters.radiusKm,
+                interests: filters.interests,
+                verifiedOnly: filters.verifiedOnly,
+                onlineOnly: filters.onlineOnly,
+                newThisWeekOnly: filters.newThisWeekOnly,
+              );
+      if (!mounted) {
+        return;
+      }
+      if (_filtersKey != requestFiltersKey) {
+        return;
+      }
+      setState(() {
+        _loadedMore = true;
+        _mergeCards(page.items);
+        _nextCursor = page.nextCursor;
+        _pagingExhausted = page.nextCursor == null || page.nextCursor!.isEmpty;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+    } finally {
+      _loadingMore = false;
+    }
+  }
+
+  bool _hasFrendlyPlus(SubscriptionStateData? subscription) {
+    return subscription?.status == 'active' || subscription?.status == 'trial';
+  }
+
+  void _openMatch(BuildContext context, String userId, String? chatId) {
+    context.go(
+      Uri(
+        path: '/match',
+        queryParameters: {
+          'userId': userId,
+          if (chatId != null && chatId.isNotEmpty) 'chatId': chatId,
+        },
+      ).toString(),
+    );
+  }
+
+  void _handleBackendActionError(
+    BuildContext context,
+    BackendActionException error,
+  ) {
+    switch (error.code) {
+      case 'tokens_insufficient':
+        context.push('/wallet');
+        return;
+      case 'frendly_plus_required':
+        context.push('/paywall');
+        return;
+      case 'dating_swipe_rate_limited':
+        _showSnackBar(context, 'Лимит свайпов на час закончился');
+        return;
+      case 'dating_rewind_unavailable':
+        _showSnackBar(context, 'Можно вернуть только последний пропуск');
+        return;
+      default:
+        _showSnackBar(context, 'Не удалось сохранить действие');
+        return;
+    }
+  }
+}
+
+Iterable<String> datingPrewarmImageUrls(
+  List<BackendCardItem> cards, {
+  required int currentIndex,
+}) sync* {
+  var emitted = 0;
+  for (var index = currentIndex + 1;
+      index < cards.length && emitted < 3;
+      index += 1) {
+    final profile = _DatingProfile.fromBackend(cards[index]);
+    final url = _preferredDatingPhotoUrl(profile)?.trim();
+    if (url == null || url.isEmpty) {
+      continue;
+    }
+    emitted += 1;
+    yield url;
+  }
+}
+
+class _DatingHeaderControls extends StatelessWidget {
+  const _DatingHeaderControls({
+    required this.hasPlus,
+    required this.count,
+    required this.profiles,
+    required this.onTap,
+  });
+
+  final bool hasPlus;
+  final int? count;
+  final List<_DatingProfile> profiles;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: _LikesYouBanner(
+              hasPlus: hasPlus,
+              count: count,
+              profiles: profiles,
+              onTap: onTap,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const _FilterButton(),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterButton extends StatelessWidget {
+  const _FilterButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Фильтры',
+      button: true,
+      child: GestureDetector(
+        onTap: () => context.push('/dating/filter'),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: dateasyLimeGradient,
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x55BEFF67),
+                    blurRadius: 24,
+                    offset: Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                LucideIcons.slidersHorizontal,
+                color: DateasyColors.backgroundDeep,
+                size: 20,
+              ),
+            ),
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: DateasyColors.pink,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: DateasyColors.background, width: 2),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LikesYouBanner extends StatelessWidget {
+  const _LikesYouBanner({
+    required this.hasPlus,
+    required this.count,
+    required this.profiles,
+    required this.onTap,
+  });
+
+  final bool hasPlus;
+  final int? count;
+  final List<_DatingProfile> profiles;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final safeCount = count ?? 0;
+    final title = count == null
+        ? 'Проверяем лайки'
+        : safeCount > 0
+            ? _likedYouTitle(safeCount)
+            : 'Пока нет лайков';
+
+    return Semantics(
+      button: true,
+      label: 'Кто тебя лайкнул',
+      child: GestureDetector(
+        onTap: onTap,
+        child: _GlassBox(
+          height: 56,
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              children: [
+                _LikesAvatarStack(
+                  profiles: profiles,
+                  locked: !hasPlus,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            hasPlus ? LucideIcons.heart : LucideIcons.lock,
+                            size: 13,
+                            color: hasPlus
+                                ? DateasyColors.lime
+                                : DateasyColors.pink,
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                  ),
+                            ),
                           ),
                         ],
                       ),
-                    ),
+                      const SizedBox(height: 2),
+                      Text(
+                        hasPlus
+                            ? 'Открой список и перейди в профиль'
+                            : safeCount > 0
+                                ? 'Открой с Frendly+'
+                                : 'Здесь появятся новые симпатии',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: DateasyColors.muted,
+                              fontSize: 11,
+                            ),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(width: 8),
+                Container(
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 11),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    gradient: dateasyLimeGradient,
+                  ),
+                  child: Text(
+                    'Открыть',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: DateasyColors.backgroundDeep,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _likedYouTitle(int count) {
+  return count == 1 ? '1 лайкнул тебя' : '$count лайкнули тебя';
+}
+
+class _LikesAvatarStack extends StatelessWidget {
+  const _LikesAvatarStack({
+    required this.profiles,
+    required this.locked,
+  });
+
+  final List<_DatingProfile> profiles;
+  final bool locked;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = profiles.take(3).toList(growable: false);
+    return SizedBox(
+      width: 74,
+      height: 38,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (var index = 0; index < 3; index += 1)
+            Positioned(
+              left: index * 18,
+              child: _LikesPreviewAvatar(
+                profile: index < items.length ? items[index] : null,
+                locked: locked,
               ),
-            );
-          },
+            ),
+          if (locked)
+            Positioned(
+              right: 0,
+              bottom: -1,
+              child: Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: DateasyColors.backgroundDeep,
+                  border: Border.all(color: DateasyColors.border),
+                ),
+                child: const Icon(
+                  LucideIcons.lock,
+                  size: 10,
+                  color: DateasyColors.lime,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LikesPreviewAvatar extends StatelessWidget {
+  const _LikesPreviewAvatar({
+    required this.profile,
+    required this.locked,
+  });
+
+  final _DatingProfile? profile;
+  final bool locked;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget image = DateasyRemoteImage(
+      imageUrl: profile?.imageUrl,
+      usage: DateasyImageUsage.avatar,
+    );
+    if (locked) {
+      image = ImageFiltered(
+        imageFilter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: image,
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: DateasyColors.surface2,
+          border: Border.all(color: DateasyColors.background, width: 2),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: image,
+      ),
+    );
+  }
+}
+
+class _DatingDeckLayout extends StatelessWidget {
+  const _DatingDeckLayout({
+    required this.enabled,
+    required this.card,
+    required this.limits,
+    required this.onSwipe,
+    required this.onRewind,
+    required this.onPass,
+    required this.onSuper,
+    required this.onLike,
+  });
+
+  final bool enabled;
+  final _DatingProfile card;
+  final DatingLimitsData? limits;
+  final ValueChanged<String> onSwipe;
+  final VoidCallback onRewind;
+  final VoidCallback onPass;
+  final VoidCallback onSuper;
+  final VoidCallback onLike;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cardHeight = _cardHeightFor(constraints.maxHeight);
+        final content = Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _SwipeableDatingCard(
+              enabled: enabled,
+              onSwipe: onSwipe,
+              child: _CardStack(
+                card: card,
+                height: cardHeight,
+              ),
+            ),
+            const SizedBox(height: _datingCardActionGap),
+            IgnorePointer(
+              ignoring: !enabled,
+              child: _Actions(
+                enabled: enabled,
+                limits: limits,
+                onRewind: onRewind,
+                onPass: onPass,
+                onSuper: onSuper,
+                onLike: onLike,
+              ),
+            ),
+          ],
+        );
+        final contentHeight =
+            cardHeight + _datingCardActionGap + _datingActionMaxDiameter;
+
+        if (contentHeight <= constraints.maxHeight) {
+          return Align(
+            alignment: Alignment.topCenter,
+            child: content,
+          );
+        }
+
+        return SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: content,
         );
       },
     );
   }
 
-  DatingProfileData? _currentProfile(List<DatingProfileData> profiles) {
-    if (profiles.isEmpty) {
-      return null;
-    }
-
-    final initialProfileId = widget.initialProfileId;
-    if (initialProfileId != null &&
-        initialProfileId.isNotEmpty &&
-        !_handledProfileIds.contains(initialProfileId)) {
-      for (final profile in profiles) {
-        if (profile.userId == initialProfileId) {
-          return profile;
-        }
-      }
-    }
-
-    for (final profile in profiles) {
-      if (!_handledProfileIds.contains(profile.userId)) {
-        return profile;
-      }
-    }
-
-    return null;
-  }
-
-  DatingDiscoverFilters get _currentDiscoverFilters {
-    return DatingDiscoverFilters(
-      ageMin: _filterAge.start.round(),
-      ageMax: _filterAge.end.round(),
-      radiusKm: _filterRadiusKm.roundToDouble(),
-      interests: _filterInterests.toList(growable: false),
-    );
-  }
-
-  List<ProfilePhoto> _photosFor(DatingProfileData profile) {
-    if (profile.photos.isNotEmpty) {
-      return profile.photos;
-    }
-    if (profile.avatarUrl == null || profile.avatarUrl!.isEmpty) {
-      return const [];
-    }
-    return [
-      ProfilePhoto(
-        id: '${profile.userId}-avatar',
-        url: profile.avatarUrl!,
-        order: 0,
-      ),
-    ];
-  }
-
-  Iterable<String?> _prewarmPhotoUrls(List<DatingProfileData> profiles) sync* {
-    var emittedProfiles = 0;
-    for (final profile in profiles) {
-      if (_handledProfileIds.contains(profile.userId)) {
-        continue;
-      }
-      final photo = _photosFor(profile).firstOrNull;
-      if (photo != null) {
-        yield photo.bestUrlFor(BbImageUsageProfile.hero);
-      }
-      emittedProfiles += 1;
-      if (emittedProfiles >= 3) {
-        break;
-      }
-    }
-  }
-
-  int _photoIndexFor(DatingProfileData profile) {
-    final photos = _photosFor(profile);
-    if (photos.isEmpty) {
-      return 0;
-    }
-    final stored = _photoIndexes[profile.userId] ?? 0;
-    return stored.clamp(0, photos.length - 1);
-  }
-
-  void _showPreviousPhoto(DatingProfileData profile) {
-    final photos = _photosFor(profile);
-    if (photos.length <= 1) {
-      return;
-    }
-    final currentIndex = _photoIndexFor(profile);
-    if (currentIndex == 0) {
-      return;
-    }
-    setState(() {
-      _photoIndexes[profile.userId] = currentIndex - 1;
-    });
-  }
-
-  void _showNextPhoto(DatingProfileData profile) {
-    final photos = _photosFor(profile);
-    if (photos.length <= 1) {
-      return;
-    }
-    final currentIndex = _photoIndexFor(profile);
-    if (currentIndex >= photos.length - 1) {
-      return;
-    }
-    setState(() {
-      _photoIndexes[profile.userId] = currentIndex + 1;
-    });
-  }
-
-  double _datingBottomScrollPadding(BuildContext context, {double base = 132}) {
-    return base + MediaQuery.paddingOf(context).bottom;
+  double _cardHeightFor(double availableHeight) {
+    final height =
+        availableHeight - _datingCardActionGap - _datingActionMaxDiameter;
+    return height.clamp(_datingMinCardHeight, _datingMaxCardHeight).toDouble();
   }
 }
-
-class _DatingHeader extends StatelessWidget {
-  const _DatingHeader({
-    required this.filtersActive,
-    required this.onBack,
-    required this.onFilter,
-  });
-
-  final bool filtersActive;
-  final VoidCallback onBack;
-  final VoidCallback onFilter;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        BbV5IconButton(
-          icon: LucideIcons.arrow_left,
-          onPressed: onBack,
-        ),
-        const SizedBox(width: 8),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              BbV5Kicker('Дейтинг · свидания'),
-              SizedBox(height: 3),
-              BbV5HeroTitle(
-                title: 'Свидания',
-                accent: 'рядом',
-                fontSize: 22,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Semantics(
-          button: true,
-          label: 'Фильтры дейтинга',
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              BbV5IconButton(
-                icon: LucideIcons.list_filter,
-                onPressed: onFilter,
-              ),
-              if (filtersActive)
-                const Positioned(
-                  top: 7,
-                  right: 7,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: BbV5Colors.terra,
-                      shape: BoxShape.circle,
-                    ),
-                    child: SizedBox(width: 8, height: 8),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DatingTabs extends StatelessWidget {
-  const _DatingTabs({
-    required this.activeTab,
-    required this.likesCount,
-    required this.onTabChanged,
-  });
-
-  final String activeTab;
-  final int likesCount;
-  final ValueChanged<String> onTabChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 46,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: BbV5Colors.paperHi,
-        borderRadius: BorderRadius.circular(BbV5Radii.pill),
-        border: Border.all(color: BbV5Colors.hair),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1FFFFFFF),
-            blurRadius: 0,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _DatingTabButton(
-              label: 'Лента',
-              active: activeTab == 'discover',
-              onTap: () => onTabChanged('discover'),
-            ),
-          ),
-          Expanded(
-            child: _DatingTabButton(
-              label: 'Лайки',
-              suffix: likesCount > 0 ? ' · $likesCount' : null,
-              active: activeTab == 'likes',
-              onTap: () => onTabChanged('likes'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DatingTabButton extends StatelessWidget {
-  const _DatingTabButton({
-    required this.label,
-    required this.active,
-    required this.onTap,
-    this.suffix,
-  });
-
-  final String label;
-  final String? suffix;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(BbV5Radii.pill),
-      child: Container(
-        height: 38,
-        decoration: BoxDecoration(
-          color: active ? BbV5Colors.accent : Colors.transparent,
-          borderRadius: BorderRadius.circular(BbV5Radii.pill),
-          boxShadow: active ? BbV5Shadows.ink : null,
-        ),
-        alignment: Alignment.center,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: AppTextStyles.button.copyWith(
-                fontFamily: 'Sora',
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: active ? BbV5Colors.paperHi : BbV5Colors.inkSoft,
-                letterSpacing: 0,
-              ),
-            ),
-            if (suffix != null)
-              Text(
-                suffix!,
-                style: AppTextStyles.button.copyWith(
-                  fontFamily: 'Sora',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: active ? BbV5Colors.paperHi : BbV5Colors.inkSoft,
-                  letterSpacing: 0,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DatingPlusLockedState extends StatelessWidget {
-  const _DatingPlusLockedState({
-    required this.onOpenPaywall,
-  });
-
-  final VoidCallback onOpenPaywall;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: BbV5Card(
-        padding: const EdgeInsets.all(28),
-        radius: 24,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              LucideIcons.lock,
-              size: 32,
-              color: BbV5Colors.terra,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Лайки доступны с Frendly+',
-              textAlign: TextAlign.center,
-              style: bbV5DisplayStyle(fontSize: 15),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Открой входящие лайки и отвечай тем, кто уже выбрал тебя',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodySoft.copyWith(
-                color: BbV5Colors.inkMute,
-                fontSize: 12.5,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 16),
-            BbV5PillButton(
-              label: 'Открыть Frendly+',
-              onPressed: onOpenPaywall,
-              dark: true,
-              height: 46,
-              fontSize: 13,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DatingFilterChip extends StatelessWidget {
-  const _DatingFilterChip({
-    required this.group,
-    required this.label,
-    required this.active,
-    required this.onTap,
-    this.visualLabel,
-  });
-
-  final String group;
-  final String label;
-  final String? visualLabel;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: active,
-      label: '$group $label',
-      onTap: onTap,
-      child: ExcludeSemantics(
-        child: BbV5Chip(
-          label: visualLabel ?? label,
-          active: active,
-          onTap: onTap,
-        ),
-      ),
-    );
-  }
-}
-
-class _DatingLoadingState extends StatelessWidget {
-  const _DatingLoadingState();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: BbV5Card(
-        padding: EdgeInsets.all(24),
-        radius: 24,
-        child: SizedBox(
-          width: 28,
-          height: 28,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.4,
-            color: BbV5Colors.ink,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DatingEmptyState extends StatelessWidget {
-  const _DatingEmptyState({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: BbV5Card(
-        padding: const EdgeInsets.all(28),
-        radius: 24,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 32, color: BbV5Colors.terra),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: bbV5DisplayStyle(fontSize: 15),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodySoft.copyWith(
-                color: BbV5Colors.inkMute,
-                fontSize: 12.5,
-                height: 1.35,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-enum DatingSwipeDirection { pass, like }
 
 class _SwipeableDatingCard extends StatefulWidget {
   const _SwipeableDatingCard({
     required this.child,
+    required this.enabled,
     required this.onSwipe,
-    super.key,
-    this.enabled = true,
   });
 
   final Widget child;
   final bool enabled;
-  final void Function(DatingSwipeDirection direction) onSwipe;
+  final ValueChanged<String> onSwipe;
 
   @override
   State<_SwipeableDatingCard> createState() => _SwipeableDatingCardState();
 }
 
 class _SwipeableDatingCardState extends State<_SwipeableDatingCard> {
-  final ValueNotifier<double> _dragDx = ValueNotifier<double>(0);
+  static const double _threshold = 92;
+
+  double _dragX = 0;
 
   @override
   void didUpdateWidget(covariant _SwipeableDatingCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.child != widget.child) {
-      _dragDx.value = 0;
+    if (!widget.enabled && _dragX != 0) {
+      _dragX = 0;
     }
-    if (!widget.enabled && _dragDx.value != 0) {
-      _dragDx.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _dragDx.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxVisualDx =
-            (constraints.maxWidth * 0.34).clamp(96.0, 132.0).toDouble();
-        final swipeThreshold = (maxVisualDx * 0.75).clamp(72.0, 110.0);
-
-        return GestureDetector(
-          onHorizontalDragUpdate: widget.enabled
-              ? (details) => _handleDragUpdate(details, maxVisualDx)
-              : null,
-          onHorizontalDragEnd:
-              widget.enabled ? (_) => _handleDragEnd(swipeThreshold) : null,
-          onHorizontalDragCancel: widget.enabled ? _resetDrag : null,
-          child: ValueListenableBuilder<double>(
-            valueListenable: _dragDx,
-            child: KeyedSubtree(
-              key: const ValueKey('dating-swipeable-card-surface'),
-              child: RepaintBoundary(child: widget.child),
-            ),
-            builder: (context, dx, child) {
-              final direction = dx == 0
-                  ? null
-                  : dx > 0
-                      ? DatingSwipeDirection.like
-                      : DatingSwipeDirection.pass;
-
-              return Transform(
-                alignment: Alignment.center,
-                transform: Matrix4.identity()
-                  ..translateByDouble(dx, 0, 0, 1)
-                  ..rotateZ(dx / 1800),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    child!,
-                    if (direction != null)
-                      Positioned(
-                        top: 26,
-                        right:
-                            direction == DatingSwipeDirection.like ? 26 : null,
-                        left:
-                            direction == DatingSwipeDirection.pass ? 26 : null,
-                        child: _SwipeDecisionPill(direction: direction),
-                      ),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
+    return GestureDetector(
+      key: const ValueKey('dating-swipe-card'),
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragUpdate: widget.enabled
+          ? (details) {
+              setState(() {
+                _dragX += details.delta.dx;
+              });
+            }
+          : null,
+      onHorizontalDragEnd: widget.enabled ? _finishDrag : null,
+      onHorizontalDragCancel: _resetDrag,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        transformAlignment: Alignment.center,
+        transform: Matrix4.identity()
+          ..translateByDouble(_dragX, 0, 0, 1)
+          ..rotateZ((_dragX / 900).clamp(-0.16, 0.16)),
+        child: widget.child,
+      ),
     );
   }
 
-  void _handleDragUpdate(DragUpdateDetails details, double maxVisualDx) {
-    final next = (_dragDx.value + details.delta.dx)
-        .clamp(-maxVisualDx, maxVisualDx)
-        .toDouble();
-    if (next != _dragDx.value) {
-      _dragDx.value = next;
+  void _finishDrag(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final shouldLike = _dragX > _threshold || velocity > 720;
+    final shouldPass = _dragX < -_threshold || velocity < -720;
+    if (shouldLike) {
+      widget.onSwipe('like');
+    } else if (shouldPass) {
+      widget.onSwipe('pass');
     }
-  }
-
-  void _handleDragEnd(double threshold) {
-    final dx = _dragDx.value;
-    final direction = dx >= threshold
-        ? DatingSwipeDirection.like
-        : dx <= -threshold
-            ? DatingSwipeDirection.pass
-            : null;
-
     _resetDrag();
-
-    if (direction != null) {
-      widget.onSwipe(direction);
-    }
   }
 
   void _resetDrag() {
-    if (_dragDx.value != 0) {
-      _dragDx.value = 0;
+    if (!mounted) {
+      return;
     }
+    setState(() {
+      _dragX = 0;
+    });
   }
 }
 
-class _DatingProfileCard extends StatelessWidget {
-  const _DatingProfileCard({
-    required this.profile,
-    required this.saved,
-    required this.photoIndex,
-    required this.actionsEnabled,
-    required this.onPreviousPhoto,
-    required this.onNextPhoto,
-    required this.onSaveToggle,
-    required this.onSkip,
-    required this.onSuper,
-    required this.onLike,
-    super.key,
+class _CardStack extends StatefulWidget {
+  const _CardStack({
+    required this.card,
+    required this.height,
   });
 
-  final DatingProfileData profile;
-  final bool saved;
-  final int photoIndex;
-  final bool actionsEnabled;
-  final VoidCallback? onPreviousPhoto;
-  final VoidCallback? onNextPhoto;
-  final VoidCallback onSaveToggle;
-  final VoidCallback onSkip;
+  final _DatingProfile card;
+  final double height;
+
+  @override
+  State<_CardStack> createState() => _CardStackState();
+}
+
+class _CardStackState extends State<_CardStack> {
+  int _photoIndex = 0;
+
+  @override
+  void didUpdateWidget(covariant _CardStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.card.id != widget.card.id) {
+      _photoIndex = 0;
+    } else {
+      final maxIndex = widget.card.photos.length - 1;
+      if (maxIndex < 0) {
+        _photoIndex = 0;
+      } else if (_photoIndex > maxIndex) {
+        _photoIndex = maxIndex;
+      }
+    }
+  }
+
+  void _showPreviousPhoto() {
+    if (_photoIndex == 0) {
+      return;
+    }
+    setState(() {
+      _photoIndex -= 1;
+    });
+  }
+
+  void _showNextPhoto() {
+    final maxIndex = widget.card.photos.length - 1;
+    if (_photoIndex >= maxIndex) {
+      return;
+    }
+    setState(() {
+      _photoIndex += 1;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final card = widget.card;
+    final height = widget.height;
+    final photos = card.photos;
+    final activePhoto = photos.isEmpty
+        ? _DatingPhoto(
+            imageUrl: card.imageUrl, imageVariants: card.imageVariants)
+        : photos[_photoIndex];
+    final photoCount = photos.length;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: SizedBox(
+        height: height,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: 18,
+              right: 18,
+              top: 12,
+              height: height - 26,
+              child: Transform.scale(
+                scale: 0.96,
+                child: const _StackBackCard(color: DateasyColors.surface2),
+              ),
+            ),
+            Positioned(
+              left: 34,
+              right: 34,
+              top: 24,
+              height: height - 34,
+              child: Transform.scale(
+                scale: 0.92,
+                child: const _StackBackCard(color: DateasyColors.surface),
+              ),
+            ),
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(32),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: DateasyColors.border),
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.34),
+                        blurRadius: 30,
+                        offset: const Offset(0, 18),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Semantics(
+                        container: true,
+                        excludeSemantics: true,
+                        label: photoCount > 1
+                            ? 'Фото ${_photoIndex + 1} из $photoCount'
+                            : null,
+                        image: true,
+                        child: DateasyRemoteImage(
+                          imageUrl: activePhoto.imageUrl,
+                          imageVariants: activePhoto.imageVariants,
+                          usage: DateasyImageUsage.fullscreen,
+                        ),
+                      ),
+                      const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Color(0x661F0C3F),
+                              DateasyColors.background,
+                            ],
+                            stops: [0.22, 0.58, 1],
+                          ),
+                        ),
+                      ),
+                      if (photoCount > 1) ...[
+                        Positioned(
+                          top: 8,
+                          left: 12,
+                          right: 12,
+                          child: _PhotoProgress(
+                            count: photoCount,
+                            activeIndex: _photoIndex,
+                          ),
+                        ),
+                        Positioned(
+                          left: 0,
+                          top: 32,
+                          bottom: 104,
+                          width: 120,
+                          child: _PhotoTapZone(
+                            semanticsLabel: 'Предыдущее фото',
+                            alignment: Alignment.centerLeft,
+                            enabled: _photoIndex > 0,
+                            icon: LucideIcons.chevronLeft,
+                            onTap: _showPreviousPhoto,
+                          ),
+                        ),
+                        Positioned(
+                          right: 0,
+                          top: 32,
+                          bottom: 104,
+                          width: 120,
+                          child: _PhotoTapZone(
+                            semanticsLabel: 'Следующее фото',
+                            alignment: Alignment.centerRight,
+                            enabled: _photoIndex < photoCount - 1,
+                            icon: LucideIcons.chevronRight,
+                            onTap: _showNextPhoto,
+                          ),
+                        ),
+                      ],
+                      Positioned(
+                        top: 12,
+                        left: 12,
+                        right: 12,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            if (card.online) const _OnlineBadge(),
+                            if (card.matchPercent != null)
+                              _MatchBadge(value: card.matchPercent!),
+                          ],
+                        ),
+                      ),
+                      Positioned(
+                        left: 13,
+                        right: 13,
+                        bottom: 13,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        card.age == null
+                                            ? card.name
+                                            : '${card.name}, ${card.age}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .headlineMedium
+                                            ?.copyWith(
+                                              fontFamily: 'Sora',
+                                              fontSize: 24,
+                                              height: 1.08,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 7),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            LucideIcons.mapPin,
+                                            size: 13,
+                                            color: DateasyColors.muted,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            card.distanceLabel,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: DateasyColors.muted,
+                                                  fontSize: 11,
+                                                ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          const Icon(
+                                            LucideIcons.briefcaseBusiness,
+                                            size: 13,
+                                            color: DateasyColors.muted,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              card.job,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                    color: DateasyColors.muted,
+                                                    fontSize: 11,
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                GestureDetector(
+                                  onTap: () => context.push('/u/${card.id}'),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 11,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      color: DateasyColors.foreground,
+                                    ),
+                                    child: Text(
+                                      'Профиль',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: DateasyColors.backgroundDeep,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 11,
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            if (card.interests.isNotEmpty) ...[
+                              _Interests(items: card.interests),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PhotoProgress extends StatelessWidget {
+  const _PhotoProgress({
+    required this.count,
+    required this.activeIndex,
+  });
+
+  final int count;
+  final int activeIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var index = 0; index < count; index += 1) ...[
+          if (index > 0) const SizedBox(width: 4),
+          Expanded(
+            child: Container(
+              height: 2,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                color: Colors.white.withValues(
+                  alpha: index == activeIndex ? 1 : 0.3,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PhotoTapZone extends StatelessWidget {
+  const _PhotoTapZone({
+    required this.semanticsLabel,
+    required this.alignment,
+    required this.enabled,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String semanticsLabel;
+  final Alignment alignment;
+  final bool enabled;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      button: true,
+      enabled: enabled,
+      label: semanticsLabel,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: onTap,
+        child: Align(
+          alignment: alignment,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 120),
+            opacity: enabled ? 1 : 0,
+            child: Container(
+              width: 28,
+              height: 28,
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: DateasyColors.glass,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+              ),
+              child: Icon(
+                icon,
+                size: 17,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StackBackCard extends StatelessWidget {
+  const _StackBackCard({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        color: color.withValues(alpha: 0.6),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+    );
+  }
+}
+
+class _OnlineBadge extends StatelessWidget {
+  const _OnlineBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: DateasyColors.glass,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: DateasyColors.lime,
+            ),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            'онлайн',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MatchBadge extends StatelessWidget {
+  const _MatchBadge({required this.value});
+
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        gradient: dateasyLimeGradient,
+      ),
+      child: Text(
+        '$value% мэтч',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: DateasyColors.backgroundDeep,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+      ),
+    );
+  }
+}
+
+class _Interests extends StatelessWidget {
+  const _Interests({required this.items});
+
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: items.map((item) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            color: DateasyColors.glass,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                LucideIcons.sparkles,
+                size: 12,
+                color: DateasyColors.lime,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                item,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _Actions extends StatelessWidget {
+  const _Actions({
+    required this.enabled,
+    required this.limits,
+    required this.onRewind,
+    required this.onPass,
+    required this.onSuper,
+    required this.onLike,
+  });
+
+  final bool enabled;
+  final DatingLimitsData? limits;
+  final VoidCallback onRewind;
+  final VoidCallback onPass;
   final VoidCallback onSuper;
   final VoidCallback onLike;
 
   @override
   Widget build(BuildContext context) {
-    final photos = profile.photos.isNotEmpty
-        ? profile.photos
-        : profile.avatarUrl == null || profile.avatarUrl!.isEmpty
-            ? const <ProfilePhoto>[]
-            : [
-                ProfilePhoto(
-                  id: '${profile.userId}-avatar',
-                  url: profile.avatarUrl!,
-                  order: 0,
-                ),
-              ];
-    final clampedPhotoIndex =
-        photos.isEmpty ? 0 : photoIndex.clamp(0, photos.length - 1);
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [BbV5Colors.paperHi, BbV5Colors.paper],
-        ),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: BbV5Colors.hair),
-        boxShadow: BbV5Shadows.card,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AspectRatio(
-            aspectRatio: 0.74,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: BbProfilePhotoImage(
-                    imageUrl: photos.isEmpty
-                        ? null
-                        : photos[clampedPhotoIndex]
-                            .bestUrlFor(BbImageUsageProfile.hero),
-                    fallbackText: profile.photoEmoji,
-                    usageProfile: BbImageUsageProfile.hero,
-                    fallbackFontSize: 80,
-                  ),
-                ),
-                const Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  height: 112,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Color(0x59000000), Color(0x00000000)],
-                      ),
-                    ),
-                  ),
-                ),
-                const Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        stops: [0, 0.34, 0.62, 1],
-                        colors: [
-                          Color(0x00000000),
-                          Color(0x00000000),
-                          Color(0x73000000),
-                          Color(0xB3000000),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.translucent,
-                          onTap: onPreviousPhoto,
-                        ),
-                      ),
-                      Expanded(
-                        child: GestureDetector(
-                          key: const ValueKey('dating-photo-next-zone'),
-                          behavior: HitTestBehavior.translucent,
-                          onTap: onNextPhoto,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  top: 12,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        height: 28,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-                          color: BbV5Colors.paperHi.withValues(alpha: 0.92),
-                          borderRadius: BorderRadius.circular(BbV5Radii.pill),
-                          border: Border.all(color: BbV5Colors.hair),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              LucideIcons.sparkles,
-                              size: 12,
-                              color: BbV5Colors.terra,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Дейтинг',
-                              style: AppTextStyles.caption.copyWith(
-                                color: BbV5Colors.ink,
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.84,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Spacer(),
-                      Semantics(
-                        button: true,
-                        label: 'Сохранить',
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: onSaveToggle,
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: BbV5Colors.paperHi.withValues(alpha: 0.92),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: BbV5Colors.hair),
-                            ),
-                            alignment: Alignment.center,
-                            child: Icon(
-                              saved
-                                  ? Icons.bookmark_rounded
-                                  : LucideIcons.bookmark,
-                              size: 16,
-                              color: saved ? BbV5Colors.terra : BbV5Colors.ink,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  left: 20,
-                  right: 20,
-                  bottom: 96,
-                  child: _DatingPhotoInfoOverlay(profile: profile),
-                ),
-                Positioned(
-                  left: 20,
-                  right: 20,
-                  bottom: 16,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _CircleActionButton(
-                        semanticsLabel: 'Пропустить',
-                        icon: LucideIcons.x,
-                        onTap: actionsEnabled ? onSkip : null,
-                      ),
-                      const SizedBox(width: 12),
-                      _CircleActionButton(
-                        semanticsLabel: 'Супер',
-                        icon: LucideIcons.star,
-                        size: _CircleActionSize.large,
-                        tone: _CircleActionTone.gold,
-                        onTap: actionsEnabled ? onSuper : null,
-                      ),
-                      const SizedBox(width: 12),
-                      _CircleActionButton(
-                        semanticsLabel: 'Лайк',
-                        icon: LucideIcons.heart,
-                        size: _CircleActionSize.extraLarge,
-                        tone: _CircleActionTone.like,
-                        fillIcon: true,
-                        onTap: actionsEnabled ? onLike : null,
-                      ),
-                      const SizedBox(width: 12),
-                      _CircleActionButton(
-                        semanticsLabel: 'Сохранить',
-                        icon: saved
-                            ? Icons.bookmark_rounded
-                            : LucideIcons.bookmark,
-                        fillIcon: saved,
-                        onTap: actionsEnabled ? onSaveToggle : null,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 1),
-                      child: Text(
-                        '“',
-                        style: bbV5DisplayStyle(
-                          fontSize: 16,
-                          color: BbV5Colors.terra,
-                          height: 1,
-                          letterSpacing: 1.8,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        profile.prompt,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySoft.copyWith(
-                          color: BbV5Colors.inkSoft,
-                          fontSize: 12.5,
-                          height: 1.28,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DatingPhotoInfoOverlay extends StatelessWidget {
-  const _DatingPhotoInfoOverlay({required this.profile});
-
-  static const _defaultLanguage = DatingLanguageData(
-    flag: '🇷🇺',
-    label: 'Русский',
-  );
-  static const _defaultNationality = DatingLanguageData(
-    flag: '🇷🇺',
-    label: 'Россия',
-  );
-
-  final DatingProfileData profile;
-
-  @override
-  Widget build(BuildContext context) {
-    final location = _locationLabel(profile);
-    final languages = profile.languages
-        .where(
-            (language) => language.flag.isNotEmpty || language.label.isNotEmpty)
-        .toList(growable: false);
-    final visibleLanguages =
-        (languages.isEmpty ? const [_defaultLanguage] : languages)
-            .take(2)
-            .toList(growable: false);
-    final extraLanguages =
-        (languages.isEmpty ? 1 : languages.length) - visibleLanguages.length;
-    final nationality = profile.nationality ?? _defaultNationality;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final rewindBadge = _limitBadge(limits?.rewinds);
+    final superBadge = _limitBadge(limits?.superLikes);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(LucideIcons.map_pin, size: 14, color: Colors.white),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                location,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.meta.copyWith(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
+        _RoundAction(
+          icon: LucideIcons.undo2,
+          size: 48,
+          iconColor: DateasyColors.pink,
+          badge: rewindBadge?.label,
+          badgeShowsTokens: rewindBadge?.showsTokens ?? false,
+          onTap: enabled ? onRewind : null,
+          semanticLabel: 'Вернуть',
         ),
-        const SizedBox(height: 6),
-        Text(
-          profile.age == null
-              ? profile.name
-              : '${profile.name}, ${profile.age}',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.screenTitle.copyWith(
-            color: Colors.white,
-            fontSize: 28,
-            fontWeight: FontWeight.w600,
-            height: 1,
-            letterSpacing: -0.56,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
+        const SizedBox(width: 12),
+        _RoundAction(
+          icon: LucideIcons.x,
+          size: 48,
+          onTap: enabled ? onPass : null,
+          semanticLabel: 'Пропустить',
         ),
-        const SizedBox(height: 6),
-        Text(
-          profile.about,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.meta.copyWith(
-            color: Colors.white.withValues(alpha: 0.85),
-            fontSize: 12.5,
-            height: 1.375,
-          ),
+        const SizedBox(width: 12),
+        _RoundAction(
+          icon: Icons.favorite,
+          size: 58,
+          gradient: dateasyLimeGradient,
+          iconColor: DateasyColors.backgroundDeep,
+          onTap: enabled ? onLike : null,
+          semanticLabel: 'Лайк',
         ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            _GlassPill(
-              height: 26,
-              padding: const EdgeInsets.symmetric(horizontal: 9),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    LucideIcons.languages,
-                    size: 12,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _languageLabel(visibleLanguages, extraLanguages),
-                    style: AppTextStyles.meta.copyWith(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _GlassPill(
-              height: 26,
-              padding: const EdgeInsets.symmetric(horizontal: 9),
-              child: Text(
-                '${nationality.flag} ${nationality.label}'.trim(),
-                style: AppTextStyles.meta.copyWith(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            ...profile.tags.take(2).map(
-                  (tag) => _GlassPill(
-                    height: 26,
-                    padding: const EdgeInsets.symmetric(horizontal: 9),
-                    child: Text(
-                      '#$tag',
-                      style: AppTextStyles.meta.copyWith(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-          ],
+        const SizedBox(width: 12),
+        _RoundAction(
+          icon: LucideIcons.star,
+          size: 48,
+          color: DateasyColors.lilac,
+          iconColor: DateasyColors.backgroundDeep,
+          badge: superBadge?.label,
+          badgeShowsTokens: superBadge?.showsTokens ?? false,
+          onTap: enabled ? onSuper : null,
+          semanticLabel: 'Super-like',
         ),
       ],
     );
   }
 
-  static String _locationLabel(DatingProfileData profile) {
-    final city = _firstText([profile.city, 'Москва']);
-    final distance = _firstText([profile.distance, 'Рядом']);
-    return '$city · $distance';
-  }
-
-  static String _firstText(List<String?> values) {
-    for (final value in values) {
-      final trimmed = value?.trim();
-      if (trimmed != null && trimmed.isNotEmpty) {
-        return trimmed;
-      }
+  _ActionLimitBadge? _limitBadge(DatingLimitBucketData? limit) {
+    if (limit == null) {
+      return null;
     }
-    return '';
-  }
-
-  static String _languageLabel(
-    List<DatingLanguageData> languages,
-    int extraLanguages,
-  ) {
-    final flags = languages
-        .map((language) => language.flag)
-        .where((flag) => flag.isNotEmpty)
-        .join(' ');
-    final firstLabel = languages.firstOrNull?.label ?? '';
-    final base =
-        [flags, firstLabel].where((part) => part.trim().isNotEmpty).join(' ');
-    if (extraLanguages <= 0) {
-      return base;
+    if (limit.freeRemaining > 0) {
+      return _ActionLimitBadge(
+        label: '${limit.freeRemaining}',
+        showsTokens: false,
+      );
     }
-    return '$base +$extraLanguages';
+    return _ActionLimitBadge(
+      label: '${limit.paidCost}',
+      showsTokens: true,
+    );
   }
 }
 
-class _GlassPill extends StatelessWidget {
-  const _GlassPill({
-    required this.child,
-    required this.height,
-    required this.padding,
+class _ActionLimitBadge {
+  const _ActionLimitBadge({
+    required this.label,
+    required this.showsTokens,
   });
+
+  final String label;
+  final bool showsTokens;
+}
+
+class _RoundAction extends StatelessWidget {
+  const _RoundAction({
+    required this.icon,
+    required this.size,
+    required this.semanticLabel,
+    this.onTap,
+    this.color,
+    this.gradient,
+    this.iconColor,
+    this.badge,
+    this.badgeShowsTokens = false,
+  });
+
+  final IconData icon;
+  final double size;
+  final VoidCallback? onTap;
+  final String semanticLabel;
+  final Color? color;
+  final Gradient? gradient;
+  final Color? iconColor;
+  final String? badge;
+  final bool badgeShowsTokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: semanticLabel,
+      button: true,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color ?? DateasyColors.glass,
+                gradient: gradient,
+                border: gradient == null && color == null
+                    ? Border.all(color: DateasyColors.border)
+                    : null,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black
+                        .withValues(alpha: onTap == null ? 0.08 : 0.18),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Icon(
+                icon,
+                size: size >= 56 ? 26 : 20,
+                color: onTap == null
+                    ? DateasyColors.muted.withValues(alpha: 0.45)
+                    : iconColor ?? DateasyColors.muted,
+              ),
+            ),
+            if (badge != null)
+              Positioned(
+                top: -3,
+                right: -6,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: DateasyColors.foreground,
+                  ),
+                  child: Row(
+                    children: [
+                      if (badgeShowsTokens) ...[
+                        const Icon(
+                          LucideIcons.coins,
+                          key: ValueKey('dating-action-token-badge'),
+                          size: 10,
+                          color: DateasyColors.backgroundDeep,
+                        ),
+                        const SizedBox(width: 2),
+                      ],
+                      Text(
+                        badge!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: DateasyColors.backgroundDeep,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassBox extends StatelessWidget {
+  const _GlassBox({required this.child, this.height});
 
   final Widget child;
-  final double height;
-  final EdgeInsetsGeometry padding;
+  final double? height;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          height: height,
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-          ),
-          alignment: Alignment.center,
-          child: child,
-        ),
-      ),
-    );
-  }
-}
-
-enum _CircleActionTone { ghost, gold, like }
-
-enum _CircleActionSize { medium, large, extraLarge }
-
-class _CircleActionButton extends StatelessWidget {
-  const _CircleActionButton({
-    required this.semanticsLabel,
-    required this.icon,
-    required this.onTap,
-    this.tone = _CircleActionTone.ghost,
-    this.size = _CircleActionSize.medium,
-    this.fillIcon = false,
-  });
-
-  final String semanticsLabel;
-  final IconData icon;
-  final VoidCallback? onTap;
-  final _CircleActionTone tone;
-  final _CircleActionSize size;
-  final bool fillIcon;
-
-  @override
-  Widget build(BuildContext context) {
-    final dimension = switch (size) {
-      _CircleActionSize.medium => 48.0,
-      _CircleActionSize.large => 56.0,
-      _CircleActionSize.extraLarge => 68.0,
-    };
-    final iconSize = switch (size) {
-      _CircleActionSize.medium => 20.0,
-      _CircleActionSize.large => 21.0,
-      _CircleActionSize.extraLarge => 25.0,
-    };
-    final background = switch (tone) {
-      _CircleActionTone.ghost => BbV5Colors.paperHi.withValues(alpha: 0.95),
-      _CircleActionTone.gold => BbV5Colors.paperHi,
-      _CircleActionTone.like => BbV5Colors.accent,
-    };
-    final foreground = switch (tone) {
-      _CircleActionTone.ghost => BbV5Colors.ink,
-      _CircleActionTone.gold => BbV5Colors.gold,
-      _CircleActionTone.like => BbV5Colors.paperHi,
-    };
-    final border = switch (tone) {
-      _CircleActionTone.ghost => BbV5Colors.hair,
-      _CircleActionTone.gold => BbV5Colors.gold.withValues(alpha: 0.35),
-      _CircleActionTone.like => Colors.white.withValues(alpha: 0.4),
-    };
-    final shadows = switch (tone) {
-      _CircleActionTone.ghost => const [
-          BoxShadow(
-            color: Color(0x66000000),
-            blurRadius: 28,
-            spreadRadius: -8,
-            offset: Offset(0, 12),
-          ),
-        ],
-      _CircleActionTone.gold => [
-          BoxShadow(
-            color: BbV5Colors.gold.withValues(alpha: 0.55),
-            blurRadius: 28,
-            spreadRadius: -8,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      _CircleActionTone.like => const [
-          BoxShadow(
-            color: Color(0xCCB26F4A),
-            blurRadius: 32,
-            spreadRadius: -8,
-            offset: Offset(0, 16),
-          ),
-        ],
-    };
-
-    return Semantics(
-      button: true,
-      label: semanticsLabel,
-      enabled: onTap != null,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          width: dimension,
-          height: dimension,
-          decoration: BoxDecoration(
-            color: background,
-            shape: BoxShape.circle,
-            border: Border.all(color: border),
-            boxShadow: shadows,
-            gradient: tone == _CircleActionTone.like
-                ? const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [BbV5Colors.terra, BbV5Colors.accentDeep],
-                  )
-                : null,
-          ),
-          alignment: Alignment.center,
-          child: Icon(
-            icon,
-            size: iconSize,
-            color: foreground,
-            fill: fillIcon ? 1 : 0,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DatingThumbnail extends StatelessWidget {
-  const _DatingThumbnail({
-    required this.profile,
-  });
-
-  final DatingProfileData profile;
-
-  @override
-  Widget build(BuildContext context) {
-    final imageUrl = profile.primaryPhoto
-            ?.bestUrlFor(BbImageUsageProfile.avatar) ??
-        profile.photos.firstOrNull?.bestUrlFor(BbImageUsageProfile.avatar) ??
-        profile.avatarUrl;
-
-    return BbProfilePhotoImage(
-      imageUrl: imageUrl,
-      fallbackText: profile.photoEmoji,
-      usageProfile: BbImageUsageProfile.avatar,
-      fallbackFontSize: 24,
-    );
-  }
-}
-
-class _SwipeDecisionPill extends StatelessWidget {
-  const _SwipeDecisionPill({
-    required this.direction,
-  });
-
-  final DatingSwipeDirection direction;
-
-  @override
-  Widget build(BuildContext context) {
-    final isLike = direction == DatingSwipeDirection.like;
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      height: height,
       decoration: BoxDecoration(
-        color: isLike
-            ? BbV5Colors.accent.withValues(alpha: 0.92)
-            : BbV5Colors.paperHi.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(16),
+        color: DateasyColors.glass,
+        border: Border.all(color: DateasyColors.border),
       ),
-      child: Text(
-        isLike ? 'Лайк' : 'Пропустить',
-        style: AppTextStyles.meta.copyWith(
-          color: isLike ? BbV5Colors.paperHi : BbV5Colors.ink,
-          fontWeight: FontWeight.w600,
+      child: child,
+    );
+  }
+}
+
+class _DatingActionHistoryItem {
+  const _DatingActionHistoryItem({
+    required this.card,
+    required this.action,
+    required this.index,
+  });
+
+  final BackendCardItem card;
+  final String action;
+  final int index;
+}
+
+class _DatingProfile {
+  const _DatingProfile({
+    required this.id,
+    required this.name,
+    required this.job,
+    required this.distanceLabel,
+    this.age,
+    this.imageUrl,
+    this.imageVariants,
+    this.photos = const [],
+    this.matchPercent,
+    this.interests = const [],
+    this.online = false,
+  });
+
+  final String id;
+  final String name;
+  final String job;
+  final String distanceLabel;
+  final int? age;
+  final String? imageUrl;
+  final Object? imageVariants;
+  final List<_DatingPhoto> photos;
+  final int? matchPercent;
+  final List<String> interests;
+  final bool online;
+
+  factory _DatingProfile.fromBackend(BackendCardItem item) {
+    final raw = item.raw;
+    final profile = _map(raw['profile']);
+    final imageVariants = _profileImageVariants(raw);
+    return _DatingProfile(
+      id: item.id,
+      name: item.title.isEmpty ? 'Профиль' : item.title,
+      age: _intOrNull(raw['age'] ?? profile['age']),
+      imageUrl: item.imageUrl,
+      imageVariants: imageVariants,
+      photos: _photoList(
+        raw['photos'],
+        fallbackUrl: item.imageUrl,
+        fallbackVariants: imageVariants,
+      ),
+      matchPercent: _intOrNull(
+        raw['matchPercent'] ??
+            raw['match'] ??
+            raw['matchScore'] ??
+            raw['compatibility'] ??
+            raw['compatibilityPercent'],
+      ),
+      job: _stringOrNull(
+            raw['job'] ??
+                raw['profession'] ??
+                raw['occupation'] ??
+                raw['vibe'] ??
+                profile['vibe'],
+          ) ??
+          item.city ??
+          'Готов к встрече',
+      distanceLabel: _stringOrNull(raw['distance'] ?? raw['distanceLabel']) ??
+          item.city ??
+          '',
+      interests: _stringList(
+        raw['commonInterests'] ??
+            raw['tags'] ??
+            raw['interests'] ??
+            profile['interests'],
+      ),
+      online: raw['online'] == true,
+    );
+  }
+}
+
+class _DatingPhoto {
+  const _DatingPhoto({
+    required this.imageUrl,
+    this.imageVariants,
+  });
+
+  final String? imageUrl;
+  final Object? imageVariants;
+}
+
+class _DatingStatusCard extends StatelessWidget {
+  const _DatingStatusCard({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: _GlassBox(
+        height: 320,
+        child: Center(
+          child: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: DateasyColors.muted,
+                ),
+          ),
         ),
       ),
     );
   }
 }
 
-extension<T> on List<T> {
-  T? get firstOrNull => isEmpty ? null : first;
+Map<String, Object?> _map(Object? value) {
+  if (value is Map) {
+    return value.map((key, value) => MapEntry('$key', value));
+  }
+  return const {};
+}
+
+List<Object?> _list(Object? value) {
+  if (value is List) {
+    return value;
+  }
+  return const [];
+}
+
+String? _stringOrNull(Object? value) {
+  final result = value?.toString();
+  if (result == null || result.isEmpty) {
+    return null;
+  }
+  return result;
+}
+
+int? _intOrNull(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '');
+}
+
+List<_DatingPhoto> _photoList(
+  Object? value, {
+  String? fallbackUrl,
+  Object? fallbackVariants,
+}) {
+  final photos = <_DatingPhoto>[];
+  final urls = <String>{};
+  void add(Object? candidate, Object? variants) {
+    final url = _stringOrNull(candidate)?.trim();
+    if (url == null || url.isEmpty || !urls.add(url)) {
+      return;
+    }
+    photos.add(_DatingPhoto(imageUrl: url, imageVariants: variants));
+  }
+
+  for (final item in _list(value)) {
+    if (item is String) {
+      add(item, null);
+      continue;
+    }
+    final photo = _map(item);
+    final media = _map(photo['media']);
+    final variants = _photoImageVariants(photo);
+    add(
+      photo['url'] ??
+          photo['imageUrl'] ??
+          photo['photoUrl'] ??
+          photo['avatarUrl'] ??
+          photo['downloadUrl'] ??
+          media['url'] ??
+          media['downloadUrl'],
+      variants,
+    );
+  }
+  if (photos.isEmpty) {
+    add(fallbackUrl, fallbackVariants);
+  }
+  return photos;
+}
+
+Object? _profileImageVariants(Map<String, Object?> raw) {
+  final primaryPhoto = _map(raw['primaryPhoto']);
+  return raw['imageVariants'] ?? _photoImageVariants(primaryPhoto);
+}
+
+Object? _photoImageVariants(Map<String, Object?> photo) {
+  final media = _map(photo['media']);
+  return photo['variants'] ?? media['variants'];
+}
+
+String? _preferredDatingPhotoUrl(_DatingProfile profile) {
+  final photo = profile.photos.isEmpty
+      ? _DatingPhoto(
+          imageUrl: profile.imageUrl,
+          imageVariants: profile.imageVariants,
+        )
+      : profile.photos.first;
+  return DateasyRemoteImage.resolveVariantImageUrl(
+    imageUrl: photo.imageUrl,
+    imageVariants: photo.imageVariants,
+    usage: DateasyImageUsage.fullscreen,
+  );
+}
+
+List<String> _stringList(Object? value) {
+  if (value is List) {
+    return value
+        .map((item) => item.toString())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+  return const [];
 }

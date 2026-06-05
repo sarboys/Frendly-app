@@ -1,58 +1,37 @@
-class AppCacheKey {
-  const AppCacheKey._();
+class AppCacheUserScope {
+  const AppCacheUserScope._(this.value);
 
-  static String build({
-    required String path,
-    Map<String, Object?> query = const {},
-  }) {
-    final parts = <String>[];
-    final keys = query.keys.where((key) => query[key] != null).toList()..sort();
+  final String value;
 
-    for (final key in keys) {
-      final value = query[key];
-      if (value == null) {
-        continue;
-      }
-      if (value is Iterable && value is! String) {
-        for (final item in value) {
-          if (item != null) {
-            parts.add('${_encode(key)}=${_encode(item)}');
-          }
-        }
-        continue;
-      }
-      parts.add('${_encode(key)}=${_encode(value)}');
-    }
+  factory AppCacheUserScope.public() => const AppCacheUserScope._('public');
 
-    if (parts.isEmpty) {
-      return path;
-    }
-    return '$path?${parts.join('&')}';
+  factory AppCacheUserScope.user(String userId) {
+    return AppCacheUserScope._('user:$userId');
   }
-
-  static String _encode(Object value) => Uri.encodeQueryComponent('$value');
 }
 
-class AppCacheUserScope {
-  const AppCacheUserScope._(this.storageId);
+class AppCacheKey {
+  const AppCacheKey({
+    required this.namespace,
+    required this.value,
+    required this.userScope,
+  });
 
-  static const public = AppCacheUserScope._('public');
-  static const guest = AppCacheUserScope._('guest');
+  final String namespace;
+  final String value;
+  final AppCacheUserScope userScope;
 
-  final String storageId;
+  String get storageKey => '$namespace::$value';
 
-  static AppCacheUserScope user(String userId) {
-    final trimmed = userId.trim();
-    if (trimmed.isEmpty) {
-      return guest;
-    }
-    return AppCacheUserScope._('user:$trimmed');
-  }
-
-  static AppCacheUserScope fromUserId(String? userId) {
-    if (userId == null) {
-      return guest;
-    }
-    return user(userId);
+  AppCacheKey copyWith({
+    String? namespace,
+    String? value,
+    AppCacheUserScope? userScope,
+  }) {
+    return AppCacheKey(
+      namespace: namespace ?? this.namespace,
+      value: value ?? this.value,
+      userScope: userScope ?? this.userScope,
+    );
   }
 }

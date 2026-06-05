@@ -1,400 +1,190 @@
-import 'package:big_break_mobile/app/theme/app_colors.dart';
-import 'package:big_break_mobile/app/theme/app_spacing.dart';
-import 'package:big_break_mobile/app/theme/app_text_styles.dart';
-import 'package:big_break_mobile/shared/data/app_providers.dart';
-import 'package:big_break_mobile/shared/data/backend_repository.dart';
-import 'package:big_break_mobile/shared/widgets/bb_v5_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:mobile2/shared/data/app_providers.dart';
+import 'package:mobile2/shared/theme/dateasy_theme.dart';
+import 'package:mobile2/shared/widgets/dateasy_phone_frame.dart';
 
 class ReportScreen extends ConsumerStatefulWidget {
-  const ReportScreen({
-    required this.userId,
-    super.key,
-  });
+  const ReportScreen({super.key, this.targetUserId});
 
-  final String userId;
+  final String? targetUserId;
 
   @override
   ConsumerState<ReportScreen> createState() => _ReportScreenState();
 }
 
 class _ReportScreenState extends ConsumerState<ReportScreen> {
-  String? _reason;
-  bool _block = true;
-  final _detailsController = TextEditingController();
-  bool _submitting = false;
+  final _commentController = TextEditingController();
+  String? _selectedReason;
+  bool _blockProfile = true;
+  bool _sent = false;
+  bool _sending = false;
+  String? _error;
 
   @override
   void dispose() {
-    _detailsController.dispose();
+    _commentController.dispose();
     super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final targetUserId = widget.targetUserId;
+    final reason = _selectedReason;
+    if (targetUserId == null || targetUserId.isEmpty || reason == null) {
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      await ref.read(reportActionsProvider).createReport(
+            targetUserId: targetUserId,
+            reason: reason,
+            details: _commentController.text.trim(),
+            blockRequested: _blockProfile,
+          );
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _sent = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _error = 'Не удалось отправить жалобу';
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
-    final profileAsync = ref.watch(personProfileProvider(widget.userId));
-    const reasons = <(String, String, String)>[
-      ('fake', 'Фейковый профиль', 'Чужие фото или вымышленная личность'),
-      (
-        'rude',
-        'Грубое поведение',
-        'Оскорбления, агрессия в чате или на встрече'
-      ),
-      ('harass', 'Домогательства', 'Нежелательные действия, преследование'),
-      ('spam', 'Спам или реклама', 'Продвижение услуг, рассылки'),
-      ('scam', 'Мошенничество', 'Подозрительные просьбы, обман'),
-      ('other', 'Другое', 'Опишу подробнее ниже'),
-    ];
+    if (_sent) {
+      return _SuccessState(blockProfile: _blockProfile);
+    }
 
-    return BbV5Scaffold(
-      child: SafeArea(
-        bottom: false,
-        child: profileAsync.when(
-          data: (profile) => Column(
+    if (widget.targetUserId == null || widget.targetUserId!.isEmpty) {
+      return const DateasyPhoneFrame(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Нужен targetUserId для жалобы',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return DateasyPhoneFrame(
+      child: Stack(
+        children: [
+          ListView(
+            padding: EdgeInsets.only(
+              top: MediaQuery.paddingOf(context).top + 16,
+              bottom: MediaQuery.paddingOf(context).bottom + 116,
+            ),
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: colors.border.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ),
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => context.pop(),
-                      icon: const Icon(Icons.chevron_left_rounded, size: 28),
-                    ),
-                    Expanded(
-                      child: Text(
-                        'Пожаловаться',
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.itemTitle.copyWith(fontSize: 16),
-                      ),
-                    ),
-                    const SizedBox(width: 48),
-                  ],
-                ),
+              const _Header(),
+              const _PrivacyAlert(),
+              _ReasonsSection(
+                selected: _selectedReason,
+                onSelected: (id) => setState(() => _selectedReason = id),
               ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      decoration: BoxDecoration(
-                        color: colors.destructive.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.flag_outlined,
-                            size: 20,
-                            color: colors.destructive,
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Жалоба на ${profile.displayName}',
-                                  style: AppTextStyles.itemTitle
-                                      .copyWith(fontSize: 14),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Команда модерации проверит профиль за 24 часа. Это анонимно, пользователь не узнает.',
-                                  style: AppTextStyles.bodySoft.copyWith(
-                                    fontSize: 12,
-                                    height: 1.625,
-                                    color: colors.inkSoft,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Что случилось',
-                      style: AppTextStyles.caption.copyWith(
-                        fontFamily: 'Sora',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        height: 1.1,
-                        letterSpacing: 0.55,
-                        color: colors.inkMute,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ...reasons.map(
-                      (reason) => _ReasonTile(
-                        label: reason.$2,
-                        subtitle: reason.$3,
-                        selected: _reason == reason.$1,
-                        onTap: () => setState(() => _reason = reason.$1),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      decoration: BoxDecoration(
-                        color: colors.card,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: colors.border),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Подробности (по желанию)',
-                            style: AppTextStyles.body.copyWith(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              height: 1.25,
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          TextField(
-                            controller: _detailsController,
-                            maxLines: 3,
-                            maxLength: 500,
-                            decoration: InputDecoration(
-                              hintText:
-                                  'Что произошло? Когда, где, как себя вёл?',
-                              hintStyle: AppTextStyles.bodySoft.copyWith(
-                                fontSize: 14,
-                                height: 1.625,
-                                color: colors.inkMute,
-                              ),
-                              border: InputBorder.none,
-                              counterText: '',
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            style: AppTextStyles.bodySoft.copyWith(
-                              fontSize: 14,
-                              height: 1.625,
-                              color: colors.inkSoft,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    InkWell(
-                      onTap: () => setState(() => _block = !_block),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: colors.card,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: colors.border),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: _block
-                                    ? colors.foreground
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: _block
-                                      ? colors.foreground
-                                      : colors.border,
-                                  width: 2,
-                                ),
-                              ),
-                              child: _block
-                                  ? Center(
-                                      child: Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: BoxDecoration(
-                                          color: colors.primaryForeground,
-                                          borderRadius:
-                                              BorderRadius.circular(2),
-                                        ),
-                                      ),
-                                    )
-                                  : null,
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Заблокировать ${profile.displayName}',
-                                    style: AppTextStyles.itemTitle.copyWith(
-                                      fontSize: 14,
-                                      height: 1.15,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Не увидите друг друга в приложении',
-                                    style: AppTextStyles.meta.copyWith(
-                                      fontWeight: FontWeight.w400,
-                                      color: colors.inkMute,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              const _InlineState(
+                text:
+                    'Жалоба уйдет команде. Если включить блокировку, профиль сразу пропадет из твоих экранов.',
               ),
-              SafeArea(
-                top: false,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colors.background.withValues(alpha: 0.92),
-                    border: Border(
-                      top: BorderSide(
-                        color: colors.border.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: colors.destructive,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        onPressed: _reason == null || _submitting
-                            ? null
-                            : () async {
-                                final repository =
-                                    ref.read(backendRepositoryProvider);
-                                setState(() {
-                                  _submitting = true;
-                                });
-                                try {
-                                  await repository.createReport(
-                                    targetUserId: widget.userId,
-                                    reason: _reason!,
-                                    details: _detailsController.text.trim(),
-                                    blockRequested: _block,
-                                  );
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Жалоба отправлена'),
-                                      ),
-                                    );
-                                    context.pop();
-                                  }
-                                } catch (_) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Не получилось отправить жалобу',
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                } finally {
-                                  if (mounted) {
-                                    setState(() {
-                                      _submitting = false;
-                                    });
-                                  }
-                                }
-                              },
-                        child: Text(
-                          'Отправить жалобу',
-                          style: AppTextStyles.button.copyWith(
-                            color: colors.destructiveForeground,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              _CommentSection(controller: _commentController),
+              if (_error != null) _InlineState(text: _error!),
+              _BlockToggle(
+                value: _blockProfile,
+                onChanged: (value) => setState(() => _blockProfile = value),
               ),
             ],
           ),
-          loading: () => Center(
-            child: CircularProgressIndicator(color: colors.primary),
+          _BottomSubmit(
+            enabled: _selectedReason != null && !_sending,
+            sending: _sending,
+            onSubmit: _submit,
           ),
-          error: (error, _) => Center(child: Text(error.toString())),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _ReasonTile extends StatelessWidget {
-  const _ReasonTile({
-    required this.label,
-    required this.subtitle,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final String subtitle;
-  final bool selected;
-  final VoidCallback onTap;
+class _Header extends StatelessWidget {
+  const _Header();
 
   @override
   Widget build(BuildContext context) {
-    final colors = AppColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _GlassIconButton(
+            icon: LucideIcons.chevronLeft,
+            onTap: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/dating');
+              }
+            },
+          ),
+          Text(
+            'Пожаловаться',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(width: 44, height: 44),
+        ],
+      ),
+    );
+  }
+}
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+class _PrivacyAlert extends StatelessWidget {
+  const _PrivacyAlert();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: colors.card,
-          borderRadius: BorderRadius.circular(16),
+          color: DateasyColors.pink.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: selected ? colors.foreground : colors.border,
-            width: selected ? 2 : 1,
+            color: DateasyColors.pink.withValues(alpha: 0.3),
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Text(
-              label,
-              style: AppTextStyles.itemTitle.copyWith(
-                fontSize: 14,
-                height: 1.15,
-              ),
+            const Icon(
+              LucideIcons.shieldAlert,
+              color: DateasyColors.pink,
+              size: 24,
             ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: AppTextStyles.meta.copyWith(
-                fontWeight: FontWeight.w400,
-                color: colors.inkMute,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Жалоба анонимна. Мы не покажем её другому пользователю.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: DateasyColors.muted,
+                      fontSize: 12,
+                    ),
               ),
             ),
           ],
@@ -403,3 +193,541 @@ class _ReasonTile extends StatelessWidget {
     );
   }
 }
+
+class _ReasonsSection extends StatelessWidget {
+  const _ReasonsSection({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String? selected;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Section(
+      title: 'Причина',
+      child: Column(
+        children: [
+          for (var index = 0; index < _reasons.length; index++) ...[
+            _ReasonTile(
+              reason: _reasons[index],
+              selected: selected == _reasons[index].id,
+              onTap: () => onSelected(_reasons[index].id),
+            ),
+            if (index != _reasons.length - 1) const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ReasonTile extends StatelessWidget {
+  const _ReasonTile({
+    required this.reason,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _ReportReason reason;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: _GlassPanel(
+        borderRadius: 16,
+        padding: const EdgeInsets.all(12),
+        borderColor:
+            selected ? DateasyColors.lime : Colors.white.withValues(alpha: 0.1),
+        backgroundColor: selected
+            ? DateasyColors.lime.withValues(alpha: 0.1)
+            : DateasyColors.glass,
+        shadow: selected
+            ? const [
+                BoxShadow(
+                  color: Color(0x55BEFF67),
+                  blurRadius: 24,
+                  spreadRadius: -14,
+                  offset: Offset(0, 14),
+                ),
+              ]
+            : null,
+        child: Row(
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: selected ? DateasyColors.lime : Colors.transparent,
+                border: Border.all(
+                  color: selected
+                      ? DateasyColors.lime
+                      : Colors.white.withValues(alpha: 0.3),
+                  width: 2,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: selected
+                  ? const Icon(
+                      LucideIcons.check,
+                      color: DateasyColors.backgroundDeep,
+                      size: 12,
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    reason.title,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    reason.subtitle,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: DateasyColors.muted,
+                          fontSize: 11,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CommentSection extends StatelessWidget {
+  const _CommentSection({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Section(
+      title: 'Комментарий',
+      child: _GlassPanel(
+        borderRadius: 16,
+        padding: EdgeInsets.zero,
+        child: TextField(
+          controller: controller,
+          minLines: 4,
+          maxLines: 4,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: DateasyColors.foreground,
+                fontSize: 14,
+              ),
+          decoration: InputDecoration(
+            hintText: 'Опиши, что случилось',
+            hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: DateasyColors.muted,
+                  fontSize: 14,
+                ),
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BlockToggle extends StatelessWidget {
+  const _BlockToggle({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: GestureDetector(
+        onTap: () => onChanged(!value),
+        child: _GlassPanel(
+          borderRadius: 16,
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: value,
+                  onChanged: (next) => onChanged(next ?? false),
+                  activeColor: DateasyColors.lime,
+                  checkColor: DateasyColors.backgroundDeep,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  side: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    width: 1.4,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Также заблокировать профиль',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontSize: 14,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomSubmit extends StatelessWidget {
+  const _BottomSubmit({
+    required this.enabled,
+    required this.sending,
+    required this.onSubmit,
+  });
+
+  final bool enabled;
+  final bool sending;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          MediaQuery.paddingOf(context).bottom + 24,
+        ),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [
+              DateasyColors.background,
+              DateasyColors.background,
+              Color(0x001F0C3F),
+            ],
+          ),
+        ),
+        child: GestureDetector(
+          onTap: enabled ? onSubmit : null,
+          child: Opacity(
+            opacity: enabled ? 1 : 0.4,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                gradient: dateasyLimeGradient,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: enabled
+                    ? const [
+                        BoxShadow(
+                          color: Color(0x66BEFF67),
+                          blurRadius: 24,
+                          spreadRadius: -12,
+                          offset: Offset(0, 12),
+                        ),
+                      ]
+                    : null,
+              ),
+              alignment: Alignment.center,
+              child: sending
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      'Отправить жалобу',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: DateasyColors.backgroundDeep,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineState extends StatelessWidget {
+  const _InlineState({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Section(
+      title: 'Статус',
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: DateasyColors.muted,
+            ),
+      ),
+    );
+  }
+}
+
+class _SuccessState extends StatelessWidget {
+  const _SuccessState({required this.blockProfile});
+
+  final bool blockProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    return DateasyPhoneFrame(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: dateasyLimeGradient,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x66BEFF67),
+                    blurRadius: 30,
+                    spreadRadius: -12,
+                    offset: Offset(0, 14),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                LucideIcons.check,
+                color: DateasyColors.backgroundDeep,
+                size: 40,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Жалоба отправлена',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: 300,
+              child: Text(
+                'Рассмотрим в течение 24 часов. '
+                '${blockProfile ? 'Профиль заблокирован.' : ''}',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: DateasyColors.muted,
+                      fontSize: 14,
+                    ),
+              ),
+            ),
+            const SizedBox(height: 32),
+            GestureDetector(
+              onTap: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/dating');
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 13,
+                ),
+                decoration: BoxDecoration(
+                  gradient: dateasyLimeGradient,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x66BEFF67),
+                      blurRadius: 24,
+                      spreadRadius: -12,
+                      offset: Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  'Вернуться',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: DateasyColors.backgroundDeep,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Section extends StatelessWidget {
+  const _Section({
+    required this.title,
+    required this.child,
+  });
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: DateasyColors.muted,
+                  fontSize: 12,
+                  letterSpacing: 1.2,
+                ),
+          ),
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _GlassIconButton extends StatelessWidget {
+  const _GlassIconButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: _GlassPanel(
+        borderRadius: 16,
+        padding: EdgeInsets.zero,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(icon, size: 20),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassPanel extends StatelessWidget {
+  const _GlassPanel({
+    required this.child,
+    required this.borderRadius,
+    required this.padding,
+    this.borderColor,
+    this.backgroundColor,
+    this.shadow,
+  });
+
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsetsGeometry padding;
+  final Color? borderColor;
+  final Color? backgroundColor;
+  final List<BoxShadow>? shadow;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: backgroundColor ?? DateasyColors.glass,
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(
+          color: borderColor ?? Colors.white.withValues(alpha: 0.1),
+        ),
+        boxShadow: shadow,
+      ),
+      child: child,
+    );
+  }
+}
+
+class _ReportReason {
+  const _ReportReason({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String id;
+  final String title;
+  final String subtitle;
+}
+
+const _reasons = [
+  _ReportReason(
+    id: 'impersonation',
+    title: 'Фейковый профиль',
+    subtitle: 'Подозреваю, что фото не его',
+  ),
+  _ReportReason(
+    id: 'spam',
+    title: 'Спам или реклама',
+    subtitle: 'Навязчивые ссылки или продажа услуг',
+  ),
+  _ReportReason(
+    id: 'harass',
+    title: 'Оскорбления',
+    subtitle: 'Грубость, угрозы, домогательства',
+  ),
+  _ReportReason(
+    id: 'minor',
+    title: 'Несовершеннолетний',
+    subtitle: 'Похоже, человеку нет 18',
+  ),
+  _ReportReason(
+    id: 'scam',
+    title: 'Мошенничество',
+    subtitle: 'Просит деньги или данные',
+  ),
+  _ReportReason(
+    id: 'other',
+    title: 'Другое',
+    subtitle: 'Опиши ниже',
+  ),
+];

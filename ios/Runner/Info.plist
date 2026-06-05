@@ -42,6 +42,14 @@
 				<string>yx$(YANDEX_CLIENT_ID)</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>GoogleSignIn</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.202569120900-49bl2vjan89hiof10o7uvffij50jj70a</string>
+			</array>
+		</dict>
 	</array>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
@@ -65,13 +73,15 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Frendly uses your local network to connect to the Big Break backend during development.</string>
+	<string>Frendly uses your local network to connect to the backend during development.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Frendly uses the camera so you can take a profile photo and verify your account.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Frendly uses your contacts to find friends who are already here.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Frendly uses your location to show nearby events and fill the address automatically.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Frendly uses your location to show nearby events and improve location-based matching.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Frendly uses the microphone so you can record and send voice messages in chat.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

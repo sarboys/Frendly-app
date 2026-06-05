@@ -8,10 +8,11 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <application
         android:label="Frendly"
-        android:name=".MainApplication"
-        android:icon="@mipmap/ic_launcher">
+        android:name="com.sergeypolyakov.frendly.mobile2.MainApplication"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
         <activity
-            android:name=".MainActivity"
+            android:name="com.sergeypolyakov.frendly.mobile2.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""

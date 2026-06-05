@@ -1,39 +1,45 @@
 import 'dart:async';
-import 'dart:convert';
 
-import 'package:big_break_mobile/app/core/config/backend_config.dart';
-import 'package:big_break_mobile/shared/models/tokens.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:mobile2/app/core/config/backend_config.dart';
+import 'package:mobile2/shared/models/backend_models.dart';
 
-const _requestDedupeKeyExtra = '_bbRequestDedupeKey';
+const _requestDedupeKeyExtra = '_dateasyRequestDedupeKey';
+const _requestCallerCancelTokenExtra = '_dateasyCallerCancelToken';
 
 class ApiClient {
   ApiClient({
     required Future<String?> Function() readAccessToken,
     required Future<AuthTokens> Function() refreshTokens,
-  }) : _dio = Dio(
+    String apiBaseUrl = BackendConfig.apiBaseUrl,
+    HttpClientAdapter? adapter,
+  })  : _readAccessToken = readAccessToken,
+        _refreshTokens = refreshTokens,
+        dio = Dio(
           BaseOptions(
-            baseUrl: BackendConfig.apiBaseUrl,
+            baseUrl: apiBaseUrl,
             connectTimeout: const Duration(seconds: 10),
             sendTimeout: const Duration(seconds: 10),
             receiveTimeout: const Duration(seconds: 20),
-            headers: {
-              'content-type': 'application/json',
-            },
+            headers: {'content-type': 'application/json'},
           ),
         ) {
-    _dio.interceptors.add(
+    if (adapter != null) {
+      dio.httpClientAdapter = adapter;
+    }
+    dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           final skipAuthHeader = options.extra['skipAuthHeader'] == true;
-          final token = skipAuthHeader ? null : await readAccessToken();
-          final hasExplicitAuthHeader =
-              options.headers['authorization'] != null;
-          if (!hasExplicitAuthHeader && token != null && token.isNotEmpty) {
+          final token = skipAuthHeader ? null : await _readAccessToken();
+          if (token != null &&
+              token.isNotEmpty &&
+              options.headers['authorization'] == null) {
             options.headers['authorization'] = 'Bearer $token';
           }
-          final dedupeKey = _prepareRequestDedupe(options);
+
+          final dedupeKey = _dedupeKey(options, token);
           if (dedupeKey == null) {
             handler.next(options);
             return;
@@ -42,14 +48,15 @@ class ApiClient {
           final pending = _inFlightGetRequests[dedupeKey];
           if (pending != null) {
             try {
-              handler.resolve(await pending.future);
-            } on DioException catch (pendingError) {
-              handler.reject(pendingError);
-            } catch (pendingError, stackTrace) {
+              handler
+                  .resolve(await _awaitDedupeResponse(pending.future, options));
+            } on DioException catch (error) {
+              handler.reject(error);
+            } catch (error, stackTrace) {
               handler.reject(
                 DioException(
                   requestOptions: options,
-                  error: pendingError,
+                  error: error,
                   stackTrace: stackTrace,
                 ),
               );
@@ -57,181 +64,164 @@ class ApiClient {
             return;
           }
 
-          options.extra[_requestDedupeKeyExtra] = dedupeKey;
           final completer = Completer<Response<dynamic>>();
-          completer.future.catchError(
-            (_) => Response<dynamic>(requestOptions: options),
-          );
+          completer.future.catchError((_) => Response<dynamic>(
+                requestOptions: options,
+              ));
           _inFlightGetRequests[dedupeKey] = completer;
+          options.extra[_requestDedupeKeyExtra] = dedupeKey;
+          final callerCancelToken = options.cancelToken;
+          if (callerCancelToken != null) {
+            options.extra[_requestCallerCancelTokenExtra] = callerCancelToken;
+            options.cancelToken = null;
+          }
           handler.next(options);
         },
         onResponse: (response, handler) {
-          _completeRequestDedupe(response.requestOptions, response);
+          _completeDedupe(response.requestOptions, response);
+          final callerCancelError = _callerCancelError(response.requestOptions);
+          if (callerCancelError != null) {
+            handler.reject(callerCancelError);
+            return;
+          }
           handler.next(response);
         },
         onError: (error, handler) async {
-          final skipAuthRefresh =
-              error.requestOptions.extra['skipAuthRefresh'] == true;
-          if (error.response?.statusCode == 401 &&
-              !skipAuthRefresh &&
-              error.requestOptions.extra['retried'] != true) {
-            try {
-              _debugAuthLog('Auth refresh started after 401');
-              final tokens = await refreshTokens();
-              final cloned = await _retry(
-                error.requestOptions,
-                tokens.accessToken,
-              );
-              _debugAuthLog('Auth refresh succeeded, retrying request');
-              _completeRequestDedupe(error.requestOptions, cloned);
-              handler.resolve(cloned);
-              return;
-            } catch (refreshError) {
-              _debugAuthLog(
-                'Auth refresh failed: ${refreshError.runtimeType}',
-              );
-              _completeRequestDedupeError(error.requestOptions, error);
-              handler.next(error);
-              return;
-            }
+          final canRefresh = error.response?.statusCode == 401 &&
+              error.requestOptions.extra['skipAuthRefresh'] != true &&
+              error.requestOptions.extra['retried'] != true;
+          if (!canRefresh) {
+            _completeDedupeError(error.requestOptions, error);
+            handler.next(error);
+            return;
           }
 
-          _completeRequestDedupeError(error.requestOptions, error);
-          handler.next(error);
+          try {
+            final tokens = await _refreshOnce();
+            final retryOptions = _copyForRetry(error.requestOptions, tokens);
+            final response = await dio.fetch<dynamic>(retryOptions);
+            _completeDedupe(error.requestOptions, response);
+            handler.resolve(response);
+          } on DioException catch (retryError) {
+            _completeDedupeError(error.requestOptions, retryError);
+            handler.reject(retryError);
+          } catch (retryError, stackTrace) {
+            final wrapped = DioException(
+              requestOptions: error.requestOptions,
+              error: retryError,
+              stackTrace: stackTrace,
+            );
+            _completeDedupeError(error.requestOptions, wrapped);
+            handler.reject(wrapped);
+          }
         },
       ),
     );
   }
 
-  final Dio _dio;
-  final _inFlightGetRequests = <String, Completer<Response<dynamic>>>{};
+  final Dio dio;
+  final Future<String?> Function() _readAccessToken;
+  final Future<AuthTokens> Function() _refreshTokens;
+  final Map<String, Completer<Response<dynamic>>> _inFlightGetRequests = {};
+  Future<AuthTokens>? _refreshFuture;
 
-  Dio get dio => _dio;
+  Future<AuthTokens> _refreshOnce() {
+    final existing = _refreshFuture;
+    if (existing != null) {
+      return existing;
+    }
+    final future = _refreshTokens();
+    _refreshFuture = future;
+    future.whenComplete(() {
+      if (identical(_refreshFuture, future)) {
+        _refreshFuture = null;
+      }
+    });
+    return future;
+  }
 
-  Future<Response<dynamic>> _retry(
-    RequestOptions requestOptions,
-    String accessToken,
-  ) {
-    final retryExtra = {
-      ...requestOptions.extra,
-      'retried': true,
-    }..remove(_requestDedupeKeyExtra);
-    final options = Options(
-      method: requestOptions.method,
-      connectTimeout: requestOptions.connectTimeout,
-      sendTimeout: requestOptions.sendTimeout,
-      receiveTimeout: requestOptions.receiveTimeout,
-      responseType: requestOptions.responseType,
-      contentType: requestOptions.contentType,
-      validateStatus: requestOptions.validateStatus,
-      receiveDataWhenStatusError: requestOptions.receiveDataWhenStatusError,
-      followRedirects: requestOptions.followRedirects,
-      maxRedirects: requestOptions.maxRedirects,
-      persistentConnection: requestOptions.persistentConnection,
-      requestEncoder: requestOptions.requestEncoder,
-      responseDecoder: requestOptions.responseDecoder,
-      listFormat: requestOptions.listFormat,
-      headers: {
-        ...requestOptions.headers,
-        'authorization': 'Bearer $accessToken',
-      },
-      extra: retryExtra,
-    );
-
-    return _dio.request<dynamic>(
-      requestOptions.path,
-      data: requestOptions.data,
-      queryParameters: requestOptions.queryParameters,
-      options: options,
-      cancelToken: requestOptions.cancelToken,
+  RequestOptions _copyForRetry(RequestOptions source, AuthTokens tokens) {
+    final headers = Map<String, dynamic>.of(source.headers);
+    headers['authorization'] = 'Bearer ${tokens.accessToken}';
+    final extra = Map<String, dynamic>.of(source.extra);
+    extra['retried'] = true;
+    extra['skipRequestDeduplication'] = true;
+    return source.copyWith(
+      method: source.method,
+      path: source.path,
+      data: source.data,
+      queryParameters: Map<String, dynamic>.of(source.queryParameters),
+      baseUrl: source.baseUrl,
+      cancelToken: source.cancelToken,
+      connectTimeout: source.connectTimeout,
+      sendTimeout: source.sendTimeout,
+      receiveTimeout: source.receiveTimeout,
+      headers: headers,
+      extra: extra,
+      responseType: source.responseType,
+      validateStatus: source.validateStatus,
+      receiveDataWhenStatusError: source.receiveDataWhenStatusError,
+      followRedirects: source.followRedirects,
+      maxRedirects: source.maxRedirects,
+      requestEncoder: source.requestEncoder,
+      responseDecoder: source.responseDecoder,
+      listFormat: source.listFormat,
     );
   }
 
-  String? _prepareRequestDedupe(RequestOptions options) {
-    if (!_canDedupeRequest(options)) {
+  String? _dedupeKey(RequestOptions options, String? token) {
+    if (options.method.toUpperCase() != 'GET' ||
+        options.extra['skipRequestDeduplication'] == true ||
+        options.responseType == ResponseType.stream) {
       return null;
     }
-
-    return _requestDedupeKey(options);
+    final query = Map<String, dynamic>.from(options.queryParameters);
+    final queryKeys = query.keys.map((key) => key.toString()).toList()..sort();
+    final queryPart = queryKeys.map((key) => '$key=${query[key]}').join('&');
+    final authScope =
+        token == null || token.isEmpty ? 'public' : 'auth:${shortHash(token)}';
+    return '${options.method.toUpperCase()} ${options.baseUrl}${options.path}'
+        '?$queryPart $authScope';
   }
 
-  bool _canDedupeRequest(RequestOptions options) {
-    return options.method.toUpperCase() == 'GET' &&
-        options.cancelToken == null &&
-        options.extra['skipRequestDeduplication'] != true &&
-        options.extra['retried'] != true &&
-        options.responseType != ResponseType.stream;
-  }
+  @visibleForTesting
+  static int shortHash(String value) => Object.hashAll(value.codeUnits);
 
-  String _requestDedupeKey(RequestOptions options) {
-    final uriWithoutQuery = options.uri.replace(query: '').toString();
-    final query = _stableEncode(options.queryParameters);
-    final authHeader = options.headers['authorization']?.toString() ?? '';
-    final authScope = '${authHeader.length}:${authHeader.hashCode}';
-    return '${options.method.toUpperCase()} $uriWithoutQuery?$query auth=$authScope';
-  }
-
-  String _stableEncode(Object? value) {
-    if (value is Map) {
-      final normalized = <String, Object?>{};
-      final keys = value.keys.map((key) => key.toString()).toList()..sort();
-      for (final key in keys) {
-        normalized[key] = _normalizeForStableEncode(value[key]);
-      }
-      return jsonEncode(normalized);
-    }
-
-    return jsonEncode(_normalizeForStableEncode(value));
-  }
-
-  Object? _normalizeForStableEncode(Object? value) {
-    if (value is Map) {
-      final normalized = <String, Object?>{};
-      final keys = value.keys.map((key) => key.toString()).toList()..sort();
-      for (final key in keys) {
-        normalized[key] = _normalizeForStableEncode(value[key]);
-      }
-      return normalized;
-    }
-    if (value is Iterable) {
-      return value.map(_normalizeForStableEncode).toList(growable: false);
-    }
-    return value;
-  }
-
-  void _completeRequestDedupe(
-    RequestOptions requestOptions,
-    Response<dynamic> response,
-  ) {
-    final key = requestOptions.extra[_requestDedupeKeyExtra] as String?;
+  void _completeDedupe(RequestOptions options, Response<dynamic> response) {
+    final key = options.extra[_requestDedupeKeyExtra] as String?;
     if (key == null) {
       return;
     }
-
-    final completer = _inFlightGetRequests.remove(key);
-    if (completer != null && !completer.isCompleted) {
-      completer.complete(response);
-    }
+    _inFlightGetRequests.remove(key)?.complete(response);
   }
 
-  void _completeRequestDedupeError(
-    RequestOptions requestOptions,
-    DioException error,
-  ) {
-    final key = requestOptions.extra[_requestDedupeKeyExtra] as String?;
+  void _completeDedupeError(RequestOptions options, DioException error) {
+    final key = options.extra[_requestDedupeKeyExtra] as String?;
     if (key == null) {
       return;
     }
-
-    final completer = _inFlightGetRequests.remove(key);
-    if (completer != null && !completer.isCompleted) {
-      completer.completeError(error, error.stackTrace);
-    }
+    _inFlightGetRequests.remove(key)?.completeError(error, error.stackTrace);
   }
-}
 
-void _debugAuthLog(String message) {
-  if (kDebugMode || kProfileMode) {
-    debugPrint(message);
+  Future<Response<dynamic>> _awaitDedupeResponse(
+    Future<Response<dynamic>> response,
+    RequestOptions options,
+  ) {
+    final cancelToken = options.cancelToken;
+    if (cancelToken == null) {
+      return response;
+    }
+    return Future.any([
+      response,
+      cancelToken.whenCancel.then<Response<dynamic>>((error) => throw error),
+    ]);
+  }
+
+  DioException? _callerCancelError(RequestOptions options) {
+    final cancelToken = options.extra[_requestCallerCancelTokenExtra];
+    if (cancelToken is CancelToken && cancelToken.isCancelled) {
+      return cancelToken.cancelError;
+    }
+    return null;
   }
 }
