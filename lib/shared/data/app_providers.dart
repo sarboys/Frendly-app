@@ -3905,6 +3905,24 @@ class PaymentActionsController {
     }
   }
 
+  Future<CheckoutSessionData> createCheckoutSession({
+    required String source,
+    String returnTo = '/dating',
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      return await _ref.read(backendRepositoryProvider).createCheckoutSession(
+            source: source,
+            returnTo: returnTo,
+            cancelToken: cancelToken,
+          );
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
   Future<SubscriptionStateData> subscribeWithTokens(String plan) async {
     final cancelToken = _trackToken();
     try {

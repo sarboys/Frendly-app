@@ -223,6 +223,34 @@ void main() {
     });
   });
 
+  test('creates checkout session for external payment flow', () async {
+    late RequestOptions seen;
+    final repository = BackendRepository(
+      Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = _FakeAdapter((options) async {
+          seen = options;
+          return _jsonResponse(options, {
+            'checkoutUrl': 'https://frendly.tech/checkout/token-1',
+            'expiresAt': '2026-06-05T10:15:00.000Z',
+          });
+        }),
+    );
+
+    final session = await repository.createCheckoutSession(
+      source: 'dating_swipe_limit',
+      returnTo: '/dating',
+    );
+
+    expect(seen.method, 'POST');
+    expect(seen.path, '/checkout/sessions');
+    expect(seen.data, {
+      'source': 'dating_swipe_limit',
+      'returnTo': '/dating',
+    });
+    expect(session.checkoutUrl, 'https://frendly.tech/checkout/token-1');
+    expect(session.expiresAt, '2026-06-05T10:15:00.000Z');
+  });
+
   test('starts and verifies telegram auth with backend contract', () async {
     final requests = <RequestOptions>[];
     final repository = BackendRepository(

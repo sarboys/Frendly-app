@@ -1027,6 +1027,22 @@ class BackendRepository {
     return PaymentOrderData.fromJson(json);
   }
 
+  Future<CheckoutSessionData> createCheckoutSession({
+    required String source,
+    String returnTo = '/dating',
+    CancelToken? cancelToken,
+  }) async {
+    final json = await _postMap(
+      '/checkout/sessions',
+      data: {
+        'source': source,
+        'returnTo': returnTo,
+      },
+      cancelToken: cancelToken,
+    );
+    return CheckoutSessionData.fromJson(json);
+  }
+
   Future<PaymentOrderData> checkPayment({
     required String orderId,
     CancelToken? cancelToken,

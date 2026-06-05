@@ -34,6 +34,19 @@ void main() {
     );
   });
 
+  test('maps checkout payment return link to wallet route', () {
+    final route = paymentReturnRouteForUri(
+      Uri.parse(
+        'frendly://payment/success?checkoutToken=token-1&returnTo=/dating',
+      ),
+    );
+
+    expect(
+      route,
+      '/wallet?paymentResult=success&checkoutToken=token-1&returnTo=%2Fdating',
+    );
+  });
+
   test('maps payment host with result query to wallet route', () {
     final route = paymentReturnRouteForUri(
       Uri.parse(

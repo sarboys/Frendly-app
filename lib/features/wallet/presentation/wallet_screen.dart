@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,7 +24,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
   String? _busyPackId;
   String? _handledPaymentReturnKey;
 
-  bool get _usesAppleIap => defaultTargetPlatform == TargetPlatform.iOS;
+  bool get _usesAppleIap => false;
 
   void _showNotice(BuildContext context, String text) {
     ScaffoldMessenger.of(context).showSnackBar(

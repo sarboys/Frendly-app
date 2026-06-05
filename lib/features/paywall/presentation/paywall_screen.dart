@@ -1,16 +1,15 @@
 import 'dart:ui' show ImageFilter;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:mobile2/features/payments/application/apple_iap_purchase_controller.dart';
 import 'package:mobile2/shared/data/app_providers.dart';
 import 'package:mobile2/shared/models/backend_models.dart';
 import 'package:mobile2/shared/theme/dateasy_theme.dart';
 import 'package:mobile2/shared/utils/frendly_legal_links.dart';
 import 'package:mobile2/shared/widgets/dateasy_refresh_indicator.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class PaywallScreen extends ConsumerStatefulWidget {
   const PaywallScreen({super.key});
@@ -24,7 +23,8 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   bool _busy = false;
   String? _error;
 
-  bool get _usesAppleIap => defaultTargetPlatform == TargetPlatform.iOS;
+  bool get _usesAppleIap => false;
+  bool get _usesExternalCheckout => true;
 
   _Plan? _selectedPlan(List<_Plan> plans) {
     if (plans.isEmpty) {
@@ -50,9 +50,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     final plans = planCatalog.valueOrNull
             ?.map((plan) => _Plan.fromBackend(
                   plan,
-                  usesAppleIap: _usesAppleIap,
+                  usesAppleIap: _usesExternalCheckout || _usesAppleIap,
                 ))
-            .where((plan) => _usesAppleIap ? plan.amount > 0 : plan.ft > 0)
+            .where((plan) => (_usesExternalCheckout || _usesAppleIap)
+                ? plan.amount > 0
+                : plan.ft > 0)
             .toList(growable: false) ??
         const <_Plan>[];
     final selectedPlan = _selectedPlan(plans);
@@ -60,8 +62,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     final perks = selectedPlan?.perks.isNotEmpty == true
         ? selectedPlan!.perks
         : catalogPerks;
-    final hasEnoughTokens =
-        _usesAppleIap || (selectedPlan != null && balance >= selectedPlan.ft);
+    final hasEnoughTokens = _usesExternalCheckout ||
+        _usesAppleIap ||
+        (selectedPlan != null && balance >= selectedPlan.ft);
 
     return Scaffold(
       body: LayoutBuilder(
@@ -144,7 +147,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                                         onTap: () => _subscribe(
                                           selectedPlan,
                                           hasEnoughTokens,
-                                          catalog.valueOrNull,
                                         ),
                                       ),
                                   ],
@@ -168,8 +170,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   Future<void> _subscribe(
     _Plan plan,
     bool hasEnoughTokens,
-    PaymentsCatalog? catalog,
   ) async {
+    if (_usesExternalCheckout) {
+      await _openExternalCheckout();
+      return;
+    }
     if (!_usesAppleIap && !hasEnoughTokens) {
       context.go('/wallet');
       return;
@@ -182,23 +187,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       _error = null;
     });
     try {
-      if (_usesAppleIap) {
-        final appleProductId = plan.appleProductId ??
-            _appleSubscriptionProductId(catalog, plan.id);
-        if (appleProductId == null) {
-          throw const AppleIapPurchaseException(
-            'missing_apple_product_id',
-            'App Store product id is missing',
-          );
-        }
-        await ref.read(paymentActionsProvider).purchaseAppleProduct(
-              productKind: 'subscription',
-              productId: plan.id,
-              appleProductId: appleProductId,
-            );
-      } else {
-        await ref.read(paymentActionsProvider).subscribeWithTokens(plan.id);
-      }
+      await ref.read(paymentActionsProvider).subscribeWithTokens(plan.id);
       if (!mounted) {
         return;
       }
@@ -216,40 +205,42 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       }
       setState(() {
         _busy = false;
-        _error = _usesAppleIap
-            ? _appleIapErrorText(error)
-            : 'Не удалось активировать Plus';
+        _error = 'Не удалось активировать Plus';
       });
     }
   }
 
-  String _appleIapErrorText(Object error) {
-    if (error is AppleIapPurchaseException) {
-      return switch (error.code) {
-        'missing_apple_product_id' => 'У подписки нет product id для App Store',
-        'app_store_unavailable' => 'App Store покупки сейчас недоступны',
-        'apple_product_not_found' => 'Подписка не найдена в App Store Connect',
-        'purchase_canceled' => 'Покупка отменена',
-        'purchase_pending' => 'Покупка еще обрабатывается в App Store',
-        'purchase_not_started' => 'App Store не начал покупку',
-        'purchase_timeout' => 'App Store не ответил. Попробуй еще раз',
-        'purchase_product_mismatch' =>
-          'App Store вернул не ту подписку. Проверь product id',
-        'purchase_failed' => 'App Store отклонил покупку',
-        _ => 'Не удалось оплатить через App Store',
-      };
+  Future<void> _openExternalCheckout() async {
+    if (_busy) {
+      return;
     }
-    return 'Не удалось оплатить через App Store';
-  }
-
-  String? _appleSubscriptionProductId(PaymentsCatalog? catalog, String planId) {
-    for (final plan in catalog?.subscriptions ?? const <SubscriptionPlan>[]) {
-      final value = plan.appleProductId?.trim();
-      if (plan.id == planId && value != null && value.isNotEmpty) {
-        return value;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final session = await ref.read(paymentActionsProvider).createCheckoutSession(
+            source: 'plus_gate',
+            returnTo: '/dating',
+          );
+      final url = Uri.tryParse(session.checkoutUrl);
+      if (url == null) {
+        throw const FormatException('Invalid checkout URL');
+      }
+      final opened = await launchUrl(url, mode: LaunchMode.inAppBrowserView);
+      if (!opened) {
+        throw StateError('checkout launch failed');
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _error = 'Не удалось открыть оплату');
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
       }
     }
-    return null;
   }
 }
 
@@ -629,7 +620,7 @@ class _BottomCta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = usesAppleIap
-        ? 'Оплатить через App Store'
+        ? 'Открыть оплату'
         : hasEnoughTokens
             ? 'Активировать за ${plan.ft} FT'
             : 'Не хватает $missingTokens FT · Пополнить';
@@ -689,7 +680,7 @@ class _BottomCta extends StatelessWidget {
           Text(
             error ??
                 (usesAppleIap
-                    ? 'Покупка пройдет через Apple In-App Purchase'
+                    ? 'Оплата пройдет на сайте Frendly'
                     : 'Списание токенов через backend'),
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(

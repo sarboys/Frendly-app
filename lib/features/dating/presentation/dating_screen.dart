@@ -13,6 +13,7 @@ import 'package:mobile2/shared/widgets/dateasy_bottom_nav.dart';
 import 'package:mobile2/shared/widgets/dateasy_phone_frame.dart';
 import 'package:mobile2/shared/widgets/dateasy_remote_image.dart';
 import 'package:mobile2/shared/widgets/dateasy_top_bar.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const double _datingTopInset = 12;
 const double _datingTopControlsGap = 14;
@@ -89,7 +90,7 @@ class _DatingScreenState extends State<DatingScreen> {
       if (!context.mounted) {
         return;
       }
-      _handleBackendActionError(context, error);
+      _handleBackendActionError(ref, context, error);
     } finally {
       if (mounted) {
         setState(() {
@@ -148,7 +149,7 @@ class _DatingScreenState extends State<DatingScreen> {
       if (!context.mounted) {
         return;
       }
-      _handleBackendActionError(context, error);
+      _handleBackendActionError(ref, context, error);
     } finally {
       if (mounted) {
         setState(() {
@@ -446,6 +447,7 @@ class _DatingScreenState extends State<DatingScreen> {
   }
 
   void _handleBackendActionError(
+    WidgetRef ref,
     BuildContext context,
     BackendActionException error,
   ) {
@@ -457,7 +459,7 @@ class _DatingScreenState extends State<DatingScreen> {
         context.push('/paywall');
         return;
       case 'dating_swipe_rate_limited':
-        _showSnackBar(context, 'Лимит свайпов на час закончился');
+        _showSwipeLimitDialog(ref, context);
         return;
       case 'dating_rewind_unavailable':
         _showSnackBar(context, 'Можно вернуть только последний пропуск');
@@ -466,6 +468,78 @@ class _DatingScreenState extends State<DatingScreen> {
         _showSnackBar(context, 'Не удалось сохранить действие');
         return;
     }
+  }
+
+  void _showSwipeLimitDialog(WidgetRef ref, BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        var loading = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: DateasyColors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              title: const Text('Лимиты кончились'),
+              content: const Text(
+                'Можно получить больше свайпов через Frendly+.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: loading ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('Позже'),
+                ),
+                FilledButton(
+                  onPressed: loading
+                      ? null
+                      : () async {
+                          setDialogState(() => loading = true);
+                          try {
+                            final session = await ref
+                                .read(paymentActionsProvider)
+                                .createCheckoutSession(
+                                  source: 'dating_swipe_limit',
+                                  returnTo: '/dating',
+                                );
+                            final url = Uri.tryParse(session.checkoutUrl);
+                            if (url == null) {
+                              throw const FormatException('Invalid checkout URL');
+                            }
+                            final opened = await launchUrl(
+                              url,
+                              mode: LaunchMode.inAppBrowserView,
+                            );
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext);
+                            }
+                            if (!opened && context.mounted) {
+                              _showSnackBar(context, 'Не удалось открыть оплату');
+                            }
+                          } catch (_) {
+                            if (context.mounted) {
+                              _showSnackBar(context, 'Не удалось открыть оплату');
+                            }
+                            if (dialogContext.mounted) {
+                              setDialogState(() => loading = false);
+                            }
+                          }
+                        },
+                  child: loading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Получить больше'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 }
 
