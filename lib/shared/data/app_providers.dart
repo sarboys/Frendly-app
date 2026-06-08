@@ -12,8 +12,6 @@ import 'package:mobile2/app/core/local_cache/app_local_cache_store.dart';
 import 'package:mobile2/app/core/local_cache/local_first_repository.dart';
 import 'package:mobile2/app/core/network/chat_socket_client.dart';
 import 'package:mobile2/app/core/providers/core_providers.dart';
-import 'package:mobile2/features/payments/application/apple_iap_purchase_controller.dart';
-import 'package:mobile2/features/payments/application/in_app_purchase_apple_iap_gateway.dart';
 import 'package:mobile2/shared/data/affiche_client_geo_enrichment_service.dart';
 import 'package:mobile2/shared/data/backend_repository.dart';
 import 'package:mobile2/shared/models/backend_models.dart';
@@ -3831,26 +3829,6 @@ final paymentActionsProvider = Provider<PaymentActionsController>(
   PaymentActionsController.new,
 );
 
-final appleIapGatewayProvider = Provider<AppleIapGateway>((ref) {
-  return InAppPurchaseAppleIapGateway();
-});
-
-final appleIapPurchaseControllerProvider =
-    Provider<AppleIapPurchaseController>((ref) {
-  return AppleIapPurchaseController(
-    gateway: ref.read(appleIapGatewayProvider),
-    confirmPurchase: (input) {
-      return ref.read(backendRepositoryProvider).confirmAppleIapPurchase(
-            productKind: input.productKind,
-            productId: input.productId,
-            appleProductId: input.appleProductId,
-            transactionId: input.transactionId,
-            verificationData: input.verificationData,
-          );
-    },
-  );
-});
-
 final verificationActionsProvider = Provider<VerificationActionsController>(
   VerificationActionsController.new,
 );
@@ -3905,6 +3883,24 @@ class PaymentActionsController {
     }
   }
 
+  Future<CheckoutSessionData> createCheckoutSession({
+    required String source,
+    String returnTo = '/dating',
+  }) async {
+    final cancelToken = _trackToken();
+    try {
+      return await _ref.read(backendRepositoryProvider).createCheckoutSession(
+            source: source,
+            returnTo: returnTo,
+            cancelToken: cancelToken,
+          );
+    } on DioException catch (error) {
+      throw BackendActionException.fromDio(error);
+    } finally {
+      _tokens.remove(cancelToken);
+    }
+  }
+
   Future<SubscriptionStateData> subscribeWithTokens(String plan) async {
     final cancelToken = _trackToken();
     try {
@@ -3921,30 +3917,6 @@ class PaymentActionsController {
       throw BackendActionException.fromDio(error);
     } finally {
       _tokens.remove(cancelToken);
-    }
-  }
-
-  Future<PaymentOrderData> purchaseAppleProduct({
-    required String productKind,
-    required String productId,
-    required String appleProductId,
-  }) async {
-    try {
-      final order = await _ref.read(appleIapPurchaseControllerProvider).buy(
-            AppleIapProductPurchase(
-              productKind: productKind,
-              productId: productId,
-              appleProductId: appleProductId,
-            ),
-          );
-      _ref.invalidate(tokenWalletProvider);
-      _ref.invalidate(paymentsCatalogProvider);
-      _ref.invalidate(subscriptionProvider);
-      _ref.invalidate(subscriptionPlansProvider);
-      _ref.invalidate(ownProfileProvider);
-      return order;
-    } on DioException catch (error) {
-      throw BackendActionException.fromDio(error);
     }
   }
 

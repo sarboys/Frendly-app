@@ -1955,16 +1955,14 @@ void main() {
     expect(find.text('Кошелёк'), findsOneWidget);
     expect(find.text('Frendly Tokens'), findsOneWidget);
     expect(find.text('240'), findsOneWidget);
-    expect(find.text('БАЗОВЫЙ'), findsOneWidget);
-    expect(find.text('199 ₽'), findsOneWidget);
+    expect(find.text('Покупка токенов пока недоступна'), findsOneWidget);
+    expect(find.text('199 ₽'), findsNothing);
     expect(find.text('Plus подписка'), findsOneWidget);
     expect(find.text('от 250 FT / мес'), findsOneWidget);
     expect(find.text('Буст встречи'), findsOneWidget);
     expect(find.text('80 FT / 24ч'), findsOneWidget);
     expect(find.text('Super-like'), findsOneWidget);
     expect(find.text('5 FT / шт'), findsOneWidget);
-    expect(find.text('Промокод'), findsOneWidget);
-    expect(find.text('Активировать'), findsOneWidget);
     expect(find.text('Нет endpoint'), findsNothing);
     expect(find.text('Пополнение токенов'), findsOneWidget);
     expect(find.text('+100 FT'), findsOneWidget);
@@ -1972,15 +1970,11 @@ void main() {
     expect(find.text('-250 FT'), findsOneWidget);
   });
 
-  test('mobile2 wallet opens token payment in in-app browser', () {
-    expect(walletPaymentLaunchMode, LaunchMode.inAppBrowserView);
-  });
-
   test('mobile2 legal links open in in-app browser', () {
     expect(frendlyLegalLaunchMode, LaunchMode.inAppBrowserView);
   });
 
-  testWidgets('mobile2 paywall defaults to front2 middle plan', (tester) async {
+  testWidgets('mobile2 paywall shows Plus without purchases', (tester) async {
     await tester.binding.setSurfaceSize(const Size(430, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -1994,13 +1988,14 @@ void main() {
 
     expect(find.text('Frendly'), findsOneWidget);
     expect(find.text('Plus'), findsOneWidget);
-    expect(find.text('3 месяца'), findsOneWidget);
-    expect(find.text('Активировать за 600 FT'), findsOneWidget);
+    expect(find.text('Plus скоро'), findsOneWidget);
+    expect(find.text('Активировать за 600 FT'), findsNothing);
+    expect(find.text('Оплатить через App Store'), findsNothing);
     expect(find.text('Terms of Use (EULA)'), findsOneWidget);
     expect(find.text('Privacy Policy'), findsOneWidget);
   });
 
-  testWidgets('mobile2 paywall shows App Store subscription prices in rubles',
+  testWidgets('mobile2 paywall does not show App Store prices on iOS',
       (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     await tester.binding.setSurfaceSize(const Size(430, 900));
@@ -2017,18 +2012,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('3 месяца'), findsOneWidget);
-    expect(find.text('1199'), findsOneWidget);
-    expect(find.text('руб.'), findsWidgets);
-    expect(find.text('400 руб./мес'), findsOneWidget);
-    expect(find.text('Оплатить через App Store'), findsOneWidget);
+    expect(find.text('Plus скоро'), findsOneWidget);
+    expect(find.text('1199'), findsNothing);
+    expect(find.text('руб.'), findsNothing);
+    expect(find.text('400 руб./мес'), findsNothing);
+    expect(find.text('Оплатить через App Store'), findsNothing);
     expect(find.text('Активировать за 600 FT'), findsNothing);
     expect(find.text('600'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('mobile2 paywall does not duplicate wallet and plan requests',
+  testWidgets('mobile2 paywall only loads Plus catalog',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(430, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -2058,16 +2053,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(repository.walletCalls, 1);
+    expect(repository.walletCalls, 0);
     expect(repository.catalogCalls, 1);
-    expect(repository.planCalls, 1);
+    expect(repository.planCalls, 0);
 
     rebuild(() => tick += 1);
     await tester.pumpAndSettle();
 
-    expect(repository.walletCalls, 1);
+    expect(repository.walletCalls, 0);
     expect(repository.catalogCalls, 1);
-    expect(repository.planCalls, 1);
+    expect(repository.planCalls, 0);
   });
 
   testWidgets('mobile2 map matches Frendly radar screen', (tester) async {

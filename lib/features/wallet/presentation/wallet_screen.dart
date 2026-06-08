@@ -1,6 +1,3 @@
-import 'dart:async';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,9 +7,6 @@ import 'package:mobile2/shared/models/backend_models.dart';
 import 'package:mobile2/shared/theme/dateasy_theme.dart';
 import 'package:mobile2/shared/widgets/dateasy_phone_frame.dart';
 import 'package:mobile2/shared/widgets/dateasy_refresh_indicator.dart';
-import 'package:url_launcher/url_launcher.dart';
-
-const walletPaymentLaunchMode = LaunchMode.inAppBrowserView;
 
 class WalletScreen extends ConsumerStatefulWidget {
   const WalletScreen({super.key});
@@ -22,11 +16,6 @@ class WalletScreen extends ConsumerStatefulWidget {
 }
 
 class _WalletScreenState extends ConsumerState<WalletScreen> {
-  String? _busyPackId;
-  String? _handledPaymentReturnKey;
-
-  bool get _usesAppleIap => defaultTargetPlatform == TargetPlatform.iOS;
-
   void _showNotice(BuildContext context, String text) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -39,7 +28,6 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
 
   @override
   Widget build(BuildContext context) {
-    _handlePaymentReturnFromRoute(context);
     return DateasyPhoneFrame(
       child: Builder(
         builder: (context) {
@@ -47,10 +35,6 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
           final catalog = ref.watch(paymentsCatalogProvider);
           final planCatalog = ref.watch(subscriptionPlansProvider);
           final walletData = wallet.valueOrNull;
-          final packs = catalog.valueOrNull?.tokenPacks
-                  .map(_TokenPack.fromBackend)
-                  .toList(growable: false) ??
-              const <_TokenPack>[];
           final spendIdeas = _spendIdeasFromBackend(
             planCatalog.valueOrNull,
             catalog.valueOrNull,
@@ -80,20 +64,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                   loading: () => const _BalanceCard(balance: 0),
                   error: (_, __) => const _BalanceCard(balance: 0),
                 ),
-                if (catalog.isLoading && packs.isEmpty)
-                  const _InlineState(text: 'Загружаем пакеты')
-                else if (packs.isEmpty)
-                  _InlineState(
-                    text: catalog.hasError
-                        ? 'Не удалось загрузить пакеты'
-                        : 'Backend пока не отдает пакеты',
-                  )
-                else
-                  _PackGrid(
-                    packs: packs,
-                    busyPackId: _busyPackId,
-                    onTopUp: _startPayment,
-                  ),
+                const _PaymentsPausedSection(),
                 _SpendIdeas(
                   ideas: spendIdeas,
                   loading: catalog.isLoading || planCatalog.isLoading,
@@ -113,90 +84,6 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
         },
       ),
     );
-  }
-
-  void _handlePaymentReturnFromRoute(BuildContext context) {
-    Uri uri;
-    try {
-      uri = GoRouterState.of(context).uri;
-    } catch (_) {
-      return;
-    }
-    final result = uri.queryParameters['paymentResult'];
-    if (result != 'success' && result != 'fail') {
-      return;
-    }
-    final key = uri.toString();
-    if (_handledPaymentReturnKey == key) {
-      return;
-    }
-    _handledPaymentReturnKey = key;
-    final orderId = uri.queryParameters['orderId'];
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      unawaited(
-        ref.read(paymentActionsProvider).handlePaymentReturn(
-              orderId: orderId,
-            ),
-      );
-    });
-  }
-
-  Future<void> _startPayment(_TokenPack pack) async {
-    if (_busyPackId != null) {
-      return;
-    }
-    setState(() => _busyPackId = pack.id);
-    try {
-      if (_usesAppleIap) {
-        final appleProductId = pack.appleProductId?.trim();
-        if (appleProductId == null || appleProductId.isEmpty) {
-          _showNotice(context, 'App Store product не настроен');
-          return;
-        }
-        await ref.read(paymentActionsProvider).purchaseAppleProduct(
-              productKind: 'tokens',
-              productId: pack.id,
-              appleProductId: appleProductId,
-            );
-        if (mounted) {
-          _showNotice(context, 'Токены начислены');
-        }
-      } else {
-        final order = await ref.read(paymentActionsProvider).initTokenPayment(
-              pack.id,
-            );
-        final url = Uri.tryParse(order.paymentUrl ?? '');
-        if (url == null) {
-          if (mounted) {
-            _showNotice(context, 'Backend не вернул ссылку оплаты');
-          }
-        } else {
-          final opened = await launchUrl(
-            url,
-            mode: walletPaymentLaunchMode,
-          );
-          if (!opened && mounted) {
-            _showNotice(context, 'Не удалось открыть оплату');
-          }
-        }
-      }
-    } catch (_) {
-      if (mounted) {
-        _showNotice(
-          context,
-          _usesAppleIap
-              ? 'Не удалось оплатить через App Store'
-              : 'Не удалось начать оплату',
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _busyPackId = null);
-      }
-    }
   }
 }
 
@@ -322,156 +209,32 @@ class _BalanceCard extends StatelessWidget {
   }
 }
 
-class _PackGrid extends StatelessWidget {
-  const _PackGrid({
-    required this.packs,
-    required this.busyPackId,
-    required this.onTopUp,
-  });
-
-  final List<_TokenPack> packs;
-  final String? busyPackId;
-  final void Function(_TokenPack pack) onTopUp;
+class _PaymentsPausedSection extends StatelessWidget {
+  const _PaymentsPausedSection();
 
   @override
   Widget build(BuildContext context) {
     return _Section(
-      title: 'Пополнить',
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: packs.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          mainAxisExtent: 132,
-        ),
-        itemBuilder: (context, index) {
-          final pack = packs[index];
-          return _PackCard(
-            pack: pack,
-            busy: busyPackId == pack.id,
-            onTap: () => onTopUp(pack),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _PackCard extends StatelessWidget {
-  const _PackCard({
-    required this.pack,
-    required this.busy,
-    required this.onTap,
-  });
-
-  final _TokenPack pack;
-  final bool busy;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
+      title: 'Пополнение',
       child: _GlassPanel(
         borderRadius: 16,
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    pack.label.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: DateasyColors.muted,
-                          fontSize: 10,
-                          letterSpacing: 1,
-                        ),
+            Text(
+              'Покупка токенов пока недоступна',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
-                ),
-                if (pack.badge != null) _Badge(text: pack.badge!),
-              ],
             ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${pack.ft}',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontSize: 24,
-                        height: 1,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                const SizedBox(width: 5),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(
-                    'FT',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: DateasyColors.muted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
+            const SizedBox(height: 6),
+            Text(
+              'Баланс и история работают. Пополнение появится позже.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: DateasyColors.muted,
+                    fontSize: 13,
                   ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            Container(
-              height: 32,
-              decoration: BoxDecoration(
-                gradient: dateasyLimeGradient,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (busy)
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else ...[
-                    const Icon(
-                      LucideIcons.plus,
-                      color: DateasyColors.backgroundDeep,
-                      size: 14,
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      '${pack.rub} ₽',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: DateasyColors.backgroundDeep,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    if (pack.originalRub != null) ...[
-                      const SizedBox(width: 5),
-                      Text(
-                        '${pack.originalRub} ₽',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: DateasyColors.backgroundDeep
-                                  .withValues(alpha: 0.55),
-                              fontSize: 10,
-                              decoration: TextDecoration.lineThrough,
-                              decorationColor: DateasyColors.backgroundDeep
-                                  .withValues(alpha: 0.65),
-                            ),
-                      ),
-                    ],
-                  ],
-                ],
-              ),
             ),
           ],
         ),
@@ -633,7 +396,7 @@ class _InlineState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Section(
-      title: 'Пополнить',
+      title: 'Кошелек',
       child: _GlassPanel(
         borderRadius: 16,
         padding: const EdgeInsets.all(16),
@@ -798,71 +561,6 @@ class _GlassPanel extends StatelessWidget {
         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Padding(padding: padding, child: child),
-    );
-  }
-}
-
-class _Badge extends StatelessWidget {
-  const _Badge({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        gradient: dateasyPinkGradient,
-        borderRadius: BorderRadius.circular(7),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: DateasyColors.foreground,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              height: 1,
-            ),
-      ),
-    );
-  }
-}
-
-class _TokenPack {
-  const _TokenPack({
-    required this.id,
-    required this.ft,
-    required this.rub,
-    required this.label,
-    this.appleProductId,
-    this.originalRub,
-    this.badge,
-  });
-
-  final String id;
-  final int ft;
-  final int rub;
-  final String label;
-  final String? appleProductId;
-  final int? originalRub;
-  final String? badge;
-
-  factory _TokenPack.fromBackend(TokenPackProduct product) {
-    final discountBadge =
-        product.discountPercent > 0 ? '-${product.discountPercent}%' : null;
-    return _TokenPack(
-      id: product.id,
-      ft: product.tokens,
-      rub: product.priceRub,
-      label: product.label,
-      appleProductId: product.appleProductId,
-      originalRub: product.originalPriceRub,
-      badge: discountBadge ??
-          (product.best
-              ? 'Хит'
-              : product.bonus > 0
-                  ? '+${product.bonus}'
-                  : null),
     );
   }
 }

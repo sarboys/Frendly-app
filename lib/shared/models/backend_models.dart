@@ -1193,6 +1193,26 @@ class PaymentOrderData {
   }
 }
 
+class CheckoutSessionData {
+  const CheckoutSessionData({
+    required this.checkoutUrl,
+    required this.expiresAt,
+    this.raw = const {},
+  });
+
+  final String checkoutUrl;
+  final String expiresAt;
+  final Map<String, Object?> raw;
+
+  factory CheckoutSessionData.fromJson(Map<String, Object?> json) {
+    return CheckoutSessionData(
+      checkoutUrl: _string(json['checkoutUrl']),
+      expiresAt: _string(json['expiresAt']),
+      raw: json,
+    );
+  }
+}
+
 class SubscriptionStateData {
   const SubscriptionStateData({
     required this.status,
